@@ -1,0 +1,172 @@
+# VIEWSTATE V001 — STAGE 00.3
+# FINAL CTO PRECISION CORRECTION
+
+## MODE
+
+ANALYSIS ONLY — PRECISION CORRECTION ONLY.
+
+Do NOT modify any file.
+Do NOT modify governance.
+Do NOT freeze Stage 00.3.
+Do NOT begin Stage 00.4.
+Do NOT reopen any Founder decision.
+
+The corrected Stage 00.3 report is approved in substance.
+
+Apply ONLY the five precision corrections below.
+
+Do not rewrite or reinterpret any other approved decision.
+
+---
+
+## CORRECTION 1 — MATCHING ELIGIBILITY WORDING
+
+Where Property or Requirement success definitions say that the record:
+
+"immediately participates in Matching"
+
+replace the meaning with:
+
+"becomes eligible for broker-initiated Matching."
+
+This prevents any implication that Matching runs automatically.
+
+Matching remains:
+
+- broker-initiated
+- non-automatic
+- non-background
+- non-notification-driven
+
+Do not otherwise change Matching behavior.
+
+---
+
+## CORRECTION 2 — CONTACT IMPORT VALIDITY
+
+Manual Contact minimum remains:
+
+- Name
+- Phone Number
+
+The same validity rule applies to imported Contacts.
+
+Contact Import should automatically populate all information available from the source.
+
+The broker must NOT retype information that was successfully imported.
+
+However, before the imported record can be saved as a valid Contact:
+
+- Name must exist
+- Phone Number must exist
+
+If one required minimum value is unavailable from the import source, the broker provides only the missing minimum value before save.
+
+Role remains OPTIONAL.
+
+Do not make role assignment part of import validity.
+
+Do not add Property Import.
+
+---
+
+## CORRECTION 3 — MATCH EXPLANATION GRANULARITY
+
+Remove the phrase:
+
+"Field-level explanation"
+
+where it implies that Stage 00.3 has frozen the exact explanation granularity.
+
+Use instead:
+
+"Explain the score/result using relevant matching reasons."
+
+Frozen behavior remains:
+
+Compare → Score (0–100) → Explain
+
+Visible results remain:
+
+Score ≥70%
+
+The exact explanation structure, matching fields, scoring weights, scoring formula, and presentation remain deferred.
+
+---
+
+## CORRECTION 4 — LANGUAGE UX NEUTRALITY
+
+Remove any wording that freezes language change specifically to:
+
+"Profile/Settings"
+
+Replace with:
+
+"The broker may change language later through the app's language preference control."
+
+Preserve:
+
+- Arabic / RTL default
+- English selectable
+- no mandatory language gate
+- no mandatory profile gate
+
+Do not decide the exact UI location of the language preference.
+
+---
+
+## CORRECTION 5 — STALE DOCUMENT SOURCE ACCURACY
+
+Preserve the existing stale-documentation finding regarding premature WhatsApp parsing / raw-file handling assumptions.
+
+Correct its source attribution so that:
+
+`docs/database/README.md`
+
+is included as the source containing the premature raw WhatsApp file parsing / retention assumption identified in the previous forensic analysis.
+
+Do not modify the stale document.
+
+Do not perform Governance Cleanup.
+
+---
+
+# REQUIRED OUTPUT
+
+Return ONLY:
+
+## 1. Five Correction Verification Table
+
+| Correction | Result |
+
+## 2. Stage 00.3 Final Readiness Check
+
+Confirm:
+
+- no Founder decisions remain unresolved
+- no files modified
+- Stage 00.1 remains FROZEN
+- Stage 00.2.1 remains FROZEN
+- Stage 00.2.2 remains FROZEN
+- Stage 00.3 remains NOT FROZEN
+- Stage 00.4 not started
+- Matching remains broker-initiated
+- Contact Import uses the same Name + Phone validity minimum
+- Match explanation granularity remains deferred
+- language UI placement remains deferred
+- stale documentation remains queued for Governance Cleanup
+- PRE-IMPLEMENTATION remains active
+
+Then end with exactly:
+
+`STATUS: READY FOR STAGE 00.3 FREEZE`
+
+or, only if a genuine inconsistency remains:
+
+`STATUS: BLOCKED — CORRECTION REQUIRED`
+
+STOP.
+
+Do NOT modify any file.
+Do NOT freeze Stage 00.3.
+Do NOT begin Stage 00.4.
