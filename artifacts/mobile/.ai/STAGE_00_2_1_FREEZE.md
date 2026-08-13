@@ -52,7 +52,7 @@ Any future modification to Stage 00.2.1 content requires an **explicit governed 
 | 6 | Classification | Exactly 4 labels: Follow Up / Important / Pending / Order Complete or Closed Deal; one at a time; no dates or reminders (DEC-010) |
 | 7 | Global Search | Available on every primary screen; contact names, phone numbers, property titles, location areas (DEC-006) |
 | 8 | WhatsApp / WhatsApp Business Communication Choice | Both required; selected app opens; technical mechanism deferred to Integration stage (DEC-011) |
-| 9 | Property Sharing via WhatsApp / WhatsApp Business | Broker shares property with specific client; both apps required as choices; mechanism and payload deferred (Founder Decision 2, DEC-016) |
+| 9 | Property Sharing via WhatsApp / WhatsApp Business | Broker shares property with specific client; both apps required as choices; mechanism and payload deferred (Founder Decision 2) |
 | 10 | Import | WhatsApp-driven and WA Business-driven capture; device contacts import; mechanism deferred to Integration stage |
 | 11 | User Profile | Broker profile, language preference, RTL/LTR (includes Basic Settings as sub-capability) |
 | 12 | Media & Attachments | Photos + Videos + Documents at product scope; storage, format, and architecture details deferred (Founder Decision 1) |
