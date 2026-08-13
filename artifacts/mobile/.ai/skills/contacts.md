@@ -89,31 +89,21 @@ interface DeviceContact {
 All phone numbers stored in ViewState must be in E.164 format (`+[country code][number]`).
 
 ```typescript
-function normalizeEgyptianPhone(raw: string): string | null {
-  // Strip all non-digit characters
+// Phone normalization is market-configurable.
+// The active market configuration provides: country code, expected digit length,
+// local prefix rules, and E.164 normalization logic.
+// Do NOT hardcode country-specific phone patterns here.
+
+function normalizePhone(raw: string, marketConfig: MarketPhoneConfig): string | null {
   const digits = raw.replace(/\D/g, '');
-
-  // Handle leading 0 (local format): 01X XXXX XXXX → +201X XXXX XXXX
-  if (digits.startsWith('0') && digits.length === 11) {
-    return `+2${digits}`;
-  }
-
-  // Handle country code: 201X XXXX XXXX → +201X XXXX XXXX
-  if (digits.startsWith('20') && digits.length === 12) {
-    return `+${digits}`;
-  }
-
-  // Handle +20 format already: +201X XXXX XXXX
-  if (digits.startsWith('201') && digits.length === 12) {
-    return `+${digits}`;
-  }
-
-  return null; // unrecognizable — do not save
+  // Apply market-specific normalization rules from marketConfig
+  // e.g., local prefix stripping, country code prepending, length validation
+  return marketConfig.normalize(digits); // returns E.164 string or null
 }
 
-function isValidEgyptianMobile(normalized: string): boolean {
-  // Egyptian mobiles: +2010, +2011, +2012, +2015
-  return /^\+2(010|011|012|015)\d{8}$/.test(normalized);
+function isValidMobile(normalized: string, marketConfig: MarketPhoneConfig): boolean {
+  // Validation pattern provided by market configuration
+  return marketConfig.mobilePattern.test(normalized);
 }
 ```
 
@@ -124,7 +114,7 @@ function isValidEgyptianMobile(normalized: string): boolean {
 ### From device contacts
 1. Request permission → if denied, show Settings link
 2. Load all contacts with phone numbers (`Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name] })`)
-3. Filter: only contacts with at least one valid Egyptian phone number
+3. Filter: only contacts with at least one valid phone number (per market phone config)
 4. Normalize phone numbers
 5. Deduplicate: check against existing ViewState contacts by normalized phone number
 6. Show preview list: "X new contacts found, Y already exist"

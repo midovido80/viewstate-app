@@ -74,16 +74,16 @@ flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
 ```typescript
 // Log the breakdown object from calculateMatchScore
 // Check: are null fields being handled correctly?
-// Check: is governorate comparison using the same ID format?
+// Check: is location_area comparison using the same ID format from market config?
 // Check: is price stored as a string and not parsed to number before comparison?
 ```
 
 ### Phone number not normalizing
 ```typescript
-// Log the raw input to normalizeEgyptianPhone
-// Check: does the number start with 0, 20, or +20?
-// Check: is the number exactly 11 digits (local) or 12 digits (with country code)?
-// Test with: 01012345678, +201012345678, 201012345678
+// Log the raw input to the phone normalization function
+// Check: is the market phone pattern loaded correctly from market config?
+// Check: does the input match the expected format for the active market?
+// Check: is the output stored as clean E.164 (e.g., +XXXXXXXXXXX)?
 ```
 
 ### WhatsApp import finds 0 contacts

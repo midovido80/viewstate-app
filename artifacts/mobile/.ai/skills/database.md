@@ -54,10 +54,10 @@ export const properties = pgTable('properties', {
   type: propertyTypeEnum('type').notNull(),
   purpose: propertyPurposeEnum('purpose').notNull(),
   price: numeric('price', { precision: 15, scale: 2 }).notNull(),
-  currency: varchar('currency', { length: 3 }).notNull().default('EGP'),
+  currency: varchar('currency', { length: 3 }).notNull(), // market-configurable default — do not hardcode
   area_sqm: numeric('area_sqm', { precision: 8, scale: 2 }),
   bedrooms: smallint('bedrooms'),
-  governorate: text('governorate'),
+  location_area: text('location_area'), // market-configurable — see DATABASE_RULES.md DEC-012
   is_active: boolean('is_active').notNull().default(true),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

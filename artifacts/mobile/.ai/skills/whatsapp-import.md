@@ -1,155 +1,141 @@
-# ViewState AI Skill — WhatsApp Import
+# ViewState AI Skill — WhatsApp & WhatsApp Business
 
-**Read this before implementing any WhatsApp import functionality in ViewState.**
-
----
-
-## Overview
-
-Egyptian brokers conduct most of their business via WhatsApp. ViewState provides a way to import a WhatsApp chat export (.txt file) to extract contact names, phone numbers, and property leads mentioned in the conversation.
-
-This feature is an **import assistant** — it extracts structured data from unstructured text. It does NOT send or receive WhatsApp messages.
+**Read this before implementing any WhatsApp-related functionality in ViewState.**
 
 ---
 
-## WhatsApp Export Format
+## Governance Boundary — Stage 00.1 Lock
 
-WhatsApp exports chats as `.txt` files. The format varies slightly between iOS and Android, but follows this general pattern:
+The following is locked at the product-definition level. Technical implementation details are NOT locked here — they belong to the Integration stage.
 
-### iOS format
-```
-[13/8/2026, 2:30:15 PM] Ahmed Hassan: مرحبا، عندي شقة للبيع في القاهرة
-[13/8/2026, 2:31:00 PM] Mohamed Ali: +201001234567 تواصل معه
-[13/8/2026, 2:32:45 PM] Ahmed Hassan: المساحة 120 متر، 3 غرف
-```
+**Product-level rules:**
+1. ViewState supports both **WhatsApp** and **WhatsApp Business** as required communication channel options
+2. When a broker initiates a communication action from a contact or a relevant property workflow, ViewState must present a **choice between WhatsApp and WhatsApp Business**
+3. The selected option opens that specific app
+4. Both options are equally required — ViewState is not WhatsApp-only
 
-### Android format
-```
-13/8/2026, 2:30 PM - Ahmed Hassan: مرحبا، عندي شقة للبيع في القاهرة
-13/8/2026, 2:31 PM - Mohamed Ali: +201001234567 تواصل معه
-```
+**Import / capture scope:**
+5. ViewState supports WhatsApp and WhatsApp Business as data **capture/import sources** (e.g., extracting contacts or leads from broker conversations)
+6. The precise technical mechanism for import (deep links, intents, exported file parsing, API integration, etc.) is decided in the Integration stage — it is NOT locked here
+7. Do not assume `.txt` export parsing is the only or the settled integration approach at the product level
 
----
-
-## Import Flow
-
-1. Broker taps "Import from WhatsApp"
-2. App shows instructions: "In WhatsApp, open the chat → ⋮ → More → Export Chat → Without Media → Save to Files"
-3. Broker uses `expo-document-picker` to select the exported `.txt` file
-4. App parses the file locally (no server involved — privacy-first)
-5. App shows extracted results:
-   - Contacts found (name + phone number)
-   - Potential property mentions (keyword-based detection)
-6. Broker reviews, selects which contacts to save
-7. Broker can assign a role to each contact before saving
-8. Save confirmed contacts to the database
+**What is NOT in scope for V001:**
+- In-app messaging (ViewState does not send or receive WhatsApp messages from within the app)
+- WhatsApp Business API for automated or programmatic messaging
+- Any form of WhatsApp integration beyond communication channel choice and data import/capture
 
 ---
 
-## File Selection
+## Communication Action — Product Behavior
+
+When the broker taps a communication action on a contact or property:
+
+1. ViewState presents a choice: **WhatsApp** | **WhatsApp Business**
+2. The broker selects one
+3. The selected app is opened (technical mechanism — deep link, intent, or equivalent — is decided in the Integration stage)
+4. The broker's selection preference may optionally be remembered per contact
+
+This applies to:
+- Calling/messaging a contact directly
+- Sharing a property with a contact via messaging
+
+---
+
+## Import Flow — Product-Level Description
+
+ViewState supports importing contacts and potential property leads that the broker encounters through their WhatsApp or WhatsApp Business conversations.
+
+**Product-level behavior (mechanism TBD in Integration stage):**
+1. Broker initiates an import from a WhatsApp or WhatsApp Business conversation
+2. ViewState extracts: contact names, phone numbers, and potential property-related information
+3. Broker reviews extracted results and selects which to save
+4. Broker assigns roles to contacts before saving
+5. Confirmed records are saved to the database
+
+**Privacy rule (product-level, implementation-invariant):**
+- Only broker-selected contact records are ever stored
+- Raw conversation content is never stored or sent to the server
+- The broker is shown a clear privacy notice before any import begins
+
+---
+
+## Implementation Notes (Preliminary — Integration Stage Decides)
+
+The following reflects one possible implementation approach (.txt export parsing) that may or may not be the final chosen mechanism. This is provided for planning context only — it is NOT the locked product approach.
+
+### One possible approach: WhatsApp chat export (.txt parsing)
+
+WhatsApp allows users to export a chat as a `.txt` file. The format varies between iOS and Android:
+
+```
+// iOS pattern
+[DD/MM/YYYY, H:MM:SS AM/PM] Sender Name: message content
+
+// Android pattern
+DD/MM/YYYY, H:MM AM/PM - Sender Name: message content
+```
+
+If this approach is chosen in the Integration stage, the implementation would:
+- Use `expo-document-picker` for file selection
+- Parse the file on-device (privacy-first — no server involved)
+- Extract contacts (sender names + phone numbers)
+- Detect property-related keywords in message content
+- Show results for broker review before saving
+
+### Phone number extraction
+
+Phone number format varies by market. Do NOT hardcode country-specific phone patterns. The market configuration provides the expected phone format and E.164 normalization rules for the active deployment market.
 
 ```typescript
-import * as DocumentPicker from 'expo-document-picker';
-
-async function pickWhatsAppFile(): Promise<string | null> {
-  const result = await DocumentPicker.getDocumentAsync({
-    type: 'text/plain',
-    copyToCacheDirectory: true,
-  });
-
-  if (result.canceled) return null;
-  return result.assets[0].uri;
-}
+// Phone pattern must come from market config — not hardcoded
+// Example (illustrative only):
+// const phonePattern = getMarketConfig().phonePattern;
 ```
 
----
+### Property keyword detection
 
-## Parsing Logic
+Property-related keywords should include Arabic and English terms relevant to the active market. Core terms (apartment, villa, sale, rent, etc.) are universal. Market-specific property type names may be added via market configuration.
 
 ```typescript
-interface ParsedMessage {
-  timestamp: Date | null;
-  sender: string | null;
-  content: string;
-}
-
-interface ParsedContact {
-  name: string;
-  phone: string; // normalized E.164
-  messagesCount: number;
-  firstSeen: Date | null;
-}
-
-function parseWhatsAppExport(text: string): {
-  messages: ParsedMessage[];
-  contacts: ParsedContact[];
-  propertyMentions: string[];
-} {
-  // iOS pattern: [DD/MM/YYYY, H:MM:SS AM/PM] Name: message
-  const iosPattern = /\[(\d{1,2}\/\d{1,2}\/\d{4}), (\d{1,2}:\d{2}:\d{2} [AP]M)\] ([^:]+): (.+)/;
-
-  // Android pattern: DD/MM/YYYY, H:MM AM/PM - Name: message
-  const androidPattern = /(\d{1,2}\/\d{1,2}\/\d{4}), (\d{1,2}:\d{2} [AP]M) - ([^:]+): (.+)/;
-
-  // Phone number extraction from message content
-  const phonePattern = /(?:\+20|0)(1[0125]\d{8})/g;
-
-  // Property keywords (Arabic + English) for detecting property mentions
-  const propertyKeywords = [
-    'شقة', 'فيلا', 'أرض', 'محل', 'مكتب', // Arabic
-    'apartment', 'villa', 'land', 'shop', 'office', // English
-    'للبيع', 'للإيجار', 'sale', 'rent', 'متر', 'غرفة', 'غرف',
-  ];
-
-  // Parse messages, extract contacts and phone numbers, detect property mentions
-  // ... implementation here
-}
+const basePropertyKeywords = [
+  // Universal Arabic property terms
+  'شقة', 'فيلا', 'أرض', 'محل', 'مكتب',
+  'للبيع', 'للإيجار',
+  // Universal English property terms
+  'apartment', 'villa', 'land', 'shop', 'office', 'sale', 'rent',
+];
+// Additional market-specific terms loaded from market configuration
 ```
 
 ---
 
 ## Contact Extraction Rules
 
-1. **Named senders**: Every unique sender name in the chat is a potential contact
-2. **Phone numbers in messages**: Scan message content for Egyptian phone numbers
+Regardless of technical import mechanism:
+
+1. **Named senders / participants**: Every unique participant is a potential contact
+2. **Phone numbers in content**: Scan content for phone numbers matching the market phone pattern
 3. **Deduplication**: If the same phone number appears under different names, flag for broker review
-4. **Minimum signal**: Only extract a contact if they appear in ≥ 2 messages OR shared a phone number
+4. **Minimum signal**: Only suggest a contact if they appear in ≥ 2 messages OR shared a phone number
+5. **Broker review required**: No contact is saved without explicit broker selection
 
 ---
 
-## Property Mention Detection
+## Error States (UI — language-neutral)
 
-Scan message content for property-related keywords. If found:
-- Show the message as a "mention" in the import review screen
-- Let the broker optionally create a property lead from the mention
-- This is a soft suggestion — the broker decides what to do with each mention
-
----
-
-## Privacy Rules
-
-- File parsing happens **entirely on the device** — no chat content is ever sent to the server
-- Only the selected contact records (name + phone) are sent to the server after broker review
-- The original `.txt` file is deleted from the app cache after parsing (`expo-file-system`)
-- The broker is shown a privacy note before starting the import
+| Error condition | Handling |
+|----------------|---------|
+| File too large | Show error in Arabic and English: "الملف كبير جداً" / "File too large" |
+| Unrecognized format | Show error with re-export instructions |
+| Zero contacts found | Show empty state with guidance |
+| Zero phone numbers found | Show contacts by name only — let broker add phone manually |
+| File read error | Show retry option |
 
 ---
 
 ## Platform Notes
 
-- `expo-document-picker`: works on iOS, Android, and web
+- `expo-document-picker`: works on iOS and Android
 - File reading: use `expo-file-system` (`FileSystem.readAsStringAsync()`)
-- Web: `FileSystem` has partial support — test explicitly
-- The `.txt` file may be large (1000+ messages) — parse in a background thread using a chunked approach to avoid blocking the UI
-
----
-
-## Error Cases
-
-| Error | Handling |
-|-------|---------|
-| File too large (> 5 MB) | Show error: "הקובץ גדול מדי" / "File too large" |
-| Not a WhatsApp export format | Show error with instructions to re-export |
-| Zero contacts found | Show empty state with tips |
-| Zero phone numbers found | Show contacts by name only, let broker add phone manually |
-| File read error | Show retry button |
+- Large files (1000+ messages): parse in a background/chunked approach to avoid blocking the UI
+- All parsing must happen on-device — never send raw conversation content to the server

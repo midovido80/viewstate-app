@@ -29,10 +29,10 @@ const mockProperty: Property = {
   type: 'apartment',
   purpose: 'sale',
   price: '2500000',
-  currency: 'EGP',
+  currency: 'AED', // use market-appropriate currency in real tests — this is illustrative
   area_sqm: '120',
   bedrooms: 3,
-  governorate: 'cairo',
+  location_area: 'market-area-1', // use market-config ID — not a hardcoded country-specific value
   is_active: true,
   // ... other fields
 };
@@ -47,7 +47,7 @@ const mockRequirement: BuyerRequirement = {
   area_min_sqm: '100',
   area_max_sqm: null,
   bedrooms_min: 2,
-  governorate: ['cairo', 'giza'],
+  location_areas: ['market-area-1', 'market-area-2'], // use market-config IDs
   is_active: true,
   // ... other fields
 };
@@ -106,8 +106,8 @@ describe('POST /api/properties', () => {
         type: 'apartment',
         purpose: 'sale',
         price: 2500000,
-        currency: 'EGP',
-        governorate: 'cairo',
+        currency: 'AED', // market-configurable — use active market currency in real tests
+        location_area: 'market-area-1', // market-config ID
         title_ar: 'شقة للبيع',
       });
 
@@ -145,10 +145,10 @@ describe('PropertyCard', () => {
     title_ar: 'شقة رائعة',
     title_en: 'Great Apartment',
     price: 2500000,
-    currency: 'EGP',
+    currency: 'AED', // market-configurable — use active market currency in real tests
     type: 'apartment' as const,
     purpose: 'sale' as const,
-    governorate: 'cairo',
+    location_area: 'market-area-1', // market-config ID
   };
 
   it('renders Arabic title', () => {

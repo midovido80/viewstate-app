@@ -50,7 +50,7 @@ These rules are non-negotiable and apply to every AI session and every implement
 8. **Testing before reporting.** After each completed layer: run technical tests, functional tests, new-user simulation, and regression checks before reporting completion.
 
 ### V001 Product Scope
-9. **V001 scope is fixed and lean.** V001 features: Contacts, Properties, Matching, Import/Export, Global Search, User Profile, Arabic/English support. **Deferred (not V001):** Tasks, Deals, Commission, Reports, Network Marketplace, advanced AI chat, voice assistant.
+9. **V001 scope is fixed and lean.** V001 features: Contacts, Properties, Requirements, Matching, Classification (4-label optional status tags), Import/WhatsApp+WhatsApp Business communication, Global Search, User Profile, Arabic/English support. **Deferred (not V001):** Full task/reminder engine, Deals tracking, Commission, Reports, Network Marketplace, advanced AI chat, voice assistant.
 10. **Capture First → Enrich Later.** Minimal required data first; optional details later. Do not over-engineer forms or data models on first entry.
 11. **Contact roles for V001:** Tenant, Buyer, Owner, Broker — only these four. No other contact roles.
 12. **Matching AI scope for V001:** Compare + Score + Explain — only these three capabilities. No recommendation engine, no ML, no vector search.

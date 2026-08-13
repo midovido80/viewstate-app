@@ -62,6 +62,7 @@ phone           VARCHAR(20)              -- normalized E.164
 roles           TEXT[]                   -- ['buyer','tenant','owner','broker'] — V001 only these four
 source          ENUM('manual','whatsapp_import','contacts_import')
 notes           TEXT
+classification  TEXT                     -- optional: 'follow_up'|'important'|'pending'|'closed' (nullable)
 is_active       BOOLEAN DEFAULT true
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -81,18 +82,19 @@ description_en  TEXT
 type            ENUM('apartment','villa','office','land','shop')
 purpose         ENUM('sale','rent')
 price           NUMERIC(15,2) NOT NULL
-currency        CHAR(3) DEFAULT 'EGP'
+currency        CHAR(3) NOT NULL         -- market-configurable default; set by market config
 area_sqm        NUMERIC(8,2)
 bedrooms        SMALLINT
 bathrooms       SMALLINT
 floor           SMALLINT
 total_floors    SMALLINT
-governorate     TEXT NOT NULL
+location_area   TEXT                     -- market-configurable (emirate/region/governorate/etc.) — loaded from market config
 district        TEXT
 address_ar      TEXT
 address_en      TEXT
 lat             DECIMAL(9,6)
 lng             DECIMAL(9,6)
+classification  TEXT                     -- optional: 'follow_up'|'important'|'pending'|'closed' (nullable)
 is_active       BOOLEAN DEFAULT true
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -107,11 +109,11 @@ type            ENUM('apartment','villa','office','land','shop','any')
 purpose         ENUM('sale','rent','any')
 budget_min      NUMERIC(15,2)
 budget_max      NUMERIC(15,2)
-currency        CHAR(3) DEFAULT 'EGP'
+currency        CHAR(3) NOT NULL         -- market-configurable default; set by market config
 area_min_sqm    NUMERIC(8,2)
 area_max_sqm    NUMERIC(8,2)
 bedrooms_min    SMALLINT
-governorate     TEXT[]
+location_areas  TEXT[]                   -- market-configurable location preferences (see market config)
 notes_ar        TEXT
 notes_en        TEXT
 is_active       BOOLEAN DEFAULT true
@@ -125,7 +127,7 @@ id              UUID PK
 property_id     UUID FK → properties.id
 requirement_id  UUID FK → buyer_requirements.id
 score           SMALLINT NOT NULL    -- 0-100
-breakdown       JSONB NOT NULL       -- {type,purpose,price,governorate,area,bedrooms}
+breakdown       JSONB NOT NULL       -- {type,purpose,price,location,area,bedrooms}
 status          ENUM('pending','viewed','interested','rejected','closed')
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -54,7 +54,7 @@ The matching engine is ViewState's core value proposition. It automatically comp
 | `type` | `property.type` matches `requirement.type` (or requirement is `'any'`) | 30 |
 | `purpose` | `property.purpose` matches `requirement.purpose` (or requirement is `'any'`) | 20 |
 | `price` | `property.price` is between `requirement.budget_min` and `requirement.budget_max` | 25 |
-| `governorate` | `property.governorate` is in `requirement.governorate[]` | 15 |
+| `location_area` | `property.location_area` is in `requirement.location_areas[]` | 15 |
 | `area_sqm` | `property.area_sqm` is between `requirement.area_min_sqm` and `requirement.area_max_sqm` | 5 |
 | `bedrooms` | `property.bedrooms >= requirement.bedrooms_min` | 5 |
 
@@ -88,7 +88,7 @@ interface MatchBreakdown {
   type: number;      // 0 or 30
   purpose: number;   // 0 or 20
   price: number;     // 0 or 25
-  governorate: number; // 0 or 15
+  location: number;    // 0 or 15
   area: number;      // 0 or 5
   bedrooms: number;  // 0 or 5
 }
@@ -98,7 +98,7 @@ export function calculateMatchScore({ property, requirement }: MatchInput): Matc
     type: 0,
     purpose: 0,
     price: 0,
-    governorate: 0,
+    location: 0,
     area: 0,
     bedrooms: 0,
   };
@@ -120,13 +120,13 @@ export function calculateMatchScore({ property, requirement }: MatchInput): Matc
     if (minOk && maxOk) breakdown.price = 25;
   }
 
-  // Governorate match
-  if (property.governorate && requirement.governorate && requirement.governorate.length > 0) {
-    if (requirement.governorate.includes(property.governorate)) {
-      breakdown.governorate = 15;
+  // Location area match (market-configurable field)
+  if (property.location_area && requirement.location_areas && requirement.location_areas.length > 0) {
+    if (requirement.location_areas.includes(property.location_area)) {
+      breakdown.location = 15;
     }
-  } else if (!requirement.governorate || requirement.governorate.length === 0) {
-    breakdown.governorate = 15; // No restriction = full score
+  } else if (!requirement.location_areas || requirement.location_areas.length === 0) {
+    breakdown.location = 15; // No location restriction = full score
   }
 
   // Area match

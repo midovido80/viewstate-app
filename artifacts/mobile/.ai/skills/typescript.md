@@ -103,7 +103,7 @@ interface Property {
   currency: string;
   area_sqm: number | null;
   bedrooms: number | null;
-  governorate: string | null;
+  location_area: string | null;  // market-configurable — see DATABASE_RULES.md
   district: string | null;
   is_active: boolean;
   created_at: Date;

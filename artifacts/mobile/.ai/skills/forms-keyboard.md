@@ -150,6 +150,6 @@ type SubmitState = 'idle' | 'loading' | 'success' | 'error';
 
 - Use `keyboardType="phone-pad"`
 - Strip all non-digit characters on change
-- Show formatted number: `+20 1X XXXX XXXX` for Egyptian numbers
-- Validate: Egyptian mobile numbers start with `010`, `011`, `012`, or `015`
-- Never store the formatted version — only store the clean international format: `+201XXXXXXXXX`
+- Phone format, validation pattern, and display mask are **market-configurable** — do not hardcode country-specific formats
+- The active market configuration provides: expected prefix pattern, digit count, and E.164 normalization rules
+- Never store the formatted/display version — only store the clean E.164 international format (e.g., `+XXXXXXXXXXX`)

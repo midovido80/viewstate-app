@@ -88,6 +88,7 @@ app.json                 ← Expo config
 | Object storage | Replit Storage / Cloudinary / S3 (DEC-009) | Media layer |
 | Brand primary blue | Founder to confirm exact hex | UI layer |
 | Arabic translations | Founder to write all ar.json strings | All UI screens |
+| Market config (GCC) | Location taxonomy, currency code, locale tag, phone format per market (DEC-012) | Market configuration stage |
 
 ---
 
@@ -99,6 +100,20 @@ Completed: All governance files renamed to approved names; 18 rules incorporated
 Files changed: 12 new files written; 11 old files removed  
 Decisions: DEC-001 through DEC-009 logged (DEC-008, DEC-009 still pending)  
 State: PRE-IMPLEMENTATION — confirmed, no product code written or modified
+
+### Session: 2026-08-13 (Stage 00.1 — Product Purpose & User Lock)
+Task: Governance-only correction pass to align all files with Founder-approved Stage 00.1 decisions  
+Completed: All 9 required corrections applied across governance files  
+Files changed:
+- PROJECT_BIBLE.md — full rewrite: Egypt-specific content removed; Requirements added as explicit V001 feature; follow-up classification system documented; WhatsApp + WhatsApp Business section added; location taxonomy made market-configurable; Capture→Organize→Act operating model added; 10–15s speed target documented; persona assumptions removed; all approved "is NOT" boundaries preserved
+- skills/properties.md — full rewrite: Egyptian governorates hardcoded list removed; location_area market-configurable concept added; currency made market-configurable; classification field added to data model
+- skills/whatsapp-import.md — full rewrite: Egypt-specific framing removed; WhatsApp + WhatsApp Business governance boundary added; .txt parsing clarified as one possible approach only (not locked); Hebrew error message bug fixed; phone pattern made market-configurable
+- DATABASE_RULES.md — targeted edits: `governorate` → `location_area` in properties; `governorate` → `location_areas` in buyer_requirements; currency defaults changed to market-configurable; `classification` column added to contacts and properties; breakdown JSONB comment updated
+- DECISIONS.md — DEC-010 (classification system), DEC-011 (WhatsApp + WhatsApp Business), DEC-012 (market-configurable location) added
+- README.md — Rule 9 updated to include Requirements and Classification in V001 feature list
+- CURRENT_STATE.md — pending decisions and session log updated
+Decisions: DEC-010, DEC-011, DEC-012 logged  
+State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. No product code written or modified.
 
 ---
 

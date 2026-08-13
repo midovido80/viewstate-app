@@ -50,7 +50,7 @@ Testing is not optional. Per Rule 8: after each completed layer, the AI must run
 |-------|---------------------------------------|
 | Foundation / Auth | Login, register, OTP verify, session expiry, invalid credentials, logout |
 | Contacts | Create (minimal), create (full), edit, delete (soft), role assignment, deduplication |
-| Properties | Create (minimal), create (full), edit, delete (soft), governorate filter |
+| Properties | Create (minimal), create (full), edit, delete (soft), location area filter |
 | Requirements | Create, edit, delete, validate budget range |
 | Matching | Score calculation for all field combinations, edge cases (null fields, no match, perfect match), breakdown display |
 | WhatsApp Import | Parse iOS format, parse Android format, handle malformed file, extract phones, deduplication |
