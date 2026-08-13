@@ -4,9 +4,26 @@
 
 ---
 
+## V001 Contact Roles — Governance Rule 11
+
+ViewState V001 supports **exactly four contact roles**. No others may be added without Founder approval.
+
+| Role (EN) | Role (AR) | Who |
+|-----------|-----------|-----|
+| **Buyer** | مشتري | Looking to purchase a property |
+| **Tenant** | مستأجر | Looking to rent a property |
+| **Owner** | مالك | Has a property to sell or rent |
+| **Broker** | سمسار / وسيط | A real estate agent or broker |
+
+- A contact may hold multiple roles (e.g., Buyer + Broker)
+- Only Buyer and Tenant contacts may have `BuyerRequirement` records linked
+- The UI role picker must show exactly these four options — no free-text role entry
+
+---
+
 ## Contacts in ViewState
 
-Contacts are the people a broker knows: buyers, sellers, fellow brokers, or other contacts. They are stored in the ViewState database and may be imported from:
+Contacts are the people a broker knows. They are stored in the ViewState database and may be imported from:
 1. The device's phone contacts (via expo-contacts)
 2. WhatsApp chat exports
 

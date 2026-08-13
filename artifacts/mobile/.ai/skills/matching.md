@@ -4,17 +4,39 @@
 
 ---
 
-## What Is Matching?
+## V001 Matching Scope — Governance Rule 12
 
-The matching engine is ViewState's core value proposition. It automatically compares a buyer's stated requirements against all active properties in the system and generates match records when the criteria align sufficiently.
+ViewState V001 matching does **exactly three things**. Nothing more.
+
+| Capability | Description |
+|-----------|-------------|
+| **Compare** | Field-by-field comparison between a requirement and a property |
+| **Score** | Calculate a match score 0–100 based on how many criteria align |
+| **Explain** | Show the broker exactly which fields matched and which didn't (breakdown) |
+
+**Explicitly NOT in V001 matching:**
+- No ML / AI recommendation engine
+- No vector search or semantic similarity
+- No automated push notifications for new matches
+- No cross-broker matching
+- No "similar properties" suggestions
+- No natural language requirement parsing
+
+Architecture must allow upgrading to ML in V002 without breaking the API contract.
 
 ---
 
-## Matching Philosophy (v1)
+## What Is Matching?
 
-- **Rule-based only.** No ML, no embeddings, no fuzzy logic. Simple field-to-field comparison.
-- **Transparent.** Every match has an explainable score. The broker can see exactly why a match was made.
-- **Conservative.** A match should only be generated if it's genuinely plausible — not every property is shown to every buyer.
+The matching engine is ViewState's core value proposition. It automatically compares a buyer's or tenant's stated requirements against all active properties and generates match records when criteria align.
+
+---
+
+## Matching Philosophy (V001)
+
+- **Rule-based only (Rule 12).** No ML, no embeddings, no fuzzy logic. Simple field-to-field comparison.
+- **Transparent.** Every match has an explainable score — the broker sees exactly why a match was made.
+- **Conservative.** A match is only generated if the score reaches the threshold — not every property is shown.
 - **On-demand + triggered.** Matching runs when: a new property is added, a new requirement is added, or the broker manually requests a re-match.
 
 ---
