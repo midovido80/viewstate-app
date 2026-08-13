@@ -7,7 +7,7 @@
 
 ## Problem Statement
 
-Real estate transactions across the GCC and similar markets are conducted through a mix of informal channels: messaging apps, word-of-mouth, and broker networks that leave no structured digital trail. Buyers, tenants, and property owners have no reliable way to connect through an organized broker system. Property data is unstructured, contact requirements are stored informally, and agents manage their entire operation through messaging threads and personal memory.
+Real estate transactions across Gulf markets — with Kuwait as the first operational market — are conducted through a mix of informal channels: messaging apps, word-of-mouth, and broker networks that leave no structured digital trail. Buyers, tenants, and property owners have no reliable way to connect through an organized broker system. Property data is unstructured, contact requirements are stored informally, and agents manage their entire operation through messaging threads and personal memory.
 
 ViewState exists to fix this.
 
@@ -197,7 +197,9 @@ ViewState's location concept for properties and requirements is **market-configu
 
 - The product uses a generic **location area** concept (city, district, region, or market equivalent)
 - The specific taxonomy (governorates, emirates, regions, municipalities, etc.) is market configuration, loaded per deployment — not a universal product rule
-- GCC is the first deployment market — specific location taxonomy for each market is defined during the market configuration stage
+- **Kuwait is the first operational/deployment market** for V001 — Kuwait area taxonomy is the first concrete market configuration to be defined in the Market Configuration stage
+- GCC is the planned expansion region after the Kuwait-first release — additional GCC markets provide their own location taxonomies via market configuration
+- The product itself is generic and scalable beyond any single country; Kuwait-first is an operational decision, not a product architecture constraint
 - The data model must support loading location options from configuration rather than a hardcoded list
 
 ---

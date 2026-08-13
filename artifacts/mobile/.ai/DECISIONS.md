@@ -235,15 +235,42 @@ Decided by: Founder
 Category: Product
 
 ### Context
-Governance files previously hard-coded Egypt's 27 governorates as the universal location taxonomy. Decision 2 (GCC-first, generic product) requires this to be market-configurable.
+Governance files previously hard-coded Egypt's 27 governorates as the universal location taxonomy. The product definition requires location taxonomy to be generic and market-configurable. Kuwait is the first operational/deployment market; GCC is the planned expansion region.
 
 ### Decision
-ViewState's location concept for properties and requirements must be generic and market-configurable. The specific taxonomy (governorates, emirates, regions, municipalities, etc.) is market configuration — loaded per deployment, not hard-coded into product code or governance. GCC is the first deployment market; specific location taxonomy for each GCC market is defined in the market configuration stage. No country-specific location list or administrative term is hard-coded into the product definition.
+ViewState's location concept for properties and requirements must be generic and market-configurable. The specific taxonomy (areas, districts, regions, etc.) is market configuration — loaded per deployment, not hard-coded into product code or governance. Kuwait is the first operational/deployment market for V001; Kuwait's area taxonomy is the first concrete market configuration. GCC expansion follows, with each market providing its own location taxonomy. No country-specific location list or administrative term is hard-coded into the core product definition.
 
 ### Consequences
 - All hard-coded Egypt-specific governorate lists and Egypt-specific location wording removed from governance files
 - Exact column name, data type, nullability, and schema representation for the location field are deferred to the Database stage
 - Market configuration layer design (what it provides, how it is structured, which fields it exposes) is deferred to the Architecture stage
+
+---
+
+## [DEC-013] — Kuwait as first operational/deployment market; GCC expansion planned
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Context
+The prior governance wording stated "GCC is the first deployment market." The Founder has specified Kuwait more precisely as the first operational/deployment market for V001.
+
+### Decision
+ViewState V001's first operational/deployment market is **Kuwait**. GCC is the planned expansion region after the Kuwait-first release. The product itself remains generic and scalable beyond any single country — Kuwait-first is an operational decision, not a product architecture constraint.
+
+### Product-level consequences
+- Property and location workflows must be capable of supporting a Kuwait-first market configuration in which the broker can select from Kuwait areas when entering property data
+- The complete Kuwait area taxonomy (names, groupings, IDs, source, update mechanism) is deferred to the Market Configuration / Property / Database stage — it is NOT decided in Stage 00.1
+- Where a real country context is needed for V001 product-definition examples or market configuration illustration, use Kuwait (not UAE or any other GCC country)
+- If a real V001 market currency example is ever required in a later stage, Kuwait uses KWD — but KWD is not a universal core product default and must not be treated as such in Stage 00.1
+- Additional GCC markets after Kuwait provide their own location taxonomies, currencies, phone formats, and locale settings via market configuration
+
+### What is NOT locked by this decision
+- Kuwait area names, count, grouping, or data source → Market Configuration stage
+- Database column name or type for the location field → Database stage
+- Phone number format for Kuwait → Market Configuration stage
+- KWD as a hardcoded currency default → Market Configuration stage
 
 ---
 

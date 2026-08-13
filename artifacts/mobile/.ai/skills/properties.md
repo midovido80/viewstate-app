@@ -55,14 +55,19 @@ type PropertyPurpose = 'sale' | 'rent';
 **Governance rule (product level):** Country-specific administrative terms (governorates, emirates, regions, municipalities, etc.) are NOT hard-coded into the product. Location options are loaded from market configuration per deployment — not from a hardcoded list.
 
 **Product-level rules:**
-- GCC is the first deployment market — the exact location taxonomy for each GCC market is defined in the market configuration stage
-- The UI label for the location field adapts to the market (e.g., "Emirate", "Region", "Area") — resolved from market configuration
-- No single country's administrative structure is assumed as the universal default
+- **Kuwait is the first operational/deployment market** — Kuwait area taxonomy is the first concrete market configuration to be defined
+- GCC is the planned expansion region; each GCC market provides its own location taxonomy via market configuration
+- The UI label for the location field adapts to the market (e.g., "Area", "Region", "District") — resolved from market configuration
+- No single country's administrative structure is assumed as the universal default; Kuwait-first is an operational decision, not a core product constraint
+
+**Product-level consequence for V001:**
+Property and location workflows must be capable of supporting a Kuwait-first market configuration in which the broker can select from Kuwait areas when entering property data. The complete list of Kuwait areas, how it is sourced, grouped, and stored is deferred to the Market Configuration / Property / Database stage.
 
 **Deferred to later stages:**
-- Exact database column name and type → Database stage
+- Complete Kuwait area taxonomy (names, groupings, IDs) → Market Configuration stage
+- Exact database column name and type for the location field → Database stage
 - Market configuration layer design (how it loads, what it exposes) → Architecture stage
-- Specific GCC market location lists → Market configuration stage
+- Additional GCC market location taxonomies → respective Market Configuration stages
 
 ---
 

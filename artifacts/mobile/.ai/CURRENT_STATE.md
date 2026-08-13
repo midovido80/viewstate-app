@@ -88,7 +88,8 @@ app.json                 ← Expo config
 | Object storage | Replit Storage / Cloudinary / S3 (DEC-009) | Media layer |
 | Brand primary blue | Founder to confirm exact hex | UI layer |
 | Arabic translations | Founder to write all ar.json strings | All UI screens |
-| Market config (GCC) | Location taxonomy, currency code, locale tag, phone format per market (DEC-012) | Market configuration stage |
+| Market config — Kuwait (V001 first market) | Kuwait area taxonomy, KWD currency, locale tag, phone format (DEC-012, DEC-013) | Market configuration stage |
+| Market config — GCC expansion | Per-market location taxonomy, currency, locale after Kuwait release (DEC-013) | Post-Kuwait market configuration stages |
 
 ---
 
