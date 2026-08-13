@@ -1,0 +1,746 @@
+# STAGE 00.2.2 — FOUNDER DECISION CORRECTION & FINAL MINIMUM CAPABILITY REPORT
+
+## MODE
+
+ANALYSIS / REPORT CORRECTION ONLY.
+
+This is still a PRE-IMPLEMENTATION product-definition stage.
+
+Stage 00.1 is FROZEN / APPROVED.
+
+Stage 00.2.1 is FROZEN / APPROVED.
+
+Stage 00.2.2 is NOT FROZEN yet.
+
+Do NOT modify any file.
+
+Do NOT update governance.
+
+Do NOT modify product code.
+
+Do NOT begin Stage 00.2.3.
+
+Do NOT design Architecture, Database, UX, Navigation, Integration, or implementation details.
+
+Your task is only to correct the Stage 00.2.2 analysis report using the Founder-approved decisions below.
+
+---
+
+# GOVERNANCE SOURCE OF TRUTH
+
+Before producing the corrected report, read and preserve all frozen governance, especially:
+
+- `.ai/README.md`
+- `.ai/PROJECT_BIBLE.md`
+- `.ai/ARCHITECTURE.md`
+- `.ai/UX_RULES.md`
+- `.ai/DATABASE_RULES.md`
+- `.ai/CHANGE_POLICY.md`
+- `.ai/AI_WORKFLOW.md`
+- `.ai/TESTING.md`
+- `.ai/GRILL_ME.md`
+- `.ai/DECISIONS.md`
+- `.ai/CURRENT_STATE.md`
+- `.ai/STAGE_00_1_FREEZE.md`
+- `.ai/STAGE_00_2_1_ANALYSIS.md`
+- `.ai/STAGE_00_2_1_FREEZE.md`
+
+Do not reinterpret or alter any Stage 00.1 or Stage 00.2.1 frozen decision.
+
+---
+
+# FOUNDER DECISIONS — NOW APPROVED
+
+The Founder has resolved all three open product-level decisions identified during CTO review.
+
+These decisions are now approved for Stage 00.2.2 analysis.
+
+Do NOT reopen them as ambiguities.
+
+---
+
+## FOUNDER DECISION 1 — BIDIRECTIONAL MATCHING
+
+V001 Matching must support BOTH directions:
+
+### Direction A
+
+Requirement → Matching Properties
+
+The broker can start from a Buyer/Tenant Requirement and identify matching Properties from the broker's own inventory.
+
+### Direction B
+
+Property → Matching Requirements / Relevant Clients
+
+The broker can start from a Property and identify matching Buyer/Tenant Requirements associated with relevant contacts in the broker's own data.
+
+Both directions must follow the same frozen product principle:
+
+**Compare → Score → Explain**
+
+Matching remains:
+
+- broker-initiated
+- rule-based
+- per-broker
+- private
+- non-AI
+- non-marketplace
+
+Do NOT define:
+
+- scoring weights
+- scoring thresholds beyond already frozen governance
+- algorithms
+- queries
+- schema
+- automatic alerts
+- push notifications
+- ML
+- embeddings
+- cross-broker matching
+
+This decision establishes only the PRODUCT BEHAVIOR boundary:
+
+**Matching in V001 is bidirectional.**
+
+---
+
+## FOUNDER DECISION 2 — MULTIPLE REQUIREMENTS PER BUYER / TENANT
+
+A Buyer or Tenant contact may have:
+
+**one or more Requirements**
+
+V001 must NOT artificially restrict a Buyer/Tenant to one Requirement only.
+
+This supports real broker cases where the same client may have different simultaneous property needs.
+
+Examples are NOT to be converted into implementation rules.
+
+Do NOT define:
+
+- active/inactive requirement status
+- maximum number of requirements
+- requirement priority
+- requirement version history
+- requirement expiration
+- database cardinality implementation
+- schema relationships
+- UI tabs
+- requirement grouping
+
+The product-level minimum is only:
+
+> A Buyer/Tenant contact can have multiple distinct Requirements, and each Requirement can independently participate in Matching.
+
+Capture First → Enrich Later must remain preserved.
+
+---
+
+## FOUNDER DECISION 3 — ONE EDITABLE RUNNING NOTE PER RECORD IN V001
+
+For V001:
+
+### Contact Notes
+
+Each Contact may have:
+
+**one editable running internal note**
+
+### Property Notes
+
+Each Property may have:
+
+**one editable running internal note**
+
+The note can be read and updated.
+
+This is the minimum V001 product behavior.
+
+This does NOT permanently prevent future versions from expanding Notes into:
+
+- multiple notes
+- timeline
+- note history
+- dated entries
+- activity log
+
+Those may be added later if approved.
+
+For V001, however:
+
+**one editable running note per Contact**
+and
+**one editable running note per Property**
+
+are sufficient.
+
+Do NOT define:
+
+- database column
+- data type
+- storage structure
+- timestamps
+- versioning mechanism
+- rich text
+- audit log
+- note history persistence
+
+This is product behavior only.
+
+---
+
+# REQUIRED CTO CORRECTIONS
+
+In addition to the three Founder decisions, correct the following two premature characterizations identified during CTO verification.
+
+These do NOT require new Founder decisions.
+
+---
+
+## CORRECTION A — PROPERTY LOCATION
+
+Remove any wording that defines the Kuwait / market location list as:
+
+**flat**
+
+The hierarchy or taxonomy structure is NOT decided in Stage 00.2.2.
+
+Use only:
+
+> pre-loaded, market-configured location list / selection source
+
+Do NOT decide whether it is:
+
+- flat
+- hierarchical
+- governorate-based
+- district-based
+- nested
+- multi-level
+
+Those decisions belong to the Market Configuration / Property / Database stages.
+
+---
+
+## CORRECTION B — PROPERTY SHARING UX SEQUENCE
+
+Do NOT lock the exact UX sequence as:
+
+Property → select Client → select WhatsApp / WhatsApp Business
+
+Frozen product scope requires only:
+
+- a specific Property
+- a specific client
+- WhatsApp or WhatsApp Business as the communication choice
+- a private broker-initiated sharing action
+
+The order in which these are selected is NOT decided in Stage 00.2.2.
+
+The UX stage may later determine whether the flow starts:
+
+- from the Property
+- from the Contact
+- from Matching
+- or another approved relevant context
+
+Do NOT define step order in this stage.
+
+---
+
+# REQUIRED REPORT CORRECTIONS
+
+Update the Stage 00.2.2 analysis accordingly.
+
+---
+
+## CORRECTION 1 — MATCHING
+
+Remove the Matching Direction ambiguity.
+
+Matching minimum V001 capability must state clearly:
+
+> Broker can initiate matching in both directions:
+> Requirement → Properties
+> and
+> Property → Requirements / relevant Buyer-Tenant contacts.
+
+Matching must continue to produce:
+
+- comparison
+- score
+- explanation
+
+Do not introduce implementation details.
+
+Governance Confidence should become:
+
+**CONFIRMED**
+
+unless another genuine unrelated governance conflict exists.
+
+---
+
+## CORRECTION 2 — REQUIREMENTS
+
+Remove all wording that says or implies:
+
+> one active requirement per contact is sufficient
+
+Replace it with:
+
+> A Buyer/Tenant contact may have one or more Requirements.
+
+Each Requirement remains independently retrievable, enrichable, and usable for Matching.
+
+Do NOT create lifecycle/status rules.
+
+---
+
+## CORRECTION 3 — NOTES
+
+Replace any ambiguous or inferred language about Notes cardinality with the approved V001 minimum:
+
+### Contact Notes
+
+One editable running internal note per Contact.
+
+### Property Notes
+
+One editable running internal note per Property.
+
+Preserve:
+
+Property Notes ≠ Property Description.
+
+Do not define persistence.
+
+---
+
+## CORRECTION 4 — LOCATION
+
+Remove all references to a:
+
+> flat list
+
+Use only neutral product-level language about:
+
+> a pre-loaded, market-configured location selection source/list.
+
+Taxonomy structure remains deferred.
+
+---
+
+## CORRECTION 5 — PROPERTY SHARING
+
+Remove any statement that locks exact selection order or screen flow.
+
+The minimum product outcome should state:
+
+> The broker can privately share a selected/relevant Property with a specific client using either WhatsApp or WhatsApp Business.
+
+Do not define which entity must be selected first.
+
+---
+
+# FROZEN 15 CAPABILITIES — DO NOT CHANGE
+
+Stage 00.2.2 must continue analyzing exactly these 15 IN V001 capabilities:
+
+1. Properties
+2. Contacts
+3. Buyer / Tenant Requirements
+4. Matching
+5. Classification
+6. Global Search
+7. WhatsApp / WhatsApp Business Communication Choice
+8. Import
+9. Property Sharing via WhatsApp / WhatsApp Business
+10. User Profile
+11. Authentication / Login
+12. Media & Attachments
+13. Contact Notes
+14. Property Notes
+15. Property Location
+
+Do NOT add, remove, merge, or reclassify any top-level capability.
+
+---
+
+# DEFERRED CAPABILITIES — PRESERVE
+
+Remain DEFERRED:
+
+1. Full Export System
+2. Market Configuration Administration
+3. Backup / Sync management capability
+4. Commission Management
+5. Analytics / Reporting
+
+Do NOT pull them into V001.
+
+Future architecture must remain extensible enough not to unnecessarily block their later addition.
+
+---
+
+# OUT OF V001 — PRESERVE
+
+Remain OUT OF V001:
+
+1. Tasks / Reminders
+2. Deal Management
+3. Broker-to-Broker Network / Marketplace
+4. Public Property Portal
+5. AI Assistant / Natural Language Interface
+
+Do NOT reintroduce them indirectly.
+
+---
+
+# CLASSIFICATION — PRESERVE EXACTLY
+
+The four optional labels remain exactly:
+
+1. Follow Up
+2. Important
+3. Pending
+4. Order Complete / Closed Deal
+
+No dates.
+
+No reminders.
+
+No automation.
+
+No pipeline.
+
+No deal system.
+
+---
+
+# MEDIA — PRESERVE
+
+Media & Attachments remain:
+
+- Photos
+- Videos
+- Documents
+
+IN V001.
+
+Do NOT select storage or technical implementation.
+
+---
+
+# CONTACT ROLES — PRESERVE
+
+Exactly:
+
+- Tenant
+- Buyer
+- Owner
+- Broker
+
+Multi-role contacts remain supported.
+
+Do NOT add roles.
+
+---
+
+# REQUIRED OUTPUT FORMAT
+
+Produce exactly these sections:
+
+## 1. Corrected Minimum Capability Matrix
+
+Use:
+
+| Capability | Minimum V001 Capability | Minimum User Outcome | Explicitly NOT Required in V001 | Scope-Creep Boundary | Governance Confidence |
+
+All 15 capabilities must be present.
+
+---
+
+## 2. Corrected Minimum V001 Capability Definition — Per Capability
+
+For every capability include:
+
+**Core Purpose**
+
+**Minimum V001 Capability**
+
+Maximum 3–5 product-level bullets.
+
+**Minimum Successful User Outcome**
+
+**Not Required for V001**
+
+**Scope Boundary**
+
+Do not introduce technical implementation.
+
+---
+
+## 3. Founder Decision Resolution Status
+
+Explicitly state:
+
+### Matching Direction
+RESOLVED BY FOUNDER
+
+V001 Matching is bidirectional.
+
+### Requirements Cardinality
+RESOLVED BY FOUNDER
+
+Buyer/Tenant contact may have one or more Requirements.
+
+### Notes Cardinality
+RESOLVED BY FOUNDER
+
+One editable running Contact Note per Contact and one editable running Property Note per Property in V001.
+
+---
+
+## 4. Capture First Compliance
+
+Re-evaluate:
+
+- Properties
+- Contacts
+- Requirements
+- Import
+
+Confirm that multiple Requirements do not make BASIC Contact capture heavier.
+
+A Contact must still be capturable independently under Capture First.
+
+Requirements are added as a separate demand-record workflow.
+
+Do not define fields or UI.
+
+---
+
+## 5. Capture → Organize → Act Coverage
+
+Confirm all three phases remain covered.
+
+---
+
+## 6. North Star Coverage
+
+Confirm bidirectional Matching improves North Star coverage without expanding into automation, AI, or marketplace behavior.
+
+---
+
+## 7. Duplication / Overlap Check
+
+Re-check:
+
+- Classification vs Follow-up
+- User Profile vs Basic Settings
+- WhatsApp Communication vs Property Sharing
+- Property Location vs Market Configuration
+- Contact Notes vs Property Notes
+- Import vs Media & Attachments
+
+Do not define UX sequence.
+
+---
+
+## 8. Scope-Creep Risks
+
+Update risks to reflect:
+
+- bidirectional Matching
+- multiple Requirements
+- one editable running note
+- neutral Property Location taxonomy structure
+- UX-order-neutral Property Sharing
+
+---
+
+## 9. Governance Gaps / Ambiguities
+
+Re-evaluate from zero.
+
+Do NOT count technical implementation decisions as product ambiguities.
+
+If no genuine product-level blocker remains, state exactly:
+
+`No product-level ambiguities found that block Stage 00.2.2.`
+
+---
+
+## 10. Founder Decisions Required
+
+If no additional genuine product-level decision remains, state exactly:
+
+`No unresolved Founder decisions required for Stage 00.2.2.`
+
+Do not manufacture a blocker.
+
+---
+
+## 11. Corrected Proposed Stage 00.2.2 Minimum Capability Lock
+
+Provide exactly 15 capability statements.
+
+Matching statement must explicitly include both directions.
+
+Requirements statement must explicitly support one or more Requirements per Buyer/Tenant.
+
+Notes statements must explicitly state one editable running note per record for V001.
+
+Property Location must not use the word "flat".
+
+Property Sharing must not define the selection order.
+
+This remains a recommendation only.
+
+Do NOT update governance.
+
+Do NOT freeze Stage 00.2.2.
+
+---
+
+# ALLOWED ACTIONS
+
+You may:
+
+- read governance
+- correct the analysis report
+- apply the three Founder decisions
+- remove unsupported product assumptions
+- identify genuine remaining ambiguity
+
+---
+
+# FORBIDDEN ACTIONS
+
+Do NOT:
+
+- modify any file
+- modify governance
+- freeze Stage 00.2.2
+- start Stage 00.2.3
+- create product code
+- define database schema
+- define columns
+- define data types
+- define APIs
+- define SDKs
+- define auth provider
+- define storage provider
+- define navigation
+- define screens
+- define form fields
+- define UX ordering
+- define Kuwait taxonomy hierarchy
+- define location hierarchy
+- define matching weights
+- define new matching thresholds
+- define matching algorithm implementation
+- define WhatsApp technical mechanism
+- define Import mechanism
+- define sharing payload
+- define note persistence
+- add advanced Notes history
+- introduce Requirement lifecycle logic
+- change any Stage 00.2.1 classification
+
+---
+
+# ACCEPTANCE CRITERIA
+
+The corrected analysis passes only if:
+
+- all three Founder decisions are applied exactly
+- Matching is bidirectional
+- Buyer/Tenant supports one or more Requirements
+- Contact Notes = one editable running note per Contact in V001
+- Property Notes = one editable running note per Property in V001
+- Property Notes remain distinct from Property Description
+- no "flat list" assumption remains
+- no Property Sharing UX step order is locked
+- all 15 capabilities remain unchanged
+- no new V001 top-level capability is added
+- Capture First remains intact
+- 10–15 second BASIC capture target remains intact
+- Capture → Organize → Act remains intact
+- Matching remains rule-based and broker-initiated
+- Matching does not become automated or cross-broker
+- WhatsApp and WhatsApp Business remain required choices
+- Media remains Photos + Videos + Documents
+- Commission Management remains DEFERRED
+- Analytics / Reporting remains DEFERRED
+- no DB decision is introduced
+- no UX flow is introduced
+- no Architecture mechanism is selected
+- no Integration mechanism is selected
+- no governance file is modified
+- no product code is modified
+- Stage 00.2.3 does not begin
+
+---
+
+# TESTING / VERIFICATION REQUIREMENTS
+
+Before returning the corrected report verify:
+
+1. Stage 00.1 remains FROZEN / APPROVED.
+2. Stage 00.2.1 remains FROZEN / APPROVED.
+3. Stage 00.2.2 remains NOT FROZEN.
+4. PRE-IMPLEMENTATION remains active.
+5. Stage 00.2.3 has not started.
+6. No governance file was modified.
+7. No product code was modified.
+8. Exactly 15 IN V001 capabilities remain.
+9. All three Founder decisions are reflected consistently in every section.
+10. No unsupported "one requirement only" wording remains.
+11. No unsupported "flat location list" wording remains.
+12. No Property Sharing UX sequence is locked.
+13. No technical implementation decision was introduced.
+14. No new product-level ambiguity was silently resolved.
+
+---
+
+# DELIVERABLES
+
+Return only:
+
+1. Corrected Stage 00.2.2 analysis report.
+2. Remaining genuine product ambiguities, if any.
+3. Remaining Founder decisions, if any.
+4. Final stage status.
+
+Do NOT modify governance.
+
+Do NOT freeze Stage 00.2.2.
+
+Do NOT begin Stage 00.2.3.
+
+---
+
+# FINAL STATUS
+
+End with exactly one of:
+
+`STATUS: READY FOR FOUNDER/CTO REVIEW`
+
+or
+
+`STATUS: BLOCKED — FOUNDER DECISION REQUIRED`
+
+Then STOP.
+
+Do NOT modify any file.
+
+Do NOT freeze Stage 00.2.2.
+
+Do NOT begin Stage 00.2.3.
+
+Founder/CTO approval is required before any governance update or Stage 00.2.2 freeze.
