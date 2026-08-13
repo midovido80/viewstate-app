@@ -11,7 +11,8 @@
 |-------|--------|--------------|------|
 | Stage 00.1 — Product Purpose & User Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
 | Stage 00.2.1 — V001 Scope Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
-| Stage 00.2 — UX & Interaction Lock (remaining sub-stages) | ⏸ WAITING | Awaiting separate Founder authorization | — |
+| Stage 00.2.2 — Minimum Capability Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
+| Stage 00.2.3 and beyond | ⏸ WAITING | Awaiting separate Founder authorization | — |
 | Stage 00.3 and beyond | ⏸ WAITING | Not started | — |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
@@ -54,6 +55,8 @@
 | `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
 | `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.1 corrected scope analysis |
 | `.ai/STAGE_00_2_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.1 freeze record |
+| `.ai/STAGE_00_2_2_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.2 corrected minimum capability analysis |
+| `.ai/STAGE_00_2_2_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.2 freeze record |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
@@ -175,6 +178,20 @@ Completed:
 Files changed: STAGE_00_2_1_ANALYSIS.md (full correction + FROZEN status), DECISIONS.md (DEC-016 + DEC-017), STAGE_00_2_1_FREEZE.md (new), CURRENT_STATE.md (stage status, file registry, session log)
 Decisions: DEC-016 (Commission/Analytics DEFERRED — Founder authorization), DEC-017 (Stage 00.2.1 formal freeze)
 State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 FROZEN. Stage 00.2 remaining sub-stages WAITING. Stage 00.2.2 NOT STARTED. No product code written or modified.
+
+---
+
+### Session: 2026-08-13 (Stage 00.2.2 — Minimum Capability Analysis, Correction & Formal Freeze)
+Task: Apply two CTO-verified corrections, execute Founder Decision resolutions, and formally freeze Stage 00.2.2.
+Authorization: Founder verbal authorization — "نفذ ال correction و ال verification و اقفل المرحة دي"
+Completed:
+- Correction 1 (Property Location): Removed categorical exclusion of "map-based selection" and "GPS coordinate input" from Stage 00.2.2 analysis. Replaced with neutral deferred language: visual selection method, map interaction model, coordinate usage, and taxonomy presentation are all deferred to UX / Market Configuration / Database stages. No positive or negative claim made about map or GPS behavior in V001.
+- Correction 2 (Authentication / Login): Removed "broker does not re-authenticate on every app open" from Sections 1 and 2. Retained "authenticated session" as product concept. Session lifetime and re-authentication behavior explicitly deferred to Foundation/Auth stage and auth-provider decision (DEC-008 PENDING).
+- Three Founder Decisions recorded as DEC-018 (Bidirectional Matching), DEC-019 (Multiple Requirements per Buyer/Tenant), DEC-020 (One Editable Running Note per Contact and per Property).
+- Formal freeze executed: STAGE_00_2_2_ANALYSIS.md written (FROZEN status); STAGE_00_2_2_FREEZE.md created; DEC-021 logged in DECISIONS.md; Stage 00.2.2 marked FROZEN/APPROVED in CURRENT_STATE.md and README.md.
+Files changed: STAGE_00_2_2_ANALYSIS.md (new — frozen), STAGE_00_2_2_FREEZE.md (new), DECISIONS.md (DEC-018 + DEC-019 + DEC-020 + DEC-021 added), CURRENT_STATE.md (stage status + file registry + session log updated), README.md (Stage 00.2.2 freeze noted)
+Decisions: DEC-018 (Bidirectional Matching — Founder Decision), DEC-019 (Multiple Requirements — Founder Decision), DEC-020 (One Editable Running Note — Founder Decision), DEC-021 (Stage 00.2.2 formal freeze)
+State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 FROZEN. Stage 00.2.2 FROZEN. Stage 00.2.3 WAITING. No product code written or modified.
 
 ---
 

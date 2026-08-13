@@ -390,4 +390,111 @@ PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.
 
 ---
 
+## [DEC-018] — V001 Matching is bidirectional
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.2 Founder Decision 1)
+Category: Product (Rule 12)
+
+### Context
+Stage 00.2.2 CTO verification identified that the original minimum capability analysis did not resolve the matching direction. The Founder confirmed V001 must support both directions.
+
+### Decision
+V001 Matching must support both directions:
+- **Direction A — Requirement → Properties:** Broker starts from a Buyer/Tenant Requirement and identifies matching Properties from their own inventory.
+- **Direction B — Property → Requirements / Relevant Clients:** Broker starts from a Property and identifies matching Buyer/Tenant Requirements associated with relevant contacts in the broker's own data.
+
+Both directions follow the frozen product principle: Compare → Score (0–100) → Explain.
+
+Matching remains: broker-initiated · rule-based · per-broker · private · non-AI · non-marketplace.
+
+### What Is NOT Decided Here
+Scoring weights, scoring thresholds beyond already frozen governance, algorithms, queries, schema, automatic alerts, push notifications, ML, embeddings, cross-broker matching.
+
+### Consequences
+The bidirectionality is a product behavior boundary only. Neither direction triggers automated behavior. Architecture must support both entry points. Mechanism, query implementation, and screen design are deferred to their respective stages.
+
+---
+
+## [DEC-019] — Buyer/Tenant contact may have one or more Requirements
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.2 Founder Decision 2)
+Category: Product
+
+### Context
+Stage 00.2.2 CTO verification identified that the original analysis silently claimed "one active requirement per contact is sufficient." No frozen governance source supported this cardinality limit. The Founder resolved the question.
+
+### Decision
+A Buyer or Tenant contact may have **one or more Requirements** in V001. V001 must not artificially restrict a Buyer/Tenant to a single Requirement. This supports real broker cases where the same client may have different simultaneous property needs.
+
+The product-level minimum:
+> A Buyer/Tenant contact can have multiple distinct Requirements, and each Requirement can independently participate in Matching.
+
+Capture First → Enrich Later is preserved: a Requirement with only property type and budget range is a valid, complete record regardless of how many other Requirements the same contact holds.
+
+### What Is NOT Decided Here
+Active/inactive requirement status · maximum number of requirements · requirement priority · requirement version history · requirement expiration · database cardinality implementation · schema relationships · UI tabs · requirement grouping.
+
+### Consequences
+Requirements are an additive, separate-workflow demand-record. They do not increase the burden of basic Contact capture. Multiple Requirements per contact strengthen Matching input depth.
+
+---
+
+## [DEC-020] — One editable running note per Contact and per Property in V001
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.2 Founder Decision 3)
+Category: Product
+
+### Context
+Stage 00.2.2 CTO verification identified that the original analysis inferred "single note" from a planned schema column (DATABASE_RULES.md `contacts.notes TEXT`) while Stage 00.2.1 had explicitly said "Persistence TBD." The Founder resolved the product behavior question.
+
+### Decision
+For V001:
+- **Contact Notes:** Each Contact may have one editable running internal note. The broker can read and update it.
+- **Property Notes:** Each Property may have one editable running internal note. The broker can read and update it. Property Notes remain distinct from Property Description.
+
+This is product behavior only. It does not permanently prevent future versions from expanding Notes into multiple notes, a timeline, note history, dated entries, or an activity log.
+
+### What Is NOT Decided Here
+Database column · data type · storage structure · timestamps · versioning mechanism · rich text · audit log · note history persistence.
+
+### Consequences
+Notes are one editable running plain-text annotation per record in V001. They must not evolve into task management, deal tracking, or threaded communication within V001.
+
+---
+
+## [DEC-021] — Formal Freeze: Stage 00.2.2 — Minimum Capability Analysis
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder verbal authorization — "نفذ ال correction و ال verification و اقفل المرحة دي"
+
+### Decision
+Stage 00.2.2 — Minimum Capability Analysis is **FROZEN and APPROVED** as of 2026-08-13.
+
+The minimum capability definitions documented across Stage 00.2.2 are the authoritative, locked definition of the minimum product behavior required for each of the 15 V001 capabilities.
+
+### Frozen Content Summary
+See `STAGE_00_2_2_FREEZE.md` for the full formal record. Summary:
+- **Three Founder decisions:** Bidirectional Matching (DEC-018) · One-or-more Requirements per Buyer/Tenant (DEC-019) · One editable running note per Contact and per Property (DEC-020)
+- **Two CTO corrections applied:** Property Location visual selection method neutralized (not categorically excluded); Authentication session-lifetime specificity removed (deferred to Foundation/Auth stage)
+- **15 IN V001 minimum capability definitions frozen:** see STAGE_00_2_2_FREEZE.md §Minimum Capability Definitions
+- **Capture First and 10–15 second basic capture target confirmed intact**
+- **Capture → Organize → Act confirmed fully covered**
+- **North Star (bidirectional Matching) confirmed strengthened without scope creep**
+
+### Change Process
+Any future change to Stage 00.2.2 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged. Silent edits during implementation sessions are prohibited (Rule 6).
+
+### What Is NOT Locked by Stage 00.2.2
+All schema, architecture, integration mechanisms, UI flows, visual selection methods, session lifetime, Kuwait area taxonomy, storage provider, auth provider, and market configuration specifics remain deferred to their respective stages. See `STAGE_00_2_2_FREEZE.md` — "What Is NOT Frozen" table.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.3 has NOT started — WAITING for separate Founder authorization.
+
+---
+
 _New decisions are appended here as they are made. Entries are never deleted._
