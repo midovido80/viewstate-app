@@ -104,7 +104,7 @@ Category: Product (Rule 11)
 V001 supports exactly four contact roles: Tenant, Buyer, Owner, Broker. No other roles.
 
 ### Rationale
-These four roles cover 100% of the Egyptian broker's immediate use case. Additional roles (investor, developer, etc.) are deferred to V002.
+These four roles cover the approved V001 broker use case. Additional roles (investor, developer, etc.) are deferred to V002.
 
 ### Consequences
 The `contacts.roles` DB column is a text array constrained to these four values. UI role picker shows exactly four options.
@@ -308,6 +308,29 @@ All schema, architecture, integration, and market configuration specifics remain
 
 ### Implementation Status
 PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2 has NOT started — WAITING for Founder authorization.
+
+---
+
+## [DEC-015] — Editorial governance correction: DEC-004 stale market reference
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (session authorization — Stage 00.2.1 governance correction pass)
+Category: Governance (Change Policy — Editorial Correction)
+
+### Context
+DEC-004's authoritative decision is correct and unchanged: V001 supports exactly four contact roles — Tenant, Buyer, Owner, Broker. No other roles. However, DEC-004's rationale sentence referred to "the Egyptian broker's immediate use case." DEC-012 and DEC-013 subsequently locked Kuwait as the first operational/deployment market and established the product core as generic and market-configurable. The Egypt reference became stale and inconsistent with frozen Stage 00.1 governance.
+
+### Decision
+The rationale phrase "100% of the Egyptian broker's immediate use case" is replaced with market-neutral wording: "the approved V001 broker use case." No other content in DEC-004 is changed. The four roles (Tenant, Buyer, Owner, Broker), their behavior, multi-role support rule, schema constraint reference, and V002 deferral note are all unchanged.
+
+### Change Policy compliance
+- Category: Editorial correction to a stale market reference in a rationale sentence only
+- The authoritative decision text of DEC-004 is not modified
+- No Stage 00.1 product decision is reopened or altered
+- No role is added, removed, renamed, or reordered
+- No schema, implementation, or behavior change
+- Founder explicit authorization: Stage 00.2.1 governance correction session, 2026-08-13
+- Logged per Change Policy requirements
 
 ---
 

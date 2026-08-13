@@ -10,7 +10,8 @@
 | Stage | Status | Authorized by | Date |
 |-------|--------|--------------|------|
 | Stage 00.1 — Product Purpose & User Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
-| Stage 00.2 — UX & Interaction Lock | ⏸ WAITING | Not started — awaiting Founder authorization | — |
+| Stage 00.2.1 — V001 Scope Analysis | 🔄 IN PROGRESS — awaiting Founder/CTO freeze | Three Founder decisions applied; editorial corrections applied | 2026-08-13 |
+| Stage 00.2 — UX & Interaction Lock (remaining sub-stages) | ⏸ WAITING | Awaiting Stage 00.2.1 freeze + Founder authorization | — |
 | Stage 00.3 and beyond | ⏸ WAITING | Not started | — |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
@@ -49,8 +50,9 @@
 | `.ai/AI_WORKFLOW.md` | ✅ Session protocol, prompt execution rules |
 | `.ai/TESTING.md` | ✅ 4-layer testing requirement |
 | `.ai/GRILL_ME.md` | ✅ Red-team / adversarial review protocol |
-| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-014 (DEC-014 = Stage 00.1 freeze) |
+| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-015 (DEC-014 = Stage 00.1 freeze; DEC-015 = editorial correction to DEC-004 stale market reference) |
 | `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
+| `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔄 Stage 00.2.1 corrected scope analysis — awaiting Founder/CTO freeze |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
@@ -145,6 +147,17 @@ Authorization: Founder verbal authorization — "نفذ"
 Completed: Stage 00.1 marked FROZEN/APPROVED; freeze record written; DEC-014 logged  
 Files changed: STAGE_00_1_FREEZE.md (new), DECISIONS.md (DEC-014 added), CURRENT_STATE.md (Stage Status table added), README.md (Stage 00.1 freeze noted)  
 State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2 WAITING. No product code written or modified.
+
+---
+
+### Session: 2026-08-13 (Stage 00.2.1 — Governance Correction Pass)
+Task: Apply three governance-only corrections before Stage 00.2.1 freeze. No product code modified.
+Completed:
+- Correction 1 (Capability Count): Created STAGE_00_2_1_ANALYSIS.md with fully normalized count — 27 detailed inventory rows, 25 top-level classification decisions (15 IN + 7 OUT + 3 DEFERRED = 25). Sub-capabilities #11 (Basic Settings within User Profile) and #17 (Follow-up Classifications within Classification) documented as non-top-level; arithmetic reconciled and explained.
+- Correction 2 (Import/Integration Boundary Wording): Risk 3 wording corrected. Previous wording implied integration mechanisms are forbidden from all V001 implementation. Corrected to: no technical mechanism is selected in Stage 00.2.1; mechanism selection is deferred to the Integration stage and remains subject to Founder/CTO approval at that stage.
+- Correction 3 (DEC-004 Stale Egypt Reference): Replaced "100% of the Egyptian broker's immediate use case" with "the approved V001 broker use case" in DEC-004 rationale. Authoritative decision (four roles: Tenant, Buyer, Owner, Broker) unchanged. DEC-015 logged per Change Policy.
+Files changed: DECISIONS.md (DEC-004 rationale edit + DEC-015 added), STAGE_00_2_1_ANALYSIS.md (new file), CURRENT_STATE.md (stage status, file registry, session log)
+State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 IN PROGRESS — awaiting Founder/CTO freeze. No product code written or modified.
 
 ---
 
