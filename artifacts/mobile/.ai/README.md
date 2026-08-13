@@ -5,7 +5,8 @@
 **Stage 00.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_1_FREEZE.md` and DEC-014  
 **Stage 00.2.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_1_FREEZE.md` and DEC-017  
 **Stage 00.2.2:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_2_FREEZE.md` and DEC-021  
-**Stage 00.2.3:** ⏸ WAITING — not started; awaiting Founder authorization  
+**Stage 00.3:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_3_FREEZE.md` and DEC-026  
+**Stage 00.2.3 placeholder:** ⚠️ label exists in files — content undefined; deferred to Governance Cleanup Pass  
 **Language:** Bilingual Arabic / English (ar / en)  
 **Platform:** React Native (Expo) — iOS primary, Android secondary  
 **Last updated:** 2026-08-13

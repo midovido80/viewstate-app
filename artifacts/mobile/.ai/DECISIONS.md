@@ -497,4 +497,131 @@ PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.
 
 ---
 
+## [DEC-022] — V001 BASIC capture minima, Contact role rule, and Requirement Purpose rule
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 approval)
+Category: Product
+
+### Context
+Stage 00.3 required formal Founder approval of the minimum capture fields for Contact, Property, and Requirement, as well as resolution of two closely related rules: whether Contact role is required at capture time, and whether Requirement Purpose may be inferred from Contact role.
+
+### Decision
+**Contact BASIC capture minimum:** Name + Phone Number. A Contact with Name and Phone Number is a valid saved record. No additional fields are required for initial validity.
+
+**Contact role:** Role assignment is NOT required to save a Contact. Role is enrichment. A Contact may exist without a role. Role may be assigned during initial capture or at any later time. The four allowed roles remain exactly: Tenant · Buyer · Owner · Broker. Multi-role Contacts are supported. No fifth role.
+
+**Property BASIC capture minimum:** Property Type · Purpose (Sale or Rent) · Price · Market-configured Location Area. Optional enrichment must not block BASIC capture.
+
+**Requirement BASIC capture minimum:** Property Type · Purpose (Buy or Rent) · Budget Range. Purpose belongs explicitly to the Requirement — it may NOT be inferred solely from Contact role, because Contacts may be multi-role. A Requirement must belong to a Contact holding at least one of: Buyer role, Tenant role. Owner-only and Broker-only Contacts may not own Requirements.
+
+**Contact Import validity:** Import should populate all available source information automatically. Before saving an imported Contact as a valid record, Name and Phone Number must exist. If either is unavailable from the source, the broker provides only the missing minimum value. Role remains optional at import time.
+
+**BASIC capture target:** Approximately 10–15 seconds for each of Contact, Property, and Requirement.
+
+### Consequences
+Capture First → Enrich Later is mandatory. Optional enrichment may never become a mandatory prerequisite for valid BASIC capture unless a future Founder-approved scope change explicitly changes this rule.
+
+---
+
+## [DEC-023] — Matching ≥70% visibility threshold and deferred scoring formula
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 approval)
+Category: Product (Rule 12)
+
+### Context
+Stage 00.3 required resolution of (a) which Matching results are surfaced to the broker, (b) whether the scoring formula is defined at this stage, and (c) whether a zero-match result is a valid product outcome.
+
+### Decision
+**Visibility threshold:** Only Matching results scoring ≥70% are surfaced to the broker. Results below 70% are not shown.
+
+**Zero qualifying matches:** If no record reaches 70%, the product presents "No Matches ≥70%" — this is a valid and successful Matching outcome. The system must not surface weak matches to avoid an empty result.
+
+**Scoring formula: FULLY DEFERRED.** The following are not defined at Stage 00.3 and must not be assumed: scoring weights, coefficients, relative field importance, mandatory criteria, soft criteria, penalties, mathematical formula, or algorithm implementation.
+
+**Explanation:** The product must explain the score/result using relevant matching reasons. The exact explanation structure, matching fields used in scoring, and explanation presentation remain deferred to the Implementation stage.
+
+**Matching architecture protection:** The future Matching implementation must permit scoring logic to evolve without requiring unnecessary reconstruction of the entire Matching layer. The exact scoring architecture remains deferred. This statement protects future flexibility only.
+
+### Consequences
+Both Matching directions (J-06 and J-07) operate under the ≥70% threshold. Matching remains broker-initiated, non-automatic, non-background, non-notification-driven. No cross-broker matching. No AI/ML.
+
+---
+
+## [DEC-024] — Property Sharing recipient: any saved Contact
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 — overrides prior Stage 00.3 analysis recommendation)
+Category: Product
+
+### Context
+The initial Stage 00.3 analysis recommended restricting Property Sharing recipients to Buyer/Tenant contacts only (FD-1 Option A). The Founder reviewed this recommendation and overrode it.
+
+### Decision
+V001 Property Sharing may target any saved Contact, including: Tenant · Buyer · Owner · Broker · Contact with no role assigned.
+
+Conditions that remain unchanged: the sharing action is private · broker-initiated · directed at one specific Property · directed at one specific Contact · conducted via WhatsApp or WhatsApp Business.
+
+Private one-to-one sharing with a Broker Contact is NOT Broker-to-Broker Marketplace behavior. Broker-to-Broker Marketplace remains OUT OF V001.
+
+### What Is NOT Decided Here
+Sharing payload format · Property card design · UX entry point · Property-first vs Contact-first selection sequence · technical WhatsApp mechanism.
+
+### Consequences
+J-08 (Share Property with Contact) has no role restriction on the recipient. Any saved Contact with a phone number is a valid recipient. Marketplace, bulk, public, automated, and scheduled sharing remain out of V001.
+
+---
+
+## [DEC-025] — Authentication / Language / Profile first-run behavior and Arabic/RTL default
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 — resolves FD-2)
+Category: Product + UX
+
+### Context
+Stage 00.3 analysis identified FD-2: whether User Profile setup or Language selection is a mandatory first-run gate after authentication. The analysis presented two options. The Founder resolved this.
+
+### Decision
+After successful authentication, the broker may immediately begin productive use. There is no mandatory Profile-completion gate. There is no mandatory Language-selection gate.
+
+**Default V001 language: Arabic — RTL.** Device locale is NOT the frozen default. English remains user-selectable. The broker may change language later through the app's language preference control.
+
+Profile enrichment is optional and may occur at any time. Profile is not a prerequisite for Properties, Contacts, Requirements, Matching, Search, or Sharing.
+
+### What Is NOT Decided Here
+Exact UI location of the language preference control · exact Profile field set beyond what is already frozen elsewhere · localization SDK or technical implementation.
+
+### Consequences
+J-01 (Authenticate) and J-14 (Configure Profile and Language) are independent journeys. All other journeys are accessible immediately after authentication. Arabic/RTL is the product's pre-configured default; the broker may change it at any time without a first-run gate.
+
+---
+
+## [DEC-026] — Formal Freeze: Stage 00.3 — Core User Journeys Lock
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder/CTO review and approval of corrected Stage 00.3 analysis + CTO precision correction pass
+
+### Decision
+Stage 00.3 — Core User Journeys Lock is **FROZEN and APPROVED** as of 2026-08-13.
+
+The core user journey inventory, minimum capture definitions, matching behavior rules, and product-level behaviors documented across Stage 00.3 (DEC-022 through DEC-026 as they relate to core user journeys) are the authoritative, locked definition of the minimum product journey model for ViewState V001.
+
+### Frozen Content Summary
+See `STAGE_00_3_FREEZE.md` for the full formal record. Summary:
+- **15 journeys frozen:** J-01 Authenticate · J-02 Create Contact · J-03 Create Property · J-04 Create Requirement · J-05 Import Contact · J-06 Match Requirement→Properties · J-07 Match Property→Requirements/Clients · J-08 Share Property with Contact · J-09 Communicate with Contact · J-10 Enrich Contact · J-11 Enrich Property · J-12 Enrich Requirement · J-13 Classify Contact or Property · J-14 Configure Profile and Language · J-15 Global Search and Retrieve
+- **Minimum capture frozen:** Contact (Name + Phone) · Property (Type + Purpose + Price + Location Area) · Requirement (Type + Purpose + Budget Range)
+- **Matching threshold frozen:** ≥70% visibility · scoring formula deferred · zero qualifying matches valid
+- **Four Founder decisions recorded:** DEC-022 (capture minima + role/purpose rules) · DEC-023 (matching threshold) · DEC-024 (sharing recipient) · DEC-025 (auth/language/profile)
+
+### Change Process
+Any future change to Stage 00.3 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.4 has NOT started — WAITING for Founder authorization.
+
+---
+
 _New decisions are appended here as they are made. Entries are never deleted._

@@ -12,8 +12,9 @@
 | Stage 00.1 — Product Purpose & User Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
 | Stage 00.2.1 — V001 Scope Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
 | Stage 00.2.2 — Minimum Capability Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
-| Stage 00.2.3 and beyond | ⏸ WAITING | Awaiting separate Founder authorization | — |
-| Stage 00.3 and beyond | ⏸ WAITING | Not started | — |
+| Stage 00.3 — Core User Journeys Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
+| Stage 00.2.3 placeholder | ⚠️ LABEL EXISTS — content undefined; deferred to Governance Cleanup Pass | — | — |
+| Stage 00.4 and beyond | ⏸ WAITING | Awaiting Founder authorization | — |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
 
@@ -51,12 +52,13 @@
 | `.ai/AI_WORKFLOW.md` | ✅ Session protocol, prompt execution rules |
 | `.ai/TESTING.md` | ✅ 4-layer testing requirement |
 | `.ai/GRILL_ME.md` | ✅ Red-team / adversarial review protocol |
-| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-021 (DEC-014 = Stage 00.1 freeze; DEC-015 = DEC-004 editorial correction; DEC-016 = Commission/Analytics DEFERRED; DEC-017 = Stage 00.2.1 freeze; DEC-018 = Bidirectional Matching; DEC-019 = Multiple Requirements; DEC-020 = One Editable Running Note; DEC-021 = Stage 00.2.2 freeze) |
+| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-026 (DEC-022 = BASIC capture minima + role/purpose rules; DEC-023 = Matching ≥70% threshold; DEC-024 = Property Sharing any Contact; DEC-025 = Auth/Language/Profile rules; DEC-026 = Stage 00.3 freeze) |
 | `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
 | `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.1 corrected scope analysis |
 | `.ai/STAGE_00_2_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.1 freeze record |
 | `.ai/STAGE_00_2_2_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.2 corrected minimum capability analysis |
 | `.ai/STAGE_00_2_2_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.2 freeze record |
+| `.ai/STAGE_00_3_FREEZE.md` | 🔒 FROZEN — formal Stage 00.3 freeze record |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
@@ -192,6 +194,20 @@ Completed:
 Files changed: STAGE_00_2_2_ANALYSIS.md (new — frozen), STAGE_00_2_2_FREEZE.md (new), DECISIONS.md (DEC-018 + DEC-019 + DEC-020 + DEC-021 added), CURRENT_STATE.md (stage status + file registry + session log updated), README.md (Stage 00.2.2 freeze noted)
 Decisions: DEC-018 (Bidirectional Matching — Founder Decision), DEC-019 (Multiple Requirements — Founder Decision), DEC-020 (One Editable Running Note — Founder Decision), DEC-021 (Stage 00.2.2 formal freeze)
 State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 FROZEN. Stage 00.2.2 FROZEN. Stage 00.2.3 WAITING. No product code written or modified.
+
+---
+
+### Session: 2026-08-13 (Stage 00.3 — Core User Journeys Lock — Analysis, Correction Passes, and Formal Freeze)
+Task: Execute Stage 00.3 — Core User Journeys Lock: analysis, Founder/CTO correction pass, CTO precision correction, and formal freeze.
+Authorization: Founder/CTO review and approval of corrected Stage 00.3 analysis + CTO precision correction pass + Founder freeze authorization.
+Completed:
+- Stage 00.3 analysis: classified 14 journey candidates; produced 15 journeys (8 CORE, 7 SUPPORTING); resolved 10 governance verification questions; identified 2 Founder Decisions (FD-1, FD-2).
+- Founder/CTO Correction Pass: applied 15 corrections including: Requirement Purpose made explicit on Requirement; Contact role confirmed optional at capture; Matching success state corrected (≥70% threshold, zero qualifying matches valid); scoring formula fully deferred; Property Sharing recipient expanded to any saved Contact (Founder overrides FD-1 recommendation); Arabic/RTL confirmed as frozen default (FD-2 resolved: no mandatory gates); Classification visual placement deferred; Search exact placement deferred; WhatsApp voice-call launch not pre-committed.
+- CTO Precision Correction: applied 5 precision corrections: "immediately participates in Matching" → "becomes eligible for broker-initiated Matching"; Contact Import validity minimum (Name + Phone, broker provides only missing value); "field-level explanation" removed → "explain using relevant matching reasons"; language change not locked to "Profile/Settings"; stale-doc source corrected to include docs/database/README.md for WhatsApp parsing assumption.
+- Formal freeze executed: STAGE_00_3_FREEZE.md created; DEC-022 through DEC-026 logged in DECISIONS.md; Stage 00.3 marked FROZEN/APPROVED in CURRENT_STATE.md and README.md.
+Files changed: STAGE_00_3_FREEZE.md (new), DECISIONS.md (DEC-022 + DEC-023 + DEC-024 + DEC-025 + DEC-026 added), CURRENT_STATE.md (stage status + file registry + session log updated), README.md (Stage 00.3 freeze noted)
+Decisions: DEC-022 (BASIC capture minima + role/purpose rules), DEC-023 (Matching ≥70% threshold + deferred formula + zero-match validity), DEC-024 (Property Sharing any saved Contact), DEC-025 (Auth/Language/Profile first-run + Arabic/RTL default), DEC-026 (Stage 00.3 formal freeze)
+State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 FROZEN. Stage 00.2.2 FROZEN. Stage 00.3 FROZEN. Stage 00.4 WAITING. No product code written or modified.
 
 ---
 
