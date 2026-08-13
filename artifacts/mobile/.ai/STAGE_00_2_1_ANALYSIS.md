@@ -1,12 +1,17 @@
 # Stage 00.2.1 — V001 Scope Analysis
-## CORRECTED FINAL SCOPE REPORT (Pre-Freeze)
+## CORRECTED FINAL SCOPE REPORT
 
-**Status:** 🔄 IN PROGRESS — awaiting Founder/CTO freeze
+**Status:** 🔒 FROZEN / APPROVED
 **Date:** 2026-08-13
+**Frozen by:** Founder + CTO
+**Authorization:** Founder verbal authorization — "موافق"
+**Recorded in:** DECISIONS.md DEC-017
 **Mode:** Analysis / report only. Zero file modifications to product code.
-**Corrections applied:** Three Founder decisions (Media, Property Sharing, Property Notes) + three editorial corrections (capability count normalization, Import boundary wording, DEC-004 stale market reference).
+**Corrections applied:** Three Founder scope decisions (Media, Property Sharing, Property Notes) + four editorial corrections (capability count normalization, Import boundary wording, DEC-004 stale market reference, Commission/Analytics reclassification to DEFERRED + per-broker wording consistency).
 **Stage 00.1 status:** 🔒 FROZEN / APPROVED — untouched.
 **PRE-IMPLEMENTATION:** Active.
+
+> **Change Policy:** Any future change to this frozen Stage 00.2.1 scope requires Change Policy Category A: Founder written approval → exact diff → explicit confirm → applied → new DECISIONS.md entry logged.
 
 ---
 
@@ -36,7 +41,7 @@ Subtracting these two sub-capability rows from the 27 visible rows:
 
 **27 visible rows − 2 sub-capability rows = 25 top-level classification decisions**
 
-**15 IN V001 + 7 OUT OF V001 + 3 DEFERRED = 25 ✓**
+**15 IN V001 + 5 OUT OF V001 + 5 DEFERRED = 25 ✓**
 
 ---
 
@@ -65,18 +70,18 @@ Subtracting these two sub-capability rows from the 27 visible rows:
 | 17 | Follow-up Classifications | **IN V001** *(sub-capability of #5 Classification — not a separate top-level decision)* | "Follow Up" is one of the four approved classification labels. Fully contained within Classification capability #5. No separate module required. | DEC-010; DEC-014 §8 | Counted within #5 Classification |
 | 18 | Tasks / Reminders | **OUT OF V001** | Explicitly excluded at Stage 00.1 freeze. Classification must not become a task engine. No dates, reminders, or automation permitted. | Rule 9 deferred list; DEC-014 §8; STAGE_00_1_FREEZE.md §8 | No |
 | 19 | Deal Management | **OUT OF V001** | Explicitly excluded. "Order Complete / Closed Deal" is a status label only — not a deal ledger or transaction tracker. | Rule 9 deferred list; DEC-014 §8; PROJECT_BIBLE deferred list | No |
-| 20 | Commission Management | **OUT OF V001** | Explicitly excluded and deferred. | Rule 9 deferred list; PROJECT_BIBLE deferred list | No |
-| 21 | Broker-to-Broker Network / Marketplace | **OUT OF V001** | Explicitly excluded. Single-broker private tool in V001. Architecture must not block it for V002+. | Rule 9 deferred list; Rule 17; STAGE_00_1_FREEZE.md "Not a B2B marketplace" | No |
+| 20 | Commission Management | **DEFERRED** | Not in V001; intentionally deferred for later ViewState versions. V001's "Order Complete / Closed Deal" classification label covers basic deal closure. Full commission tracking and calculation may be added or expanded in later versions. Architecture must not block future inclusion. | DEC-016; PROJECT_BIBLE deferred list | No |
+| 21 | Broker-to-Broker Network / Marketplace | **OUT OF V001** | Explicitly excluded. Per-broker private tool in V001. Architecture must not block it for V002+. | Rule 9 deferred list; Rule 17; STAGE_00_1_FREEZE.md "Not a B2B marketplace" | No |
 | 22 | Public Property Portal | **OUT OF V001** | Explicitly excluded. ViewState is a private professional tool — not a public listing platform. | STAGE_00_1_FREEZE.md "Not a public real-estate listing platform"; PROJECT_BIBLE Vision | No |
-| 23 | AI Assistant / Natural Language Interface | **OUT OF V001** | Explicitly deferred. Architecture must support it for V002+. | Rule 9 deferred list; Rule 17; PROJECT_BIBLE deferred list | No |
-| 24 | Analytics / Reporting | **OUT OF V001** | Explicitly deferred. No governance support for V001. | Rule 9 deferred list; PROJECT_BIBLE deferred list | No |
+| 23 | AI Assistant / Natural Language Interface | **OUT OF V001** | Explicitly excluded from V001 scope. Architecture must support it for V002+ per Rule 17. | Rule 9 deferred list; Rule 17; PROJECT_BIBLE deferred list | No |
+| 24 | Analytics / Reporting | **DEFERRED** | Not in V001; intentionally deferred for later ViewState versions. V001 scope is focused on core broker capture, organize, and act workflows. Analytics and reporting features may be added or expanded in later versions. Architecture must not block future inclusion. | DEC-016; Rule 9 deferred list; PROJECT_BIBLE deferred list | No |
 | 25 | Backup / Sync | **DEFERRED** | Data persistence handled server-side (PostgreSQL). Client caching is an architectural rule. A dedicated user-facing backup/sync management capability is not required for V001's purpose. | No governance support for V001 scope | No |
 
 ---
 
 ## Section 2 — Final Proposed IN V001 List
 
-The following **15 top-level capabilities** are proposed as IN V001:
+The following **15 top-level capabilities** are IN V001:
 
 1. **Authentication / Login** — broker identity and per-broker data isolation (auth provider TBD, DEC-008)
 2. **Contacts** — create, manage, role-assign (exactly four roles: Buyer / Tenant / Owner / Broker; DEC-004)
@@ -100,23 +105,23 @@ The following **15 top-level capabilities** are proposed as IN V001:
 
 | Capability | Reason for Exclusion |
 |-----------|---------------------|
-| Tasks / Reminders | Explicitly excluded at Stage 00.1 freeze. Classification must not become a task engine. |
-| Deal Management | Explicitly excluded. "Order Complete / Closed Deal" is a classification label only — not a transaction system. |
-| Commission Management | Explicitly excluded and deferred. |
+| Tasks / Reminders | Explicitly excluded at Stage 00.1 freeze. Classification must not become a task engine. No dates, reminders, or automation permitted. |
+| Deal Management | Explicitly excluded. "Order Complete / Closed Deal" is a classification label only — not a transaction system or deal ledger. |
 | Broker-to-Broker Network / Marketplace | Explicitly excluded. Per-broker private tool in V001. Architecture must remain extensible for V002+. |
 | Public Property Portal | Explicitly excluded. Private professional tool — not a consumer listing platform. |
-| AI Assistant / Natural Language Interface | Explicitly deferred. Architecture must support it for V002+. |
-| Analytics / Reporting | Explicitly deferred. No governance support for V001. |
+| AI Assistant / Natural Language Interface | Explicitly excluded from V001 scope. Architecture must support it for V002+ per Rule 17. |
 
 ---
 
 ## Section 4 — Final Proposed DEFERRED List
 
-| Capability | Why Deferral Protects V001 Goal |
-|-----------|--------------------------------|
+| Capability | Why Deferral and Extensibility Intent |
+|-----------|--------------------------------------|
 | **Full Export System** | A generalized export capability outside the essential property-sharing workflow adds complexity without V001 value. Property Sharing via WhatsApp / WhatsApp Business covers the broker's core Act-phase sharing need. Broader export (PDF generation, CSV export, bulk data export) is a natural V002 addition. |
 | **Market Configuration Administration** | The broker consumes Kuwait area data via a location picker — handled internally within Properties and Requirements. Building a market configuration management tool (admin UI, taxonomy editing) in V001 would divert focus from core broker workflows. |
 | **Backup / Sync** | Server-side PostgreSQL provides inherent data persistence. React Query client-side caching is an architectural rule. A dedicated user-facing backup/sync management capability adds complexity without V001 value. |
+| **Commission Management** | Not in V001; intentionally deferred for later ViewState versions. V001's "Order Complete / Closed Deal" classification label covers basic deal closure acknowledgement. Full commission tracking, calculation, and management may be added or expanded in later versions. Architecture must not block future inclusion. |
+| **Analytics / Reporting** | Not in V001; intentionally deferred for later ViewState versions. V001 scope is focused on core broker capture, organize, and act workflows. Analytics dashboards, usage reporting, and performance metrics are natural post-V001 additions that grow in value as broker data accumulates. Architecture must not block future inclusion. |
 
 ---
 
@@ -174,8 +179,12 @@ Property Sharing via WhatsApp / WhatsApp Business is IN V001. It is explicitly s
 **✅ RESOLVED BY FOUNDER — Decision 3**
 Property Notes are IN V001 as a product capability, distinct from Property Description. Description describes the property to clients; Notes are the broker's internal private annotations. Persistence representation is TBD.
 
+### Commission Management and Analytics / Reporting classification
+**✅ RESOLVED BY FOUNDER — DEC-016**
+Both are DEFERRED — not in V001, and intentionally preserved for later ViewState versions. Future addition, expansion, or new features may be applied to them in later versions. Architecture must not block future inclusion.
+
 ### New Ambiguities
-None. The three Founder decisions resolve all open Stage 00.2.1 scope blockers. Remaining open items (storage architecture, note persistence, sharing mechanism, media format specifics) are implementation details that belong to later stages and do not block a product-scope freeze.
+None. All Stage 00.2.1 scope blockers are resolved. Remaining open items (storage architecture, note persistence, sharing mechanism, media format specifics, Kuwait taxonomy, auth provider, object storage provider) are implementation details that belong to later stages and do not block this scope freeze.
 
 ---
 
@@ -183,11 +192,11 @@ None. The three Founder decisions resolve all open Stage 00.2.1 scope blockers. 
 
 `No unresolved Founder decisions required for Stage 00.2.1.`
 
-All three decisions identified in the previous analysis have been resolved by the Founder. Remaining open items across all capabilities are implementation details (storage provider, column names, file limits, mechanism selection, UI design) that belong to Architecture, Database, Integration, and UX stages respectively. None of these block the product-scope boundary lock that Stage 00.2.1 is designed to establish.
+All scope decisions have been resolved by the Founder. Remaining open items are implementation details (storage provider, column names, file limits, mechanism selection, UI design) that belong to Architecture, Database, Integration, and UX stages respectively.
 
 ---
 
-## Section 8 — Corrected Capability Count
+## Section 8 — Final Capability Count
 
 ### Normalization summary
 
@@ -205,35 +214,43 @@ All three decisions identified in the previous analysis have been resolved by th
 | Classification | Top-level capabilities | Count |
 |---------------|----------------------|-------|
 | **IN V001** | Authentication/Login · Contacts · Properties · Buyer/Tenant Requirements · Matching · Classification · Global Search · WhatsApp/WA Business Communication Choice · Property Sharing via WhatsApp/WA Business · Import · User Profile · Media & Attachments · Contact Notes · Property Notes · Property Location | **15** |
-| **OUT OF V001** | Tasks/Reminders · Deal Management · Commission Management · Broker-to-Broker Network/Marketplace · Public Property Portal · AI Assistant/NLI · Analytics/Reporting | **7** |
-| **DEFERRED** | Full Export System · Market Configuration (administration) · Backup/Sync | **3** |
-| **TOTAL** | | **15 + 7 + 3 = 25 ✓** |
+| **OUT OF V001** | Tasks/Reminders · Deal Management · Broker-to-Broker Network/Marketplace · Public Property Portal · AI Assistant/NLI | **5** |
+| **DEFERRED** | Full Export System · Market Configuration (administration) · Backup/Sync · Commission Management · Analytics/Reporting | **5** |
+| **TOTAL** | | **15 + 5 + 5 = 25 ✓** |
 
 **Sub-capabilities (within IN V001 parents — not double-counted):**
 - Basic Settings → contained within User Profile (#10)
 - Follow-up Classifications → contained within Classification (#5)
 
+**Reclassification note (DEC-016):** Commission Management and Analytics/Reporting were reclassified from OUT OF V001 to DEFERRED per Founder decision. Both are not in V001; both are intentionally preserved for future extensibility. This moves 2 capabilities from OUT (7→5) to DEFERRED (3→5).
+
 ---
 
-## Section 9 — Final Recommended Stage 00.2.1 Boundary
-
-*(Recommendation only. Not written into any governance file until Founder/CTO freeze is authorized.)*
+## Section 9 — Final Frozen Stage 00.2.1 Boundary
 
 > **ViewState V001 is a private, per-broker, bilingual (Arabic/English) mobile tool** for real estate professionals. Contacts, properties, and all data are owned by the individual broker — no cross-broker matching, no broker-to-broker marketplace. Kuwait is the first operational market; GCC expansion is planned. The product core is generic and market-configurable.
 >
 > **V001 contains:** Authentication; Contacts (4 roles: Buyer, Tenant, Owner, Broker); Properties; Buyer/Tenant Requirements; rule-based Matching (Compare + Score + Explain); optional 4-label Classification on contacts and properties (Follow Up / Important / Pending / Order Complete or Closed Deal — no dates or reminders); Global Search across contacts and properties; WhatsApp and WhatsApp Business as required communication channel choices (technical mechanism deferred to Integration stage); Property Sharing via WhatsApp and WhatsApp Business (broker shares property with a specific client — mechanism and payload deferred to Integration / UX stages); WhatsApp-driven and device contact Import (mechanism deferred to Integration stage); User Profile with language/locale settings; Media & Attachments (Photos + Videos + Documents — storage and format details deferred); Contact Notes and Property Notes as distinct broker-facing product capabilities (Property Notes are separate from Property Description — persistence deferred); and market-configurable Property Location (Kuwait areas as first configuration — taxonomy and schema deferred).
 >
-> **V001 explicitly excludes:** Tasks, reminders, automation, Deal Management, Commission tracking, Analytics, Public Property Portal, Broker-to-Broker Marketplace, AI Assistant, Full Export System, and Market Configuration administration.
+> **V001 explicitly excludes:** Tasks, reminders, automation, Deal Management, Broker-to-Broker Marketplace, Public Property Portal, and AI Assistant.
+>
+> **V001 defers for future versions:** Full Export System, Market Configuration administration, Backup/Sync, Commission Management, and Analytics/Reporting.
 >
 > **All database schema, storage architecture, integration mechanisms (including WhatsApp/WhatsApp Business technical approach), UI flows, Kuwait area taxonomy, and market configuration administration are deferred to their respective stages. No implementation detail was decided in Stage 00.2.1.**
 
 ---
 
-## Pre-Freeze Verification Checklist
+## Known Pre-existing Governance Gap (Queued for Architecture Stage)
+
+> **ARCHITECTURE.md media layer** still describes "Photo upload → property images, stored in object storage." This predates Founder Decision 1 (Photos + Videos + Documents). ARCHITECTURE.md was intentionally not modified in this Stage 00.2.1 pass — it is an architecture-stage document. This inconsistency must be corrected when the Architecture stage is authorized. DATABASE_RULES.md `property_media` table already contains `media_type ENUM('photo','video','document')` and is consistent with Founder Decision 1.
+
+---
+
+## Freeze Verification Checklist
 
 | Check | Status |
 |-------|--------|
-| All three Founder decisions applied exactly | ✅ |
+| All three Founder scope decisions applied exactly | ✅ |
 | Media = Photos + Videos + Documents at product-scope level | ✅ |
 | Property Sharing via WhatsApp / WhatsApp Business = IN V001 | ✅ |
 | Full Export System not merged with Property Sharing | ✅ — explicitly separated |
@@ -243,16 +260,22 @@ All three decisions identified in the previous analysis have been resolved by th
 | No UI design introduced | ✅ |
 | No schema or column introduced | ✅ |
 | No Architecture decision introduced | ✅ |
-| Capability totals reconcile | ✅ — 27 rows, 2 sub-capabilities, 25 decisions: 15 IN + 7 OUT + 3 DEFERRED = 25 |
+| "single-broker" no longer appears in this document | ✅ — replaced with "per-broker" throughout |
+| Commission Management = DEFERRED (not OUT OF V001) | ✅ |
+| Analytics / Reporting = DEFERRED (not OUT OF V001) | ✅ |
+| Commission and Analytics not in OUT OF V001 list anywhere | ✅ |
+| Capability totals reconcile | ✅ — 27 rows, 2 sub-capabilities, 25 decisions: 15 IN + 5 OUT + 5 DEFERRED = 25 |
 | Stage 00.1 untouched and FROZEN | ✅ |
 | PRE-IMPLEMENTATION active | ✅ |
-| No files modified except governance | ✅ |
+| No product code files modified | ✅ |
 | Stage 00.2.2 not started | ✅ |
-| Import / mechanism boundary wording corrected | ✅ — deferred to Integration stage, not forbidden from V001 implementation |
-| DEC-004 stale Egypt reference corrected | ✅ — replaced with market-neutral wording; logged in DEC-015 |
+| Import / mechanism boundary wording: deferred to Integration stage, not forbidden from V001 | ✅ |
+| DEC-004 stale Egypt reference corrected (DEC-015) | ✅ |
 | Contact roles unchanged: Buyer / Tenant / Owner / Broker | ✅ |
 | No UAE / AED assumption introduced | ✅ |
+| ARCHITECTURE.md not modified in this pass | ✅ |
+| Architecture gap (Photo upload wording) queued for Architecture stage | ✅ |
 
 ---
 
-`STATUS: READY FOR FOUNDER/CTO REVIEW`
+`STATUS: 🔒 FROZEN / APPROVED — Stage 00.2.1`

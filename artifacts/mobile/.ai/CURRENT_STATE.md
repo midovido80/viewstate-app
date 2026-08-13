@@ -10,8 +10,8 @@
 | Stage | Status | Authorized by | Date |
 |-------|--------|--------------|------|
 | Stage 00.1 — Product Purpose & User Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
-| Stage 00.2.1 — V001 Scope Analysis | 🔄 IN PROGRESS — awaiting Founder/CTO freeze | Three Founder decisions applied; editorial corrections applied | 2026-08-13 |
-| Stage 00.2 — UX & Interaction Lock (remaining sub-stages) | ⏸ WAITING | Awaiting Stage 00.2.1 freeze + Founder authorization | — |
+| Stage 00.2.1 — V001 Scope Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
+| Stage 00.2 — UX & Interaction Lock (remaining sub-stages) | ⏸ WAITING | Awaiting separate Founder authorization | — |
 | Stage 00.3 and beyond | ⏸ WAITING | Not started | — |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
@@ -50,9 +50,10 @@
 | `.ai/AI_WORKFLOW.md` | ✅ Session protocol, prompt execution rules |
 | `.ai/TESTING.md` | ✅ 4-layer testing requirement |
 | `.ai/GRILL_ME.md` | ✅ Red-team / adversarial review protocol |
-| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-015 (DEC-014 = Stage 00.1 freeze; DEC-015 = editorial correction to DEC-004 stale market reference) |
+| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-017 (DEC-014 = Stage 00.1 freeze; DEC-015 = DEC-004 editorial correction; DEC-016 = Commission/Analytics DEFERRED; DEC-017 = Stage 00.2.1 freeze) |
 | `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
-| `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔄 Stage 00.2.1 corrected scope analysis — awaiting Founder/CTO freeze |
+| `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.1 corrected scope analysis |
+| `.ai/STAGE_00_2_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.1 freeze record |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
@@ -158,6 +159,22 @@ Completed:
 - Correction 3 (DEC-004 Stale Egypt Reference): Replaced "100% of the Egyptian broker's immediate use case" with "the approved V001 broker use case" in DEC-004 rationale. Authoritative decision (four roles: Tenant, Buyer, Owner, Broker) unchanged. DEC-015 logged per Change Policy.
 Files changed: DECISIONS.md (DEC-004 rationale edit + DEC-015 added), STAGE_00_2_1_ANALYSIS.md (new file), CURRENT_STATE.md (stage status, file registry, session log)
 State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 IN PROGRESS — awaiting Founder/CTO freeze. No product code written or modified.
+
+---
+
+### Session: 2026-08-13 (Stage 00.2.1 — Final Correction & Formal Freeze)
+Task: Apply final governance corrections and execute formal Founder/CTO freeze for Stage 00.2.1. No product code modified.
+Completed:
+- Correction 1 (per-broker wording): Replaced "single-broker" with "per-broker" throughout STAGE_00_2_1_ANALYSIS.md. Now consistent with frozen governance language.
+- Correction 2 (Commission Management): Reclassified from OUT OF V001 to DEFERRED. Wording corrected to: "Not in V001; intentionally deferred for later ViewState versions." DEC-016 logged.
+- Correction 3 (Analytics / Reporting): Reclassified from OUT OF V001 to DEFERRED. Wording corrected to: "Not in V001; intentionally deferred for later ViewState versions." DEC-016 logged.
+- Correction 4 (count reconciliation): Updated all count sections to 15 IN + 5 OUT + 5 DEFERRED = 25. 27 visible rows / 2 sub-capabilities / 25 top-level decisions — all reconciled.
+- Correction 5 (Section 3 and 4): Section 3 (OUT OF V001) reduced to 5 entries; Section 4 (DEFERRED) expanded to 5 entries with extensibility rationale for Commission and Analytics.
+- Formal freeze executed: STAGE_00_2_1_FREEZE.md created; DEC-016 and DEC-017 logged in DECISIONS.md; Stage 00.2.1 marked FROZEN/APPROVED in all governance files.
+- Architecture gap queued: ARCHITECTURE.md "Photo upload" wording noted in analysis and freeze record as queued for Architecture stage. ARCHITECTURE.md not modified.
+Files changed: STAGE_00_2_1_ANALYSIS.md (full correction + FROZEN status), DECISIONS.md (DEC-016 + DEC-017), STAGE_00_2_1_FREEZE.md (new), CURRENT_STATE.md (stage status, file registry, session log)
+Decisions: DEC-016 (Commission/Analytics DEFERRED — Founder authorization), DEC-017 (Stage 00.2.1 formal freeze)
+State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 FROZEN. Stage 00.2 remaining sub-stages WAITING. Stage 00.2.2 NOT STARTED. No product code written or modified.
 
 ---
 

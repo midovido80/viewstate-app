@@ -334,4 +334,60 @@ The rationale phrase "100% of the Egyptian broker's immediate use case" is repla
 
 ---
 
+## [DEC-016] — Commission Management and Analytics/Reporting classified as DEFERRED
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.1 freeze pass authorization)
+Category: Product (Scope Classification)
+
+### Context
+Stage 00.2.1 CTO verification identified that Commission Management and Analytics/Reporting were classified as OUT OF V001 in the analysis, while PROJECT_BIBLE.md listed both as "Deferred." This created a classification inconsistency. The analysis also used contradictory wording ("explicitly excluded and deferred") for Commission Management. A Founder decision was required to confirm the intended classification.
+
+### Decision
+**Commission Management = DEFERRED** — not in V001; intentionally preserved for later ViewState versions. V001's "Order Complete / Closed Deal" classification label covers basic deal closure acknowledgement. Full commission tracking, calculation, and management may be added or expanded in later versions. Architecture must not block future inclusion.
+
+**Analytics / Reporting = DEFERRED** — not in V001; intentionally preserved for later ViewState versions. Analytics features grow in value as broker data accumulates. Analytics dashboards, usage reporting, and performance metrics are natural post-V001 additions. Architecture must not block future inclusion.
+
+### Founder authorization intent
+"موافق اذا كان ده هيكون سهل فى الاصدارات التالية من فيوستيت اننا نعدل او نضيف عليهم او نوسع فيهم و نضيف عليهم فيتشرز جديدة"
+(Approved so that it will be easy in later versions of ViewState to modify, add to, expand, and add new features to these capabilities.)
+
+### Consequences
+- Final Stage 00.2.1 scope count: **15 IN V001 + 5 OUT OF V001 + 5 DEFERRED = 25 top-level decisions**
+- Commission Management and Analytics/Reporting removed from OUT OF V001; added to DEFERRED
+- Architecture for all V001 modules must not block adding Commission and Analytics features in V002+
+- PROJECT_BIBLE.md OUT OF SCOPE table wording is resolved: both were already listed as "Deferred" there; this decision formalizes that classification
+
+---
+
+## [DEC-017] — Formal Freeze: Stage 00.2.1 — V001 Scope Analysis
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder verbal authorization — "موافق"
+
+### Decision
+Stage 00.2.1 — V001 Scope Analysis is **FROZEN and APPROVED** as of 2026-08-13.
+
+The product-scope decisions documented in `STAGE_00_2_1_ANALYSIS.md` are the authoritative, locked definition of the ViewState V001 capability boundary. No implementation session, AI agent, or collaborator may silently alter the substance of any Stage 00.2.1 decision.
+
+### Frozen Content Summary
+See `STAGE_00_2_1_FREEZE.md` for the full formal record. Summary:
+- **15 IN V001:** Authentication/Login · Contacts (4 roles) · Properties · Buyer/Tenant Requirements · Matching · Classification (4 labels) · Global Search · WhatsApp/WA Business Communication Choice · Property Sharing via WhatsApp/WA Business · Import · User Profile · Media & Attachments (Photos+Videos+Documents) · Contact Notes · Property Notes · Property Location
+- **5 OUT OF V001:** Tasks/Reminders · Deal Management · Broker-to-Broker Network/Marketplace · Public Property Portal · AI Assistant/NLI
+- **5 DEFERRED:** Full Export System · Market Configuration (administration) · Backup/Sync · Commission Management · Analytics/Reporting
+- **Total:** 27 visible inventory rows · 2 sub-capabilities (Basic Settings, Follow-up Classifications) · **25 top-level decisions**
+
+### Change Process
+Any future change to Stage 00.2.1 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged. Silent edits during implementation sessions are prohibited (Rule 6).
+
+### What Is NOT Locked by Stage 00.2.1
+All schema, architecture, integration mechanisms, UI flows, Kuwait area taxonomy, storage provider, auth provider, and market configuration specifics remain deferred to their respective stages. See `STAGE_00_2_1_FREEZE.md` — "What Is NOT Frozen" table.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.2 has NOT started — WAITING for separate Founder authorization.
+
+---
+
 _New decisions are appended here as they are made. Entries are never deleted._
