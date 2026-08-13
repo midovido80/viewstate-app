@@ -274,4 +274,41 @@ ViewState V001's first operational/deployment market is **Kuwait**. GCC is the p
 
 ---
 
+## [DEC-014] — Formal Freeze: Stage 00.1 — Product Purpose & User Lock
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder verbal authorization — "نفذ"
+
+### Decision
+Stage 00.1 — Product Purpose & User Lock is **FROZEN and APPROVED** as of 2026-08-13.
+
+The product-level decisions documented across Stage 00.1 (DEC-001 through DEC-013 as they relate to product purpose and user lock) are now the authoritative, locked definition of what ViewState is, who it is for, and what V001 delivers.
+
+### Frozen Content Summary
+The following product-level decisions are frozen under this entry — see `STAGE_00_1_FREEZE.md` for the full formal record:
+- Generic real-estate tool for professional brokers/consultants — market-configurable and scalable
+- Kuwait as first operational/deployment market; GCC expansion planned
+- Primary user: broker/consultant, mobile-first, no demographic assumptions
+- Operating model: Capture → Organize → Act; Matching is North Star, not only value
+- Speed target: ~10–15 seconds for basic capture only
+- Requirements as explicit named V001 feature
+- V001 scope fixed: Contacts · Properties · Requirements · Matching · Classification · Import/WhatsApp+WA Business · Global Search · User Profile · Arabic/English
+- Classification: 4 optional labels (Follow Up / Important / Pending / Order Complete or Closed Deal) — no reminders, no automation, no deal ledger; persistence deferred to Database stage
+- WhatsApp + WhatsApp Business: both required communication choices; technical mechanism deferred to Integration stage
+- Location: market-configurable concept; Kuwait area taxonomy as first market config; persistence deferred to Database stage
+- All approved V001 'is NOT' boundaries
+
+### Change Process
+Any future change to Stage 00.1 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged. Silent edits during implementation sessions are prohibited (Rule 6).
+
+### What Is NOT Locked
+All schema, architecture, integration, and market configuration specifics remain deferred to their respective stages. See `STAGE_00_1_FREEZE.md` — "What Is NOT Frozen" table.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2 has NOT started — WAITING for Founder authorization.
+
+---
+
 _New decisions are appended here as they are made. Entries are never deleted._

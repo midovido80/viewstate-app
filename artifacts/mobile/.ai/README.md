@@ -2,6 +2,8 @@
 
 **Project:** ViewState App  
 **Status:** 🔴 PRE-IMPLEMENTATION — No product features may be built without explicit Founder approval  
+**Stage 00.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_1_FREEZE.md` and DEC-014  
+**Stage 00.2:** ⏸ WAITING — not started; awaiting Founder authorization  
 **Language:** Bilingual Arabic / English (ar / en)  
 **Platform:** React Native (Expo) — iOS primary, Android secondary  
 **Last updated:** 2026-08-13

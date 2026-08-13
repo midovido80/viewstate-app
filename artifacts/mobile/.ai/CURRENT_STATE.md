@@ -5,6 +5,18 @@
 
 ---
 
+## Stage Status
+
+| Stage | Status | Authorized by | Date |
+|-------|--------|--------------|------|
+| Stage 00.1 — Product Purpose & User Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
+| Stage 00.2 — UX & Interaction Lock | ⏸ WAITING | Not started — awaiting Founder authorization | — |
+| Stage 00.3 and beyond | ⏸ WAITING | Not started | — |
+
+> **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
+
+---
+
 ## Layer Status
 
 | Layer | Status | Notes |
@@ -37,7 +49,8 @@
 | `.ai/AI_WORKFLOW.md` | ✅ Session protocol, prompt execution rules |
 | `.ai/TESTING.md` | ✅ 4-layer testing requirement |
 | `.ai/GRILL_ME.md` | ✅ Red-team / adversarial review protocol |
-| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-009 |
+| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-014 (DEC-014 = Stage 00.1 freeze) |
+| `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
@@ -123,6 +136,15 @@ Files changed:
 - CURRENT_STATE.md — pending decisions and session log updated
 Decisions: DEC-010, DEC-011, DEC-012 logged  
 State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. No product code written or modified.
+
+---
+
+### Session: 2026-08-13 (Stage 00.1 — Formal Founder/CTO Freeze)
+Task: Execute formal Founder/CTO Freeze for Stage 00.1 — Product Purpose & User Lock  
+Authorization: Founder verbal authorization — "نفذ"  
+Completed: Stage 00.1 marked FROZEN/APPROVED; freeze record written; DEC-014 logged  
+Files changed: STAGE_00_1_FREEZE.md (new), DECISIONS.md (DEC-014 added), CURRENT_STATE.md (Stage Status table added), README.md (Stage 00.1 freeze noted)  
+State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2 WAITING. No product code written or modified.
 
 ---
 
