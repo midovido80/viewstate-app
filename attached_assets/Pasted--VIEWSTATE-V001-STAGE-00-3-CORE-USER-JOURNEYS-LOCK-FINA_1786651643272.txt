@@ -1,0 +1,667 @@
+# VIEWSTATE V001 — STAGE 00.3
+# CORE USER JOURNEYS LOCK — FINAL FREEZE
+
+## MODE
+
+GOVERNANCE FREEZE ONLY.
+
+The Founder and CTO have completed review of Stage 00.3 — Core User Journeys Lock.
+
+The final corrected Stage 00.3 analysis has been approved.
+
+You are now authorized ONLY to record the approved Stage 00.3 governance freeze.
+
+Do NOT perform new product analysis.
+
+Do NOT invent new decisions.
+
+Do NOT alter approved wording or product scope.
+
+Do NOT begin Stage 00.4.
+
+Do NOT perform Governance Cleanup.
+
+Do NOT modify the Stage 00.2.3 placeholder.
+
+Do NOT modify frozen Stage 00.1, Stage 00.2.1, or Stage 00.2.2 decisions.
+
+---
+
+# 1. AUTHORITATIVE STAGE 00.3 DECISIONS
+
+Record the following as the approved Stage 00.3 Core User Journeys Lock.
+
+---
+
+## J-01 — AUTHENTICATE — CORE
+
+Success:
+
+The broker has an authenticated session granting secure access exclusively to their own ViewState data.
+
+Authentication is required before productive use.
+
+Authentication mechanism, provider, session lifetime, and re-authentication behavior remain deferred.
+
+After successful authentication, the broker may immediately begin productive use.
+
+No mandatory Profile gate.
+
+No mandatory Language-selection gate.
+
+Default language:
+
+Arabic — RTL.
+
+English remains user-selectable.
+
+---
+
+## J-02 — CREATE CONTACT — CORE
+
+Minimum BASIC capture:
+
+- Name
+- Phone Number
+
+A Contact with Name + Phone Number is valid.
+
+Contact role is OPTIONAL during initial capture.
+
+Role may be added later.
+
+Exactly four supported roles remain:
+
+- Tenant
+- Buyer
+- Owner
+- Broker
+
+Multi-role Contacts remain supported.
+
+No fifth role.
+
+Target:
+
+Approximately 10–15 seconds for BASIC capture.
+
+---
+
+## J-03 — CREATE PROPERTY — CORE
+
+Minimum BASIC capture:
+
+- Property Type
+- Purpose: Sale or Rent
+- Price
+- Market-configured Location Area
+
+After save, the Property becomes eligible for broker-initiated Matching.
+
+Optional enrichment must not block BASIC capture.
+
+Target:
+
+Approximately 10–15 seconds for BASIC capture.
+
+---
+
+## J-04 — CREATE REQUIREMENT — CORE
+
+A Requirement belongs to a Contact holding:
+
+- Buyer role
+or
+- Tenant role
+
+Minimum BASIC capture:
+
+- Property Type
+- Purpose: Buy or Rent
+- Budget Range
+
+Purpose belongs explicitly to the Requirement.
+
+Do NOT infer Requirement Purpose solely from Contact role.
+
+A Buyer/Tenant Contact may have one or more independently captured Requirements.
+
+After save, the Requirement becomes eligible for broker-initiated Matching.
+
+Do NOT introduce Requirement:
+
+- lifecycle
+- expiration
+- priority
+- active/inactive status
+- pipeline
+- automation
+
+Target:
+
+Approximately 10–15 seconds for BASIC capture.
+
+---
+
+## J-05 — IMPORT CONTACT — CORE
+
+V001 Import remains Contact-only.
+
+Approved product-level sources:
+
+- WhatsApp-related Contact capture
+- WhatsApp Business-related Contact capture
+- Device Contacts
+
+Import should populate all available source information automatically.
+
+The broker must not retype successfully imported information.
+
+Before saving as a valid Contact:
+
+- Name must exist
+- Phone Number must exist
+
+If either required minimum value is unavailable from the source, the broker provides only the missing minimum value.
+
+Role remains OPTIONAL.
+
+Property Import is NOT part of V001.
+
+Technical import mechanism remains deferred.
+
+---
+
+## J-06 — REQUIREMENT → PROPERTIES MATCHING — CORE
+
+Matching Direction A:
+
+Requirement → Properties
+
+Pattern:
+
+Compare → Score (0–100) → Explain
+
+Matching is:
+
+- broker-initiated
+- private
+- per-broker
+- rule-based
+- non-AI
+- non-automatic
+- non-background
+- non-marketplace
+
+Only results scoring:
+
+≥70%
+
+are surfaced as qualifying matches.
+
+The product must explain the score/result using relevant matching reasons.
+
+Exact explanation structure remains deferred.
+
+Exact scoring formula remains deferred.
+
+Do NOT freeze:
+
+- weights
+- coefficients
+- field importance
+- mandatory criteria
+- soft criteria
+- penalties
+- mathematical formula
+- algorithm implementation
+
+If no Property reaches 70%:
+
+`No Matches ≥70%`
+
+is a valid successful Matching outcome.
+
+---
+
+## J-07 — PROPERTY → REQUIREMENTS / CLIENTS MATCHING — CORE
+
+Matching Direction B:
+
+Property → Requirements / associated Buyer-Tenant Contacts
+
+Pattern:
+
+Compare → Score (0–100) → Explain
+
+Only qualifying results scoring:
+
+≥70%
+
+are surfaced.
+
+Associated Buyer/Tenant Contact context must be identifiable from the matched Requirement.
+
+All Matching boundaries from J-06 also apply.
+
+Zero qualifying matches remains a valid successful outcome.
+
+No automatic alerts or background matching.
+
+---
+
+## J-08 — SHARE PROPERTY WITH CONTACT — CORE
+
+Property Sharing is:
+
+- broker-initiated
+- private
+- one specific Property
+- one specific saved Contact
+- WhatsApp or WhatsApp Business
+
+Recipient may be ANY saved Contact, including:
+
+- Tenant
+- Buyer
+- Owner
+- Broker
+- Contact with no role
+
+Private sharing with a Broker Contact does NOT constitute Marketplace behavior.
+
+Broker-to-Broker Marketplace remains OUT OF V001.
+
+Do NOT freeze:
+
+- sharing payload
+- Property card design
+- UX entry point
+- Property-first vs Contact-first sequence
+- technical WhatsApp mechanism
+
+No:
+
+- public publishing
+- bulk sharing
+- automated sharing
+- scheduled sharing
+- network distribution
+
+---
+
+## J-09 — COMMUNICATE WITH CONTACT — SUPPORTING
+
+The broker may initiate communication with a saved Contact using:
+
+- WhatsApp
+- WhatsApp Business
+
+Both must remain supported choices.
+
+Communication may function as a reusable product action within relevant contexts.
+
+A dedicated standalone screen is NOT required by Stage 00.3.
+
+Technical behavior remains deferred.
+
+Do NOT guarantee direct WhatsApp voice-call launching at this stage.
+
+No in-app messaging.
+
+---
+
+## J-10 — ENRICH CONTACT — SUPPORTING
+
+Capture First → Enrich Later.
+
+After initial Contact capture, the broker may later add:
+
+- approved role(s)
+- additional Contact details
+- Contact Note
+- Classification
+
+If Buyer or Tenant role is assigned, the Contact becomes eligible to own one or more Requirements.
+
+Exact complete Contact field schema remains deferred.
+
+---
+
+## J-11 — ENRICH PROPERTY — SUPPORTING
+
+After BASIC Property capture, the broker may later add:
+
+- additional Property information
+- Photos
+- Videos
+- Documents
+- Property Note
+- Classification
+- additional Location detail allowed by later UX/data decisions
+
+Property Note remains separate from Property Description.
+
+Exact complete Property schema remains deferred.
+
+---
+
+## J-12 — ENRICH REQUIREMENT — SUPPORTING
+
+After BASIC Requirement capture, the broker may later add additional matching criteria.
+
+The exact Requirement schema remains deferred.
+
+Enrichment must not become mandatory for initial capture.
+
+---
+
+## J-13 — CLASSIFY CONTACT OR PROPERTY — SUPPORTING
+
+Classification applies only to:
+
+- Contact
+- Property
+
+Exactly four optional classifications:
+
+1. Follow Up
+2. Important
+3. Pending
+4. Order Complete / Closed Deal
+
+Only one classification at a time per supported record.
+
+Product requirement:
+
+Classification should be immediately visible during normal record use and changeable through one direct action.
+
+Exact visual placement remains deferred to UX Stage.
+
+Do NOT introduce:
+
+- dates
+- reminders
+- tasks
+- calendar
+- automation
+- pipeline
+- deal-management workflow
+
+---
+
+## J-14 — CONFIGURE PROFILE AND LANGUAGE — SUPPORTING
+
+Default V001 language:
+
+Arabic — RTL
+
+English is selectable.
+
+There is no mandatory first-run language-selection gate.
+
+There is no mandatory Profile-completion gate.
+
+Profile enrichment is optional.
+
+The broker may change language later through the app's language preference control.
+
+Exact UI location remains deferred.
+
+Exact Profile field set remains deferred unless already frozen elsewhere.
+
+---
+
+## J-15 — GLOBAL SEARCH AND RETRIEVE — SUPPORTING
+
+Global Search is limited in V001 to:
+
+### Contacts
+
+- Contact Name
+- Phone Number
+
+### Properties
+
+- Property Title
+- Location Area
+
+Requirements are NOT direct Global Search results.
+
+Notes and Media are NOT searched.
+
+No:
+
+- semantic search
+- AI search
+- saved search
+- advanced query language
+
+Product requirement:
+
+Global Search must be quickly accessible throughout the primary app experience.
+
+Exact placement and presentation remain deferred to UX Stage.
+
+Search results must clearly identify whether the result is:
+
+- Contact
+or
+- Property
+
+---
+
+# 2. MATCHING ARCHITECTURE PROTECTION
+
+Record explicitly:
+
+The future Matching implementation must permit scoring logic to evolve without requiring unnecessary reconstruction of the entire Matching layer.
+
+This does NOT authorize an architecture design now.
+
+The exact scoring architecture remains deferred.
+
+This statement protects future flexibility only.
+
+---
+
+# 3. IMPORT / EXPORT SCOPE
+
+Confirm:
+
+### IN V001
+
+- Contact Import
+- Property Sharing through WhatsApp / WhatsApp Business
+
+### NOT ADDED TO V001
+
+- Property Import
+
+### DEFERRED
+
+- Full Export System
+
+Property Sharing and Full Export remain separate concepts.
+
+Any future request to promote Property Import or Full Export into V001 requires explicit Founder scope-change review.
+
+---
+
+# 4. CAPTURE FIRST LOCK
+
+Record:
+
+Capture First → Enrich Later remains mandatory for V001.
+
+BASIC capture targets:
+
+### Contact
+Name + Phone Number
+
+### Property
+Type + Purpose + Price + Market-configured Location Area
+
+### Requirement
+Type + Purpose + Budget Range
+
+Target:
+
+Approximately 10–15 seconds for BASIC capture.
+
+Optional enrichment may never become a mandatory prerequisite for valid BASIC capture unless a future Founder-approved scope change explicitly changes this rule.
+
+---
+
+# 5. STALE DOCUMENTATION REGISTER
+
+Preserve the Stage 00.3 stale-documentation findings for the later consolidated Governance Cleanup Pass.
+
+These findings include:
+
+- premature OTP assumptions
+- premature navigation/tab assumptions
+- persistent Matches-tab assumptions
+- Notifications assumptions
+- localization SDK assumptions
+- soft-delete / retention assumptions
+- WhatsApp raw-file parsing / retention assumptions, including those in `docs/database/README.md`
+- missing Contact Notes / Property Notes
+- incomplete module index
+- premature database/ER structure assumptions
+
+Do NOT fix these items during this freeze.
+
+Do NOT delete these files during this freeze.
+
+Do NOT treat them as authoritative.
+
+They remain queued for Governance Cleanup before Stage 01.
+
+---
+
+# 6. GOVERNANCE UPDATES AUTHORIZED
+
+You MAY update ONLY the governance artifacts necessary to formally record the Stage 00.3 freeze.
+
+Expected governance updates may include:
+
+- a Stage 00.3 freeze artifact
+- DECISIONS.md
+- CURRENT_STATE.md
+- README.md only if needed to reflect formal stage status
+
+Use the project's existing approved governance naming conventions.
+
+Do NOT invent new governance filename patterns.
+
+Do NOT rename existing approved governance files.
+
+Do NOT modify product code.
+
+Do NOT modify architecture implementation.
+
+Do NOT modify database implementation.
+
+Do NOT modify UX implementation.
+
+Do NOT modify integration implementation.
+
+---
+
+# 7. DECISION RECORDS
+
+Create the minimum new decision records required to capture the Founder decisions introduced during Stage 00.3.
+
+Continue the existing decision-number sequence after DEC-021.
+
+Do NOT rewrite previous decision records.
+
+The new records should cover, without unnecessary fragmentation:
+
+- Founder-approved BASIC capture minima
+- Contact role optional at capture
+- explicit Requirement Purpose
+- Matching ≥70% result visibility threshold
+- scoring formula deferred
+- zero qualifying matches as valid outcome
+- Property Sharing recipient = any saved Contact
+- Arabic/RTL default with no mandatory Profile/Language gate
+- Stage 00.3 freeze
+
+Group closely related decisions where appropriate.
+
+Do NOT create excessive micro-decisions.
+
+---
+
+# 8. FREEZE VERIFICATION
+
+Before reporting completion verify:
+
+1. Stage 00.1 remains unchanged and FROZEN.
+2. Stage 00.2.1 remains unchanged and FROZEN.
+3. Stage 00.2.2 remains unchanged and FROZEN.
+4. Stage 00.3 is now formally FROZEN / APPROVED.
+5. Stage 00.4 remains NOT STARTED.
+6. Stage 00.2.3 placeholder remains untouched.
+7. Exactly 15 V001 top-level capabilities remain preserved.
+8. The corrected 15-journey inventory is preserved.
+9. Capture First remains preserved.
+10. Contact role remains optional at capture.
+11. Requirement Purpose remains explicit.
+12. Matching remains broker-initiated.
+13. ≥70% qualifying threshold is recorded.
+14. Scoring formula remains deferred.
+15. Zero qualifying matches remains valid.
+16. Property Sharing permits any saved Contact.
+17. Arabic/RTL remains default.
+18. Profile/Language remain non-blocking.
+19. Global Search scope remains unchanged.
+20. Classification placement remains UX-deferred.
+21. Property Import remains outside V001.
+22. Full Export remains DEFERRED.
+23. Stale docs remain non-authoritative and queued for Cleanup.
+24. No product code changed.
+25. No architecture/database/UX/integration implementation began.
+26. PRE-IMPLEMENTATION remains active.
+
+---
+
+# 9. GIT / CHANGE REPORT
+
+After completing the governance freeze, report:
+
+- exact governance files changed
+- exact new governance file created, if any
+- decision records added
+- whether any non-governance file changed
+- whether any product code changed
+- working-tree status
+- resulting commit SHA if a commit is created
+
+Do NOT push or force-push unless the existing approved project workflow automatically requires it and no history rewrite is involved.
+
+Do NOT rewrite Git history.
+
+---
+
+# FINAL STATUS
+
+End with exactly:
+
+`STATUS: STAGE 00.3 FROZEN / APPROVED`
+
+if every verification passes.
+
+Otherwise:
+
+`STATUS: BLOCKED — FREEZE VERIFICATION FAILED`
+
+Then STOP.
+
+Do NOT begin Stage 00.4.
+
+Do NOT begin Governance Cleanup automatically.
+
+WAIT for Founder/CTO instruction.
