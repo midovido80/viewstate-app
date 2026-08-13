@@ -197,7 +197,7 @@
 - The sharing action is private, broker-initiated, and directed at a specific client
 - The UX entry point and selection order are not defined at this stage
 
-**Minimum Successful User Outcome:** A broker shares a property with a specific client via their preferred WhatsApp account in a direct, private action using their preferred WhatsApp account. The UX stage will determine whether the flow starts from the property, the contact, a matching result, or another approved context.
+**Minimum Successful User Outcome:** A broker shares a property with a specific client via their preferred WhatsApp account in a direct, private action. The UX stage will determine whether the flow starts from the property, the contact, a matching result, or another approved context.
 
 **Not Required for V001:** Public property publishing, broker-to-broker property sharing, bulk sharing, scheduled sharing, branded property card design (deferred to UX / Integration stages).
 

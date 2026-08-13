@@ -51,7 +51,7 @@
 | `.ai/AI_WORKFLOW.md` | ✅ Session protocol, prompt execution rules |
 | `.ai/TESTING.md` | ✅ 4-layer testing requirement |
 | `.ai/GRILL_ME.md` | ✅ Red-team / adversarial review protocol |
-| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-017 (DEC-014 = Stage 00.1 freeze; DEC-015 = DEC-004 editorial correction; DEC-016 = Commission/Analytics DEFERRED; DEC-017 = Stage 00.2.1 freeze) |
+| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-021 (DEC-014 = Stage 00.1 freeze; DEC-015 = DEC-004 editorial correction; DEC-016 = Commission/Analytics DEFERRED; DEC-017 = Stage 00.2.1 freeze; DEC-018 = Bidirectional Matching; DEC-019 = Multiple Requirements; DEC-020 = One Editable Running Note; DEC-021 = Stage 00.2.2 freeze) |
 | `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
 | `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.1 corrected scope analysis |
 | `.ai/STAGE_00_2_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.1 freeze record |
