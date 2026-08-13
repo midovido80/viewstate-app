@@ -57,7 +57,7 @@ export const properties = pgTable('properties', {
   currency: varchar('currency', { length: 3 }).notNull(), // market-configurable default — do not hardcode
   area_sqm: numeric('area_sqm', { precision: 8, scale: 2 }),
   bedrooms: smallint('bedrooms'),
-  location_area: text('location_area'), // market-configurable — see DATABASE_RULES.md DEC-012
+  // location field: column name, type, and nullability deferred to Database stage (see DEC-012)
   is_active: boolean('is_active').notNull().default(true),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

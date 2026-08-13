@@ -29,10 +29,10 @@ const mockProperty: Property = {
   type: 'apartment',
   purpose: 'sale',
   price: '2500000',
-  currency: 'AED', // use market-appropriate currency in real tests — this is illustrative
+  currency: 'MARKET_CURRENCY', // replace with active market currency code — never hardcode a real country's currency
   area_sqm: '120',
   bedrooms: 3,
-  location_area: 'market-area-1', // use market-config ID — not a hardcoded country-specific value
+  // location field: use market-config ID — field name deferred to Database stage
   is_active: true,
   // ... other fields
 };
@@ -47,7 +47,7 @@ const mockRequirement: BuyerRequirement = {
   area_min_sqm: '100',
   area_max_sqm: null,
   bedrooms_min: 2,
-  location_areas: ['market-area-1', 'market-area-2'], // use market-config IDs
+  // location preference field: use market-config IDs — field name deferred to Database stage
   is_active: true,
   // ... other fields
 };
@@ -106,8 +106,8 @@ describe('POST /api/properties', () => {
         type: 'apartment',
         purpose: 'sale',
         price: 2500000,
-        currency: 'AED', // market-configurable — use active market currency in real tests
-        location_area: 'market-area-1', // market-config ID
+        currency: 'MARKET_CURRENCY', // replace with active market currency code — never hardcode a real country's currency
+        // location field: 'market-area-1' — field name deferred to Database stage
         title_ar: 'شقة للبيع',
       });
 
@@ -145,10 +145,10 @@ describe('PropertyCard', () => {
     title_ar: 'شقة رائعة',
     title_en: 'Great Apartment',
     price: 2500000,
-    currency: 'AED', // market-configurable — use active market currency in real tests
+    currency: 'MARKET_CURRENCY', // replace with active market currency code — never hardcode a real country's currency
     type: 'apartment' as const,
     purpose: 'sale' as const,
-    location_area: 'market-area-1', // market-config ID
+    // location field: 'market-area-1' — field name deferred to Database stage
   };
 
   it('renders Arabic title', () => {

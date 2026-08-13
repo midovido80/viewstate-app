@@ -54,7 +54,7 @@ The matching engine is ViewState's core value proposition. It automatically comp
 | `type` | `property.type` matches `requirement.type` (or requirement is `'any'`) | 30 |
 | `purpose` | `property.purpose` matches `requirement.purpose` (or requirement is `'any'`) | 20 |
 | `price` | `property.price` is between `requirement.budget_min` and `requirement.budget_max` | 25 |
-| `location_area` | `property.location_area` is in `requirement.location_areas[]` | 15 |
+| location field | property location area is in requirement's preferred location areas | 15 |
 | `area_sqm` | `property.area_sqm` is between `requirement.area_min_sqm` and `requirement.area_max_sqm` | 5 |
 | `bedrooms` | `property.bedrooms >= requirement.bedrooms_min` | 5 |
 
@@ -88,7 +88,7 @@ interface MatchBreakdown {
   type: number;      // 0 or 30
   purpose: number;   // 0 or 20
   price: number;     // 0 or 25
-  location: number;    // 0 or 15
+  location: number;    // 0 or 15 — field name is illustrative; exact name deferred to Database stage
   area: number;      // 0 or 5
   bedrooms: number;  // 0 or 5
 }
@@ -121,11 +121,15 @@ export function calculateMatchScore({ property, requirement }: MatchInput): Matc
   }
 
   // Location area match (market-configurable field)
-  if (property.location_area && requirement.location_areas && requirement.location_areas.length > 0) {
-    if (requirement.location_areas.includes(property.location_area)) {
+  // NOTE: exact field names (property.locationField / requirement.locationPreferences) are
+  // determined by the Database stage — use whatever names the schema settles on.
+  // The matching logic concept: property's location area is in the requirement's preferred areas.
+  // If requirement has no location preference, location scores full points.
+  if (property.locationField && requirement.locationPreferences?.length > 0) {
+    if (requirement.locationPreferences.includes(property.locationField)) {
       breakdown.location = 15;
     }
-  } else if (!requirement.location_areas || requirement.location_areas.length === 0) {
+  } else if (!requirement.locationPreferences || requirement.locationPreferences.length === 0) {
     breakdown.location = 15; // No location restriction = full score
   }
 

@@ -100,11 +100,12 @@ interface Property {
   type: 'apartment' | 'villa' | 'office' | 'land' | 'shop';
   purpose: 'sale' | 'rent';
   price: number;
-  currency: string;
+  currency: string;           // market-configurable — exact default deferred to Database stage
   area_sqm: number | null;
   bedrooms: number | null;
-  location_area: string | null;  // market-configurable — see DATABASE_RULES.md
+  // location field: market-configurable concept — exact field name and type deferred to Database stage
   district: string | null;
+  // classification field: 4-label optional status tag — exact field name and type deferred to Database stage
   is_active: boolean;
   created_at: Date;
   updated_at: Date;

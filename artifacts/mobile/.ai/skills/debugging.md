@@ -74,7 +74,7 @@ flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row',
 ```typescript
 // Log the breakdown object from calculateMatchScore
 // Check: are null fields being handled correctly?
-// Check: is location_area comparison using the same ID format from market config?
+// Check: is the location field comparison using the same ID format from market config?
 // Check: is price stored as a string and not parsed to number before comparison?
 ```
 

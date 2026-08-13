@@ -101,6 +101,14 @@ Files changed: 12 new files written; 11 old files removed
 Decisions: DEC-001 through DEC-009 logged (DEC-008, DEC-009 still pending)  
 State: PRE-IMPLEMENTATION — confirmed, no product code written or modified
 
+### Session: 2026-08-13 (Stage 00.1 — Boundary Softening Pass)
+Task: Rollback/softening pass to restore strict Stage 00.1 boundaries after previous correction pass introduced premature implementation decisions  
+Completed: All premature schema/implementation commitments removed from Stage 00.1 governance; product decisions preserved  
+Files changed: DATABASE_RULES.md, DECISIONS.md, skills/database.md, skills/debugging.md, skills/matching.md, skills/properties.md, skills/testing.md, skills/typescript.md  
+What was removed: classification TEXT column from planned schemas; location_area/location_areas as settled column names; DB column specification from DEC-010; column rename and market-config interface from DEC-012; AED currency from test fixtures; NOT NULL constraint decisions on location/currency  
+What was preserved: all 4 classification labels and product behavior; GCC-first generic product; market-configurable location concept; WhatsApp + WhatsApp Business; 10–15s capture target; Capture→Organize→Act; all is-NOT boundaries  
+State: PRE-IMPLEMENTATION — Stage 00.1 boundary-clean. No product code written or modified.
+
 ### Session: 2026-08-13 (Stage 00.1 — Product Purpose & User Lock)
 Task: Governance-only correction pass to align all files with Founder-approved Stage 00.1 decisions  
 Completed: All 9 required corrections applied across governance files  

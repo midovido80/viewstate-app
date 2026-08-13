@@ -25,19 +25,19 @@ interface Property {
   type: PropertyType;         // 'apartment' | 'villa' | 'office' | 'land' | 'shop'
   purpose: PropertyPurpose;   // 'sale' | 'rent'
   price: number;
-  currency: string;           // market-configurable default — see market config
+  currency: string;           // market-configurable — exact default deferred to Database stage
   area_sqm: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
   floor: number | null;
   total_floors: number | null;
-  location_area: string | null;  // market-configurable location (see Location Taxonomy below)
+  // location field: market-configurable concept (emirate/region/etc.) — field name and type deferred to Database stage
   district: string | null;
   address_ar: string | null;
   address_en: string | null;
   lat: number | null;
   lng: number | null;
-  classification: Classification | null;  // optional status tag — see Classification System
+  // classification field: 4-label optional status tag — field name, type, and constraints deferred to Database stage
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -45,27 +45,24 @@ interface Property {
 
 type PropertyType    = 'apartment' | 'villa' | 'office' | 'land' | 'shop';
 type PropertyPurpose = 'sale' | 'rent';
-type Classification  = 'follow_up' | 'important' | 'pending' | 'closed';
+// Classification type alias: deferred to Database stage — values will be Follow Up / Important / Pending / Order Complete / Closed Deal
 ```
 
 ---
 
 ## Location Taxonomy — Market-Configurable
 
-**Governance rule:** Country-specific administrative terms (governorates, emirates, regions, municipalities, etc.) are NOT hard-coded into the product. The `location_area` field is populated from a market-specific configuration list loaded at runtime.
+**Governance rule (product level):** Country-specific administrative terms (governorates, emirates, regions, municipalities, etc.) are NOT hard-coded into the product. Location options are loaded from market configuration per deployment — not from a hardcoded list.
 
-**Implementation rules:**
-- Location options are loaded from market configuration, not from a hardcoded array in product code
-- The GCC is the first deployment market — the exact location list for each GCC market is defined in the market configuration stage, not here
-- The field name in the UI adapts to the market label (e.g., "Emirate", "Region", "Governorate") — resolved from the market configuration
-- The data column is named `location_area` throughout to remain market-neutral
+**Product-level rules:**
+- GCC is the first deployment market — the exact location taxonomy for each GCC market is defined in the market configuration stage
+- The UI label for the location field adapts to the market (e.g., "Emirate", "Region", "Area") — resolved from market configuration
+- No single country's administrative structure is assumed as the universal default
 
-**Implementation pattern (illustrative — exact config source decided in Integration stage):**
-```typescript
-// Location options are loaded from market config, not hardcoded
-const locationOptions = useMarketConfig().locationAreas;
-// e.g., [{ id: 'dubai', ar: 'دبي', en: 'Dubai' }, ...]
-```
+**Deferred to later stages:**
+- Exact database column name and type → Database stage
+- Market configuration layer design (how it loads, what it exposes) → Architecture stage
+- Specific GCC market location lists → Market configuration stage
 
 ---
 
@@ -78,11 +75,11 @@ const locationOptions = useMarketConfig().locationAreas;
 | price | Yes | > 0 |
 | currency | Yes | From market configuration |
 | title_ar OR title_en | At least one | Not both empty |
-| location_area | No (recommended) | From market-configurable list |
+| location area | No (recommended) | From market-configurable list; field name TBD Database stage |
 | area_sqm | No | > 0 if provided |
 | bedrooms | No | 0–20 if provided |
 | floor | No | -5 to 200 if provided |
-| classification | No | Optional status tag only |
+| classification label | No | Optional 4-label status tag; persistence TBD Database stage |
 
 **Capture First rule:** type + purpose + price + at least one title = a valid, saveable property record. All other fields are optional enrichment.
 
@@ -93,7 +90,7 @@ const locationOptions = useMarketConfig().locationAreas;
 - Default sort: `created_at DESC` (newest first)
 - Active properties only shown by default (filter `is_active = true`)
 - Broker sees only their own properties
-- Filter options: location area, type, purpose, price range, classification
+- Filter options: location area (market-configurable), type, purpose, price range, classification label
 - Pagination: cursor-based using `id`
 
 ---
@@ -105,24 +102,26 @@ A property card in a list shows:
 - Title (Arabic preferred, English fallback)
 - Price formatted per market locale (see Price Formatting below)
 - Area in m²
-- Location area / District
+- Location area / District (label adapts to market)
 - Bedrooms (if applicable — not for land/office)
 - `is_active` badge (shown/hidden toggle)
-- Classification label badge (if set — Follow Up / Important / Pending / Closed Deal)
+- Classification label badge if set — one of: Follow Up / Important / Pending / Order Complete / Closed Deal (persistence field name TBD Database stage)
 - Match count badge (how many matches this property has)
 
 ---
 
-## Classification Display
+## Classification Display (Product Behavior)
 
-When a property has a classification set, display the label visibly next to the property title in list and detail views.
+When a property has a classification label set, display it visibly next to the property title in list and detail views. The four approved labels:
 
-| Classification value | Display (EN) | Display (AR) |
-|---------------------|-------------|-------------|
-| `follow_up` | Follow Up | متابعة |
-| `important` | Important | مهم |
-| `pending` | Pending | معلق |
-| `closed` | Closed Deal | تمت الصفقة |
+| Label (EN) | Label (AR) |
+|------------|------------|
+| Follow Up | متابعة |
+| Important | مهم |
+| Pending | معلق |
+| Order Complete / Closed Deal | تمت الصفقة |
+
+Persistence field name, type, and constraint representation are deferred to the Database stage.
 
 ---
 

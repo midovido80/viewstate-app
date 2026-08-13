@@ -198,7 +198,7 @@ V001 includes an optional lightweight classification system attached to a Contac
 - Classification is optional — broker applies it only when needed
 - No dates, scheduled reminders, automation, pipeline stages, or calendar integration
 - "Order Complete / Closed Deal" is a status label only — NOT a deal ledger, transaction tracker, or commission system
-- DB column: `classification TEXT` (nullable) constrained to `'follow_up' | 'important' | 'pending' | 'closed'`
+- Persistence column name, SQL type, constraint representation (TEXT check / ENUM / etc.), and nullability are deferred to the Database stage
 
 ### Consequences
 Replaces the earlier "Tasks & Follow-up system — Deferred" entry. A full task-management or reminder engine remains deferred. This classification system is the complete V001 follow-up scope.
@@ -232,18 +232,18 @@ All previous governance text that locked V001 to `.txt` export parsing as the se
 Date: 2026-08-13
 Status: ACTIVE
 Decided by: Founder
-Category: Architecture + Product
+Category: Product
 
 ### Context
 Governance files previously hard-coded Egypt's 27 governorates as the universal location taxonomy. Decision 2 (GCC-first, generic product) requires this to be market-configurable.
 
 ### Decision
-ViewState uses a generic `location_area` concept for properties and requirements. The specific taxonomy (governorates, emirates, regions, municipalities, etc.) is market configuration — loaded per deployment, not hardcoded in product code. GCC is the first deployment market; specific location lists for each GCC market are defined in the market configuration stage.
+ViewState's location concept for properties and requirements must be generic and market-configurable. The specific taxonomy (governorates, emirates, regions, municipalities, etc.) is market configuration — loaded per deployment, not hard-coded into product code or governance. GCC is the first deployment market; specific location taxonomy for each GCC market is defined in the market configuration stage. No country-specific location list or administrative term is hard-coded into the product definition.
 
 ### Consequences
-- DB column renamed from `governorate` to `location_area` (properties) and `location_areas` (buyer_requirements)
-- All hardcoded Egyptian governorate lists removed from skills files and product code
-- Market config layer must provide: location taxonomy label, location options list, phone number format, currency code, and locale tag
+- All hard-coded Egypt-specific governorate lists and Egypt-specific location wording removed from governance files
+- Exact column name, data type, nullability, and schema representation for the location field are deferred to the Database stage
+- Market configuration layer design (what it provides, how it is structured, which fields it exposes) is deferred to the Architecture stage
 
 ---
 

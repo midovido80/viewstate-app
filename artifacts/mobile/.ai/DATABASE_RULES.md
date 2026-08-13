@@ -62,7 +62,6 @@ phone           VARCHAR(20)              -- normalized E.164
 roles           TEXT[]                   -- ['buyer','tenant','owner','broker'] — V001 only these four
 source          ENUM('manual','whatsapp_import','contacts_import')
 notes           TEXT
-classification  TEXT                     -- optional: 'follow_up'|'important'|'pending'|'closed' (nullable)
 is_active       BOOLEAN DEFAULT true
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -70,6 +69,7 @@ deleted_at      TIMESTAMPTZ
 ```
 
 > **Rule 11:** roles array values for V001 are constrained to: `tenant`, `buyer`, `owner`, `broker` — no others.
+> **Classification (product scope — persistence TBD):** Contacts support an optional 4-label status tag (Follow Up / Important / Pending / Order Complete / Closed Deal). The persistence column name, SQL type, constraint representation, and nullability are deferred to the Database stage.
 
 ### `properties`
 ```
@@ -82,24 +82,25 @@ description_en  TEXT
 type            ENUM('apartment','villa','office','land','shop')
 purpose         ENUM('sale','rent')
 price           NUMERIC(15,2) NOT NULL
-currency        CHAR(3) NOT NULL         -- market-configurable default; set by market config
+currency        CHAR(3)                  -- market-configurable; column default and constraints deferred to Database stage
 area_sqm        NUMERIC(8,2)
 bedrooms        SMALLINT
 bathrooms       SMALLINT
 floor           SMALLINT
 total_floors    SMALLINT
-location_area   TEXT                     -- market-configurable (emirate/region/governorate/etc.) — loaded from market config
+[location]      --                       -- market-configurable location concept (emirate/region/etc.); column name, type, nullability deferred to Database stage
 district        TEXT
 address_ar      TEXT
 address_en      TEXT
 lat             DECIMAL(9,6)
 lng             DECIMAL(9,6)
-classification  TEXT                     -- optional: 'follow_up'|'important'|'pending'|'closed' (nullable)
 is_active       BOOLEAN DEFAULT true
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 deleted_at      TIMESTAMPTZ
 ```
+
+> **Classification (product scope — persistence TBD):** Properties support an optional 4-label status tag (Follow Up / Important / Pending / Order Complete / Closed Deal). The persistence column name, SQL type, constraint representation, and nullability are deferred to the Database stage.
 
 ### `buyer_requirements`
 ```
@@ -109,11 +110,11 @@ type            ENUM('apartment','villa','office','land','shop','any')
 purpose         ENUM('sale','rent','any')
 budget_min      NUMERIC(15,2)
 budget_max      NUMERIC(15,2)
-currency        CHAR(3) NOT NULL         -- market-configurable default; set by market config
+currency        CHAR(3)                  -- market-configurable; column default and constraints deferred to Database stage
 area_min_sqm    NUMERIC(8,2)
 area_max_sqm    NUMERIC(8,2)
 bedrooms_min    SMALLINT
-location_areas  TEXT[]                   -- market-configurable location preferences (see market config)
+[location pref] --                       -- market-configurable location preference(s); column name, type, structure deferred to Database stage
 notes_ar        TEXT
 notes_en        TEXT
 is_active       BOOLEAN DEFAULT true
@@ -127,7 +128,7 @@ id              UUID PK
 property_id     UUID FK → properties.id
 requirement_id  UUID FK → buyer_requirements.id
 score           SMALLINT NOT NULL    -- 0-100
-breakdown       JSONB NOT NULL       -- {type,purpose,price,location,area,bedrooms}
+breakdown       JSONB NOT NULL       -- Compare+Score+Explain per field; exact JSONB keys deferred to Database stage
 status          ENUM('pending','viewed','interested','rejected','closed')
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
