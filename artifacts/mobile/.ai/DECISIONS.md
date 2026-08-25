@@ -982,7 +982,7 @@ The Stage 00.1, 00.2.1, 00.2.2, 00.3, and 00.4 freeze files remain unchanged.
 
 ## [DEC-039] — Final Governance Closeout
 Date: 2026-08-26
-Status: ACTIVE — FINAL GOVERNANCE CLOSEOUT
+Status: PARTIALLY SUPERSEDED BY DEC-040 only for the wording and scope of the next permitted Stage 01 analysis.
 Decided by: Founder
 Category: Governance
 
