@@ -165,3 +165,35 @@ artifacts/mobile/
   .ai/                       ← Governance Package
   docs/                      ← Documentation
 ```
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Effective Architecture Contract
+
+The mobile product is one shared Android/iOS Expo/React Native application. Android is first for implementation and pilot validation only. iOS architectural compatibility is continuous from the first feature stage.
+
+Shared layers own domain rules, validation, matching, persistence, API contracts, migrations, privacy, backup, Draft behavior, and import/export formats. Business rules must not be duplicated in platform UI or native modules.
+
+Native capabilities are behind replaceable adapters for Contacts, Photos/Videos, Files and backup/restore, Location/Maps, WhatsApp/WhatsApp Business, Notifications, Secure Storage/Authentication, Deep Links, and future ViewState Card opening. Every dependency requires Android, iOS, and Expo review plus a safe fallback.
+
+Property Import is Draft-first and supports text, photos, videos, and documents from supported OS sharing mechanisms. Safe Share is one Property at a time, Preview-first, privacy-filtered, and channel-independent.
+
+Persisted data remains platform-neutral. Rental Price and Sale Price are separate product concepts. Server-backed Draft synchronization and external PACI remain deferred pending separate analyses.
+
+Architecture readiness requires a documented iOS path; Android-only success is insufficient.

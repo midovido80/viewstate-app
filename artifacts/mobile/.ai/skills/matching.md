@@ -188,3 +188,29 @@ created (status: 'pending')
 - Breakdown shown in a collapsible section: "Why this match?"
 - Contact details of the buyer not shown — only name and general requirement summary
 - Broker must click "Express Interest" to reveal contact details (anti-spam)
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Matching Eligibility
+
+Matching uses Seeker-owned Requirements and Properties within the same broker’s private inventory. A Seeker may own multiple independent Requirements. Requirement purpose is Rent or Buy and is not inferred from Person classification.
+
+Both directions remain required: Requirement → Properties and Property → Requirements/associated Seekers. Matching is broker-initiated, rule-based, private, non-AI, and non-background. Results use the approved 0–100 score and ≥70% visibility threshold with explanations; zero qualifying matches is valid.
+
+Tenant and Buyer are historical role values superseded for future implementation. No matching result may expose another broker’s data or linked-person information through Safe Share.

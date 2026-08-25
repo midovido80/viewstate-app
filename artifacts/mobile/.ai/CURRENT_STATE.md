@@ -212,3 +212,39 @@ State: PRE-IMPLEMENTATION — Stage 00.1 FROZEN. Stage 00.2.1 FROZEN. Stage 00.2
 ---
 
 _This file is updated at the end of every AI session. Never delete session log entries._
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation Status
+
+- Stage 00.1: FROZEN
+- Stage 00.2.1: FROZEN
+- Stage 00.2.2: FROZEN
+- Stage 00.3: FROZEN
+- Stage 00.4: HISTORICALLY FROZEN; historical file remains byte-for-byte unchanged
+- Governance Reconciliation: APPROVED for clean governance-only synchronization; freeze is effective only after merge verification
+- Stage 00.5: NOT DEFINED
+- Stage 01: NOT STARTED
+- Product status: PRE-IMPLEMENTATION
+- No implemented V001 dataset requires migration now
+- No migration is authorized by this reconciliation
+- Next action after governance freeze: Stage 01 Impact Analysis — first bounded Property Workflow step
+- Founder approval is required again before Stage 01 implementation
+
+Property-first permits only the minimum technical foundation required by the first bounded Property feature. It does not authorize broad authentication, database, API, infrastructure, Contacts, Matching, Tasks, integrations, backup, or iOS release implementation.

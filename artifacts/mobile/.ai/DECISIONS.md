@@ -625,3 +625,322 @@ PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.4 
 ---
 
 _New decisions are appended here as they are made. Entries are never deleted._
+## [DEC-027] — V001 Product Success Definition and 35 Release-Blocking Conditions
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder + CTO (Stage 00.4 approval)
+Category: Product acceptance
+
+### Context
+Stage 00.4 required establishing an authoritative, frozen definition of what V001 product success means and what conditions would mean V001 must not be accepted as functionally complete.
+
+### Decision
+**V001 is considered functionally successful when all five of the following are demonstrably true:**
+1. A broker can create a valid Contact (Name + Phone), Property (Type + Purpose + Price + Location Area), or Requirement (Type + Purpose + Budget Range) in a single fast action without required optional enrichment — and the saved record is immediately usable.
+2. A broker can initiate Matching in both directions (Requirement→Properties and Property→Requirements/Clients), receive scored results (0–100) at ≥70%, see an explanation using relevant matching reasons, and receive "No Matches ≥70%" when no record qualifies. Neither direction may be absent.
+3. A broker can locate any Contact or Property through a quickly accessible Global Search across four approved fields, share a specific Property with any saved Contact via WhatsApp or WhatsApp Business, and initiate communication with any Contact through WhatsApp or WhatsApp Business.
+4. Every broker's Contacts, Properties, Requirements, Notes, and Matching results are completely invisible to every other broker.
+5. The product renders in Arabic (RTL) by default. English (LTR) is selectable. Broker enters full productive use immediately after authentication — no mandatory Profile gate, no mandatory Language gate.
+
+**35 Release-Blocking Conditions:** See `STAGE_00_4_FREEZE.md` for the full numbered list. Any single condition being true means V001 must not be accepted as functionally complete. Key coverage: both Matching directions; ≥70% threshold; explained results; Capture First for all three entity types; Property four-field minimum; Requirement Purpose explicit (not from Contact role alone, UX pre-fill from prior explicit broker choice permitted if reviewable/changeable); Property Sharing to any saved Contact; both WhatsApp AND WhatsApp Business available; all three Contact Import sources present; multi-role Contact capability; multiple Requirements per Buyer/Tenant; both Arabic/RTL and English/LTR functional; per-broker data isolation; all three media types on Properties; Contact Notes; Property Notes; all four Global Search concepts individually searchable when matching records exist; no OUT OF V001 features.
+
+---
+
+## [DEC-028] — V001 Three-Level Success Model (Separate Levels Mandatory)
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder + CTO (Stage 00.4 approval)
+Category: Product acceptance governance
+
+### Decision
+V001 success must be evaluated at three separate, non-collapsed levels:
+
+**Level 1 — Product Definition Acceptance (Stage 00.4):** Product behavior is correctly and completely specified at a level sufficient to guide implementation. Closed by Stage 00.4.
+
+**Level 2 — Implementation Acceptance (Implementation + Testing stages):** A working implementation satisfies each frozen journey's PASS conditions, release-blocking conditions are absent, and all 15 capabilities are present and verifiable by technical and functional testing. 10–15 second capture target assessed by structured task-timing test.
+
+**Level 3 — Beta Acceptance (Beta stage):** Real broker users in actual field conditions can successfully complete the primary journeys. 10–15 second target validated by real-user usability testing in Arabic.
+
+**Rationale:** Collapsing Product Definition with Implementation testing creates premature commitments. Collapsing Implementation with Beta conflates technical correctness with real-user usability.
+
+### Consequences
+Stage 00.4 closes Level 1 only. Levels 2 and 3 are separate future stages with separate evaluation methods and separate evidence requirements.
+
+---
+
+## [DEC-029] — Formal Freeze: Stage 00.4 — V001 Success & Acceptance Lock
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder analysis approval + CTO precision correction passes (C1–C6, four wording fixes, search precision) + Founder freeze authorization
+
+### Decision
+Stage 00.4 — V001 Success & Acceptance Lock is **FROZEN and APPROVED** as of 2026-08-13.
+
+The product success definition, per-journey acceptance criteria, cross-product acceptance criteria, 35 release-blocking conditions, and three success levels documented in Stage 00.4 are the authoritative, locked definition of what constitutes a complete and acceptable ViewState V001 product.
+
+### Frozen Content Summary
+See `STAGE_00_4_FREEZE.md` for the full formal record. Summary:
+- **V001 Product Success Definition:** 5 statements covering Capture, Matching, Act, Privacy, and Language/Access
+- **15 journey acceptance criteria:** J-01 through J-15, each with preconditions, PASS conditions, valid empty/failure states, FAIL conditions, and explicitly not tested items
+- **Cross-product criteria:** Capture→Organize→Act · Private Per-Broker · Bilingual · Capture First · Matching North Star
+- **35 release-blocking conditions:** any single condition = V001 not acceptable
+- **Three success levels:** Product Definition (Level 1, closed by Stage 00.4) · Implementation (Level 2) · Beta (Level 3)
+- **Governance consistency:** No Category D or E findings; all open items are Category B or C
+
+### Change Process
+Any future change to Stage 00.4 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 01 has NOT started — WAITING for Founder authorization.
+
+
+---
+
+## [DEC-030] — V001 Person Classification Model
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Context
+
+The historical V001 role model used Tenant, Buyer, Owner, and Broker. The approved reconciliation replaces the demand-side split and adds the operational classifications required by V001.
+
+### Decision
+
+V001 supports exactly these five Person classifications:
+
+- Seeker / باحث
+- Owner / مالك
+- Broker / دلال
+- Real Estate Company / شركة عقارية
+- Building Guard / حارس
+
+Tenant and Buyer are replaced by one demand-side classification: Seeker.
+
+A Seeker may own multiple independent Requirements. Requirements remain separate records and are never stored as Contact Notes.
+
+Each Requirement contains its own purpose:
+
+- Rent
+- Buy
+
+Purchase versus rental intent belongs to the Requirement, not the Person classification.
+
+### Supersedes
+
+This decision supersedes the future-implementation effect of DEC-004 and related Stage 00.3/00.4 rules that limit V001 to Tenant, Buyer, Owner, and Broker. Historical records remain unchanged.
+
+### Consequences
+
+All role values, validation rules, Requirement ownership rules, import flows, matching eligibility rules, and user-visible classification lists must use this model.
+
+---
+
+## [DEC-031] — Mandatory Role-first Person Capture
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product + UX
+
+### Decision
+
+Adding a Person begins by selecting at least one approved classification. The user then chooses Add manually or Import from phone or another approved source.
+
+At least one classification is required before final save. Multi-role support is required. Classifications may be changed later without losing Person data, Requirements, or relationships.
+
+Minimum manual save requires Name, Phone, and at least one classification. No additional enrichment field is mandatory.
+
+Imported names and notes must be preserved literally. Imported values must not be translated, silently rewritten, or discarded.
+
+### Supersedes
+
+This decision supersedes the future-implementation effect of DEC-022 and Stage 00.4 rules stating that a Contact may be finally saved without a role. Historical records remain unchanged.
+
+### Consequences
+
+A zero-classification Person may exist only as an unsaved or recoverable Draft/import state, not as a valid final saved Person record.
+
+---
+
+## [DEC-032] — V001 Tasks and Follow-ups Minimum Scope
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Decision
+
+V001 includes fast Task or Follow-up creation; a short title as the only mandatory field; optional date and time; optional links to a Person, Property, or Requirement; Open and Done statuses; Today, Upcoming, All, and Done views; a simple calendar filter; local notification when date/time is selected and permission is granted; edit, complete, and reopen; and Draft preservation with no silent loss.
+
+V001 excludes recurring Tasks, workflow automation, pipelines, team assignment, Google Calendar synchronization, Apple Calendar synchronization, and advanced productivity analytics.
+
+### Supersedes
+
+This decision supersedes the V001 exclusion of all Tasks and Follow-ups. It does not alter the separate four follow-up classification labels: Follow Up, Important, Pending, and Order Complete / Closed Deal. Those labels remain a separate lightweight classification capability and are not Tasks.
+
+### Consequences
+
+The Task capability requires its own Draft, persistence, notification permission, failure recovery, testing, and privacy rules.
+
+---
+
+## [DEC-033] — Property Import and Safe Share Boundary
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product + Integration
+
+### Decision
+
+Property Import is included in V001. Manual Property entry remains permanently available.
+
+ViewState may receive Property-related content shared from WhatsApp Business, WhatsApp, and other operating-system-supported share sources. Supported incoming content may include text, photos, videos, and documents. Manual text paste is supported.
+
+Property Import creates a Draft first. Only supported fields may be extracted. The broker must review and edit extracted data before final save. Original received content remains available when extraction is incomplete, and extraction failure leaves the content available for manual completion.
+
+ViewState does not access private WhatsApp conversations and does not promise unsupported or private WhatsApp APIs. WhatsApp Business is the operational priority, but the integration remains replaceable.
+
+Property Safe Share is limited to one Property at a time, with Preview before sending and field/media selection. WhatsApp Business appears first, followed by WhatsApp and other supported channels.
+
+Owner data, source information, private Notes, exact location, and PACI are not included automatically. Bulk Property Export is excluded from this workflow.
+
+Full-account backup/data portability is a separate capability. ViewState Card and direct ViewState-to-ViewState sharing require a separate later stage.
+
+### Supersedes
+
+This decision supersedes Stage 00.4 release blockers that treat Property Import as prohibited and Full Export as the only relevant export boundary. Historical records remain unchanged.
+
+---
+
+## [DEC-034] — Draft Save and No-Silent-Loss Recovery
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Data + UX + Architecture
+
+### Decision
+
+Every add or edit operation maintains an independent Draft. Draft data is saved locally during entry and when the app moves to the background. Drafts must be recoverable after app closure, app crash, phone restart, connection failure, or session failure.
+
+A new Property, Person, Requirement, Task, or Follow-up form must never contain data from a previous completed record.
+
+A Draft may be cleared only after confirmed successful final persistence or explicit user-confirmed discard.
+
+Save failure must preserve all entered fields and media, show a clear message, and provide Retry without requiring re-entry.
+
+Editing must not mutate the persisted original record until final save succeeds. Selected photos and videos must be retained in app-controlled storage and must not depend only on temporary picker paths.
+
+Drafts must not be silently deleted. Multiple Drafts remain distinguishable and recoverable. Local Drafts remain private and are not automatically shared or uploaded. Server-backed Draft synchronization requires a separate Impact Analysis and approval.
+
+### Consequences
+
+This decision does not prematurely freeze debounce timing, storage technology, or schema.
+
+---
+
+## [DEC-035] — Explicit Per-share Disclosure Policy
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Privacy + Product
+
+### Decision
+
+Every Property share presents a final Preview showing exactly what will be shared.
+
+Owner identity, owner phone, and source information are hidden by default. A user may enable a specific owner/source field for that share only, with a clear warning and explicit confirmation. The choice is not remembered for later shares.
+
+Private Notes can never be included through the normal Property Share flow.
+
+Exact location, Google Maps link, and PACI are disabled by default. Each may be enabled explicitly for that share.
+
+General area, approved specifications, price, and selected media may be shared normally. No linked Seeker or client information may be exposed.
+
+Sharing begins only after recipient, channel, and Preview are confirmed. The same disclosure rules apply to every channel. Share failure must not modify or delete the Property, Draft, or media.
+
+### Consequences
+
+Privacy filtering must be enforced outside presentation-only UI and must apply consistently to every supported share adapter.
+
+---
+
+## [DEC-036] — PACI, Location, and Maps Behavior
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product + Data + Integration
+
+### Decision
+
+Kuwait Property location selection uses Governorate and Area. Area selection supports fast text search and displays complete names. The taxonomy remains configurable for future GCC expansion.
+
+PACI and exact location are optional and never block Property save.
+
+Location may be provided by map-point selection, current location after permission, a pasted Google Maps link, or manual entry/correction.
+
+Coordinates use a platform-neutral representation. Original user-provided map links are preserved.
+
+Maps, reverse geocoding, and automated lookup must not silently override the user’s selected Area or PACI. The user may correct Area, PACI, map link, and coordinates.
+
+Permission denial, offline state, and map failure must not prevent saving the Property or its Draft.
+
+Google Maps is the first operational map option. Maps use a replaceable adapter. iOS provides an appropriate Apple Maps or browser fallback.
+
+Exact location and PACI remain private by default during sharing. Movement history is not collected. Any external PACI integration requires separate privacy, reliability, replacement, failure, and data-authority analysis before approval.
+
+---
+
+## [DEC-037] — Cross-Platform Android/iOS Product Contract
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Architecture + Product + Testing
+
+### Decision
+
+ViewState App V001 is one product supporting Android and iOS/iPhone.
+
+Android is the first implementation, pilot, and operational-validation platform. Android-first does not authorize an Android-only architecture.
+
+iOS architectural compatibility must be maintained continuously during every implementation stage.
+
+After Android stabilization, the remaining iOS-specific work may include only remaining platform integrations, real-device verification, TestFlight verification, and App Store preparation.
+
+Shared product behavior, domain logic, validation, matching, persistence, API contracts, migrations, privacy, and backup rules remain platform-neutral.
+
+Business rules must never be duplicated inside platform-specific UI or native modules.
+
+Native functions must be isolated behind replaceable platform adapters, including Contacts; Photos and videos; Files and backup/restore; Location and maps; WhatsApp and WhatsApp Business; Notifications; Secure storage and authentication; Deep links; and future ViewState Card opening.
+
+Every dependency requires Android, iOS, and Expo compatibility review.
+
+A platform-specific dependency requires documented justification, a safe equivalent fallback, isolation from shared product logic, and Founder approval if it reduces parity or data safety.
+
+Persisted data, migrations, backup formats, import/export formats, and future ViewState Card formats remain platform-neutral.
+
+Android hardware and gesture back behavior and iOS native swipe-back/navigation behavior must both be respected.
+
+Arabic, English, RTL/LTR, keyboard behavior, accessibility, and responsive layout must be verified on both platforms.
+
+Every future feature Impact Analysis requires an Android/iOS Compatibility Impact section.
+
+Android real-device testing is mandatory for the first pilot, including Honor X9 where applicable.
+
+iPhone real-device and TestFlight testing are mandatory before iOS freeze or App Store submission.
+
+TypeScript success, Expo prebuild, simulator success, or binary generation alone is not proof of iOS functional readiness.
+
+Historical permanent single-platform priority statements are superseded. Android-first is rollout and operational-testing priority only.
+
+Platform parity means equivalent product capability and data safety, not identical native UI behavior.
+
+### Supersedes
+
+This decision supersedes the platform-priority portions of artifacts/mobile/.ai/README.md:10-12, artifacts/mobile/.ai/ARCHITECTURE.md:8-22, and artifacts/mobile/.ai/DECISIONS.md:80-93, only to the extent that they establish permanent iOS priority or postpone Android compatibility. Historical records remain unchanged.
+
+### Consequences
+
+A feature is not architecturally complete when it works only on Android without a documented iOS path. Android may reach pilot readiness first, but iOS compatibility work continues during every preceding implementation stage. Tooling/build success alone cannot establish functional readiness.

@@ -110,3 +110,43 @@ ViewState App
 ├── Media/Storage        🔒 LOCKED
 └── UI / Screens         🔒 LOCKED
 ```
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Current Authoritative Contract
+
+### Product status and sequencing
+
+ViewState App V001 remains PRE-IMPLEMENTATION. Stage 00.5 is not defined. Stage 01 has not started. Product implementation remains locked until a bounded Stage 01 Property Workflow Impact Analysis receives Founder approval.
+
+### Person model
+
+The five Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Tenant and Buyer are historical role values superseded for future implementation. A Seeker may own multiple separate Requirements, whose purpose is Rent or Buy. Person capture is role-first and requires at least one classification before final save.
+
+### V001 scope corrections
+
+The minimum Tasks and Follow-ups capability and Property Import/Safe Share are included within their approved boundaries. Full-account portability, ViewState Card, and direct ViewState-to-ViewState sharing remain separate later capabilities. Platform, Network, Marketplace, and Commission Management remain outside V001 implementation scope.
+
+### Cross-platform contract
+
+Android is first for rollout and pilot validation, not an Android-only architecture. iOS compatibility is maintained continuously. Shared business rules, persistence, APIs, migrations, privacy, backup, import/export, and future Card formats remain platform-neutral and native functions use replaceable adapters.
+
+### Visual and interaction invariants
+
+Light background; blue header; fixed Global Search in the header of principal screens; red primary headings and important data; blue action buttons; green WhatsApp and Call actions; Arabic/RTL and English/LTR; native platform back behavior; and keyboard-safe forms remain authoritative.

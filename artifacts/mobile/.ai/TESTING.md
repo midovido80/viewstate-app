@@ -107,3 +107,31 @@ Examples:
 - No mocking without an explaining comment
 - No `it.skip` without a dated TODO comment
 - No marking a layer complete before all 4 check types pass (Rule 8)
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Required Evidence Addendum
+
+Testing must verify role-first capture, five classifications, multiple Requirements per Seeker, Requirement-level Rent/Buy, separate Rental/Sale Price behavior, Draft recovery, save-failure Retry, media retention, Property Import, Safe Share Preview and privacy, optional PACI/location, and no-silent-loss behavior.
+
+Every feature requires Android/iOS Compatibility Impact evidence. Android pilot testing includes real devices and Honor X9 where applicable. iPhone real-device and TestFlight verification are mandatory before iOS freeze or App Store submission.
+
+Test Arabic/RTL and English/LTR, keyboard behavior, Android back, iOS swipe-back, responsive layout, accessibility, permissions, offline/map failure, share failure, and cross-broker isolation.
+
+Tooling success, TypeScript success, Expo prebuild, simulator success, and binary generation alone are not functional-readiness evidence.

@@ -143,3 +143,27 @@ import { Image } from 'expo-image';
 | Take a photo | `CAMERA` |
 
 Always request the minimum permission. If the broker wants to take a photo, request camera permission at the moment they tap "Take Photo" — not at app launch.
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Media Safety
+
+The approved V001 Property capability supports Photos, Videos, and Documents. Selected photos and videos must be copied or retained in app-controlled storage and must not depend only on temporary picker paths.
+
+Property Import preserves original incoming content when extraction is incomplete or fails. Draft and share failures preserve fields, media, and source content. Storage technology, file limits, codecs, and server-backed synchronization remain deferred until a bounded Impact Analysis.

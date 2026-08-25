@@ -99,3 +99,27 @@ export default function PropertyDetail() {
 - Do not create `app/index.tsx` if using `(tabs)` — the tab group is the root
 - Do not configure `headerShown` inside screen components — only in `_layout.tsx`
 - Do not use `expo-router` `Link` component for programmatic navigation — use `router.push()`
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Navigation Compatibility
+
+Navigation must preserve equivalent capability and data safety on Android and iOS. Respect Android hardware/gesture back and iOS native swipe-back/navigation. Platform-specific navigation components require safe fallbacks and must not contain authoritative business rules.
+
+A feature is not complete until its navigation path is documented for both platforms, including modal dismissal, deep links, permission-return paths, Draft recovery, and keyboard-safe final actions.

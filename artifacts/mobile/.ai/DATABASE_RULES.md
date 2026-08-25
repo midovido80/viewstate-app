@@ -166,3 +166,31 @@ created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 - Pagination: **cursor-based** (using `id` or `created_at`) — never offset-based
 - Select only needed columns — avoid `SELECT *`
 - Always filter `isNull(deleted_at)` on soft-delete tables
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Effective Data Rules
+
+This reconciliation authorizes no schema or migration work. The app remains PRE-IMPLEMENTATION with no implemented V001 dataset requiring migration now.
+
+Future schema work must represent exactly five Person classifications, separate Requirements, multiple Requirements per Seeker, Requirement purpose Rent/Buy, separate Rental Price and Sale Price, configurable Governorate/Area, optional PACI/exact location, platform-neutral coordinates, original map-link preservation, independent local Drafts, and private media retention.
+
+Any discovered implemented dataset stops the relevant stage for a fresh migration and compatibility assessment. No old role, zero-role Contact, generic-price, or Draft migration is implied by this reconciliation.
+
+Persisted originals remain unchanged until edit save succeeds. Backup, restore, import, export, and future ViewState Card formats remain platform-neutral. Server-backed Draft synchronization is deferred.
