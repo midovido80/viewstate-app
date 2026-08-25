@@ -4,7 +4,7 @@
 **Founder authorization:** Pre-Stage 01 Property Capture Scope Amendment
 **Approved baseline:** `83d28faa1cdd0ab525ba98872d90cce77efe59ae`
 **Amendment branch:** `governance/pre-stage-01-property-capture-scope-amendment`
-**Amendment PR:** TBD — assigned after PR opening within this same PR
+**Amendment PR:** #5 — https://github.com/midovido80/viewstate-app/pull/5
 **Decision:** DEC-040
 
 ---
