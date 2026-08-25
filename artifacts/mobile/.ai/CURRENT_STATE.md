@@ -1,7 +1,7 @@
 # ViewState App — Current State
 
 **Status:** 🔴 PRE-IMPLEMENTATION  
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-26
 
 ---
 
@@ -13,8 +13,11 @@
 | Stage 00.2.1 — V001 Scope Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
 | Stage 00.2.2 — Minimum Capability Analysis | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
 | Stage 00.3 — Core User Journeys Lock | 🔒 FROZEN / APPROVED | Founder + CTO | 2026-08-13 |
-| Stage 00.2.3 placeholder | ⚠️ LABEL EXISTS — content undefined; deferred to Governance Cleanup Pass | — | — |
-| Stage 00.4 and beyond | ⏸ WAITING | Awaiting Founder authorization | — |
+| Stage 00.2.3 placeholder | Historical placeholder only — no active required stage | — | — |
+| Stage 00.4 — Governance Reconciliation Evidence | 🔒 HISTORICALLY FROZEN | Founder approvals FD-01 through FD-08 | 2026-08-25 |
+| Stage 00.5 | NOT DEFINED | — | — |
+| Governance Reconciliation Corrective Freeze | ⏳ CONDITIONAL — effective only after corrective PR merge and verified `main` tree | Founder corrective authorization | 2026-08-26 |
+| Stage 01 | 🔒 NOT STARTED / LOCKED | Requires bounded Property Workflow Impact Analysis and fresh Founder approval | — |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
 
@@ -52,7 +55,7 @@
 | `.ai/AI_WORKFLOW.md` | ✅ Session protocol, prompt execution rules |
 | `.ai/TESTING.md` | ✅ 4-layer testing requirement |
 | `.ai/GRILL_ME.md` | ✅ Red-team / adversarial review protocol |
-| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-026 (DEC-022 = BASIC capture minima + role/purpose rules; DEC-023 = Matching ≥70% threshold; DEC-024 = Property Sharing any Contact; DEC-025 = Auth/Language/Profile rules; DEC-026 = Stage 00.3 freeze) |
+| `.ai/DECISIONS.md` | ✅ DEC-001 through DEC-038; DEC-030 through DEC-037 are the approved reconciliation decisions and DEC-038 is the corrective-pass/freeze decision |
 | `.ai/STAGE_00_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.1 freeze record |
 | `.ai/STAGE_00_2_1_ANALYSIS.md` | 🔒 FROZEN — Stage 00.2.1 corrected scope analysis |
 | `.ai/STAGE_00_2_1_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.1 freeze record |
@@ -60,6 +63,7 @@
 | `.ai/STAGE_00_2_2_FREEZE.md` | 🔒 FROZEN — formal Stage 00.2.2 freeze record |
 | `.ai/STAGE_00_3_FREEZE.md` | 🔒 FROZEN — formal Stage 00.3 freeze record |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
+| `.ai/GOVERNANCE_RECONCILIATION_FREEZE.md` | ⏳ Conditional formal freeze record; becomes effective only after corrective merge verification |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
 | `.ai/skills/expo-router.md` | ✅ Expo Router rules |
@@ -216,35 +220,6 @@ _This file is updated at the end of every AI session. Never delete session log e
 
 ---
 
-## Governance Reconciliation — Effective Rules
+## Current Governance Reconciliation Status
 
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation Status
-
-- Stage 00.1: FROZEN
-- Stage 00.2.1: FROZEN
-- Stage 00.2.2: FROZEN
-- Stage 00.3: FROZEN
-- Stage 00.4: HISTORICALLY FROZEN; historical file remains byte-for-byte unchanged
-- Governance Reconciliation: APPROVED for clean governance-only synchronization; freeze is effective only after merge verification
-- Stage 00.5: NOT DEFINED
-- Stage 01: NOT STARTED
-- Product status: PRE-IMPLEMENTATION
-- No implemented V001 dataset requires migration now
-- No migration is authorized by this reconciliation
-- Next action after governance freeze: Stage 01 Impact Analysis — first bounded Property Workflow step
-- Founder approval is required again before Stage 01 implementation
-
-Property-first permits only the minimum technical foundation required by the first bounded Property feature. It does not authorize broad authentication, database, API, infrastructure, Contacts, Matching, Tasks, integrations, backup, or iOS release implementation.
+The corrective pass has aligned live governance with DEC-030 through DEC-037 and recorded DEC-038. The formal reconciliation freeze is conditional until this corrective PR merges normally, the resulting GitHub `main` tree matches the verified corrective tree, no prohibited file is included, and Stage 01 remains locked. Product status remains PRE-IMPLEMENTATION; Stage 00.2.3 is historical only, Stage 00.5 is not defined, and the next permitted action is a bounded Stage 01 Property Workflow Impact Analysis after fresh Founder approval.

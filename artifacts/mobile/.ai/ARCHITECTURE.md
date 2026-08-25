@@ -5,11 +5,16 @@
 
 ---
 
+## Current Effective Architecture Contract
+
+React Native + Expo remains approved for one Android/iOS product. Android-first rollout does not permit Android-only architecture; iOS compatibility is maintained continuously. Expo Go is a preview/testing option, not an exclusive dependency gate. Shared business rules, persistence, APIs, privacy, Draft recovery, import/export boundaries, and future Card formats remain platform-neutral; native capabilities use replaceable adapters.
+
+
 ## Stack
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Mobile client | React Native + Expo (SDK 53+) | iOS primary, Android secondary |
+| Mobile client | React Native + Expo (SDK 53+) | Android-first rollout and pilot; continuous iOS architectural compatibility |
 | Routing | Expo Router (file-based) | NativeTabs on iOS 26+, classic Tabs fallback |
 | State (server) | TanStack React Query | All server data goes through generated hooks |
 | State (local) | React Context + AsyncStorage | Auth state, preferences, offline cache |
@@ -35,9 +40,9 @@ ViewState V001
 │
 ├── CORE MODULES (built after foundation)
 │   ├── Contacts Module     → create / manage / role-assign contacts
-│   │                         Roles: Tenant, Buyer, Owner, Broker (Rule 11)
+│   │                         Person classifications: Seeker, Owner, Broker, Real Estate Company, Building Guard
 │   ├── Properties Module   → create / edit / list / search properties
-│   ├── Requirements Module → buyer/tenant requirement entry and storage
+│   ├── Requirements Module → Seeker-owned Requirement entry and storage
 │   └── Matching Engine     → Compare + Score + Explain (Rule 12)
 │
 ├── IMPORT LAYER (built after core)
@@ -75,7 +80,7 @@ Screen files (`app/**/*.tsx`) must contain zero business logic. They render UI, 
 Every client–server interaction goes through the OpenAPI spec → Orval-generated hooks. No hand-rolled fetch calls for endpoints that exist in the spec.
 
 ### 4. Bilingual from day one
-Every data model with user-visible text must have both `_ar` and `_en` variants. The UI layer picks the correct one based on locale.
+Application UI and system-authored content are localized in Arabic and English. User-entered and imported names, notes, descriptions, and source text remain literal and must not be automatically translated or duplicated.
 
 ### 5. Database schema is law
 The Drizzle schema in `lib/db/src/schema/` is the single source of truth. Types derive from it via drizzle-zod. Never hand-write a type that duplicates a schema type.
@@ -168,32 +173,3 @@ artifacts/mobile/
 
 
 ---
-
-## Governance Reconciliation — Effective Rules
-
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation — Effective Architecture Contract
-
-The mobile product is one shared Android/iOS Expo/React Native application. Android is first for implementation and pilot validation only. iOS architectural compatibility is continuous from the first feature stage.
-
-Shared layers own domain rules, validation, matching, persistence, API contracts, migrations, privacy, backup, Draft behavior, and import/export formats. Business rules must not be duplicated in platform UI or native modules.
-
-Native capabilities are behind replaceable adapters for Contacts, Photos/Videos, Files and backup/restore, Location/Maps, WhatsApp/WhatsApp Business, Notifications, Secure Storage/Authentication, Deep Links, and future ViewState Card opening. Every dependency requires Android, iOS, and Expo review plus a safe fallback.
-
-Property Import is Draft-first and supports text, photos, videos, and documents from supported OS sharing mechanisms. Safe Share is one Property at a time, Preview-first, privacy-filtered, and channel-independent.
-
-Persisted data remains platform-neutral. Rental Price and Sale Price are separate product concepts. Server-backed Draft synchronization and external PACI remain deferred pending separate analyses.
-
-Architecture readiness requires a documented iOS path; Android-only success is insufficient.
