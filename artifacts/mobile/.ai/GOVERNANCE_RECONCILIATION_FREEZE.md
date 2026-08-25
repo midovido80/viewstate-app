@@ -4,8 +4,8 @@
 **Founder authorization:** Governance-only corrective pass
 **Baseline:** `84be5c9d02adb73cea15ad2a875fd23fcc38bbfd`
 **Corrective branch:** `governance/v001-reconciliation-corrective-pass`
-**Corrective PR:** To be recorded before merge
-**Corrective branch head:** To be recorded before merge
+**Corrective PR:** #2 — https://github.com/midovido80/viewstate-app/pull/2
+**Corrective branch head:** `0047190b1d5090bb410b15cec4607f7aaadf4ef5` (head at PR creation; recorded before merge)
 
 ---
 
