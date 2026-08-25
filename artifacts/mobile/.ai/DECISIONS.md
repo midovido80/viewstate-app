@@ -988,7 +988,7 @@ Category: Governance
 
 ### Context
 
-Founder authorized one final governance-only closeout from verified GitHub `main` commit `fbed357dabf09799c73982bb0643673ef3337a05` after PR #2 merged. The live governance still displayed the reconciliation as conditional, retained an obsolete complete-Foundation-before-Property implementation order, and did not state the mandatory lifecycle consistently.
+Founder authorized one final governance-only closeout from verified GitHub `main` commit `fbed357dabf09799c73982bb0643673ef3337a05` after PR #2 merged. The live governance still displayed the reconciliation as conditional, retained an obsolete implementation order that delayed the first Property step, and did not state the mandatory lifecycle consistently.
 
 ### Decision
 
