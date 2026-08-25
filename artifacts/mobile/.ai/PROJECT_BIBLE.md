@@ -243,3 +243,33 @@ Every data model, API contract, and module boundary must be designed with these 
 4. **Capture First → Enrich Later.** Minimal friction at data entry. Optional richness later.
 5. **Trust by design.** No dark patterns, no hidden data sharing, no surprises.
 6. **Offline-tolerant.** Mobile connectivity in the field may be inconsistent. The app must degrade gracefully.
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Authoritative Scope Addendum
+
+V001 is a private, broker-focused, bilingual Android/iOS product. The product contract is Capture First → Enrich Later → Act, with Property workflow first.
+
+The approved Person model contains exactly five classifications: Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate records, a Seeker may have multiple Requirements, and Rent/Buy belongs to the Requirement.
+
+Included V001 capabilities are role-first Person capture, Properties, Requirements, rule-based matching, the minimum Tasks and Follow-ups scope, Property Import and one-Property-at-a-time Safe Share, bilingual search and communication, Draft recovery, and the approved privacy and location behavior.
+
+Full-account portability, server-backed Draft synchronization, external PACI, ViewState Card, and direct ViewState-to-ViewState sharing require later approved analyses. Platform/Network/Marketplace/Commission functionality is excluded.
+
+No current dataset requires migration. Any migration language is future risk analysis only. No implementation, broad infrastructure, or Stage 01 work is authorized by this addendum.

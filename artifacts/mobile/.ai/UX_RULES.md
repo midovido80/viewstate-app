@@ -142,3 +142,33 @@ Every form screen that can have unsaved changes must:
 - Custom back gestures that override Android system behavior (Rule 15)
 - Hardcoded strings in any language (must use i18n keys)
 - Additional accent colors beyond the V001 visual baseline (Rule 14)
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Effective UX Rules
+
+Person capture is role-first: select at least one of the five approved classifications, then choose manual entry or approved import. Manual final save requires Name, Phone, and one classification. Imported names and notes remain literal.
+
+Tasks require only a short title; date/time and Person, Property, or Requirement links are optional. Statuses are Open/Done with Today, Upcoming, All, and Done views, a simple calendar filter, local notification when permitted, edit/complete/reopen, and Draft safety. Recurring work, automation, pipelines, team assignment, calendar synchronization, and analytics remain excluded.
+
+Property Import always creates a Draft before extraction. The user reviews and edits extracted values before final save. Original content remains available after partial or failed extraction. Manual Property entry always remains available.
+
+Property Safe Share is one Property at a time and requires recipient, channel, field/media selection, and final Preview confirmation. Owner/source, Private Notes, exact location, Maps link, PACI, and linked Seeker/client data are private by default or prohibited as specified by the disclosure policy.
+
+Global Search is fixed in the blue header on principal screens. Arabic/RTL and English/LTR, native Android back, iOS swipe-back, keyboard visibility, accessibility, and responsive behavior must be verified on both platforms.

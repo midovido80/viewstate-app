@@ -205,3 +205,27 @@ pnpm --filter @workspace/mobile run test -- --watch
 | Form validators | 85% |
 | API routes | 80% |
 | UI components | 60% (render + interaction) |
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Testing Stage Gates
+
+Future testing must cover the six mandatory Impact Analysis sections: Android/iOS Compatibility Impact; Persisted Data / Migration / Compatibility; Privacy and Sharing; Draft and Save-failure Safety; Performance and Bounded-scale Risk; and Testing and Release Evidence.
+
+Include real Android devices and Honor X9 where applicable, iPhone real-device testing, TestFlight verification before iOS freeze, Arabic/RTL and English/LTR, permissions, keyboard, navigation, accessibility, offline behavior, media retention, import/share privacy, migration safety, and release traceability.

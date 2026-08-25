@@ -172,3 +172,29 @@ pnpm --filter @workspace/db run push
 - **Never store money as float** — use `numeric(15,2)` (Drizzle maps this to string in JS — parse with `parseFloat()` when needed)
 - **Never hard-delete user data** — always soft-delete with `deleted_at`
 - **Never write raw SQL** unless it's a complex reporting query that can't be expressed in the ORM
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Database Stage Gates
+
+No database schema or migration is authorized by the reconciliation. The current app is PRE-IMPLEMENTATION and has no implemented V001 dataset requiring migration now.
+
+Future database work must assess five Person classifications, separate Requirements and multiple Requirements per Seeker, Requirement Rent/Buy, separate Rental Price/Sale Price, platform-neutral location coordinates, Draft identity and recovery, media retention, backup/restore, and import/export compatibility.
+
+If implemented data is discovered, stop and perform a fresh compatibility and migration assessment. Do not silently map old values or discard data.

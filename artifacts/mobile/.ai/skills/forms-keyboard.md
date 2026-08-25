@@ -153,3 +153,27 @@ type SubmitState = 'idle' | 'loading' | 'success' | 'error';
 - Phone format, validation pattern, and display mask are **market-configurable** — do not hardcode country-specific formats
 - The active market configuration provides: expected prefix pattern, digit count, and E.164 normalization rules
 - Never store the formatted/display version — only store the clean E.164 international format (e.g., `+XXXXXXXXXXX`)
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Form Safety
+
+Forms must support role-first capture, independent Drafts, save failure with Retry, explicit discard, and no stale data from the previously completed record. The persisted original remains unchanged until edit save succeeds.
+
+Active fields and final actions must remain visible above the keyboard in Arabic/RTL and English/LTR on Android and iOS. Keyboard, focus, validation, accessibility, responsive layout, back navigation, and permission-return states require platform-specific verification.

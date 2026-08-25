@@ -139,3 +139,29 @@ Regardless of technical import mechanism:
 - File reading: use `expo-file-system` (`FileSystem.readAsStringAsync()`)
 - Large files (1000+ messages): parse in a background/chunked approach to avoid blocking the UI
 - All parsing must happen on-device — never send raw conversation content to the server
+
+
+---
+
+## Governance Reconciliation — Effective Rules
+
+This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
+
+- Status remains PRE-IMPLEMENTATION.
+- Stage 00.5 is not defined and must not be fabricated.
+- Stage 01 has not begun.
+- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
+- No database migration is authorized or required by this reconciliation.
+- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
+- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
+- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
+
+
+## Governance Reconciliation — Property Import Boundary
+
+WhatsApp Business is the operational priority, followed by WhatsApp and other supported OS share sources. Supported incoming content includes text, photos, videos, and documents; manual text paste remains available.
+
+Property Import creates a Draft before extraction. Only supported fields are extracted. The broker reviews and edits before final save. Original received content remains available when extraction is partial or fails. No private conversation access or unsupported/private WhatsApp API behavior is claimed.
+
+The technical mechanism remains replaceable and must have Android and iOS paths. Property Safe Share is one Property at a time, Preview-first, field/media-selectable, and subject to the same disclosure policy on every channel.
