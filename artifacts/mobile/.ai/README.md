@@ -6,13 +6,13 @@
 **Stage 00.2.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_1_FREEZE.md` and DEC-017  
 **Stage 00.2.2:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_2_FREEZE.md` and DEC-021  
 **Stage 00.3:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_3_FREEZE.md` and DEC-026  
-**Stage 00.2.3:** Historical placeholder only — no active required stage  
-**Stage 00.4:** 🔒 HISTORICALLY FROZEN  
-**Stage 00.5:** NOT DEFINED  
-**Governance Reconciliation:** Conditional corrective freeze — effective only after corrective PR merge and verified `main` tree  
-**Stage 01:** NOT STARTED / LOCKED  
+**Stage 00.2.3:** Historical placeholder only — no active required stage
+**Stage 00.4:** 🔒 HISTORICALLY FROZEN
+**Stage 00.5:** NOT DEFINED
+**Governance Reconciliation:** Conditional corrective freeze — effective only after corrective PR merge and verified `main` tree
+**Stage 01:** NOT STARTED / LOCKED
 **Language:** Bilingual Arabic / English (ar / en)  
-**Platform:** React Native + Expo — Android-first rollout and pilot; iOS architectural compatibility maintained continuously  
+**Platform:** React Native + Expo — Android-first rollout and pilot; iOS architectural compatibility maintained continuously
 **Last updated:** 2026-08-26
 
 ---
