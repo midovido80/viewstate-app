@@ -44,17 +44,18 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 
 ## V001 Module Map
 
-The first permitted Stage 01 work is an Impact Analysis for the first bounded Property Workflow step — Building Form. That analysis may identify only the minimum technical foundation required by that bounded step. Authentication, broad database design, broad API infrastructure, Contacts, Requirements, Matching, Tasks, imports, sharing, media, and other modules are not implicitly authorized. No product implementation begins until the full mandatory governance lifecycle is complete.
+The expanded Stage 01 Impact Analysis is not started and requires fresh Founder authorization. When separately authorized, it may assess transaction-first built-property capture for Sale and Rent: exact offered property or independently offered unit selection, relevant conditional field categories, Property/Offer/Unit alternatives, Draft/no-silent-loss implications, and minimum technical impacts. Land remains a separate later V001 workflow. This is analysis only: it approves no final architecture, data model, schema, API, dependency, UI, or implementation. Authentication, broad database design, broad API infrastructure, Contacts, Requirements, Matching, Tasks, imports, sharing, media, and other modules remain separately locked.
 
 ```
 ViewState V001
 │
-├── STAGE 01 FIRST BOUNDED WORKFLOW (next permitted action)
-│   └── Building Form → bounded Property Workflow Impact Analysis first
-│                         implementation remains locked pending Founder approval
+├── STAGE 01 FUTURE ANALYSIS (fresh Founder authorization required)
+│   └── Property Capture Architecture & Dynamic Form Impact Analysis
+│       (Sale & Rent — Built Properties; Land Workflow Separate)
+│       implementation remains locked
 │
 ├── OTHER V001 MODULES (separately locked)
-│   ├── Foundation / Auth / Database / API → only minimum support may be assessed for Building Form
+│   ├── Foundation / Auth / Database / API → remain locked; only impacts may be assessed within a separately authorized analysis
 │   ├── Contacts Module → separately authorized later
 │   ├── Requirements Module → separately authorized later
 │   ├── Matching Engine → separately authorized later
@@ -103,9 +104,9 @@ The active implementation order begins with a bounded analysis, not with a requi
 
 ```
 1. Governance Package                                      ← ✅ COMPLETE
-2. Stage 01 Impact Analysis — Building Form only           ← NEXT PERMITTED ACTION
-3. Stage 01 Building Form implementation                   ← 🔒 LOCKED pending analysis and Founder approval
-4. Minimum technical foundation for Building Form          ← only if approved by that analysis
+2. Fresh Founder authorization for Stage 01 expanded Impact Analysis ← NEXT REQUIRED AUTHORIZATION
+3. Stage 01 Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate) ← 🔒 LOCKED until authorized
+4. Minimum technical foundation for that analysis          ← only if separately justified and approved
 5. Foundation / Auth / broad Database / broad API           ← 🔒 separately locked
 6. Contacts / Requirements / Matching / Tasks               ← 🔒 separately locked
 7. Imports / Sharing / Media / Global Search                 ← 🔒 separately locked

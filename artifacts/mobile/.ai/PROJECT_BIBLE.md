@@ -9,6 +9,8 @@
 
 V001 is one Android/iOS product with Android-first rollout and continuous iOS compatibility. The exact Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate Seeker-owned records with Rent or Buy purpose and multiple Requirements per Seeker. The approved minimum Tasks and Follow-ups capability, Draft-first Property Import, and one-Property-at-a-time Safe Share are in scope; full-account portability and ViewState Card remain later-stage. User-entered and imported free text remains literal.
 
+The approved future Stage 01 analysis boundary is transaction-first broker property capture: Transaction → exact offered built property or independently offered unit → relevant fields only → quick save → optional enrichment later. It may analyze Sale and Rent built-property capture alternatives without approving a final taxonomy, Property/Offer/Unit model, parent relationship, persistence representation, UI, schema, API, or implementation. Land remains a separately analyzed, approved, and frozen later V001 workflow. The expanded Stage 01 Impact Analysis itself still requires fresh Founder authorization.
+
 
 ## Problem Statement
 

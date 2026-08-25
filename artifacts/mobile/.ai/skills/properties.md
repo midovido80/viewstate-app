@@ -6,7 +6,7 @@
 
 ## Current Property Workflow Contract
 
-Property workflow is property-first. Rental Price and Sale Price are separate concepts. Property Import is Draft-first, Safe Share is one Property at a time and Preview-first, and owner/source/private Notes/linked Seeker information are private by default. Kuwait location uses Governorate and Area; PACI and exact location are optional, user-correctable, and never block save.
+Property workflow is property-first. Rental Price and Sale Price are separate concepts. The approved future Stage 01 analysis may assess transaction-first Sale and Rent capture of the exact offered built property or independently offered unit, with relevant fields only, quick save, and optional enrichment later. It does not approve a final taxonomy, Property/Offer/Unit model, parent relationship, schema, UI, or implementation. Land remains a separately analyzed, approved, and frozen later V001 workflow. Property Import is Draft-first, Safe Share is one Property at a time and Preview-first, and owner/source/private Notes/linked Seeker information are private by default. Kuwait location uses Governorate and Area; PACI and exact location are optional, user-correctable, and never block save.
 
 
 ## What Is a Property in ViewState?
@@ -17,7 +17,7 @@ A property is a real estate listing entered by a broker. It represents a unit or
 
 ## Property Data Model
 
-See `database-rules.md` for the full schema. Key fields:
+The following is non-final planning guidance only. It is not an approved final schema, taxonomy, Property/Offer/Unit model, parent relationship, or Stage 01 implementation contract. See `DATABASE_RULES.md` for the governing boundary.
 
 ```typescript
 interface Property {
@@ -49,7 +49,7 @@ interface Property {
   updated_at: Date;
 }
 
-type PropertyType    = 'apartment' | 'villa' | 'office' | 'land' | 'shop';
+type PropertyType    = 'apartment' | 'villa' | 'office' | 'land' | 'shop'; // pre-amendment planning example only; not the final Stage 01 taxonomy
 type PropertyPurpose = 'sale' | 'rent';
 // Classification type alias: deferred to Database stage — values will be Follow Up / Important / Pending / Order Complete / Closed Deal
 ```
@@ -79,20 +79,19 @@ Property and location workflows must be capable of supporting a Kuwait-first mar
 
 ## Property Validation Rules
 
-| Field | Required for basic capture? | Notes |
-|-------|------------------------------|-------|
-| type | Yes | Must be one of 5 types |
-| purpose | Yes | 'sale' or 'rent' |
-| price | Yes | > 0 |
-| currency | Yes | From market configuration |
-| title_ar OR title_en | At least one | Not both empty |
-| location area | No (recommended) | From market-configurable list; field name TBD Database stage |
-| area_sqm | No | > 0 if provided |
-| bedrooms | No | 0–20 if provided |
-| floor | No | -5 to 200 if provided |
-| classification label | No | Optional 4-label status tag; persistence TBD Database stage |
+**Authoritative BASIC Property capture (DEC-022):**
 
-**Capture First rule:** type + purpose + price + at least one title = a valid, saveable property record. All other fields are optional enrichment.
+| Field | Required for BASIC capture? | Notes |
+|-------|------------------------------|-------|
+| Property Type | Yes | Final taxonomy remains unresolved for Stage 01 analysis |
+| Purpose | Yes | Sale or Rent |
+| Price | Yes | Rental Price and Sale Price remain separate concepts; no persisted price model is approved here |
+| Market-configured Location Area | Yes | Kuwait uses Governorate and Area; exact representation remains unresolved |
+| Title | No | Not a required BASIC Property field |
+
+No fifth BASIC field is created by this amendment. Other fields are optional enrichment or remain unresolved for the separately Founder-authorized Stage 01 Impact Analysis.
+
+The existing five-type list is non-final planning guidance. Additional built-property types may be identified during Stage 01 analysis. Whether a user-selectable Other type exists remains an unresolved Stage 01 Founder decision. Land remains a separate later V001 workflow.
 
 ---
 

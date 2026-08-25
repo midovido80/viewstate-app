@@ -9,6 +9,8 @@
 
 These are governance planning rules only; no schema or migration is authorized by this corrective pass. Requirements are conceptually Seeker-owned separate records. Rental Price and Sale Price are separate concepts. User-entered/imported names, notes, descriptions, and source text remain literal; exact persisted representation is deferred to the bounded Data Impact Analysis.
 
+**Pre-Stage 01 Property Capture Amendment Boundary:** BASIC Property capture follows DEC-022 exactly: Property Type, Purpose, Price, and Market-configured Location Area. Title is not a required BASIC Property field, and this amendment creates no fifth BASIC requirement. The taxonomy and persistence examples below are non-final planning guidance only. Property/Offer/Unit alternatives, parent relationships, simultaneous Sale/Rent representation, and persisted price representation remain unresolved for the separately Founder-authorized Stage 01 Impact Analysis. Land remains a separate later V001 workflow. No schema or migration is authorized.
+
 
 ## Philosophy
 
@@ -75,6 +77,9 @@ deleted_at      TIMESTAMPTZ
 > **Classification (product scope — persistence TBD):** Contacts support an optional 4-label status tag (Follow Up / Important / Pending / Order Complete / Closed Deal). The persistence column name, SQL type, constraint representation, and nullability are deferred to the Database stage.
 
 ### `properties`
+
+> **Non-final planning guidance:** The following example must not be interpreted as an approved final taxonomy, Property/Offer/Unit model, parent/unit relationship, or persistence model. Those decisions remain reserved for the separately authorized Stage 01 Impact Analysis.
+
 ```
 id              UUID PK
 broker_id       UUID FK → users.id

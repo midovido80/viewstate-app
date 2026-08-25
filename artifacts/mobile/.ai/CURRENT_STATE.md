@@ -17,7 +17,8 @@
 | Stage 00.4 — Governance Reconciliation Evidence | 🔒 HISTORICALLY FROZEN | Founder approvals FD-01 through FD-08 | 2026-08-25 |
 | Stage 00.5 | NOT DEFINED | — | — |
 | Governance Reconciliation Corrective Freeze | 🔒 FROZEN | PR #2 merged normally; `main` verified at `fbed357dabf09799c73982bb0643673ef3337a05` | 2026-08-26 |
-| Stage 01 | 🔒 NOT STARTED / LOCKED | Next permitted action is bounded Stage 01 Building Form Impact Analysis only; implementation remains locked pending Founder approval | — |
+| Pre-Stage 01 Property Capture Scope Amendment | 🔒 FROZEN after normal amendment PR merge and verified `main` | DEC-040 ACTIVE; governance-only amendment | 2026-08-26 |
+| Stage 01 | 🔒 NOT STARTED / LOCKED | Next permitted action is fresh Founder authorization for the expanded Stage 01 Impact Analysis only; implementation remains locked | — |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
 
@@ -43,14 +44,14 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 |-------|--------|-------|
 | Governance Package | ✅ COMPLETE | All approved files written and named correctly |
 | App Scaffold | ✅ COMPLETE | Expo blank scaffold — no product UI |
-| Foundation (auth + DB + API) | 🔒 LOCKED | No broad Foundation prerequisite is authorized; only minimum technical foundation may be assessed for the bounded Building Form step |
-| Property Module | 🔒 LOCKED | Stage 01 begins only with bounded Building Form Impact Analysis; implementation requires its approved scope and Founder authorization |
-| Contacts Module | 🔒 LOCKED | Separately locked; not implicitly authorized by Building Form analysis |
-| Requirements Module | 🔒 LOCKED | Separately locked; not implicitly authorized by Building Form analysis |
-| Matching Engine | 🔒 LOCKED | Separately locked; not implicitly authorized by Building Form analysis |
-| WhatsApp Import | 🔒 LOCKED | Separately locked; not implicitly authorized by Building Form analysis |
-| Contacts Import | 🔒 LOCKED | Separately locked; not implicitly authorized by Building Form analysis |
-| Media Layer | 🔒 LOCKED | Separately locked; not implicitly authorized by Building Form analysis |
+| Foundation (auth + DB + API) | 🔒 LOCKED | No broad Foundation prerequisite is authorized; minimum technical impacts may be assessed only after fresh Founder authorization for the expanded Stage 01 Impact Analysis |
+| Property Module | 🔒 LOCKED | The approved future analysis is Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate); implementation remains locked |
+| Contacts Module | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
+| Requirements Module | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
+| Matching Engine | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
+| WhatsApp Import | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
+| Contacts Import | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
+| Media Layer | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
 | Global Search | 🔒 LOCKED | Built alongside each module per Rule 13 |
 | UI / Screens | 🔒 LOCKED | Requires all modules above |
 
@@ -78,6 +79,7 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 | `.ai/STAGE_00_3_FREEZE.md` | 🔒 FROZEN — formal Stage 00.3 freeze record |
 | `.ai/CURRENT_STATE.md` | ✅ This file |
 | `.ai/GOVERNANCE_RECONCILIATION_FREEZE.md` | 🔒 FROZEN formal freeze record; PR #2 merged normally and `main` independently verified |
+| `.ai/PRE_STAGE_01_PROPERTY_CAPTURE_SCOPE_AMENDMENT_FREEZE.md` | 🔒 FROZEN scope-amendment freeze record; DEC-040 ACTIVE after normal amendment PR merge and verified `main` |
 | `.ai/skills/README.md` | ✅ Skills index |
 | `.ai/skills/react-native.md` | ✅ React Native rules |
 | `.ai/skills/expo-router.md` | ✅ Expo Router rules |
@@ -242,4 +244,11 @@ _This file is updated at the end of every AI session. Never delete session log e
 
 ## Current Governance Reconciliation Status
 
-Governance Reconciliation is FROZEN. PR #2 merged normally at `fbed357dabf09799c73982bb0643673ef3337a05`. Final closeout PR #3 merged normally at `fdb032b1e2f16b82a63df054760c984dc5c8fadc`. Product remains PRE-IMPLEMENTATION. Stage 00.2.3 is historical only. Stage 00.5 is not defined. Stage 01 remains NOT STARTED / LOCKED. The next permitted action is bounded Stage 01 Building Form Impact Analysis only. WAIT.
+Governance Reconciliation is FROZEN. PR #2 merged normally at `fbed357dabf09799c73982bb0643673ef3337a05`. Final closeout PR #3 merged normally at `fdb032b1e2f16b82a63df054760c984dc5c8fadc`. Product remains PRE-IMPLEMENTATION. Stage 00.2.3 is historical only. Stage 00.5 is not defined. The former bounded Building Form wording is historical only and is PARTIALLY SUPERSEDED BY DEC-040 for the wording and scope of the next permitted Stage 01 analysis. WAIT.
+
+
+---
+
+## Current Property Capture Scope Amendment Status
+
+Governance Scope Amendment: FROZEN after normal amendment PR merge and verified GitHub `main`. DEC-040: ACTIVE. Product remains PRE-IMPLEMENTATION. Stage 01 remains NOT STARTED / LOCKED. The next permitted action is fresh Founder authorization for the expanded Stage 01 Impact Analysis only — Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate). Land remains a separately analyzed, approved, and frozen later V001 workflow. WAIT.

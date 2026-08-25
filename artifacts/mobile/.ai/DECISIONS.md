@@ -982,7 +982,7 @@ The Stage 00.1, 00.2.1, 00.2.2, 00.3, and 00.4 freeze files remain unchanged.
 
 ## [DEC-039] — Final Governance Closeout
 Date: 2026-08-26
-Status: ACTIVE — FINAL GOVERNANCE CLOSEOUT
+Status: PARTIALLY SUPERSEDED BY DEC-040 only for the wording and scope of the next permitted Stage 01 analysis.
 Decided by: Founder
 Category: Governance
 
@@ -1005,3 +1005,45 @@ The closeout branch is based directly on the approved `main` commit. Only the si
 The mandatory lifecycle is: Founder → CTO Review → Impact Analysis → Founder Approval → Implementation → Testing → CTO Review → Freeze → WAIT. No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
 
 Final state: GOVERNANCE FROZEN; STAGE 01 NOT STARTED / LOCKED; NEXT PERMITTED ACTION is Bounded Stage 01 Building Form Impact Analysis only; WAIT.
+ACTION is Bounded Stage 01 Building Form Impact Analysis only; WAIT.
+
+---
+
+## [DEC-040] — Property Capture Analysis Scope Clarification and Expansion
+Date: 2026-08-26
+Status: ACTIVE only upon normal amendment PR merge, verified GitHub main, exact allowlist compliance, historical preservation, and continued Stage 01 lock; before those conditions it is APPROVED / NOT EFFECTIVE.
+Decided by: Founder
+Category: Governance
+
+### Context
+
+DEC-039 finalized the Governance Reconciliation and used the bounded Stage 01 Building Form Impact Analysis wording. The Founder has clarified that the future analysis must examine transaction-first capture of the exact built property or independently offered unit currently being offered, without forcing parent Building creation. Current property planning guidance also contains an incomplete taxonomy and a stale Title requirement that conflicts with DEC-022.
+
+### Decision
+
+The future Stage 01 analysis is titled:
+
+**Stage 01 — Property Capture Architecture & Dynamic Form Impact Analysis**
+**(Sale & Rent — Built Properties; Land Workflow Separate)**
+
+When freshly authorized by the Founder after this governance amendment freeze, the analysis may assess this workflow:
+
+Transaction → exact offered built property or independently offered unit → relevant fields only → quick save → optional enrichment later.
+
+The analysis may cover Whole Building, Commercial Complex, Apartment, Floor, House, Villa, Office, Shop, Warehouse, Chalet, and additional built-property types identified during analysis. Whether a user-selectable Other type exists remains an unresolved Stage 01 Founder decision. A broker must not be forced to create a parent Building record before capturing an independently offered unit.
+
+Land remains part of V001 but requires a separately analyzed, approved, and frozen later workflow. This decision expands analysis scope only. It does not approve a final taxonomy, Property/Offer/Unit model, parent/unit relationship, persisted price model, UI, schema, migration, API, dependency, or implementation.
+
+### BASIC Property capture
+
+DEC-022 remains authoritative. BASIC Property fields are exactly Property Type, Purpose, Price, and Market-configured Location Area. Title is not a required BASIC Property field. This decision creates no fifth BASIC requirement. Rental Price and Sale Price remain separate concepts; no generic persisted price model is approved.
+
+### Relationship to DEC-039
+
+DEC-039 is PARTIALLY SUPERSEDED BY DEC-040 only for the wording and scope of the next permitted Stage 01 analysis. DEC-039's historical body, governance freeze, pre-implementation state, mandatory lifecycle, Stage 01 lock, and separately locked-module constraints remain active.
+
+### Effectiveness and final state
+
+Before normal amendment PR merge and verification, the existing governance baseline is FROZEN; this scope amendment is APPROVED FOR GOVERNANCE IMPLEMENTATION / NOT YET EFFECTIVE; DEC-040 is NOT YET EFFECTIVE; Stage 01 is NOT STARTED / LOCKED; and the current permitted wording remains the existing bounded Building Form Impact Analysis.
+
+After normal amendment PR merge, verified GitHub main, exact eight-file allowlist compliance, historical freeze-file and decision-body preservation, and continued Stage 01 lock, this decision is ACTIVE without a second administrative PR. The resulting state is: GOVERNANCE SCOPE AMENDMENT FROZEN; DEC-040 ACTIVE; PRODUCT PRE-IMPLEMENTATION; STAGE 01 NOT STARTED / LOCKED; NEXT PERMITTED ACTION fresh Founder authorization for the expanded Stage 01 Impact Analysis only; WAIT.
