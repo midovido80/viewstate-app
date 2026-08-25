@@ -181,3 +181,7 @@ Founder approval covers the Final Governance Reconciliation Impact Analysis, FD-
 No current migration is claimed or created. No database schema or migration is authorized or required by this Governance Reconciliation.
 
 No silent loss of user-entered data is allowed. Local Drafts remain private by default and are not automatically shared or uploaded.
+
+## 18. Corrective Pass and Conditional Formal Freeze
+
+Founder authorized this governance-only corrective pass from merged baseline `84be5c9d02adb73cea15ad2a875fd23fcc38bbfd`. It removes stale active wording from living governance documents, records supersession status only where DEC-030 through DEC-037 directly changed an older decision, and adds DEC-038 plus the formal freeze record. No product decision, implementation, historical freeze file, current database migration, or Stage 01 authorization is created. The freeze is effective only after the corrective PR merge and resulting `main` tree verification.

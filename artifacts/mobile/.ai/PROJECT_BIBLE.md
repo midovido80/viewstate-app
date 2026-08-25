@@ -5,6 +5,11 @@
 
 ---
 
+## Current Effective V001 Scope
+
+V001 is one Android/iOS product with Android-first rollout and continuous iOS compatibility. The exact Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate Seeker-owned records with Rent or Buy purpose and multiple Requirements per Seeker. The approved minimum Tasks and Follow-ups capability, Draft-first Property Import, and one-Property-at-a-time Safe Share are in scope; full-account portability and ViewState Card remain later-stage. User-entered and imported free text remains literal.
+
+
 ## Problem Statement
 
 Real estate transactions across Gulf markets — with Kuwait as the first operational market — are conducted through a mix of informal channels: messaging apps, word-of-mouth, and broker networks that leave no structured digital trail. Buyers, tenants, and property owners have no reliable way to connect through an organized broker system. Property data is unstructured, contact requirements are stored informally, and agents manage their entire operation through messaging threads and personal memory.
@@ -147,13 +152,13 @@ ViewState V001 supports exactly four contact roles. No others.
 | **Broker** | سمسار / وسيط | A real estate agent, consultant, or broker |
 
 - A contact may have multiple roles (e.g., both Buyer and Broker)
-- Role determines which flows are available (Buyer/Tenant → Requirements; Owner → Properties)
+- Role determines which flows are available (Seeker → Requirements; Owner → Properties)
 
 ---
 
 ## Requirements — V001 (Explicit Core Capability)
 
-Buyer/Tenant Requirements are an explicit, named V001 core capability — not merely implicit inside Matching.
+Seeker Requirements are an explicit, named V001 core capability — not merely implicit inside Matching.
 
 - A Requirement is linked to a Buyer or Tenant contact
 - It captures what the contact is looking for: property type, purpose (buy/rent), budget, area, location preference, and other criteria
@@ -246,30 +251,3 @@ Every data model, API contract, and module boundary must be designed with these 
 
 
 ---
-
-## Governance Reconciliation — Effective Rules
-
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation — Authoritative Scope Addendum
-
-V001 is a private, broker-focused, bilingual Android/iOS product. The product contract is Capture First → Enrich Later → Act, with Property workflow first.
-
-The approved Person model contains exactly five classifications: Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate records, a Seeker may have multiple Requirements, and Rent/Buy belongs to the Requirement.
-
-Included V001 capabilities are role-first Person capture, Properties, Requirements, rule-based matching, the minimum Tasks and Follow-ups scope, Property Import and one-Property-at-a-time Safe Share, bilingual search and communication, Draft recovery, and the approved privacy and location behavior.
-
-Full-account portability, server-backed Draft synchronization, external PACI, ViewState Card, and direct ViewState-to-ViewState sharing require later approved analyses. Platform/Network/Marketplace/Commission functionality is excluded.
-
-No current dataset requires migration. Any migration language is future risk analysis only. No implementation, broad infrastructure, or Stage 01 work is authorized by this addendum.

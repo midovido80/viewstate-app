@@ -62,7 +62,9 @@ Project is in PRE-IMPLEMENTATION state. Nothing is built until explicitly unlock
 
 ## [DEC-002] — Bilingual Arabic/English from day one
 Date: 2026-08-13  
-Status: ACTIVE  
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-031.
+Active clause: Application UI and system-authored content remain bilingual; user-entered and imported free text is stored literally and is not automatically translated or duplicated.
 Decided by: Founder  
 Category: UX + Data
 
@@ -79,7 +81,9 @@ All DB schemas must include bilingual text columns. All i18n keys written in bot
 
 ## [DEC-003] — React Native + Expo as mobile platform
 Date: 2026-08-13  
-Status: ACTIVE  
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-037.
+Active clause: React Native + Expo and Expo Router remain approved; Expo Go is a preview/testing option, not an exclusive runtime or dependency gate.
 Decided by: Founder  
 Category: Architecture
 
@@ -96,7 +100,8 @@ Only Expo Go compatible packages may be used in the mobile client.
 
 ## [DEC-004] — V001 contact roles: Tenant, Buyer, Owner, Broker only
 Date: 2026-08-13  
-Status: ACTIVE  
+Status: SUPERSEDED
+Superseded by: DEC-030.
 Decided by: Founder  
 Category: Product (Rule 11)
 
@@ -184,7 +189,9 @@ C) AWS S3 — most flexible
 
 ## [DEC-010] — V001 contact and property classification system
 Date: 2026-08-13
-Status: ACTIVE
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-032.
+Active clause: Follow Up, Important, Pending, and Order Complete / Closed Deal remain a separate optional classification capability and are not Tasks.
 Decided by: Founder
 Category: Product
 
@@ -418,7 +425,9 @@ The bidirectionality is a product behavior boundary only. Neither direction trig
 
 ## [DEC-019] — Buyer/Tenant contact may have one or more Requirements
 Date: 2026-08-13
-Status: ACTIVE
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-030.
+Active clause: A Person may own multiple separate Requirements; the effective Person classification is Seeker rather than Buyer or Tenant.
 Decided by: Founder (Stage 00.2.2 Founder Decision 2)
 Category: Product
 
@@ -499,7 +508,9 @@ PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.
 
 ## [DEC-022] — V001 BASIC capture minima, Contact role rule, and Requirement Purpose rule
 Date: 2026-08-13
-Status: ACTIVE
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-030 and DEC-031.
+Active clause: BASIC capture guidance remains subject to DEC-031, which requires at least one Person classification before final save, and DEC-030, which replaces the four-role model.
 Decided by: Founder (Stage 00.3 approval)
 Category: Product
 
@@ -944,3 +955,26 @@ This decision supersedes the platform-priority portions of artifacts/mobile/.ai/
 ### Consequences
 
 A feature is not architecturally complete when it works only on Android without a documented iOS path. Android may reach pilot readiness first, but iOS compatibility work continues during every preceding implementation stage. Tooling/build success alone cannot establish functional readiness.
+
+---
+
+## [DEC-038] — Governance Reconciliation Corrective Pass and Formal Freeze
+Date: 2026-08-26
+Status: ACTIVE
+Decided by: Founder
+Category: Governance
+
+### Context
+Founder authorized a governance-only corrective pass from baseline `84be5c9d02adb73cea15ad2a875fd23fcc38bbfd` after PR #1 successfully merged the approved governance reconciliation. The live README, CURRENT_STATE, and related current documents still contained stale active rules that contradicted DEC-030 through DEC-037, and the completed reconciliation freeze had not been recorded durably.
+
+### Decision
+Correct current authoritative governance sections, without rewriting historical decision bodies or changing historical freeze files. Mark only directly affected historical decisions as superseded or partially superseded. Create the conditional formal reconciliation freeze record.
+
+### Scope and constraints
+The correction covers current platform, Person classification, user-text localization, Tasks/Follow-ups, Property workflow, stage-status, governance-index, and decision-status wording. No product decision is reopened or changed. No current database migration is created. Stage 01 remains locked.
+
+### Freeze condition
+The Governance Reconciliation Corrective Freeze becomes effective only after the corrective PR is merged normally, the resulting GitHub `main` contains the verified corrective tree with no prohibited files, and Stage 01 remains locked. Corrective PR number and final branch head are recorded in the freeze record before merge.
+
+### Historical preservation
+The Stage 00.1, 00.2.1, 00.2.2, 00.3, and 00.4 freeze files remain unchanged.

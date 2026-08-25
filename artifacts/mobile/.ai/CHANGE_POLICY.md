@@ -1,9 +1,14 @@
 # ViewState App — Change Policy
 
 **Status:** PRE-IMPLEMENTATION  
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-26
 
 ---
+
+## Current Reconciliation Gate
+
+The Governance Reconciliation Corrective Freeze is conditional until its corrective PR merges and GitHub `main` is verified. Product status remains PRE-IMPLEMENTATION and Stage 01 remains locked. No dependency, product, schema, API, workflow, or migration change is authorized by this governance-only pass.
+
 
 ## Governing Principle
 
@@ -124,7 +129,7 @@ If the task reveals a gap in governance, the AI must **STOP and ask** before con
 - No new npm package without Founder awareness
 - Every new package documented in `CURRENT_STATE.md` with the reason
 - Never upgrade Expo SDK or React Native without explicit Founder instruction (Expo Skill: Forbidden Changes)
-- Prefer packages already in the Expo Go compatible list
+- Require an Android, iOS, and Expo compatibility review; Expo Go is a preview/testing option, not an exclusive dependency gate
 
 ---
 
@@ -141,28 +146,3 @@ If the task reveals a gap in governance, the AI must **STOP and ask** before con
 
 
 ---
-
-## Governance Reconciliation — Effective Rules
-
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation — Additional Gates
-
-Governance reconciliation is a Category A change and uses append-only decisions. Historical freeze records are not rewritten.
-
-Every future feature Impact Analysis must include Android/iOS Compatibility Impact; Persisted Data / Migration / Compatibility; Privacy and Sharing; Draft and Save-failure Safety; Performance and Bounded-scale Risk; and Testing and Release Evidence.
-
-A feature may not begin implementation until the bounded Stage Impact Analysis and Founder approval are complete. Property-first does not authorize broad authentication, database, API, infrastructure, Contacts, Matching, Tasks, integrations, backup, or iOS release work.
-
-If a requested change requires a new product decision or an unauthorized file, stop and request approval rather than expanding scope silently.

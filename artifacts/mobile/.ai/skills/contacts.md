@@ -4,6 +4,11 @@
 
 ---
 
+## Current Person Contract
+
+Capture is role-first. At least one classification is required before final save; multi-role is supported. The exact classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Imported names and notes remain literal.
+
+
 ## V001 Contact Roles — Governance Rule 11
 
 ViewState V001 supports **exactly four contact roles**. No others may be added without Founder approval.
@@ -157,26 +162,3 @@ Only `buyer` contacts can have `BuyerRequirement` records linked to them.
 
 
 ---
-
-## Governance Reconciliation — Effective Rules
-
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation — Contact Rules
-
-Exactly five Person classifications are authoritative: Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Tenant and Buyer are historical values, not future authoritative classifications.
-
-Adding a Person begins with at least one classification, followed by manual entry or approved import. Final manual save requires Name, Phone, and at least one classification. Multi-role support is required, and later classification changes must preserve Person data, Requirements, and relationships.
-
-A Seeker may own multiple independent Requirements. Rent or Buy is stored on the Requirement. Imported names and notes are preserved literally and are never silently translated, rewritten, or discarded.

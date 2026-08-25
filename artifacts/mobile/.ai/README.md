@@ -6,12 +6,24 @@
 **Stage 00.2.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_1_FREEZE.md` and DEC-017  
 **Stage 00.2.2:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_2_FREEZE.md` and DEC-021  
 **Stage 00.3:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_3_FREEZE.md` and DEC-026  
-**Stage 00.2.3 placeholder:** ⚠️ label exists in files — content undefined; deferred to Governance Cleanup Pass  
+**Stage 00.2.3:** Historical placeholder only — no active required stage  
+**Stage 00.4:** 🔒 HISTORICALLY FROZEN  
+**Stage 00.5:** NOT DEFINED  
+**Governance Reconciliation:** Conditional corrective freeze — effective only after corrective PR merge and verified `main` tree  
+**Stage 01:** NOT STARTED / LOCKED  
 **Language:** Bilingual Arabic / English (ar / en)  
-**Platform:** React Native (Expo) — iOS primary, Android secondary  
-**Last updated:** 2026-08-13
+**Platform:** React Native + Expo — Android-first rollout and pilot; iOS architectural compatibility maintained continuously  
+**Last updated:** 2026-08-26
 
 ---
+
+## Current Effective V001 Contract
+
+- ViewState App is one Android/iOS product. Android is first for rollout and pilot validation; iOS architectural compatibility is continuous. Expo Go is a preview/testing option, not an exclusive dependency gate; every dependency requires Android, iOS, and Expo compatibility review.
+- The exact Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate Seeker-owned records; their purpose is Rent or Buy, and a Seeker may have multiple Requirements.
+- UI and system-authored content are localized in Arabic and English. User-entered or imported names, notes, descriptions, and source text remain literal and are not automatically translated or duplicated.
+- The minimum Tasks and Follow-ups capability is in scope. Its four separate optional labels are Follow Up, Important, Pending, and Order Complete / Closed Deal.
+- Property workflow is property-first with separate Rental Price and Sale Price, Draft-first Property Import, one-Property-at-a-time Safe Share, PACI/Location/Maps behavior, private-by-default disclosure, and no-silent-loss Draft recovery.
 
 ## What This Package Is
 
@@ -34,6 +46,7 @@ The Governance Package is the **single source of truth** that governs every deci
 | `GRILL_ME.md` | Adversarial red-team / grill-me review protocol |
 | `DECISIONS.md` | All major architectural and product decisions |
 | `CURRENT_STATE.md` | Live tracker of what exists vs. what is planned |
+| `GOVERNANCE_RECONCILIATION_FREEZE.md` | Conditional formal reconciliation freeze record |
 | `skills/README.md` | Skills index — task-specific AI rules per module |
 
 ---
@@ -55,9 +68,9 @@ These rules are non-negotiable and apply to every AI session and every implement
 8. **Testing before reporting.** After each completed layer: run technical tests, functional tests, new-user simulation, and regression checks before reporting completion.
 
 ### V001 Product Scope
-9. **V001 scope is fixed and lean.** V001 features: Contacts, Properties, Requirements, Matching, Classification (4-label optional status tags), Import/WhatsApp+WhatsApp Business communication, Global Search, User Profile, Arabic/English support. **Deferred (not V001):** Full task/reminder engine, Deals tracking, Commission, Reports, Network Marketplace, advanced AI chat, voice assistant.
+9. **V001 scope is fixed and lean.** V001 includes Contacts, Properties, Seeker Requirements, Matching, the separate 4-label optional classification capability, minimum Tasks and Follow-ups, Draft-first Property Import, Safe Share, operating-system share sources, Global Search, User Profile, and Arabic/English support. **Deferred (not V001):** recurring or automated task systems, Deals tracking, Commission, Reports, Network Marketplace, advanced AI chat, voice assistant, full-account portability, ViewState Card, and direct ViewState-to-ViewState sharing.
 10. **Capture First → Enrich Later.** Minimal required data first; optional details later. Do not over-engineer forms or data models on first entry.
-11. **Contact roles for V001:** Tenant, Buyer, Owner, Broker — only these four. No other contact roles.
+11. **Person classifications for V001:** Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس — exactly these five. Person capture is role-first; at least one classification is required before final save; multi-role support is required.
 12. **Matching AI scope for V001:** Compare + Score + Explain — only these three capabilities. No recommendation engine, no ML, no vector search.
 
 ### UX Rules
@@ -113,40 +126,3 @@ ViewState App
 
 
 ---
-
-## Governance Reconciliation — Effective Rules
-
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation — Current Authoritative Contract
-
-### Product status and sequencing
-
-ViewState App V001 remains PRE-IMPLEMENTATION. Stage 00.5 is not defined. Stage 01 has not started. Product implementation remains locked until a bounded Stage 01 Property Workflow Impact Analysis receives Founder approval.
-
-### Person model
-
-The five Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Tenant and Buyer are historical role values superseded for future implementation. A Seeker may own multiple separate Requirements, whose purpose is Rent or Buy. Person capture is role-first and requires at least one classification before final save.
-
-### V001 scope corrections
-
-The minimum Tasks and Follow-ups capability and Property Import/Safe Share are included within their approved boundaries. Full-account portability, ViewState Card, and direct ViewState-to-ViewState sharing remain separate later capabilities. Platform, Network, Marketplace, and Commission Management remain outside V001 implementation scope.
-
-### Cross-platform contract
-
-Android is first for rollout and pilot validation, not an Android-only architecture. iOS compatibility is maintained continuously. Shared business rules, persistence, APIs, migrations, privacy, backup, import/export, and future Card formats remain platform-neutral and native functions use replaceable adapters.
-
-### Visual and interaction invariants
-
-Light background; blue header; fixed Global Search in the header of principal screens; red primary headings and important data; blue action buttons; green WhatsApp and Call actions; Arabic/RTL and English/LTR; native platform back behavior; and keyboard-safe forms remain authoritative.

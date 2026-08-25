@@ -1,9 +1,14 @@
 # ViewState App — Database Rules
 
 **Status:** PRE-IMPLEMENTATION  
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-26
 
 ---
+
+## Current Effective Data Boundary
+
+These are governance planning rules only; no schema or migration is authorized by this corrective pass. Requirements are conceptually Seeker-owned separate records. Rental Price and Sale Price are separate concepts. User-entered/imported names, notes, descriptions, and source text remain literal; exact persisted representation is deferred to the bounded Data Impact Analysis.
+
 
 ## Philosophy
 
@@ -18,7 +23,7 @@
 ## Naming Conventions
 
 ### Tables
-- Plural snake_case: `users`, `contacts`, `properties`, `buyer_requirements`, `matches`, `property_media`
+- Plural snake_case: `users`, `contacts`, `properties`, `seeker_requirements`, `matches`, `property_media`
 - Join tables: `[table_a]_[table_b]` (alphabetical): e.g., `contacts_properties`
 
 ### Columns
@@ -26,7 +31,7 @@
 - Booleans: `is_` prefix: `is_active`, `is_verified`, `is_deleted`
 - Timestamps: every table has `created_at` and `updated_at`
 - Soft-delete: `deleted_at TIMESTAMPTZ` (nullable) — **never hard-delete user data**
-- Bilingual text: `_ar` and `_en` suffix: `title_ar`, `title_en`
+- Localized UI/system labels may use approved Arabic/English resources; user-entered or imported free text remains literal and must not be auto-translated or duplicated
 
 ### Indexes
 - Index every foreign key column
@@ -42,8 +47,7 @@
 ```
 id              UUID PK
 phone           VARCHAR(20) UNIQUE NOT NULL  -- primary identifier (E.164)
-name_ar         TEXT
-name_en         TEXT
+name            TEXT                     -- stored literally; persisted representation remains deferred
 role            ENUM('broker', 'buyer', 'admin')
 is_verified     BOOLEAN DEFAULT false
 is_active       BOOLEAN DEFAULT true
@@ -56,10 +60,9 @@ deleted_at      TIMESTAMPTZ
 ```
 id              UUID PK
 broker_id       UUID FK → users.id
-name_ar         TEXT
-name_en         TEXT
+name            TEXT                     -- stored literally; persisted representation remains deferred
 phone           VARCHAR(20)              -- normalized E.164
-roles           TEXT[]                   -- ['buyer','tenant','owner','broker'] — V001 only these four
+classifications TEXT[]                   -- ['seeker','owner','broker','real_estate_company','building_guard']; at least one before final save
 source          ENUM('manual','whatsapp_import','contacts_import')
 notes           TEXT
 is_active       BOOLEAN DEFAULT true
@@ -68,20 +71,19 @@ updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 deleted_at      TIMESTAMPTZ
 ```
 
-> **Rule 11:** roles array values for V001 are constrained to: `tenant`, `buyer`, `owner`, `broker` — no others.
+> **Current Person rule:** classifications are Seeker, Owner, Broker, Real Estate Company, and Building Guard; multi-role is supported and final save requires at least one classification.
 > **Classification (product scope — persistence TBD):** Contacts support an optional 4-label status tag (Follow Up / Important / Pending / Order Complete / Closed Deal). The persistence column name, SQL type, constraint representation, and nullability are deferred to the Database stage.
 
 ### `properties`
 ```
 id              UUID PK
 broker_id       UUID FK → users.id
-title_ar        TEXT
-title_en        TEXT
-description_ar  TEXT
-description_en  TEXT
+title           TEXT                     -- user-entered text remains literal
+description     TEXT                     -- user-entered text remains literal
 type            ENUM('apartment','villa','office','land','shop')
 purpose         ENUM('sale','rent')
-price           NUMERIC(15,2) NOT NULL
+rental_price    NUMERIC(15,2)            -- separate rental concept
+sale_price      NUMERIC(15,2)            -- separate sale concept
 currency        CHAR(3)                  -- market-configurable; column default and constraints deferred to Database stage
 area_sqm        NUMERIC(8,2)
 bedrooms        SMALLINT
@@ -102,7 +104,7 @@ deleted_at      TIMESTAMPTZ
 
 > **Classification (product scope — persistence TBD):** Properties support an optional 4-label status tag (Follow Up / Important / Pending / Order Complete / Closed Deal). The persistence column name, SQL type, constraint representation, and nullability are deferred to the Database stage.
 
-### `buyer_requirements`
+### `seeker_requirements`
 ```
 id              UUID PK
 contact_id      UUID FK → contacts.id
@@ -169,28 +171,3 @@ created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 
 
 ---
-
-## Governance Reconciliation — Effective Rules
-
-This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
-
-- Status remains PRE-IMPLEMENTATION.
-- Stage 00.5 is not defined and must not be fabricated.
-- Stage 01 has not begun.
-- Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
-- No database migration is authorized or required by this reconciliation.
-- Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
-- ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
-- Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
-
-
-## Governance Reconciliation — Effective Data Rules
-
-This reconciliation authorizes no schema or migration work. The app remains PRE-IMPLEMENTATION with no implemented V001 dataset requiring migration now.
-
-Future schema work must represent exactly five Person classifications, separate Requirements, multiple Requirements per Seeker, Requirement purpose Rent/Buy, separate Rental Price and Sale Price, configurable Governorate/Area, optional PACI/exact location, platform-neutral coordinates, original map-link preservation, independent local Drafts, and private media retention.
-
-Any discovered implemented dataset stops the relevant stage for a fresh migration and compatibility assessment. No old role, zero-role Contact, generic-price, or Draft migration is implied by this reconciliation.
-
-Persisted originals remain unchanged until edit save succeeds. Backup, restore, import, export, and future ViewState Card formats remain platform-neutral. Server-backed Draft synchronization is deferred.
