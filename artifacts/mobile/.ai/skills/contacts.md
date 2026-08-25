@@ -11,7 +11,7 @@ Capture is role-first. At least one classification is required before final save
 
 ## V001 Contact Roles — Governance Rule 11
 
-ViewState V001 supports **exactly four contact roles**. No others may be added without Founder approval.
+ViewState V001 supports **exactly five Person classifications**: Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Capture is role-first; at least one classification is required before final save; multi-role support is required.
 
 | Role (EN) | Role (AR) | Who |
 |-----------|-----------|-----|

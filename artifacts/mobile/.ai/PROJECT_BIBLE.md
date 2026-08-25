@@ -20,7 +20,7 @@ ViewState exists to fix this.
 
 ## Vision
 
-> A lean, bilingual (Arabic/English) mobile platform that lets real estate professionals manage their contacts, property inventory, and buyer/tenant requirements — and identify matches when a fit exists.
+> A lean, bilingual (Arabic/English) mobile platform that lets real estate professionals manage their People records, property inventory, and Seeker-owned Requirements — and identify matches when a fit exists.
 
 ViewState is not a public marketplace. It is a **professional tool** for brokers, consultants, and serious real estate professionals. Think of it as the CRM and matching engine that messaging-group-based workflows wish they were.
 
@@ -32,9 +32,9 @@ ViewState is not a public marketplace. It is a **professional tool** for brokers
 
 | Feature | Description |
 |---------|-------------|
-| Contacts | Manage buyer/tenant/owner/broker contacts with profiles and roles |
+| Contacts | Manage Seeker, Owner, Broker, Real Estate Company, and Building Guard People records with multi-role classifications |
 | Properties | Create and manage property listings with bilingual fields |
-| Requirements | Capture and manage buyer/tenant requirements linked to contacts |
+| Requirements | Capture and manage separate Seeker-owned Requirements linked to People records |
 | Matching | Rule-based Compare + Score + Explain matching between requirements and properties |
 | Classification | Lightweight optional status labels on contacts and properties (Follow Up / Important / Pending / Order Complete / Closed Deal) |
 | Import | WhatsApp and WhatsApp Business driven capture/import flows (technical mechanism decided in Integration stage); device contacts import |
@@ -172,7 +172,7 @@ Seeker Requirements are an explicit, named V001 core capability — not merely i
 
 The V001 matching engine does exactly three things:
 
-1. **Compare** — field-by-field comparison between a buyer/tenant requirement and available properties
+1. **Compare** — field-by-field comparison between a Seeker-owned Requirement and available Properties
 2. **Score** — calculate a match score (0–100) based on how many criteria align
 3. **Explain** — show the broker exactly which fields matched and which didn't
 
@@ -213,7 +213,7 @@ ViewState's location concept for properties and requirements is **market-configu
 
 ### Persona 1: The Broker / Consultant (الوسيط / المستشار العقاري)
 
-A real estate professional who works daily from a mobile device with contacts (buyers, tenants, owners, brokers), property listings, and buyer/tenant requirements. Works primarily via messaging apps and direct calls as part of their daily deal flow.
+A real estate professional who works daily from a mobile device with People records (Seekers, Owners, Brokers, Real Estate Companies, and Building Guards), Property listings, and Seeker-owned Requirements. Works primarily via messaging apps and direct calls as part of their daily deal flow.
 
 **Goal:** Organize their contact base and property inventory, capture requirements quickly, identify matches, and manage their daily workflow from a mobile device.
 
