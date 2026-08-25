@@ -7,7 +7,7 @@
 
 ## Current Reconciliation Gate
 
-The Governance Reconciliation Corrective Freeze is conditional until its corrective PR merges and GitHub `main` is verified. Product status remains PRE-IMPLEMENTATION and Stage 01 remains locked. No dependency, product, schema, API, workflow, or migration change is authorized by this governance-only pass.
+The Governance Reconciliation Corrective Freeze is FROZEN: PR #2 merged normally and GitHub `main` was independently verified at `fbed357dabf09799c73982bb0643673ef3337a05`. Product status remains PRE-IMPLEMENTATION and Stage 01 remains locked. No dependency, product, schema, API, workflow, or migration change is authorized by this governance-only pass.
 
 
 ## Governing Principle
@@ -15,6 +15,20 @@ The Governance Reconciliation Corrective Freeze is conditional until its correct
 This project uses a **Founder-approval gate** at every layer boundary. The AI never decides what to build next. The Founder controls the build sequence. Frozen layers must never be changed without explicit Founder approval (Rule 6).
 
 ---
+
+## Mandatory Governance Lifecycle
+
+Founder
+→ CTO Review
+→ Impact Analysis
+→ Founder Approval
+→ Implementation
+→ Testing
+→ CTO Review
+→ Freeze
+→ WAIT
+
+No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
 
 ## Change Categories
 
@@ -37,7 +51,7 @@ New screens, new API routes, new DB columns, new business logic.
 
 - Requires: Layer unlock command: `IMPLEMENT: [layer name]`
 - Requires: Stage definition before any code (Rule 7) — see Stage Protocol below
-- Process: Founder unlocks → AI reads governance + skill → defines stage → implements → tests → reports
+- Process: Founder → CTO Review → Impact Analysis → Founder Approval → Implementation → Testing → CTO Review → Freeze → WAIT. The Stage Protocol below must be completed before any code.
 - Log: `CURRENT_STATE.md` updated
 
 ### Category D — Bug fixes and polish (low risk)

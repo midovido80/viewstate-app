@@ -978,3 +978,30 @@ The Governance Reconciliation Corrective Freeze becomes effective only after the
 
 ### Historical preservation
 The Stage 00.1, 00.2.1, 00.2.2, 00.3, and 00.4 freeze files remain unchanged.
+---
+
+## [DEC-039] — Final Governance Closeout
+Date: 2026-08-26
+Status: ACTIVE — FINAL GOVERNANCE CLOSEOUT
+Decided by: Founder
+Category: Governance
+
+### Context
+
+Founder authorized one final governance-only closeout from verified GitHub `main` commit `fbed357dabf09799c73982bb0643673ef3337a05` after PR #2 merged. The live governance still displayed the reconciliation as conditional, retained an obsolete implementation order that delayed the first Property step, and did not state the mandatory lifecycle consistently.
+
+### Decision
+
+Finalize the Governance Reconciliation as FROZEN, record PR #2’s normal merge and verified merge commit, correct the active implementation order so the next permitted action is only the bounded Stage 01 Building Form Impact Analysis, restore the exact mandatory lifecycle, and preserve the historical conditional explanation.
+
+### Scope and constraints
+
+This is a governance-only closeout. It adds no product requirement, makes no new architecture or technology decision, authorizes no product implementation, and does not change DEC-001 through DEC-038 or any historical freeze file. Stage 01 remains NOT STARTED / LOCKED. Authentication, broad database design, broad API infrastructure, Contacts, Requirements, Matching, Tasks, imports, sharing, media, and other modules are not implicitly authorized.
+
+### Verification and final state
+
+The closeout branch is based directly on the approved `main` commit. Only the six Founder-authorized governance files changed. DEC-001 through DEC-039 are unique and sequential. PR #2 merged normally at `fbed357dabf09799c73982bb0643673ef3337a05`, and the resulting `main` tree was independently verified.
+
+The mandatory lifecycle is: Founder → CTO Review → Impact Analysis → Founder Approval → Implementation → Testing → CTO Review → Freeze → WAIT. No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
+
+Final state: GOVERNANCE FROZEN; STAGE 01 NOT STARTED / LOCKED; NEXT PERMITTED ACTION is Bounded Stage 01 Building Form Impact Analysis only; WAIT.

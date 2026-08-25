@@ -10,6 +10,20 @@
 React Native + Expo remains approved for one Android/iOS product. Android-first rollout does not permit Android-only architecture; iOS compatibility is maintained continuously. Expo Go is a preview/testing option, not an exclusive dependency gate. Shared business rules, persistence, APIs, privacy, Draft recovery, import/export boundaries, and future Card formats remain platform-neutral; native capabilities use replaceable adapters.
 
 
+## Mandatory Governance Lifecycle
+
+Founder
+→ CTO Review
+→ Impact Analysis
+→ Founder Approval
+→ Implementation
+→ Testing
+→ CTO Review
+→ Freeze
+→ WAIT
+
+No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
+
 ## Stack
 
 | Layer | Technology | Notes |
@@ -30,43 +44,27 @@ React Native + Expo remains approved for one Android/iOS product. Android-first 
 
 ## V001 Module Map
 
+The first permitted Stage 01 work is an Impact Analysis for the first bounded Property Workflow step — Building Form. That analysis may identify only the minimum technical foundation required by that bounded step. Authentication, broad database design, broad API infrastructure, Contacts, Requirements, Matching, Tasks, imports, sharing, media, and other modules are not implicitly authorized. No product implementation begins until the full mandatory governance lifecycle is complete.
+
 ```
 ViewState V001
 │
-├── FOUNDATION (built first — unlocked by Founder)
-│   ├── Auth layer (login / register / OTP / session)
-│   ├── Database schema (users, contacts, properties, requirements, matches)
-│   └── API server base routes
+├── STAGE 01 FIRST BOUNDED WORKFLOW (next permitted action)
+│   └── Building Form → bounded Property Workflow Impact Analysis first
+│                         implementation remains locked pending Founder approval
 │
-├── CORE MODULES (built after foundation)
-│   ├── Contacts Module     → create / manage / role-assign contacts
-│   │                         Person classifications: Seeker, Owner, Broker, Real Estate Company, Building Guard
-│   ├── Properties Module   → create / edit / list / search properties
-│   ├── Requirements Module → Seeker-owned Requirement entry and storage
-│   └── Matching Engine     → Compare + Score + Explain (Rule 12)
+├── OTHER V001 MODULES (separately locked)
+│   ├── Foundation / Auth / Database / API → only minimum support may be assessed for Building Form
+│   ├── Contacts Module → separately authorized later
+│   ├── Requirements Module → separately authorized later
+│   ├── Matching Engine → separately authorized later
+│   ├── Tasks / Follow-ups → separately authorized later
+│   ├── WhatsApp and Contacts Import → separately authorized later
+│   ├── Media / Storage → separately authorized later
+│   └── Global Search → separately authorized with relevant modules
 │
-├── IMPORT LAYER (built after core)
-│   ├── WhatsApp Import     → parse exported chat .txt for leads
-│   └── Contacts Import     → read device contacts
-│
-├── SEARCH LAYER (core utility — built with each module)
-│   └── Global Search       → available on every primary screen (Rule 13)
-│                             Lives in blue top header (Rule 14)
-│
-├── MEDIA LAYER
-│   └── Photo upload        → property images, stored in object storage
-│
-└── UI / SCREENS (built last)
-    ├── Onboarding / Auth
-    ├── Dashboard (Home)
-    ├── Properties screens
-    ├── Contacts screens
-    ├── Matches screens
-    ├── Import screens
-    └── Settings / Profile
+└── UI / SCREENS → separately locked; no broad UI implementation authorized
 ```
-
----
 
 ## Architecture Rules
 
@@ -101,22 +99,20 @@ Global Search is not a standalone feature — it is a shared utility. Implement 
 
 ## Layer Build Order (enforced by Governance Rule 6)
 
+The active implementation order begins with a bounded analysis, not with a requirement to implement the complete Foundation/Auth layer.
+
 ```
-1. Governance Package          ← ✅ COMPLETE
-2. Foundation (auth + DB + API base)    ← 🔒 LOCKED
-3. Property Module                       ← 🔒 LOCKED
-4. Contacts Module                       ← 🔒 LOCKED
-5. Requirements Module                   ← 🔒 LOCKED
-6. Matching Engine                       ← 🔒 LOCKED
-7. WhatsApp Import                       ← 🔒 LOCKED
-8. Media Layer                           ← 🔒 LOCKED
-9. UI / Screens                          ← 🔒 LOCKED
-10. Polish, testing, release             ← 🔒 LOCKED
+1. Governance Package                                      ← ✅ COMPLETE
+2. Stage 01 Impact Analysis — Building Form only           ← NEXT PERMITTED ACTION
+3. Stage 01 Building Form implementation                   ← 🔒 LOCKED pending analysis and Founder approval
+4. Minimum technical foundation for Building Form          ← only if approved by that analysis
+5. Foundation / Auth / broad Database / broad API           ← 🔒 separately locked
+6. Contacts / Requirements / Matching / Tasks               ← 🔒 separately locked
+7. Imports / Sharing / Media / Global Search                 ← 🔒 separately locked
+8. UI / Screens / Polish / testing / release                ← 🔒 separately locked
 ```
 
-Each layer is locked until the Founder says `IMPLEMENT: [layer name]`.
-
----
+Each implementation step requires the exact mandatory lifecycle: Founder → CTO Review → Impact Analysis → Founder Approval → Implementation → Testing → CTO Review → Freeze → WAIT. No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
 
 ## File Structure (target — not yet implemented)
 
