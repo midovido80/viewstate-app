@@ -10,7 +10,7 @@
 **Stage 00.4:** 🔒 HISTORICALLY FROZEN
 **Stage 00.5:** NOT DEFINED
 **Governance Reconciliation:** 🔒 FROZEN — corrective reconciliation verified on GitHub `main` at `fbed357dabf09799c73982bb0643673ef3337a05`; PR #2 merged normally
-**Stage 01:** NOT STARTED / LOCKED
+**Stage 01:** NOT STARTED / LOCKED — Fresh Founder authorization is required for the expanded Stage 01 Impact Analysis after the amendment freeze
 **Language:** Bilingual Arabic / English (ar / en)  
 **Platform:** React Native + Expo — Android-first rollout and pilot; iOS architectural compatibility maintained continuously
 **Last updated:** 2026-08-26
@@ -18,6 +18,8 @@
 ---
 
 ## Current Effective V001 Contract
+
+The approved future Stage 01 title is **Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate)**. Stage 01 remains NOT STARTED / LOCKED. The expanded Impact Analysis requires fresh Founder authorization after this governance amendment freeze; Land remains a separately analyzed, approved, and frozen later V001 workflow.
 
 - ViewState App is one Android/iOS product. Android is first for rollout and pilot validation; iOS architectural compatibility is continuous. Expo Go is a preview/testing option, not an exclusive dependency gate; every dependency requires Android, iOS, and Expo compatibility review.
 - The exact Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate Seeker-owned records; their purpose is Rent or Buy, and a Seeker may have multiple Requirements.
@@ -47,6 +49,7 @@ The Governance Package is the **single source of truth** that governs every deci
 | `DECISIONS.md` | All major architectural and product decisions |
 | `CURRENT_STATE.md` | Live tracker of what exists vs. what is planned |
 | `GOVERNANCE_RECONCILIATION_FREEZE.md` | 🔒 FROZEN formal reconciliation freeze record |
+| `PRE_STAGE_01_PROPERTY_CAPTURE_SCOPE_AMENDMENT_FREEZE.md` | 🔒 FROZEN scope-amendment freeze record; Stage 01 analysis remains separately Founder-authorized |
 | `skills/README.md` | Skills index — task-specific AI rules per module |
 
 ---
