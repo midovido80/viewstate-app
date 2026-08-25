@@ -9,7 +9,7 @@
 **Stage 00.2.3:** Historical placeholder only — no active required stage
 **Stage 00.4:** 🔒 HISTORICALLY FROZEN
 **Stage 00.5:** NOT DEFINED
-**Governance Reconciliation:** Conditional corrective freeze — effective only after corrective PR merge and verified `main` tree
+**Governance Reconciliation:** 🔒 FROZEN — corrective reconciliation verified on GitHub `main` at `fbed357dabf09799c73982bb0643673ef3337a05`; PR #2 merged normally
 **Stage 01:** NOT STARTED / LOCKED
 **Language:** Bilingual Arabic / English (ar / en)  
 **Platform:** React Native + Expo — Android-first rollout and pilot; iOS architectural compatibility maintained continuously
@@ -46,7 +46,7 @@ The Governance Package is the **single source of truth** that governs every deci
 | `GRILL_ME.md` | Adversarial red-team / grill-me review protocol |
 | `DECISIONS.md` | All major architectural and product decisions |
 | `CURRENT_STATE.md` | Live tracker of what exists vs. what is planned |
-| `GOVERNANCE_RECONCILIATION_FREEZE.md` | Conditional formal reconciliation freeze record |
+| `GOVERNANCE_RECONCILIATION_FREEZE.md` | 🔒 FROZEN formal reconciliation freeze record |
 | `skills/README.md` | Skills index — task-specific AI rules per module |
 
 ---
@@ -62,6 +62,20 @@ These rules are non-negotiable and apply to every AI session and every implement
 4. **No inventing.** Replit must not invent requirements, fields, workflows, dependencies, architecture changes, or UX behavior not defined in governance.
 5. **Ambiguity = STOP.** If any requirement is ambiguous, conflicting, or requires a change outside the approved scope, STOP and ask before implementing.
 6. **Frozen layers are locked.** Frozen layers must never be changed without explicit Founder approval.
+
+## Mandatory Governance Lifecycle
+
+Founder
+→ CTO Review
+→ Impact Analysis
+→ Founder Approval
+→ Implementation
+→ Testing
+→ CTO Review
+→ Freeze
+→ WAIT
+
+No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
 
 ### Stage Protocol
 7. **Every implementation stage must define:** scope, allowed changes, forbidden changes, testing requirements, new-user simulation, regression boundary, stop conditions, and final report. This definition must exist before any code is written.
@@ -88,6 +102,8 @@ These rules are non-negotiable and apply to every AI session and every implement
 ---
 
 ## Implementation Unlock Protocol
+
+An IMPLEMENT command is valid only after the mandatory governance lifecycle above. It may not bypass CTO Review, Impact Analysis, or Founder Approval.
 
 When the Founder is ready to build a layer, they say exactly:
 
