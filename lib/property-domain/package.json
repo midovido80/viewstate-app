@@ -1,0 +1,13 @@
+{
+  "name": "@workspace/property-domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types ./src/property-domain.test.ts",
+    "typecheck": "tsc --build"
+  }
+}
