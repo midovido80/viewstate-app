@@ -9,6 +9,7 @@ import type {
   PropertyCore,
   RentOffer,
   SaleOffer,
+  ShareDisclosurePolicy,
   TypeDetails,
   ValidationResult,
 } from "./types.ts";
@@ -26,9 +27,9 @@ import {
 
 export function createPrivacyMetadata(
   classification: PrivacyClassification,
-  shareableProjectionEligible: boolean,
+  disclosurePolicy: ShareDisclosurePolicy,
 ): PrivacyMetadata {
-  return { classification, shareableProjectionEligible };
+  return { classification, disclosurePolicy };
 }
 
 export function createLiteralText(

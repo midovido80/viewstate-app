@@ -10,6 +10,7 @@ import type {
   PrivacyClassification,
   Property,
   PropertyCore,
+  ShareDisclosurePolicy,
   TypeDetails,
   ValidationIssue,
   ValidationResult,
@@ -63,7 +64,7 @@ export function validateClassifiedLiteralText(
   text: ClassifiedLiteralText | undefined,
   path: readonly string[],
   expectedClassification: PrivacyClassification,
-  shareableProjectionEligible: boolean | undefined,
+  expectedDisclosurePolicy: ShareDisclosurePolicy,
 ): readonly ValidationIssue[] {
   const issues = [...validateLiteralText(text, path)];
   if (text === undefined) return issues;
@@ -76,14 +77,11 @@ export function validateClassifiedLiteralText(
     ));
   }
 
-  if (
-    shareableProjectionEligible !== undefined &&
-    text.privacy.shareableProjectionEligible !== shareableProjectionEligible
-  ) {
+  if (text.privacy.disclosurePolicy !== expectedDisclosurePolicy) {
     issues.push(issue(
-      "invalid_shareable_eligibility",
-      [...path, "privacy", "shareableProjectionEligible"],
-      `Shareable projection eligibility must be ${String(shareableProjectionEligible)}.`,
+      "invalid_disclosure_policy",
+      [...path, "privacy", "disclosurePolicy"],
+      `Disclosure policy must be ${expectedDisclosurePolicy}.`,
     ));
   }
 
@@ -114,10 +112,10 @@ export function validatePropertyCore(
   const issues: ValidationIssue[] = [
     ...validateRequiredIdentifier(core.id, ["id"]),
     ...validateRequiredIdentifier(core.locationArea.id, ["locationArea", "id"]),
-    ...validateClassifiedLiteralText(core.description, ["description"], "normal", undefined),
-    ...validateClassifiedLiteralText(core.privateNotes, ["privateNotes"], "private_notes", false),
-    ...validateClassifiedLiteralText(core.ownerSource, ["ownerSource"], "owner_source", false),
-    ...validateClassifiedLiteralText(core.exactLocation, ["exactLocation"], "exact_location", false),
+    ...validateClassifiedLiteralText(core.description, ["description"], "normal", "normal"),
+    ...validateClassifiedLiteralText(core.privateNotes, ["privateNotes"], "private_notes", "never"),
+    ...validateClassifiedLiteralText(core.ownerSource, ["ownerSource"], "owner_source", "explicit_per_share"),
+    ...validateClassifiedLiteralText(core.exactLocation, ["exactLocation"], "exact_location", "explicit_per_share"),
   ];
 
   if (!isPropertyType(core.propertyType)) {
@@ -146,7 +144,7 @@ export function validateTypeDetails(
       details.clarification,
       ["typeDetails", "clarification"],
       "normal",
-      undefined,
+      "normal",
     ));
   }
 

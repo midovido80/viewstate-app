@@ -41,7 +41,7 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
 function normalText(value: string): ClassifiedLiteralText {
   return createLiteralText(
     value,
-    createPrivacyMetadata("normal", true),
+    createPrivacyMetadata("normal", "normal"),
   );
 }
 
@@ -244,7 +244,7 @@ test("Other Built Property clarification uses normal privacy classification", ()
     propertyType: "other_built_property",
     otherBuiltPropertyClarification: createLiteralText(
       "private classification is incompatible here",
-      createPrivacyMetadata("private_notes", false),
+      createPrivacyMetadata("private_notes", "never"),
     ),
     locationAreaId: "area-1",
     transaction: "sale",
@@ -307,36 +307,83 @@ test("whitespace-only validation does not mutate original text", () => {
   assertEqual(candidate.description.value, literal, "Validation must not mutate text");
 });
 
-test("enforces privacy classifications and sensitive non-shareability", () => {
+test("enforces exact privacy disclosure policies", () => {
+  const normalDescription = validatePropertyCore({
+    ...core(),
+    description: createLiteralText(
+      "normal",
+      createPrivacyMetadata("normal", "normal"),
+    ),
+  });
   const wrongClassification = validatePropertyCore({
     ...core(),
     privateNotes: normalText("private"),
-  });
-  const wronglyShareable = validatePropertyCore({
-    ...core(),
-    exactLocation: createLiteralText(
-      "PACI-sensitive",
-      createPrivacyMetadata("exact_location", true),
-    ),
   });
   const validSensitiveFields = validatePropertyCore({
     ...core(),
     privateNotes: createLiteralText(
       "private",
-      createPrivacyMetadata("private_notes", false),
+      createPrivacyMetadata("private_notes", "never"),
     ),
     ownerSource: createLiteralText(
       "owner",
-      createPrivacyMetadata("owner_source", false),
+      createPrivacyMetadata("owner_source", "explicit_per_share"),
     ),
     exactLocation: createLiteralText(
       "exact",
-      createPrivacyMetadata("exact_location", false),
+      createPrivacyMetadata("exact_location", "explicit_per_share"),
     ),
   });
+  const invalidPolicies = [
+    validatePropertyCore({
+      ...core(),
+      privateNotes: createLiteralText(
+        "private",
+        createPrivacyMetadata("private_notes", "normal"),
+      ),
+    }),
+    validatePropertyCore({
+      ...core(),
+      privateNotes: createLiteralText(
+        "private",
+        createPrivacyMetadata("private_notes", "explicit_per_share"),
+      ),
+    }),
+    validatePropertyCore({
+      ...core(),
+      ownerSource: createLiteralText(
+        "owner",
+        createPrivacyMetadata("owner_source", "normal"),
+      ),
+    }),
+    validatePropertyCore({
+      ...core(),
+      ownerSource: createLiteralText(
+        "owner",
+        createPrivacyMetadata("owner_source", "never"),
+      ),
+    }),
+    validatePropertyCore({
+      ...core(),
+      exactLocation: createLiteralText(
+        "exact",
+        createPrivacyMetadata("exact_location", "normal"),
+      ),
+    }),
+    validatePropertyCore({
+      ...core(),
+      exactLocation: createLiteralText(
+        "exact",
+        createPrivacyMetadata("exact_location", "never"),
+      ),
+    }),
+  ];
+  assert(normalDescription.ok, "Normal description with normal policy must validate");
   assertEqual(wrongClassification.ok, false, "Private Notes must use private_notes classification");
-  assertEqual(wronglyShareable.ok, false, "Exact location must not be shareable");
   assert(validSensitiveFields.ok, "Correct sensitive metadata must validate");
+  for (const result of invalidPolicies) {
+    assertEqual(result.ok, false, "Invalid classification-to-policy mapping must fail");
+  }
 });
 
 test("final aggregate requires matching Property Core and Offer identities", () => {

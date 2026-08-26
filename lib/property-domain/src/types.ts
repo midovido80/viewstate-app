@@ -38,9 +38,14 @@ export type PrivacyClassification =
   | "owner_source"
   | "exact_location";
 
+export type ShareDisclosurePolicy =
+  | "normal"
+  | "explicit_per_share"
+  | "never";
+
 export interface PrivacyMetadata {
   readonly classification: PrivacyClassification;
-  readonly shareableProjectionEligible: boolean;
+  readonly disclosurePolicy: ShareDisclosurePolicy;
 }
 
 export interface ClassifiedLiteralText {
@@ -130,7 +135,7 @@ export type ValidationIssueCode =
   | "invalid_price"
   | "invalid_currency_code"
   | "invalid_privacy_classification"
-  | "invalid_shareable_eligibility"
+  | "invalid_disclosure_policy"
   | "legacy_purpose_not_allowed"
   | "missing_sale_price"
   | "missing_rental_price"
