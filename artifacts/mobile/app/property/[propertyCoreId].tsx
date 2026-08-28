@@ -18,6 +18,7 @@ import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
 import { getAreaById, searchAreas } from '@/constants/kuwait-areas';
 import { store } from '@/services/persistence';
+import { deleteSavedProperty } from '@/services/propertyDeletion';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -56,6 +57,9 @@ export default function PropertyDetailScreen() {
   const [discarding, setDiscarding] = useState(false);
   const [pendingOperation, setPendingOperation] = useState<PropertyUpdateOperationV1 | null>(null);
   const [recoveryStatus, setRecoveryStatus] = useState<PropertyUpdateRecoveryResult['status'] | null>(null);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const canPermanentlyDelete = store.canPermanentlyDelete();
 
   const load = useCallback(async () => {
     if (!id) {
@@ -309,6 +313,33 @@ export default function PropertyDetailScreen() {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!property || deleting) return;
+    if (!store.canPermanentlyDelete()) {
+      setDeleteVisible(false);
+      setError(t('delete.failed'));
+      return;
+    }
+    setDeleting(true);
+    setError('');
+    const expected = property;
+    try {
+      const result = await deleteSavedProperty({ expected, store });
+      if (result.status !== 'deleted') {
+        setDeleteVisible(false);
+        setError(t('delete.failed'));
+        return;
+      }
+      setDeleteVisible(false);
+      router.replace('/' as never);
+    } catch {
+      setDeleteVisible(false);
+      setError(t('delete.failed'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (status !== 'ready' || !property) {
     const message = status === 'loading'
       ? t('edit.loading')
@@ -353,9 +384,16 @@ export default function PropertyDetailScreen() {
           {mode === 'edit' ? t('edit.title') : t('detail.title')}
         </Text>
         {mode === 'detail' ? (
-          <TouchableOpacity onPress={beginEdit} accessibilityRole="button" testID="property-edit-action">
-            <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.edit')}</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {canPermanentlyDelete ? (
+              <TouchableOpacity onPress={() => setDeleteVisible(true)} accessibilityRole="button" testID="property-delete-action">
+                <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold }}>{t('detail.delete')}</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity onPress={beginEdit} accessibilityRole="button" testID="property-edit-action">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.edit')}</Text>
+            </TouchableOpacity>
+          </View>
         ) : <View style={styles.headerSpacer} />}
       </View>
 
@@ -458,6 +496,30 @@ export default function PropertyDetailScreen() {
             ))}
           </ScrollView>
           <Button title={t('capture.cancel')} onPress={() => setAreaOpen(false)} variant="outline" />
+        </View>
+      </Modal>
+
+      <Modal
+        visible={deleteVisible && canPermanentlyDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setDeleteVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]} testID="property-delete-dialog" accessibilityRole="alert">
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('delete.title')}
+            </Text>
+            <Text style={[styles.modalMessage, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('delete.message').replace('{identity}', `${t(`propertyType.${property.core.propertyType}` as keyof Translations)} · ${areaName(property.core.locationArea.id)} · ${property.core.id}`)}
+            </Text>
+            <TouchableOpacity onPress={() => setDeleteVisible(false)} disabled={deleting} style={[styles.modalAction, { borderColor: colors.border }]} testID="property-delete-cancel">
+              <Text style={[styles.modalActionText, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('capture.cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => void confirmDelete()} disabled={deleting} style={[styles.modalAction, { borderColor: colors.destructive, opacity: deleting ? 0.6 : 1 }]} testID="property-delete-confirm">
+              <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>{t('delete.confirm')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -575,6 +637,7 @@ const styles = StyleSheet.create({
   header: { minHeight: 60, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontSize: 20 },
   headerSpacer: { width: 40 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   content: { padding: 20, paddingBottom: 48, gap: 16 },
   detailRow: { paddingVertical: 18, borderBottomWidth: 1 },
   detailValue: { fontSize: 18, marginTop: 6 },

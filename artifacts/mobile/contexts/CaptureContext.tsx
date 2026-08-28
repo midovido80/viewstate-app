@@ -31,6 +31,7 @@ type SaveRecoveryStatus =
 
 interface CaptureContextValue {
   draft: PropertyDraft;
+  draftOrigin: 'fresh' | 'resumed';
   updateDraft: (changes: Partial<PropertyDraft>) => void;
   isReady: boolean;
   draftLoadFailed: boolean;
@@ -65,6 +66,7 @@ function createFreshDraft(): PropertyDraft {
 export function CaptureProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<PropertyDraft>(DEFAULT_DRAFT);
+  const [draftOrigin, setDraftOrigin] = useState<'fresh' | 'resumed'>('fresh');
   const [isReady, setIsReady] = useState(false);
   const [draftLoadFailed, setDraftLoadFailed] = useState(false);
   const [saveRecoveryStatus, setSaveRecoveryStatus] = useState<SaveRecoveryStatus>('none');
@@ -93,6 +95,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         return 'newer' as const;
       }
       setCurrentDraft(newDraft);
+      setDraftOrigin('fresh');
       setDraftLoadFailed(false);
       return 'replaced' as const;
     } finally {
@@ -140,10 +143,12 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         const saved = await loadDraft();
         if (saved) {
           setCurrentDraft(saved);
+          setDraftOrigin('resumed');
         } else {
           const newDraft = createFreshDraft();
           await saveDraft(newDraft);
           setCurrentDraft(newDraft);
+          setDraftOrigin('fresh');
         }
 
         try {
@@ -187,12 +192,17 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     }
 
     setDraft(prev => {
-      const next = updatePropertyDraft(prev, changes);
+      const freshRentDefaults = draftOrigin === 'fresh'
+        && changes.transaction === 'rent'
+        && prev.rentalPeriodId === undefined
+        ? { rentalPeriodId: 'monthly' }
+        : {};
+      const next = updatePropertyDraft(prev, { ...changes, ...freshRentDefaults });
       draftRef.current = next;
       saveDraft(next).catch(console.error);
       return next;
     });
-  }, [draftLoadFailed, isReady, saveRecoveryStatus, t]);
+  }, [draftLoadFailed, draftOrigin, isReady, saveRecoveryStatus, t]);
 
   const projectToProperty = useCallback(() => {
     const result = projectDraftToProperty(draft);
@@ -226,6 +236,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         return false;
       }
       setCurrentDraft(newDraft);
+      setDraftOrigin('fresh');
       setDraftLoadFailed(false);
       return true;
     } finally {
@@ -280,6 +291,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({
     draft,
+    draftOrigin,
     updateDraft,
     isReady,
     draftLoadFailed,
@@ -289,6 +301,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     resetDraft
   }), [
     draft,
+    draftOrigin,
     updateDraft,
     isReady,
     draftLoadFailed,

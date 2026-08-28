@@ -1086,3 +1086,38 @@ This decision does not approve or freeze the full Properties module. Dynamic fie
 ### Final state
 
 Task #5 is implemented locally, provisionally accepted based on the submitted report, and not frozen. It has not been pushed, merged, or released. PR #7 and the protected and diagnostic branches remain unchanged. Physical Android/iOS acceptance remains outstanding. WAIT.
+
+---
+
+## [DEC-042] — Narrow Local Saved-Property Permanent-Deletion Exception
+Date: 2026-08-28
+Status: APPROVED FOR BOUNDED LOCAL IMPLEMENTATION; REAL-DATA EXECUTION REQUIRES SEPARATE FOUNDER APPROVAL
+Decided by: Founder
+Category: Data Safety
+
+### Context
+
+The general Governance rule requires soft deletion and prohibits hard deletion of user data. The Founder has approved a narrow exception so a saved Property can be permanently removed from one explicitly identified local ViewState storage namespace. This exception is required for an explicit per-Property deletion control and for a separately approved fixed-snapshot purge; it is not a general deletion-policy change.
+
+### Decision
+
+A saved Property may be permanently deleted only through either:
+
+1. explicit per-Property confirmation that identifies the exact Property version to delete; or
+2. a fixed target snapshot whose real-data execution receives a separate explicit Founder approval after implementation and isolated synthetic verification.
+
+Deletion must fail closed for stale, unreadable, conflicting, pending, unsupported, or failed operations. A fixed-snapshot purge is all-or-nothing: every targeted Property is removed together or none is, while unrelated Properties and Properties added after the snapshot are preserved. The implementation may retain only the minimum non-content Property identifier/state required to prevent delayed saves, edits, retries, or recovery from recreating a permanently deleted identity. It must not retain Property price, area, notes, links, offer content, or personal details in that safeguard.
+
+### Boundaries
+
+- The exception applies only to saved Properties in the explicitly identified local browser profile/storage namespace or local device store.
+- It does not authorize deletion of drafts, recovery evidence, preferences, other entities, other devices, profiles, environments, server data, backups, or protected repository history.
+- Drafts and recovery evidence must not be silently deleted to manufacture success. An incompatible or conflicting pending state blocks deletion until explicitly resolved.
+- No annual-to-monthly relabeling, amount conversion, fifth BASIC field, Property Domain change, identity substitution, archival substitute, migration of real records, or unrelated refactor is authorized.
+- Existing annual or unknown-cadence saved Properties remain honestly represented unless separately and explicitly corrected.
+- The general no-hard-delete rule remains active for every other user-data category and storage boundary.
+- Implementation approval and destructive real-data execution approval are separate gates. This decision does not authorize a purge of current Preview or device data.
+
+### Compatibility and verification
+
+The bounded implementation must preserve existing Property and Offer identities, unrelated data and current architecture. Deletion and pricing tests use isolated synthetic stores only. Web and Native guarantees and limitations must be reported separately; unavailable platform coverage is not a pass. No commit, push, merge, publication, freeze, or real-data deletion is authorized before the implementation report and CTO review.

@@ -7,13 +7,16 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
-import { formatRentalCadence, MARKET_CONFIG } from '@/constants/market';
+import {
+  formatRentalCadence,
+  MARKET_CONFIG,
+} from '@/constants/market';
 
 export default function PriceScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { draft, updateDraft, isReady } = useCapture();
+  const { draft, draftOrigin, updateDraft, isReady } = useCapture();
   const { t, isRTL, fonts } = useI18n();
   
   const isSale = draft.transaction === 'sale';
@@ -22,10 +25,15 @@ export default function PriceScreen() {
     : draft.rentalPrice?.amount?.toString() ?? '';
   const numAmount = Number(amount);
   const workingRentalPeriodId = draft.rentalPeriodId
-    ?? (draft.rentalPrice === undefined ? MARKET_CONFIG.defaultRentalPeriodId : undefined);
+    ?? (draftOrigin === 'fresh' && draft.transaction === 'rent'
+      ? MARKET_CONFIG.defaultRentalPeriodId
+      : undefined);
+  const needsCadenceConfirmation = draftOrigin === 'resumed'
+    && draft.transaction === 'rent'
+    && draft.rentalPeriodId !== MARKET_CONFIG.defaultRentalPeriodId;
   const isValid = !isNaN(numAmount)
     && numAmount > 0
-    && (isSale || workingRentalPeriodId !== undefined);
+    && (isSale || (workingRentalPeriodId !== undefined && !needsCadenceConfirmation));
 
   const handleAmountChange = (value: string) => {
     const parsed = Number(value);
@@ -38,7 +46,7 @@ export default function PriceScreen() {
     } else {
       updateDraft({
         rentalPrice: price,
-        ...(draft.rentalPrice === undefined && draft.rentalPeriodId === undefined
+        ...(draftOrigin === 'fresh' && draft.rentalPeriodId === undefined
           ? { rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId }
           : {}),
       });
@@ -102,6 +110,19 @@ export default function PriceScreen() {
           ]}
           testID="input-price"
         />
+        {needsCadenceConfirmation ? (
+          <View style={[styles.confirmation, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+              {t('price.cadence.confirm_message')}
+            </Text>
+            <Button
+              title={t('price.cadence.confirm_monthly')}
+              onPress={() => updateDraft({ rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId })}
+              variant="outline"
+              testID="confirm-monthly-cadence"
+            />
+          </View>
+        ) : null}
       </KeyboardAwareScrollViewCompat>
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>
@@ -138,6 +159,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 18,
+  },
+  confirmation: {
+    marginTop: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 10,
+    gap: 12,
   },
   footer: {
     paddingHorizontal: 20,

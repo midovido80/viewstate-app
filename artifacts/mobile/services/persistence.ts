@@ -36,13 +36,43 @@ export interface PropertyStore {
   getProperty(id: string): Promise<Property | null>;
   compareAndUpdate(expected: Property, replacement: Property): Promise<boolean>;
   canSafelyUpdate(): boolean;
+  canPermanentlyDelete(): boolean;
   getProperties(): Promise<Property[]>;
   searchProperties(query: string): Promise<Property[]>;
+  deleteProperty(expected: Property): Promise<PropertyDeletionResult>;
+  deletePropertiesSnapshot(
+    expected: readonly Property[],
+    capability?: PropertyDeletionCapability,
+  ): Promise<PropertyDeletionResult>;
+  getPropertyInventory(): Promise<PropertyInventory>;
+}
+
+export type PropertyDeletionResult =
+  | { status: 'deleted'; count: number }
+  | { status: 'missing' | 'stale' | 'duplicate' | 'unsupported' };
+
+export interface PropertyInventory {
+  count: number;
+  ids: string[];
+}
+
+export interface PropertyDeletionCapability {
+  /** The caller has excluded old writers that do not honor deletion fences. */
+  cooperatingWritersConfirmed: true;
+}
+
+interface KeyValueStorage {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+}
+
+interface LockManager {
+  request<T>(name: string, options: { mode: 'exclusive' }, callback: () => Promise<T>): Promise<T>;
 }
 
 const nativeMutations = new SerialTaskQueue();
 
-class SQLiteStore implements PropertyStore {
+export class SQLiteStore implements PropertyStore {
   private db: SQLite.SQLiteDatabase | null = null;
   private initialization: Promise<void> | null = null;
 
@@ -61,6 +91,10 @@ class SQLiteStore implements PropertyStore {
       );
       CREATE TABLE IF NOT EXISTS app_migrations (
         id TEXT PRIMARY KEY
+      );
+      CREATE TABLE IF NOT EXISTS deleted_property_ids (
+        id TEXT PRIMARY KEY,
+        generation INTEGER NOT NULL
       );
     `);
 
@@ -102,6 +136,11 @@ class SQLiteStore implements PropertyStore {
         'SELECT data FROM properties WHERE id = ?',
         [property.core.id],
       );
+      const deleted = await this.db!.getFirstAsync<{ id: string }>(
+        'SELECT id FROM deleted_property_ids WHERE id = ?',
+        [property.core.id],
+      );
+      if (deleted) throw new Error('PROPERTY_ID_DELETED');
       if (existing) {
         if (existing.data !== JSON.stringify(property)) {
           throw new Error('PROPERTY_ID_ALREADY_EXISTS');
@@ -129,6 +168,11 @@ class SQLiteStore implements PropertyStore {
     if (expected.core.id !== replacement.core.id) return false;
     let updated = false;
     await nativeMutations.enqueue(async () => {
+      const deleted = await this.db!.getFirstAsync<{ id: string }>(
+        'SELECT id FROM deleted_property_ids WHERE id = ?',
+        [expected.core.id],
+      );
+      if (deleted) return;
       const result = await this.db!.runAsync(
         'UPDATE properties SET data = ?, search_text = ? WHERE id = ? AND data = ?',
         [
@@ -147,6 +191,10 @@ class SQLiteStore implements PropertyStore {
     return true;
   }
 
+  canPermanentlyDelete() {
+    return true;
+  }
+
   async getProperties(): Promise<Property[]> {
     if (!this.db) throw new Error('DB not initialized');
     const rows = await this.db.getAllAsync<{ data: string }>('SELECT data FROM properties ORDER BY id DESC');
@@ -159,31 +207,107 @@ class SQLiteStore implements PropertyStore {
     const term = query.toLocaleLowerCase();
     return properties.filter(property => getPropertySearchText(property).includes(term));
   }
+
+  async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
+    return this.deletePropertiesSnapshot([expected], { cooperatingWritersConfirmed: true });
+  }
+
+  async deletePropertiesSnapshot(
+    expected: readonly Property[],
+    _capability?: PropertyDeletionCapability,
+  ): Promise<PropertyDeletionResult> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (new Set(expected.map(property => property.core.id)).size !== expected.length) {
+      return { status: 'duplicate' };
+    }
+    let result: PropertyDeletionResult = { status: 'stale' };
+    await nativeMutations.enqueue(async () => {
+      await this.db!.withTransactionAsync(async () => {
+        for (const property of expected) {
+          const rows = await this.db!.getAllAsync<{ data: string }>(
+            'SELECT data FROM properties WHERE id = ?',
+            [property.core.id],
+          );
+          if (rows.length === 0) {
+            result = { status: 'missing' };
+            throw new Error('DELETE_PRECONDITION');
+          }
+          if (rows.length !== 1 || rows[0].data !== JSON.stringify(property)) {
+            result = rows.length > 1 ? { status: 'duplicate' } : { status: 'stale' };
+            throw new Error('DELETE_PRECONDITION');
+          }
+        }
+        for (const property of expected) {
+          await this.db!.runAsync(
+            `INSERT INTO deleted_property_ids (id, generation) VALUES (?, 1)
+             ON CONFLICT(id) DO UPDATE SET generation = generation + 1`,
+            [property.core.id],
+          );
+          const deleted = await this.db!.runAsync(
+            'DELETE FROM properties WHERE id = ? AND data = ?',
+            [property.core.id, JSON.stringify(property)],
+          );
+          if (deleted.changes !== 1) throw new Error('DELETE_PRECONDITION');
+        }
+        result = { status: 'deleted', count: expected.length };
+      });
+    }).catch(error => {
+      if (error instanceof Error && error.message === 'DELETE_PRECONDITION') return;
+      throw error;
+    });
+    return result;
+  }
+
+  async getPropertyInventory(): Promise<PropertyInventory> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ id: string }>('SELECT id FROM properties ORDER BY id');
+    return { count: rows.length, ids: rows.map(row => row.id) };
+  }
 }
 
-class WebStore implements PropertyStore {
+export class WebStore implements PropertyStore {
   private readonly KEY = '@viewstate_properties';
+  private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1';
   private initialization: Promise<void> | null = null;
+
+  constructor(
+    private readonly storage: KeyValueStorage = AsyncStorage,
+    private readonly suppliedLocks?: LockManager | null,
+  ) {}
 
   async init() {
     this.initialization ??= migrateStage01B1WebProperties(
-      AsyncStorage,
+      this.storage,
       this.KEY,
     ).then(() => undefined);
     await this.initialization;
   }
 
-  private async getAll(): Promise<Property[]> {
-    const data = await AsyncStorage.getItem(this.KEY);
-    return data ? JSON.parse(data) : [];
+  /** Raw array access for non-deletion mutations; never call from visible reads. */
+  private async getAllRaw(): Promise<Property[]> {
+    const data = await this.storage.getItem(this.KEY);
+    if (data === null) return [];
+    const parsed = JSON.parse(data) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    return parsed as Property[];
   }
 
-  private get lockManager(): { request<T>(name: string, options: { mode: 'exclusive' }, callback: () => Promise<T>): Promise<T> } | null {
+  /** Visible reads honor durable ID-only deletion fences without recursive reads. */
+  private async getAll(): Promise<Property[]> {
+    const [all, deletedIds] = await Promise.all([
+      this.getAllRaw(),
+      this.getDeletedIds(),
+    ]);
+    return all.filter(property => !deletedIds.has(property.core.id));
+  }
+
+  private get lockManager(): LockManager | null {
+    if (this.suppliedLocks !== undefined) return this.suppliedLocks;
     const manager = typeof navigator === 'undefined'
       ? undefined
       : (navigator as Navigator & { locks?: unknown }).locks;
     if (!manager || typeof (manager as { request?: unknown }).request !== 'function') return null;
-    return manager as { request<T>(name: string, options: { mode: 'exclusive' }, callback: () => Promise<T>): Promise<T> };
+    return manager as LockManager;
   }
 
   private async withMutationLock<T>(work: () => Promise<T>): Promise<T> {
@@ -196,7 +320,10 @@ class WebStore implements PropertyStore {
 
   async saveProperty(property: Property) {
     await this.withMutationLock(async () => {
-      const all = await this.getAll();
+      const all = await this.getAllRaw();
+      if ((await this.getDeletedIds()).has(property.core.id)) {
+        throw new Error('PROPERTY_ID_DELETED');
+      }
       const existing = all.findIndex(p => p.core.id === property.core.id);
       if (existing >= 0) {
         if (JSON.stringify(all[existing]) !== JSON.stringify(property)) {
@@ -205,7 +332,7 @@ class WebStore implements PropertyStore {
         return;
       }
       all.unshift(property);
-      await AsyncStorage.setItem(this.KEY, JSON.stringify(all));
+      await this.storage.setItem(this.KEY, JSON.stringify(all));
     });
   }
 
@@ -218,7 +345,8 @@ class WebStore implements PropertyStore {
   async compareAndUpdate(expected: Property, replacement: Property): Promise<boolean> {
     if (expected.core.id !== replacement.core.id || !this.canSafelyUpdate()) return false;
     return this.withMutationLock(async () => {
-      const all = await this.getAll();
+      const all = await this.getAllRaw();
+      if ((await this.getDeletedIds()).has(expected.core.id)) return false;
       const matching = all
         .map((property, index) => ({ property, index }))
         .filter(item => item.property.core.id === expected.core.id);
@@ -229,13 +357,17 @@ class WebStore implements PropertyStore {
         return false;
       }
       all[matching[0].index] = replacement;
-      await AsyncStorage.setItem(this.KEY, JSON.stringify(all));
+      await this.storage.setItem(this.KEY, JSON.stringify(all));
       return true;
     });
   }
 
   canSafelyUpdate() {
     return this.lockManager !== null;
+  }
+
+  canPermanentlyDelete() {
+    return false;
   }
 
   async getProperties(): Promise<Property[]> {
@@ -248,6 +380,41 @@ class WebStore implements PropertyStore {
     return all.filter(p => {
       return getPropertySearchText(p).includes(q);
     });
+  }
+
+  private async getDeletedIds(): Promise<Set<string>> {
+    const raw = await this.storage.getItem(this.DELETED_KEY);
+    if (raw === null) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      !parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+      || (parsed as { version?: unknown }).version !== 1
+      || !Array.isArray((parsed as { ids?: unknown }).ids)
+      || !(parsed as { ids: unknown[] }).ids.every(id => typeof id === 'string')
+    ) throw new Error('UNREADABLE_DELETION_SAFEGUARD');
+    return new Set((parsed as { ids: string[] }).ids);
+  }
+
+  async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
+    // Permanent browser deletion is intentionally unavailable: AsyncStorage
+    // cannot provide the required crash-atomic fence and array mutation.
+    return { status: 'unsupported' };
+  }
+
+  async deletePropertiesSnapshot(
+    _expected: readonly Property[],
+    _capability?: PropertyDeletionCapability,
+  ): Promise<PropertyDeletionResult> {
+    // Do not add a caller assertion or lock-based escape hatch here. Only the
+    // native SQLite adapter has a transaction spanning fence and exact deletes.
+    return { status: 'unsupported' };
+  }
+
+  async getPropertyInventory(): Promise<PropertyInventory> {
+    const all = await this.getAll();
+    const ids = all.map(property => property.core.id);
+    if (new Set(ids).size !== ids.length) throw new Error('DUPLICATE_PROPERTY');
+    return { count: ids.length, ids: [...ids].sort() };
   }
 }
 

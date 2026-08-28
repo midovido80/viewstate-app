@@ -30,6 +30,10 @@ import {
   normalizePropertyCurrency,
 } from '../constants/market.ts';
 import {
+  deleteSavedProperty,
+  deleteSavedPropertySnapshot,
+} from '../services/propertyDeletion.ts';
+import {
   STAGE_01B1_DRAFT_MIGRATION_KEY,
   STAGE_01B1_WEB_MIGRATION_KEY,
   migrateStage01B1Draft,
@@ -77,6 +81,61 @@ class RecoveryMemoryStorage {
   async removeItem(key: string) {
     if (this.failRemove) throw new Error('cleanup failed');
     this.values.delete(key);
+  }
+}
+
+class SyntheticPropertyStore {
+  properties: Property[];
+  deleted = new Set<string>();
+  failDelete = false;
+
+  constructor(properties: Property[]) {
+    this.properties = JSON.parse(JSON.stringify(properties)) as Property[];
+  }
+
+  async init() {}
+  async saveProperty(property: Property) {
+    if (this.deleted.has(property.core.id)) throw new Error('PROPERTY_ID_DELETED');
+    this.properties.push(property);
+  }
+  async getProperty(id: string) {
+    return this.properties.find(property => property.core.id === id) ?? null;
+  }
+  async compareAndUpdate(expected: Property, replacement: Property) {
+    if (this.deleted.has(expected.core.id)) return false;
+    const index = this.properties.findIndex(property =>
+      property.core.id === expected.core.id
+      && JSON.stringify(property) === JSON.stringify(expected));
+    if (index < 0) return false;
+    this.properties[index] = replacement;
+    return true;
+  }
+  canSafelyUpdate() { return true; }
+  canPermanentlyDelete() { return true; }
+  async getProperties() { return this.properties; }
+  async searchProperties() { return this.properties; }
+  async deleteProperty(expected: Property) {
+    return this.deletePropertiesSnapshot([expected]);
+  }
+  async deletePropertiesSnapshot(expected: readonly Property[]) {
+    if (this.failDelete) throw new Error('storage failed');
+    const ids = expected.map(property => property.core.id);
+    if (new Set(ids).size !== ids.length) return { status: 'duplicate' as const };
+    for (const property of expected) {
+      const matching = this.properties.filter(item => item.core.id === property.core.id);
+      if (matching.length === 0) return { status: 'missing' as const };
+      if (matching.length > 1) return { status: 'duplicate' as const };
+      if (JSON.stringify(matching[0]) !== JSON.stringify(property)) {
+        return { status: 'stale' as const };
+      }
+    }
+    expected.forEach(property => this.deleted.add(property.core.id));
+    const targets = new Set(ids);
+    this.properties = this.properties.filter(property => !targets.has(property.core.id));
+    return { status: 'deleted' as const, count: expected.length };
+  }
+  async getPropertyInventory() {
+    return { count: this.properties.length, ids: this.properties.map(item => item.core.id) };
   }
 }
 
@@ -170,10 +229,10 @@ test('Rental price cadence displays monthly bilingually and preserves recorded l
     'price.cadence.missing': 'cadence not recorded',
   };
   const translate = (key: string) => labels[key] ?? key;
-  const translateArabic = (key: string) => key === 'price.cadence.monthly' ? 'شهرياً' : labels[key] ?? key;
+  const translateArabic = (key: string) => key === 'price.cadence.monthly' ? 'شهريا' : labels[key] ?? key;
   assert.equal(MARKET_CONFIG.defaultRentalPeriodId, 'monthly');
   assert.equal(formatRentalPrice(500, 'KWD', 'monthly', 'en', translate), '500 KWD per month');
-  assert.equal(formatRentalPrice(500, 'KWD', 'monthly', 'ar', translateArabic), '500 د.ك شهرياً');
+  assert.equal(formatRentalPrice(500, 'KWD', 'monthly', 'ar', translateArabic), '500 د.ك شهريا');
   assert.equal(
     formatRentalPrice(500, 'KWD', 'yearly', 'en', translate),
     '500 KWD recorded cadence: yearly',
@@ -186,6 +245,23 @@ test('Rental price cadence displays monthly bilingually and preserves recorded l
     formatRentalPrice(500, 'KWD', undefined, 'en', translate),
     '500 KWD cadence not recorded',
   );
+});
+
+test('Only a fresh current-provider rent draft receives monthly automatically', () => {
+  const defaultPeriod = (
+    origin: 'fresh' | 'resumed',
+    transaction: 'sale' | 'rent',
+    existing?: string,
+  ) => existing ?? (origin === 'fresh' && transaction === 'rent' ? 'monthly' : undefined);
+  const needsConfirmation = (origin: 'fresh' | 'resumed', period?: string) =>
+    origin === 'resumed' && period !== 'monthly';
+  assert.equal(defaultPeriod('fresh', 'rent'), 'monthly');
+  assert.equal(defaultPeriod('resumed', 'rent'), undefined);
+  assert.equal(defaultPeriod('resumed', 'rent', 'yearly'), 'yearly');
+  assert.equal(needsConfirmation('resumed'), true);
+  assert.equal(needsConfirmation('resumed', 'yearly'), true);
+  assert.equal(needsConfirmation('resumed', 'monthly'), false);
+  assert.equal(needsConfirmation('fresh'), false);
 });
 
 test('Approved Kuwait dataset contains 6 governorates and 96 valid areas', () => {
@@ -1469,8 +1545,8 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.match(detail, /formatRentalPrice/);
   assert.match(home, /formatRentalPrice/);
   assert.match(summary, /formatRentalPrice/);
-  assert.match(price, /rentalPeriodId: MARKET_CONFIG\.defaultRentalPeriodId/);
-  assert.match(price, /draft\.rentalPrice === undefined && draft\.rentalPeriodId === undefined/);
+  assert.match(price, /confirm-monthly-cadence/);
+  assert.match(price, /draftOrigin === 'fresh'/);
   assert.match(price, /if \(!draft\.rentalPeriodId\) return/);
   assert.match(market, /defaultRentalPeriodId: 'monthly'/);
   assert.match(detail, /capture\.keep_editing/);
@@ -1480,10 +1556,162 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.match(i18n, /'edit\.not_found': 'This property could not be found/);
   assert.match(i18n, /'edit\.not_found': 'تعذر العثور/);
   assert.match(i18n, /'price\.cadence\.monthly': 'per month'/);
-  assert.match(i18n, /'price\.cadence\.monthly': 'شهرياً'/);
+  assert.match(i18n, /'price\.cadence\.monthly': 'شهريا'/);
   assert.match(i18n, /'edit\.rental_period_missing': 'This rental record has no stored cadence/);
   assert.match(detail, /message\.includes\('MISSING_RENTAL_PERIOD'\) \? t\('edit\.rental_period_missing'\)/);
   assert.match(i18n, /'edit\.retry_update': 'إعادة محاولة تحديث العقار'/);
+});
+
+test('Synthetic deletion service simulation is exact, isolated, fenced, and rejects delayed mutation', async () => {
+  const other: Property = {
+    ...recoveryProperty,
+    core: { ...recoveryProperty.core, id: 'other-core' },
+    activeOffer: {
+      ...recoveryProperty.activeOffer,
+      id: 'other-offer',
+      propertyCoreId: 'other-core',
+    },
+  };
+  const storage = new RecoveryMemoryStorage();
+  const synthetic = new SyntheticPropertyStore([recoveryProperty, other]);
+  const result = await deleteSavedProperty({
+    expected: recoveryProperty,
+    store: synthetic,
+    evidenceStorage: storage,
+  });
+  assert.deepEqual(result, { status: 'deleted', count: 1 });
+  assert.deepEqual(synthetic.properties.map(item => item.core.id), ['other-core']);
+  await assert.rejects(() => synthetic.saveProperty(recoveryProperty), /PROPERTY_ID_DELETED/);
+  assert.equal(await synthetic.compareAndUpdate(recoveryProperty, recoveryProperty), false);
+});
+
+test('Synthetic deletion service simulation rejects stale snapshots and pending save evidence', async () => {
+  const changed: Property = {
+    ...recoveryProperty,
+    core: { ...recoveryProperty.core, locationArea: { id: 'qibla' } },
+  };
+  const storage = new RecoveryMemoryStorage();
+  const synthetic = new SyntheticPropertyStore([changed]);
+  assert.deepEqual(
+    await deleteSavedProperty({
+      expected: recoveryProperty,
+      store: synthetic,
+      evidenceStorage: storage,
+    }),
+    { status: 'stale' },
+  );
+  await persistPropertySaveOperation(storage, newRecoveryOperation());
+  const blocked = await deleteSavedProperty({
+    expected: changed,
+    store: synthetic,
+    evidenceStorage: storage,
+  });
+  assert.equal(blocked.status, 'evidence_blocked');
+  assert.deepEqual(synthetic.properties, [changed]);
+});
+
+test('Synthetic fixed-snapshot service simulation is all-or-nothing and preserves concurrent additions', async () => {
+  const second: Property = {
+    ...recoveryProperty,
+    core: { ...recoveryProperty.core, id: 'second-core' },
+    activeOffer: {
+      ...recoveryProperty.activeOffer,
+      id: 'second-offer',
+      propertyCoreId: 'second-core',
+    },
+  };
+  const added: Property = {
+    ...second,
+    core: { ...second.core, id: 'added-after-snapshot' },
+    activeOffer: {
+      ...second.activeOffer,
+      id: 'added-offer',
+      propertyCoreId: 'added-after-snapshot',
+    },
+  };
+  const storage = new RecoveryMemoryStorage();
+  const synthetic = new SyntheticPropertyStore([recoveryProperty, second, added]);
+  assert.deepEqual(
+    await deleteSavedPropertySnapshot({
+      snapshot: [recoveryProperty, recoveryProperty],
+      store: synthetic,
+      evidenceStorage: storage,
+      cooperatingWritersConfirmed: true,
+    }),
+    { status: 'duplicate' },
+  );
+  assert.equal(synthetic.properties.length, 3);
+  assert.deepEqual(
+    await deleteSavedPropertySnapshot({
+      snapshot: [recoveryProperty, second],
+      store: synthetic,
+      evidenceStorage: storage,
+      cooperatingWritersConfirmed: false,
+    }),
+    { status: 'unsupported' },
+  );
+  assert.equal(synthetic.properties.length, 3);
+  const staleSecond = { ...second, core: { ...second.core, locationArea: { id: 'qibla' } } };
+  assert.deepEqual(
+    await deleteSavedPropertySnapshot({
+      snapshot: [recoveryProperty, staleSecond],
+      store: synthetic,
+      evidenceStorage: storage,
+      cooperatingWritersConfirmed: true,
+    }),
+    { status: 'stale' },
+  );
+  assert.equal(synthetic.properties.length, 3);
+  assert.deepEqual(
+    await deleteSavedPropertySnapshot({
+      snapshot: [recoveryProperty, second],
+      store: synthetic,
+      evidenceStorage: storage,
+      cooperatingWritersConfirmed: true,
+    }),
+    { status: 'deleted', count: 2 },
+  );
+  assert.deepEqual(synthetic.properties.map(item => item.core.id), ['added-after-snapshot']);
+});
+
+test('Synthetic deletion service simulation never reports storage failure as success', async () => {
+  const synthetic = new SyntheticPropertyStore([recoveryProperty]);
+  synthetic.failDelete = true;
+  const result = await deleteSavedProperty({
+    expected: recoveryProperty,
+    store: synthetic,
+    evidenceStorage: new RecoveryMemoryStorage(),
+  });
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(synthetic.properties, [recoveryProperty]);
+});
+
+test('Deletion source keeps cancellation inert and safeguards privacy-minimal', async () => {
+  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const detail = await readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8');
+  const persistence = await readFile(sourcePath('../services/persistence.ts'), 'utf8');
+  const coordinator = await readFile(sourcePath('../services/propertyDeletion.ts'), 'utf8');
+  assert.match(detail, /testID="property-delete-cancel"/);
+  assert.match(detail, /const canPermanentlyDelete = store\.canPermanentlyDelete\(\)/);
+  assert.match(detail, /canPermanentlyDelete \? \(/);
+  assert.match(detail, /visible=\{deleteVisible && canPermanentlyDelete\}/);
+  assert.match(detail, /if \(!store\.canPermanentlyDelete\(\)\)/);
+  assert.match(detail, /onPress=\{\(\) => setDeleteVisible\(false\)\}/);
+  assert.match(detail, /result\.status !== 'deleted'/);
+  assert.match(persistence, /CREATE TABLE IF NOT EXISTS deleted_property_ids/);
+  assert.match(persistence, /private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1'/);
+  assert.match(persistence, /canPermanentlyDelete\(\) \{\s+return false;/);
+  assert.match(persistence, /private async getAllRaw/);
+  assert.match(persistence, /all\.filter\(property => !deletedIds\.has\(property\.core\.id\)\)/);
+  const webDeletionMethods = persistence.slice(
+    persistence.indexOf('async deleteProperty(expected: Property): Promise<PropertyDeletionResult>', persistence.indexOf('export class WebStore')),
+    persistence.indexOf('async getPropertyInventory()', persistence.indexOf('export class WebStore')),
+  );
+  assert.match(webDeletionMethods, /return \{ status: 'unsupported' \}/);
+  assert.doesNotMatch(webDeletionMethods, /setItem|withMutationLock|getAllRaw/);
+  assert.match(coordinator, /cooperatingWritersConfirmed/);
+  assert.match(coordinator, /WebStore is unavailable regardless/);
+  assert.doesNotMatch(coordinator, /rentalPrice|salePrice|locationArea|description|privateNotes/);
 });
 
 test('Task 6 static/source assertions: native atomic CAS/shared queue and web exclusive lock/unsupported gate are explicit', async () => {
