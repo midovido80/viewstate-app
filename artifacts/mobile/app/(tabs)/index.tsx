@@ -51,7 +51,13 @@ export default function TabOneScreen() {
     const areaName = area ? (language === 'ar' ? area.ar : area.en) : item.core.locationArea.id;
 
     return (
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}>
+      <TouchableOpacity
+        onPress={() => router.push(`/property/${encodeURIComponent(item.core.id)}` as any)}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}
+        testID={`property-card-${item.core.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${t(`propertyType.${item.core.propertyType}` as keyof Translations)}, ${areaName}`}
+      >
         <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
             {t(`propertyType.${item.core.propertyType}` as keyof Translations)}
@@ -71,7 +77,7 @@ export default function TabOneScreen() {
             {areaName}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

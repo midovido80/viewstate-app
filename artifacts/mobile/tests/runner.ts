@@ -44,6 +44,22 @@ import {
   loadPropertySaveOperation,
   persistPropertySaveOperation,
 } from '../services/propertySaveRecovery.ts';
+import {
+  PROPERTY_UPDATE_OPERATION_KEY,
+  PendingPropertyUpdateExistsError,
+  PropertyEditReadError,
+  buildPropertyUpdateCandidate,
+  createEditDraft,
+  createPropertyUpdateOperation,
+  discardPropertyEditDraft,
+  executePropertyUpdateRecovery,
+  flushPropertyEditDraftWrites,
+  loadPropertyEditDraft,
+  loadPropertyUpdateOperation,
+  persistPropertyUpdateOperation,
+  propertyEditDraftKey,
+  savePropertyEditDraft,
+} from '../services/propertyUpdateRecovery.ts';
 
 class RecoveryMemoryStorage {
   values = new Map<string, string>();
@@ -961,4 +977,424 @@ test('Capture reliability UI exposes localized errors and accessible stable cont
   assert.match(captureContext, /mutationsBlocked\.current = true;[\s\S]*persistPropertySaveOperation/);
   assert.match(draftService, /current !== expectedSnapshot/);
   assert.match(draftService, /generation !== writeGeneration/);
+});
+
+test('Task 6 executable candidate simulation: unchanged type preserves exact identity, literals, privacy, source and unknown data', () => {
+  const baseline = {
+    core: {
+      id: 'edit-preserve-core',
+      propertyType: 'villa',
+      locationArea: { id: 'salmiya', unknownLocation: 'kept' },
+      description: { value: 'literal', privacy: { classification: 'normal', disclosurePolicy: 'normal' } },
+      privateNotes: { value: 'private', privacy: { classification: 'private_notes', disclosurePolicy: 'never' } },
+      ownerSource: { value: 'owner', privacy: { classification: 'owner_source', disclosurePolicy: 'explicit_per_share' } },
+      exactLocation: { value: 'exact', privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' } },
+      sourceEnvelope: { imported: true },
+    },
+    activeOffer: {
+      id: 'edit-preserve-offer',
+      propertyCoreId: 'edit-preserve-core',
+      transaction: 'sale',
+      salePrice: { amount: 100, currencyCode: 'KWD', priceMetadata: { source: 'literal' } },
+      unrelatedOfferData: { literal: 'keep' },
+    },
+    unknownRoot: { privacySafe: true },
+  } as unknown as Property;
+  const candidate = buildPropertyUpdateCandidate(baseline, {
+    propertyType: 'villa',
+    transaction: 'sale',
+    priceAmount: 900,
+    locationAreaId: 'qibla',
+  });
+  assert.equal(candidate.core.id, baseline.core.id);
+  assert.equal(candidate.activeOffer.id, baseline.activeOffer.id);
+  assert.equal(candidate.activeOffer.propertyCoreId, baseline.core.id);
+  assert.equal(candidate.core.propertyType, 'villa');
+  assert.equal(candidate.core.locationArea.id, 'qibla');
+  assert.equal(candidate.activeOffer.transaction, 'sale');
+  if (candidate.activeOffer.transaction === 'sale') {
+    assert.equal(candidate.activeOffer.salePrice.amount, 900);
+    assert.deepEqual((candidate.activeOffer.salePrice as any).priceMetadata, { source: 'literal' });
+  }
+  assert.deepEqual((candidate.core as any).description, (baseline.core as any).description);
+  assert.deepEqual((candidate.core as any).privateNotes, (baseline.core as any).privateNotes);
+  assert.deepEqual((candidate.core as any).ownerSource, (baseline.core as any).ownerSource);
+  assert.deepEqual((candidate.core as any).exactLocation, (baseline.core as any).exactLocation);
+  assert.deepEqual((candidate.core as any).sourceEnvelope, (baseline.core as any).sourceEnvelope);
+  assert.equal((candidate.core.locationArea as any).unknownLocation, 'kept');
+  assert.deepEqual((candidate.activeOffer as any).unrelatedOfferData, (baseline.activeOffer as any).unrelatedOfferData);
+  assert.deepEqual((candidate as any).unknownRoot, (baseline as any).unknownRoot);
+  assert.equal(baseline.activeOffer.transaction, 'sale');
+  const pricePatched = buildPropertyUpdateCandidate(baseline, {
+    propertyType: 'villa',
+    transaction: 'sale',
+    priceAmount: 101,
+    locationAreaId: 'salmiya',
+  });
+  assert.equal(pricePatched.activeOffer.transaction, 'sale');
+  assert.deepEqual((pricePatched.activeOffer.salePrice as any).currencyCode, 'KWD');
+  assert.deepEqual((pricePatched.activeOffer.salePrice as any).priceMetadata, { source: 'literal' });
+});
+
+test('Task 6 executable validation simulation: Sale to Rent is out of four-field scope even with caller-injected period', () => {
+  const sale = recoveryProperty;
+  assert.throws(() => buildPropertyUpdateCandidate(sale, {
+    propertyType: 'apartment',
+    transaction: 'rent',
+    priceAmount: 500,
+    locationAreaId: 'salmiya',
+    rentalPeriodId: 'yearly',
+  }), /TRANSACTION_SCOPE_RENT_PERIOD/);
+});
+
+test('Task 6 executable validation simulation: original Rent may switch to Sale and back using retained period with a new price', () => {
+  const rent: Property = {
+    core: { id: 'rent-transition', propertyType: 'apartment', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'rent-transition-offer',
+      propertyCoreId: 'rent-transition',
+      transaction: 'rent',
+      rentalPrice: { amount: 500, currencyCode: 'KWD' },
+      rentalPeriodId: 'monthly',
+    },
+  };
+  const sale = buildPropertyUpdateCandidate(rent, {
+    propertyType: 'apartment',
+    transaction: 'sale',
+    priceAmount: 175000,
+    locationAreaId: 'salmiya',
+    rentalPeriodId: 'monthly',
+  });
+  assert.equal(sale.activeOffer.transaction, 'sale');
+  assert.equal('rentalPrice' in sale.activeOffer, false);
+  assert.equal('rentalPeriodId' in sale.activeOffer, false);
+  const rentAgain = buildPropertyUpdateCandidate(rent, {
+    propertyType: 'apartment',
+    transaction: 'rent',
+    priceAmount: 650,
+    locationAreaId: 'salmiya',
+    rentalPeriodId: 'monthly',
+  });
+  assert.equal(rentAgain.activeOffer.transaction, 'rent');
+  if (rentAgain.activeOffer.transaction === 'rent') {
+    assert.equal(rentAgain.activeOffer.rentalPeriodId, 'monthly');
+    assert.equal(rentAgain.activeOffer.rentalPrice.amount, 650);
+  }
+});
+
+test('Task 6 executable validation simulation: enrichment mismatch, invalid price and unapproved area fail closed', () => {
+  const safeTypeChange = buildPropertyUpdateCandidate(recoveryProperty, {
+    propertyType: 'villa',
+    transaction: 'sale',
+    priceAmount: 150000,
+    locationAreaId: 'salmiya',
+  });
+  assert.equal(safeTypeChange.core.propertyType, 'villa');
+  const enriched = {
+    ...recoveryProperty,
+    typeDetails: { propertyType: 'apartment' as const, apartmentSubtype: 'studio' as const },
+  };
+  assert.throws(() => buildPropertyUpdateCandidate(enriched, {
+    propertyType: 'villa',
+    transaction: 'sale',
+    priceAmount: 1,
+    locationAreaId: 'salmiya',
+  }), /INCOMPATIBLE_TYPE_DETAILS/);
+  const unknownEnrichment = { ...recoveryProperty, enrichment: { sourceType: 'apartment' } } as Property;
+  assert.throws(() => buildPropertyUpdateCandidate(unknownEnrichment, {
+    propertyType: 'villa',
+    transaction: 'sale',
+    priceAmount: 1,
+    locationAreaId: 'salmiya',
+  }), /INCOMPATIBLE_TYPE_DETAILS/);
+  const arbitraryUnknown = {
+    ...recoveryProperty,
+    core: {
+      ...recoveryProperty.core,
+      locationArea: { ...recoveryProperty.core.locationArea, potentiallyTypeBound: true },
+    },
+  } as Property;
+  assert.throws(() => buildPropertyUpdateCandidate(arbitraryUnknown, {
+    propertyType: 'villa',
+    transaction: 'sale',
+    priceAmount: 1,
+    locationAreaId: 'salmiya',
+  }), /INCOMPATIBLE_TYPE_DETAILS/);
+  assert.throws(() => buildPropertyUpdateCandidate(recoveryProperty, {
+    propertyType: 'apartment',
+    transaction: 'sale',
+    priceAmount: -1,
+    locationAreaId: 'salmiya',
+  }), /INVALID_PRICE/);
+  assert.throws(() => buildPropertyUpdateCandidate(recoveryProperty, {
+    propertyType: 'apartment',
+    transaction: 'sale',
+    priceAmount: 1,
+    locationAreaId: 'not-approved',
+  }), /INVALID_APPROVED_AREA/);
+});
+
+test('Task 6 executable draft simulation: per-property edit drafts are isolated from add draft and each other', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const first = createEditDraft({ ...recoveryProperty, core: { ...recoveryProperty.core, id: 'draft-a' }, activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: 'draft-a' } });
+  const second = createEditDraft({ ...recoveryProperty, core: { ...recoveryProperty.core, id: 'draft-b' }, activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: 'draft-b' } });
+  await savePropertyEditDraft(first, storage);
+  await savePropertyEditDraft(second, storage);
+  storage.values.set('@viewstate_property_draft', '{"capture":"untouched"}');
+  assert.deepEqual(await loadPropertyEditDraft('draft-a', storage), first);
+  assert.deepEqual(await loadPropertyEditDraft('draft-b', storage), second);
+  assert.equal(storage.values.get('@viewstate_property_draft'), '{"capture":"untouched"}');
+  assert.notEqual(propertyEditDraftKey('draft-a'), propertyEditDraftKey('draft-b'));
+});
+
+test('Task 6 executable draft simulation: newer same-ID generation and discard prevent delayed resurrection', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const first = createEditDraft({ ...recoveryProperty, core: { ...recoveryProperty.core, id: 'generation-core' }, activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: 'generation-core' } });
+  await savePropertyEditDraft(first, storage);
+  const newer = { ...first, choices: { ...first.choices, priceAmount: 999 }, writeGeneration: 2 };
+  await savePropertyEditDraft(newer, first, storage);
+  assert.equal(await discardPropertyEditDraft(first.propertyCoreId, first, storage), false);
+  assert.deepEqual(await loadPropertyEditDraft(first.propertyCoreId, storage), newer);
+  assert.equal(await discardPropertyEditDraft(newer.propertyCoreId, newer, storage), true);
+  assert.equal(await savePropertyEditDraft(first, storage), false);
+  assert.equal(await loadPropertyEditDraft(first.propertyCoreId, storage), null);
+});
+
+test('Task 6 executable draft simulation: unreadable edit data is preserved and fails closed', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const expected = createEditDraft(recoveryProperty);
+  const key = propertyEditDraftKey(expected.propertyCoreId);
+  storage.values.set(key, '{"version":');
+  await assert.rejects(() => loadPropertyEditDraft(expected.propertyCoreId, storage), PropertyEditReadError);
+  assert.equal(await discardPropertyEditDraft(expected.propertyCoreId, expected, storage), false);
+  assert.equal(storage.values.get(key), '{"version":');
+});
+
+function newUpdateFixture() {
+  const draft = createEditDraft(recoveryProperty);
+  const candidate = buildPropertyUpdateCandidate(recoveryProperty, {
+    ...draft.choices,
+    priceAmount: 160000,
+  });
+  const operation = createPropertyUpdateOperation({
+    operationId: 'update-operation-1',
+    baseline: recoveryProperty,
+    candidate,
+    draftSnapshot: draft,
+    preparedAt: '2026-08-28T12:00:00.000Z',
+  });
+  return { draft, candidate, operation };
+}
+
+test('Task 6 executable recovery simulation: restart never updates baseline until explicit retry', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const { draft, candidate, operation } = newUpdateFixture();
+  await savePropertyEditDraft(draft, storage);
+  await persistPropertyUpdateOperation(operation, storage);
+  let current = recoveryProperty;
+  let updates = 0;
+  const run = (allowUpdate: boolean) => executePropertyUpdateRecovery({
+    operation,
+    allowUpdate,
+    getProperty: async () => current,
+    compareAndUpdate: async (baseline, replacement) => {
+      updates += 1;
+      if (JSON.stringify(current) !== JSON.stringify(baseline)) return false;
+      current = replacement;
+      return true;
+    },
+    storage,
+  });
+  assert.deepEqual(await run(false), { status: 'retry_required' });
+  assert.equal(updates, 0);
+  assert.deepEqual(await run(true), { status: 'complete', updatedNow: true });
+  assert.equal(updates, 1);
+  assert.deepEqual(current, candidate);
+});
+
+test('Task 6 executable recovery simulation: changed, missing, and unreadable same-ID drafts block prepared CAS', async () => {
+  const { draft, operation } = newUpdateFixture();
+  for (const draftState of ['changed', 'missing', 'unreadable'] as const) {
+    const storage = new RecoveryMemoryStorage();
+    if (draftState === 'changed') {
+      await savePropertyEditDraft({ ...draft, choices: { ...draft.choices, priceAmount: 123 }, writeGeneration: 2 }, null, storage);
+    } else if (draftState === 'unreadable') {
+      storage.values.set(propertyEditDraftKey(draft.propertyCoreId), '{broken');
+    }
+    await persistPropertyUpdateOperation(operation, storage);
+    let updates = 0;
+    const result = await executePropertyUpdateRecovery({
+      operation,
+      allowUpdate: true,
+      getProperty: async () => recoveryProperty,
+      compareAndUpdate: async () => { updates += 1; return true; },
+      storage,
+    });
+    assert.deepEqual(result, { status: 'conflict' });
+    assert.equal(updates, 0);
+  }
+});
+
+test('Task 6 executable draft CAS simulation: expected full snapshot protects cross-tab update and discard', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const draft = createEditDraft({ ...recoveryProperty, core: { ...recoveryProperty.core, id: 'cas-draft' }, activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: 'cas-draft' } });
+  await savePropertyEditDraft(draft, null, storage);
+  const tabTwo = { ...draft, choices: { ...draft.choices, priceAmount: 808 }, writeGeneration: draft.writeGeneration + 1 };
+  assert.equal(await savePropertyEditDraft(tabTwo, draft, storage), true);
+  const tabOne = { ...draft, choices: { ...draft.choices, locationAreaId: 'qibla' }, writeGeneration: draft.writeGeneration + 1 };
+  assert.equal(await savePropertyEditDraft(tabOne, draft, storage), false);
+  assert.equal(await discardPropertyEditDraft(draft.propertyCoreId, draft, storage), false);
+  assert.deepEqual(await loadPropertyEditDraft(draft.propertyCoreId, storage), tabTwo);
+});
+
+test('Task 6 executable ordering simulation: rapid latest draft is persisted before its operation can be journaled', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const first = createEditDraft({ ...recoveryProperty, core: { ...recoveryProperty.core, id: 'rapid-draft' }, activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: 'rapid-draft' } });
+  const latest = { ...first, choices: { ...first.choices, priceAmount: 333 }, writeGeneration: first.writeGeneration + 1 };
+  const firstWrite = savePropertyEditDraft(first, null, storage);
+  const latestWrite = savePropertyEditDraft(latest, first, storage);
+  await flushPropertyEditDraftWrites();
+  assert.equal(await firstWrite, true);
+  assert.equal(await latestWrite, true);
+  assert.deepEqual(await loadPropertyEditDraft('rapid-draft', storage), latest);
+  const candidate = buildPropertyUpdateCandidate(latest.baseline, latest.choices);
+  const operation = createPropertyUpdateOperation({
+    operationId: 'rapid-operation',
+    baseline: latest.baseline,
+    candidate,
+    draftSnapshot: latest,
+    preparedAt: '2026-08-28T12:00:00.000Z',
+  });
+  await persistPropertyUpdateOperation(operation, storage);
+  assert.deepEqual((await loadPropertyUpdateOperation(storage))?.draftSnapshot, latest);
+});
+
+test('Task 6 executable recovery simulation: exact candidate is cleanup-only and third/missing values conflict', async () => {
+  const { candidate, operation } = newUpdateFixture();
+  let updates = 0;
+  const candidateStorage = new RecoveryMemoryStorage();
+  await persistPropertyUpdateOperation(operation, candidateStorage);
+  assert.equal((await executePropertyUpdateRecovery({
+    operation,
+    allowUpdate: true,
+    getProperty: async () => candidate,
+    compareAndUpdate: async () => { updates += 1; return true; },
+    storage: candidateStorage,
+  })).status, 'complete');
+  assert.equal(updates, 0);
+  for (const current of [null, { ...recoveryProperty, core: { ...recoveryProperty.core, locationArea: { id: 'qibla' } } }]) {
+    const storage = new RecoveryMemoryStorage();
+    await persistPropertyUpdateOperation(operation, storage);
+    assert.deepEqual(await executePropertyUpdateRecovery({
+      operation,
+      allowUpdate: true,
+      getProperty: async () => current,
+      compareAndUpdate: async () => { updates += 1; return true; },
+      storage,
+    }), { status: 'conflict' });
+    assert.ok(storage.values.has(PROPERTY_UPDATE_OPERATION_KEY));
+  }
+});
+
+test('Task 6 executable recovery simulation: failed CAS retries, cleanup failure never updates confirmed candidate again', async () => {
+  const { draft, candidate, operation } = newUpdateFixture();
+  const storage = new RecoveryMemoryStorage();
+  await savePropertyEditDraft(draft, storage);
+  await persistPropertyUpdateOperation(operation, storage);
+  let current = recoveryProperty;
+  let calls = 0;
+  const failed = await executePropertyUpdateRecovery({
+    operation,
+    allowUpdate: true,
+    getProperty: async () => current,
+    compareAndUpdate: async () => { calls += 1; throw new Error('disk'); },
+    storage,
+  });
+  assert.equal(failed.status, 'update_failed');
+  storage.failRemove = true;
+  const cleanupFailed = await executePropertyUpdateRecovery({
+    operation,
+    allowUpdate: true,
+    getProperty: async () => current,
+    compareAndUpdate: async (_baseline, replacement) => { calls += 1; current = replacement; return true; },
+    storage,
+  });
+  assert.equal(cleanupFailed.status, 'cleanup_failed');
+  const confirmed = await loadPropertyUpdateOperation(storage);
+  assert.equal(confirmed?.state, 'confirmed');
+  storage.failRemove = false;
+  const cleanupRetry = await executePropertyUpdateRecovery({
+    operation: confirmed!,
+    allowUpdate: true,
+    getProperty: async () => candidate,
+    compareAndUpdate: async () => { calls += 1; return true; },
+    storage,
+  });
+  assert.equal(cleanupRetry.status, 'complete');
+  assert.equal(calls, 2);
+});
+
+test('Task 6 executable recovery simulation: unreadable and unresolved operations remain evidence and cannot be replaced', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const { operation } = newUpdateFixture();
+  storage.values.set(PROPERTY_UPDATE_OPERATION_KEY, '{"version":');
+  await assert.rejects(() => loadPropertyUpdateOperation(storage), PropertyEditReadError);
+  assert.equal(storage.values.get(PROPERTY_UPDATE_OPERATION_KEY), '{"version":');
+  storage.values.clear();
+  await persistPropertyUpdateOperation(operation, storage);
+  await assert.rejects(
+    () => persistPropertyUpdateOperation({ ...operation, operationId: 'other' }, storage),
+    PendingPropertyUpdateExistsError,
+  );
+  assert.deepEqual(await loadPropertyUpdateOperation(storage), operation);
+});
+
+test('Task 6 static/source assertions: detail, missing handling, accessibility, back/discard and localized RTL-safe editing are wired', async () => {
+  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [detail, home, i18n] = await Promise.all([
+    readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sourcePath('../app/(tabs)/index.tsx'), 'utf8'),
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+  ]);
+  assert.match(home, /property-card-\$\{item\.core\.id\}/);
+  assert.match(home, /accessibilityRole="button"/);
+  assert.match(detail, /status === 'missing'/);
+  assert.match(detail, /property-edit-action/);
+  assert.match(detail, /property-edit-save/);
+  assert.match(detail, /testID="property-update-retry"/);
+  assert.match(detail, /testID="property-update-cleanup-retry"/);
+  assert.match(detail, /retryRecovery\(true\)/);
+  assert.match(detail, /retryRecovery\(false\)/);
+  assert.match(detail, /testID="property-edit-leave-dialog"/);
+  assert.match(detail, /testID="property-edit-keep-editing"/);
+  assert.match(detail, /testID="property-edit-keep-draft-exit"/);
+  assert.match(detail, /testID="property-edit-discard"/);
+  assert.doesNotMatch(detail, /Alert\.alert\(t\('edit\.leave_title'/);
+  assert.doesNotMatch(detail, /'yearly'/);
+  assert.match(detail, /edit\.transaction_scope/);
+  assert.match(detail, /capture\.keep_editing/);
+  assert.match(detail, /discardPropertyEditDraft/);
+  assert.match(detail, /searchAreas\(areaSearch\)/);
+  assert.match(detail, /isRTL \? 'right' : 'left'/);
+  assert.match(i18n, /'edit\.not_found': 'This property could not be found/);
+  assert.match(i18n, /'edit\.not_found': 'تعذر العثور/);
+  assert.match(i18n, /'edit\.transaction_scope': 'Changing a Sale to Rent/);
+  assert.match(i18n, /'edit\.retry_update': 'إعادة محاولة تحديث العقار'/);
+});
+
+test('Task 6 static/source assertions: native atomic CAS/shared queue and web exclusive lock/unsupported gate are explicit', async () => {
+  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const persistence = await readFile(sourcePath('../services/persistence.ts'), 'utf8');
+  assert.match(persistence, /const nativeMutations = new SerialTaskQueue\(\)/);
+  assert.match(persistence, /UPDATE properties SET data = \?, search_text = \? WHERE id = \? AND data = \?/);
+  assert.match(persistence, /result\.changes === 1/);
+  assert.match(persistence, /navigator/);
+  assert.match(persistence, /locks\.request\('viewstate-properties-mutation', \{ mode: 'exclusive' \}/);
+  assert.match(persistence, /SAFE_WEB_MUTATION_UNSUPPORTED/);
+  assert.match(persistence, /async saveProperty[\s\S]*withMutationLock/);
+  assert.match(persistence, /async compareAndUpdate[\s\S]*withMutationLock/);
+  assert.match(persistence, /private readonly KEY = '@viewstate_properties'/);
+  assert.match(persistence, /INSERT INTO properties \(id, data, search_text\)/);
+  assert.match(persistence, /PROPERTY_ID_ALREADY_EXISTS/);
+  assert.doesNotMatch(persistence, /INSERT OR REPLACE INTO properties/);
 });
