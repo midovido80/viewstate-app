@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import { projectDraftToProperty, PropertyDraft, Property } from '@workspace/property-domain';
 import appConfig from '../app.json';
-import { SerialTaskQueue } from '../services/serialTaskQueue.ts';
+import {
+  parseStoredJson,
+  runSaveWithCleanup,
+  SerialTaskQueue,
+  SingleFlight,
+  StoredValueParseError,
+} from '../services/serialTaskQueue.ts';
 import {
   Area,
   KUWAIT_AREA_ALIASES,
@@ -505,4 +512,154 @@ test('Draft writes remain ordered through immediate reset', async () => {
   await queue.flush();
 
   assert.deepEqual(stored, ['fresh-draft']);
+});
+
+test('Serial queue preserves ordering and continues after a failed write', async () => {
+  const queue = new SerialTaskQueue();
+  const stored: string[] = [];
+
+  const failed = queue.enqueue(async () => {
+    stored.push('first');
+    throw new Error('write failed');
+  });
+  const recovered = queue.enqueue(async () => {
+    stored.push('second');
+  });
+
+  await assert.rejects(failed, /write failed/);
+  await recovered;
+  await queue.flush();
+  assert.deepEqual(stored, ['first', 'second']);
+});
+
+test('Unreadable stored draft is explicit and is not treated as an empty draft', () => {
+  assert.equal(parseStoredJson<PropertyDraft>(null), null);
+  assert.throws(
+    () => parseStoredJson<PropertyDraft>('{"transaction":'),
+    StoredValueParseError,
+  );
+});
+
+test('Save failure keeps cleanup pending for a successful retry', async () => {
+  let saveAttempts = 0;
+  let cleanupAttempts = 0;
+
+  const first = await runSaveWithCleanup({
+    propertyAlreadySaved: false,
+    saveProperty: async () => {
+      saveAttempts += 1;
+      throw new Error('disk unavailable');
+    },
+    cleanupDraft: async () => {
+      cleanupAttempts += 1;
+    },
+  });
+  assert.equal(first.status, 'save_failed');
+  assert.equal(first.propertySaved, false);
+  assert.equal(saveAttempts, 1);
+  assert.equal(cleanupAttempts, 0);
+
+  const retry = await runSaveWithCleanup({
+    propertyAlreadySaved: first.propertySaved,
+    saveProperty: async () => {
+      saveAttempts += 1;
+    },
+    cleanupDraft: async () => {
+      cleanupAttempts += 1;
+    },
+  });
+  assert.equal(retry.status, 'complete');
+  assert.equal(saveAttempts, 2);
+  assert.equal(cleanupAttempts, 1);
+});
+
+test('Draft cleanup retry never saves an already-persisted property twice', async () => {
+  let saves = 0;
+  let cleanups = 0;
+
+  const first = await runSaveWithCleanup({
+    propertyAlreadySaved: false,
+    saveProperty: async () => {
+      saves += 1;
+    },
+    cleanupDraft: async () => {
+      cleanups += 1;
+      throw new Error('draft write failed');
+    },
+  });
+  assert.equal(first.status, 'cleanup_failed');
+  assert.equal(first.propertySaved, true);
+
+  const retry = await runSaveWithCleanup({
+    propertyAlreadySaved: first.propertySaved,
+    saveProperty: async () => {
+      saves += 1;
+    },
+    cleanupDraft: async () => {
+      cleanups += 1;
+    },
+  });
+  assert.equal(retry.status, 'complete');
+  assert.equal(saves, 1);
+  assert.equal(cleanups, 2);
+});
+
+test('Single-flight guard prevents rapid duplicate submissions', async () => {
+  const flight = new SingleFlight();
+  let submissions = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+
+  const first = flight.run(async () => {
+    submissions += 1;
+    await gate;
+    return 'saved';
+  });
+  const duplicate = await flight.run(async () => {
+    submissions += 1;
+    return 'duplicate';
+  });
+
+  assert.deepEqual(duplicate, { started: false });
+  assert.equal(submissions, 1);
+  release();
+  assert.deepEqual(await first, { started: true, value: 'saved' });
+});
+
+test('Capture reliability UI exposes localized errors and accessible stable controls', async () => {
+  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [i18n, header, selectCard, location, summary, button, captureContext] = await Promise.all([
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+    readFile(sourcePath('../components/CaptureHeader.tsx'), 'utf8'),
+    readFile(sourcePath('../components/SelectCard.tsx'), 'utf8'),
+    readFile(sourcePath('../app/capture/location.tsx'), 'utf8'),
+    readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
+    readFile(sourcePath('../components/Button.tsx'), 'utf8'),
+    readFile(sourcePath('../contexts/CaptureContext.tsx'), 'utf8'),
+  ]);
+
+  assert.match(i18n, /'errors\.storage_save': 'The local save failed/);
+  assert.match(i18n, /'errors\.storage_save': 'تعذر الحفظ محلياً/);
+  assert.match(i18n, /'errors\.cleanup_after_save': 'The property was saved/);
+  assert.match(i18n, /'errors\.cleanup_after_save': 'تم حفظ العقار/);
+  assert.match(header, /testID="capture-back"/);
+  assert.match(header, /testID="capture-cancel"/);
+  assert.match(header, /testID="capture-cancel-dialog"/);
+  assert.match(header, /testID="capture-keep-editing"/);
+  assert.match(header, /testID="capture-keep-draft-exit"/);
+  assert.match(header, /testID="capture-discard-draft"/);
+  assert.match(header, /capture\.keep_draft_exit/);
+  assert.match(header, /capture\.discard/);
+  assert.match(selectCard, /accessibilityRole="radio"/);
+  assert.match(selectCard, /accessibilityState=\{\{ selected: Boolean\(selected\) \}\}/);
+  assert.match(location, /testID="location-selector"/);
+  assert.match(location, /testID=\{`location-area-\$\{item\.id\}`\}/);
+  assert.match(summary, /new SingleFlight\(\)/);
+  assert.match(summary, /propertyAlreadySaved: propertySaved\.current/);
+  assert.match(button, /accessibilityState=\{\{ disabled: disabled \|\| loading, busy: loading \}\}/);
+  assert.match(captureContext, /\}\, \[\]\);/);
+  assert.match(captureContext, /if \(!isReady\) return null;/);
+  assert.match(captureContext, /if \(!isReady \|\| draftLoadFailed\)/);
 });

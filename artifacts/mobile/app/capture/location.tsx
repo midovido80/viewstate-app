@@ -70,6 +70,9 @@ export default function LocationScreen() {
 
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
+          testID="location-selector"
+          accessibilityRole="button"
+          accessibilityLabel={t('location.areaId')}
           style={[styles.selectorBtn, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.inputRadius }]}
         >
           <Text style={[
@@ -112,6 +115,7 @@ export default function LocationScreen() {
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel={t('capture.cancel')}
+              testID="location-picker-close"
               onPress={() => setModalVisible(false)}
               style={styles.closeBtn}
             >
@@ -130,6 +134,8 @@ export default function LocationScreen() {
                 autoCorrect={false}
                 autoCapitalize="none"
                 clearButtonMode="while-editing"
+                testID="location-search"
+                accessibilityLabel={t('location.search')}
                 style={[styles.searchInput, { color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}
               />
             </View>
@@ -166,6 +172,10 @@ export default function LocationScreen() {
                     },
                   ]}
                   onPress={() => handleSelect(item.id)}
+                  testID={`location-area-${item.id}`}
+                  accessibilityRole="radio"
+                  accessibilityLabel={language === 'ar' ? item.ar : item.en}
+                  accessibilityState={{ selected: areaId === item.id }}
                 >
                   <Text style={[styles.areaText, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
                     {language === 'ar' ? item.ar : item.en}

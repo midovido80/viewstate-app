@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,34 +11,70 @@ import { store } from '@/services/persistence';
 
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice } from '@/constants/market';
+import { runSaveWithCleanup, SingleFlight } from '@/services/serialTaskQueue';
 
 export default function SummaryScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { draft, projectToProperty, resetDraft } = useCapture();
+  const { draft, draftLoadFailed, projectToProperty, resetDraft } = useCapture();
   const { t, isRTL, language, fonts } = useI18n();
   const [submitting, setSubmitting] = useState(false);
+  const [cleanupPending, setCleanupPending] = useState(false);
+  const propertySaved = useRef(false);
+  const submitFlight = useRef(new SingleFlight());
   
   const handleFinish = async () => {
-    setSubmitting(true);
-    try {
-      const projection = projectToProperty();
-      if (!projection.ok) {
-        Alert.alert(t('errors.required'), projection.issues.map(i => i.message).join('\n'));
-        setSubmitting(false);
-        return;
-      }
+    await submitFlight.current.run(async () => {
+      setSubmitting(true);
+      try {
+        if (draftLoadFailed) {
+          Alert.alert(t('errors.draft_read_title'), t('errors.draft_read'));
+          return;
+        }
 
-      await store.saveProperty(projection.property);
-      await resetDraft();
-      
-      router.replace('/capture/success' as never);
-    } catch (e) {
-      console.error(e);
-      Alert.alert(t('errors.required'), t('errors.required'));
-      setSubmitting(false);
-    }
+        const projection = propertySaved.current ? null : projectToProperty();
+        if (projection && !projection.ok) {
+          const hasInvalidPrice = projection.issues.some(issue => issue.code === 'invalid_price');
+          Alert.alert(
+            t('errors.validation_title'),
+            t(hasInvalidPrice ? 'errors.invalid_price' : 'errors.capture_incomplete'),
+          );
+          return;
+        }
+
+        const result = await runSaveWithCleanup({
+          propertyAlreadySaved: propertySaved.current,
+          saveProperty: async () => {
+            if (!projection || !projection.ok) {
+              throw new Error('A valid property projection is required before saving.');
+            }
+            await store.saveProperty(projection.property);
+          },
+          cleanupDraft: resetDraft,
+        });
+
+        propertySaved.current = result.propertySaved;
+
+        if (result.status === 'save_failed') {
+          console.error('Property save failed:', result.error);
+          Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
+          return;
+        }
+
+        if (result.status === 'cleanup_failed') {
+          console.error('Post-save draft cleanup failed:', result.error);
+          setCleanupPending(true);
+          Alert.alert(t('errors.cleanup_title'), t('errors.cleanup_after_save'));
+          return;
+        }
+
+        setCleanupPending(false);
+        router.replace('/capture/success' as never);
+      } finally {
+        setSubmitting(false);
+      }
+    });
   };
 
   const area = draft.locationAreaId ? getAreaById(draft.locationAreaId) : null;
@@ -93,7 +129,7 @@ export default function SummaryScreen() {
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <Button 
-          title={t('summary.submit')} 
+          title={t(cleanupPending ? 'summary.retry_cleanup' : 'summary.submit')}
           onPress={handleFinish} 
           loading={submitting}
           size="large"

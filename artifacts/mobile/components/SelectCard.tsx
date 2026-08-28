@@ -20,6 +20,9 @@ export function SelectCard({ title, icon, selected, onSelect, testID }: SelectCa
       activeOpacity={0.7}
       onPress={onSelect}
       testID={testID}
+      accessibilityRole="radio"
+      accessibilityLabel={title}
+      accessibilityState={{ selected: Boolean(selected) }}
       style={[
         styles.container,
         {

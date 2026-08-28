@@ -70,7 +70,16 @@ export function Button({
 
   if (isPrimary && !disabled) {
     return (
-      <TouchableOpacity onPress={onPress} disabled={loading} style={style} activeOpacity={0.8} testID={testID}>
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={loading}
+        style={style}
+        activeOpacity={0.8}
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ disabled: loading, busy: loading }}
+      >
         <LinearGradient
           colors={[colors.primary, colors.turquoise]}
           start={{ x: 0, y: 0 }}
@@ -94,6 +103,9 @@ export function Button({
       ]} 
       activeOpacity={0.8}
       testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
     >
       {content}
     </TouchableOpacity>
