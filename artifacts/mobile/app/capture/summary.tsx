@@ -7,21 +7,23 @@ import { useI18n, Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
-import { store } from '@/services/persistence';
-
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice } from '@/constants/market';
-import { runSaveWithCleanup, SingleFlight } from '@/services/serialTaskQueue';
+import { SingleFlight } from '@/services/serialTaskQueue';
 
 export default function SummaryScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { draft, draftLoadFailed, projectToProperty, resetDraft } = useCapture();
+  const {
+    draft,
+    draftLoadFailed,
+    saveRecoveryStatus,
+    projectToProperty,
+    savePropertyWithRecovery,
+  } = useCapture();
   const { t, isRTL, language, fonts } = useI18n();
   const [submitting, setSubmitting] = useState(false);
-  const [cleanupPending, setCleanupPending] = useState(false);
-  const propertySaved = useRef(false);
   const submitFlight = useRef(new SingleFlight());
   
   const handleFinish = async () => {
@@ -33,7 +35,9 @@ export default function SummaryScreen() {
           return;
         }
 
-        const projection = propertySaved.current ? null : projectToProperty();
+        const hasPendingRecovery = saveRecoveryStatus === 'retry_required'
+          || saveRecoveryStatus === 'cleanup_pending';
+        const projection = hasPendingRecovery ? null : projectToProperty();
         if (projection && !projection.ok) {
           const hasInvalidPrice = projection.issues.some(issue => issue.code === 'invalid_price');
           Alert.alert(
@@ -43,18 +47,9 @@ export default function SummaryScreen() {
           return;
         }
 
-        const result = await runSaveWithCleanup({
-          propertyAlreadySaved: propertySaved.current,
-          saveProperty: async () => {
-            if (!projection || !projection.ok) {
-              throw new Error('A valid property projection is required before saving.');
-            }
-            await store.saveProperty(projection.property);
-          },
-          cleanupDraft: resetDraft,
-        });
-
-        propertySaved.current = result.propertySaved;
+        const result = await savePropertyWithRecovery(
+          projection && projection.ok ? projection.property : undefined,
+        );
 
         if (result.status === 'save_failed') {
           console.error('Property save failed:', result.error);
@@ -64,12 +59,20 @@ export default function SummaryScreen() {
 
         if (result.status === 'cleanup_failed') {
           console.error('Post-save draft cleanup failed:', result.error);
-          setCleanupPending(true);
           Alert.alert(t('errors.cleanup_title'), t('errors.cleanup_after_save'));
           return;
         }
 
-        setCleanupPending(false);
+        if (result.status === 'retry_required') {
+          Alert.alert(t('errors.recovery_retry_title'), t('errors.recovery_retry'));
+          return;
+        }
+
+        if (result.status === 'conflict' || result.status === 'unresolved_draft') {
+          Alert.alert(t('errors.recovery_conflict_title'), t('errors.recovery_conflict'));
+          return;
+        }
+
         router.replace('/capture/success' as never);
       } finally {
         setSubmitting(false);
@@ -129,7 +132,13 @@ export default function SummaryScreen() {
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <Button 
-          title={t(cleanupPending ? 'summary.retry_cleanup' : 'summary.submit')}
+          title={t(
+            saveRecoveryStatus === 'cleanup_pending'
+              ? 'summary.retry_cleanup'
+              : saveRecoveryStatus === 'retry_required'
+                ? 'summary.retry_save'
+                : 'summary.submit'
+          )}
           onPress={handleFinish} 
           loading={submitting}
           size="large"

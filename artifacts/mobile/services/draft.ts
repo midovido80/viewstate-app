@@ -5,6 +5,7 @@ import { migrateStage01B1Draft } from '@/services/stage01B1CurrencyMigration';
 
 const DRAFT_KEY = '@viewstate_property_draft';
 const writes = new SerialTaskQueue();
+let writeGeneration = 0;
 
 export class DraftReadError extends Error {
   constructor(cause: unknown) {
@@ -16,7 +17,9 @@ export class DraftReadError extends Error {
 
 export async function saveDraft(draft: PropertyDraft): Promise<void> {
   const snapshot = JSON.stringify(draft);
+  const generation = writeGeneration;
   return writes.enqueue(async () => {
+    if (generation !== writeGeneration) return;
     await AsyncStorage.setItem(DRAFT_KEY, snapshot);
   });
 }
@@ -35,8 +38,42 @@ export async function loadDraft(): Promise<PropertyDraft | null> {
 }
 
 export async function clearDraft(): Promise<void> {
+  writeGeneration += 1;
   return writes.enqueue(async () => {
     await AsyncStorage.removeItem(DRAFT_KEY);
+  });
+}
+
+export async function replaceDraftIfUnchanged(
+  expectedSnapshot: string,
+  replacement: PropertyDraft,
+): Promise<boolean> {
+  writeGeneration += 1;
+  const generation = writeGeneration;
+  const replacementSnapshot = JSON.stringify(replacement);
+  let replaced = false;
+  await writes.enqueue(async () => {
+    const current = await AsyncStorage.getItem(DRAFT_KEY);
+    if (current === null) return;
+    try {
+      JSON.parse(current);
+    } catch (error) {
+      throw new DraftReadError(error);
+    }
+    if (current !== expectedSnapshot || generation !== writeGeneration) return;
+    await AsyncStorage.setItem(DRAFT_KEY, replacementSnapshot);
+    replaced = true;
+  });
+  return replaced;
+}
+
+export async function replaceDraft(replacement: PropertyDraft): Promise<void> {
+  writeGeneration += 1;
+  const generation = writeGeneration;
+  const snapshot = JSON.stringify(replacement);
+  return writes.enqueue(async () => {
+    if (generation !== writeGeneration) return;
+    await AsyncStorage.setItem(DRAFT_KEY, snapshot);
   });
 }
 

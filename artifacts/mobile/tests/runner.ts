@@ -34,6 +34,66 @@ import {
   migrateStage01B1Draft,
   migrateStage01B1WebProperties,
 } from '../services/stage01B1CurrencyMigration.ts';
+import {
+  PROPERTY_SAVE_OPERATION_KEY,
+  PendingSaveOperationExistsError,
+  SaveRecoveryReadError,
+  clearPropertySaveOperation,
+  createPropertySaveOperation,
+  executePropertySaveRecovery,
+  loadPropertySaveOperation,
+  persistPropertySaveOperation,
+} from '../services/propertySaveRecovery.ts';
+
+class RecoveryMemoryStorage {
+  values = new Map<string, string>();
+  failRemove = false;
+
+  async getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+
+  async setItem(key: string, value: string) {
+    this.values.set(key, value);
+  }
+
+  async removeItem(key: string) {
+    if (this.failRemove) throw new Error('cleanup failed');
+    this.values.delete(key);
+  }
+}
+
+const recoveryDraft: PropertyDraft = {
+  propertyCoreId: 'recovery-core',
+  offerId: 'recovery-offer',
+  propertyType: 'apartment',
+  transaction: 'sale',
+  salePrice: { amount: 150000, currencyCode: 'KWD' },
+  locationAreaId: 'salmiya',
+};
+
+const recoveryProperty: Property = {
+  core: {
+    id: 'recovery-core',
+    propertyType: 'apartment',
+    locationArea: { id: 'salmiya' },
+  },
+  activeOffer: {
+    id: 'recovery-offer',
+    propertyCoreId: 'recovery-core',
+    transaction: 'sale',
+    salePrice: { amount: 150000, currencyCode: 'KWD' },
+  },
+};
+
+function newRecoveryOperation() {
+  return createPropertySaveOperation({
+    operationId: 'operation-1',
+    draft: recoveryDraft,
+    targetProperty: recoveryProperty,
+    preparedAt: '2026-08-28T12:00:00.000Z',
+  });
+}
 
 test('I18n logic (Mocked)', () => {
   const isRTL = (lang: string) => lang === 'ar';
@@ -604,6 +664,236 @@ test('Draft cleanup retry never saves an already-persisted property twice', asyn
   assert.equal(cleanups, 2);
 });
 
+test('Restart before property save preserves work and requires explicit retry', async () => {
+  const storage = new RecoveryMemoryStorage();
+  await persistPropertySaveOperation(storage, newRecoveryOperation());
+  const operation = await loadPropertySaveOperation(storage);
+  assert.ok(operation);
+  let saves = 0;
+  let cleanups = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: false,
+    getProperties: async () => [],
+    saveProperty: async () => { saves += 1; },
+    getDraft: () => recoveryDraft,
+    cleanupDraft: async () => { cleanups += 1; return 'replaced'; },
+    clearOperation: async () => true,
+  });
+
+  assert.deepEqual(result, { status: 'retry_required' });
+  assert.equal(saves, 0);
+  assert.equal(cleanups, 0);
+});
+
+test('Explicit retry saves once, then performs guarded cleanup', async () => {
+  const operation = newRecoveryOperation();
+  const properties: Property[] = [];
+  let saves = 0;
+  let cleanups = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: true,
+    getProperties: async () => properties,
+    saveProperty: async property => {
+      saves += 1;
+      properties.push(property);
+    },
+    getDraft: () => recoveryDraft,
+    cleanupDraft: async () => { cleanups += 1; return 'replaced'; },
+    clearOperation: async () => true,
+  });
+
+  assert.equal(result.status, 'complete');
+  assert.equal(saves, 1);
+  assert.equal(cleanups, 1);
+});
+
+test('Restart after confirmed save retries cleanup only and never saves twice', async () => {
+  const storage = new RecoveryMemoryStorage();
+  await persistPropertySaveOperation(storage, newRecoveryOperation());
+  const operation = await loadPropertySaveOperation(storage);
+  assert.ok(operation);
+  let saves = 0;
+  let cleanupAttempts = 0;
+  let failCleanup = true;
+  const options = {
+    operation,
+    allowSave: false,
+    getProperties: async () => [recoveryProperty],
+    saveProperty: async () => { saves += 1; },
+    getDraft: () => recoveryDraft,
+    cleanupDraft: async () => {
+      cleanupAttempts += 1;
+      if (failCleanup) throw new Error('draft cleanup failed');
+      return 'replaced' as const;
+    },
+    clearOperation: async () => true,
+  };
+
+  const interrupted = await executePropertySaveRecovery(options);
+  assert.equal(interrupted.status, 'cleanup_failed');
+  assert.equal(saves, 0);
+
+  failCleanup = false;
+  const restartRetry = await executePropertySaveRecovery(options);
+  assert.equal(restartRetry.status, 'complete');
+  assert.equal(saves, 0);
+  assert.equal(cleanupAttempts, 2);
+});
+
+test('Newer draft contents survive cleanup even when identifiers are unchanged', async () => {
+  const operation = newRecoveryOperation();
+  const changedSameIds: PropertyDraft = {
+    ...recoveryDraft,
+    locationAreaId: 'qibla',
+  };
+  let cleanupAttempts = 0;
+  let cleared = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: false,
+    getProperties: async () => [recoveryProperty],
+    saveProperty: async () => assert.fail('confirmed property must not be saved again'),
+    getDraft: () => changedSameIds,
+    cleanupDraft: async () => { cleanupAttempts += 1; return 'replaced'; },
+    clearOperation: async () => { cleared += 1; return true; },
+  });
+
+  assert.deepEqual(result, {
+    status: 'complete',
+    savedNow: false,
+    newerDraftPreserved: true,
+  });
+  assert.equal(cleanupAttempts, 0);
+  assert.equal(cleared, 1);
+});
+
+test('Newer draft with different identifiers also survives confirmed-save cleanup', async () => {
+  const operation = newRecoveryOperation();
+  const newerDraft: PropertyDraft = {
+    ...recoveryDraft,
+    propertyCoreId: 'newer-core',
+    offerId: 'newer-offer',
+  };
+  let cleanupAttempts = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: false,
+    getProperties: async () => [recoveryProperty],
+    saveProperty: async () => assert.fail('confirmed property must not be saved again'),
+    getDraft: () => newerDraft,
+    cleanupDraft: async () => { cleanupAttempts += 1; return 'replaced'; },
+    clearOperation: async () => true,
+  });
+
+  assert.equal(result.status, 'complete');
+  assert.equal(cleanupAttempts, 0);
+});
+
+test('Changed saved property blocks overwrite and preserves unresolved operation', async () => {
+  const operation = newRecoveryOperation();
+  const changedProperty: Property = {
+    ...recoveryProperty,
+    core: {
+      ...recoveryProperty.core,
+      locationArea: { id: 'qibla' },
+    },
+  };
+  let saves = 0;
+  let cleanups = 0;
+  let clears = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: true,
+    getProperties: async () => [changedProperty],
+    saveProperty: async () => { saves += 1; },
+    getDraft: () => recoveryDraft,
+    cleanupDraft: async () => { cleanups += 1; return 'replaced'; },
+    clearOperation: async () => { clears += 1; return true; },
+  });
+
+  assert.deepEqual(result, { status: 'conflict' });
+  assert.equal(saves, 0);
+  assert.equal(cleanups, 0);
+  assert.equal(clears, 0);
+});
+
+test('Malformed recovery data stays stored and blocks recovery', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const malformed = '{"version":1,"operationId":';
+  storage.values.set(PROPERTY_SAVE_OPERATION_KEY, malformed);
+
+  await assert.rejects(
+    () => loadPropertySaveOperation(storage),
+    SaveRecoveryReadError,
+  );
+  assert.equal(storage.values.get(PROPERTY_SAVE_OPERATION_KEY), malformed);
+});
+
+test('An unresolved recovery operation cannot be replaced', async () => {
+  const storage = new RecoveryMemoryStorage();
+  const first = newRecoveryOperation();
+  await persistPropertySaveOperation(storage, first);
+  const second = {
+    ...first,
+    operationId: 'operation-2',
+  };
+
+  await assert.rejects(
+    () => persistPropertySaveOperation(storage, second),
+    PendingSaveOperationExistsError,
+  );
+  assert.deepEqual(await loadPropertySaveOperation(storage), first);
+});
+
+test('Failure to clear recovery state causes cleanup-only retry without another save', async () => {
+  const operation = newRecoveryOperation();
+  const storage = new RecoveryMemoryStorage();
+  await persistPropertySaveOperation(storage, operation);
+  storage.failRemove = true;
+  let saves = 0;
+  const run = () => executePropertySaveRecovery({
+    operation,
+    allowSave: false,
+    getProperties: async () => [recoveryProperty],
+    saveProperty: async () => { saves += 1; },
+    getDraft: () => recoveryDraft,
+    cleanupDraft: async () => 'replaced',
+    clearOperation: candidate => clearPropertySaveOperation(storage, candidate),
+  });
+
+  assert.equal((await run()).status, 'cleanup_failed');
+  assert.equal(saves, 0);
+  assert.ok(await storage.getItem(PROPERTY_SAVE_OPERATION_KEY));
+
+  storage.failRemove = false;
+  assert.equal((await run()).status, 'complete');
+  assert.equal(saves, 0);
+  assert.equal(await storage.getItem(PROPERTY_SAVE_OPERATION_KEY), null);
+});
+
+test('Changed same-ID draft prevents explicit retry of an unresolved save', async () => {
+  const operation = newRecoveryOperation();
+  const changedSameIds: PropertyDraft = {
+    ...recoveryDraft,
+    salePrice: { amount: 175000, currencyCode: 'KWD' },
+  };
+  let saves = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: true,
+    getProperties: async () => [],
+    saveProperty: async () => { saves += 1; },
+    getDraft: () => changedSameIds,
+    cleanupDraft: async () => 'replaced',
+    clearOperation: async () => true,
+  });
+
+  assert.deepEqual(result, { status: 'unresolved_draft' });
+  assert.equal(saves, 0);
+});
+
 test('Single-flight guard prevents rapid duplicate submissions', async () => {
   const flight = new SingleFlight();
   let submissions = 0;
@@ -630,7 +920,7 @@ test('Single-flight guard prevents rapid duplicate submissions', async () => {
 
 test('Capture reliability UI exposes localized errors and accessible stable controls', async () => {
   const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
-  const [i18n, header, selectCard, location, summary, button, captureContext] = await Promise.all([
+  const [i18n, header, selectCard, location, summary, button, captureContext, draftService] = await Promise.all([
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
     readFile(sourcePath('../components/CaptureHeader.tsx'), 'utf8'),
     readFile(sourcePath('../components/SelectCard.tsx'), 'utf8'),
@@ -638,6 +928,7 @@ test('Capture reliability UI exposes localized errors and accessible stable cont
     readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
     readFile(sourcePath('../components/Button.tsx'), 'utf8'),
     readFile(sourcePath('../contexts/CaptureContext.tsx'), 'utf8'),
+    readFile(sourcePath('../services/draft.ts'), 'utf8'),
   ]);
 
   assert.match(i18n, /'errors\.storage_save': 'The local save failed/);
@@ -657,9 +948,17 @@ test('Capture reliability UI exposes localized errors and accessible stable cont
   assert.match(location, /testID="location-selector"/);
   assert.match(location, /testID=\{`location-area-\$\{item\.id\}`\}/);
   assert.match(summary, /new SingleFlight\(\)/);
-  assert.match(summary, /propertyAlreadySaved: propertySaved\.current/);
+  assert.match(summary, /savePropertyWithRecovery/);
+  assert.match(i18n, /'errors\.recovery_retry': 'The previous save could not be confirmed/);
+  assert.match(i18n, /'errors\.recovery_retry': 'تعذر تأكيد عملية الحفظ السابقة/);
+  assert.match(i18n, /'errors\.recovery_conflict': 'The saved property or draft changed/);
+  assert.match(i18n, /'errors\.recovery_unreadable': 'تعذرت قراءة سجل الحفظ المعلق/);
   assert.match(button, /accessibilityState=\{\{ disabled: disabled \|\| loading, busy: loading \}\}/);
   assert.match(captureContext, /\}\, \[\]\);/);
   assert.match(captureContext, /if \(!isReady\) return null;/);
-  assert.match(captureContext, /if \(!isReady \|\| draftLoadFailed\)/);
+  assert.match(captureContext, /saveRecoveryStatus !== 'none'/);
+  assert.match(captureContext, /The draft cannot be discarded while save recovery is unresolved/);
+  assert.match(captureContext, /mutationsBlocked\.current = true;[\s\S]*persistPropertySaveOperation/);
+  assert.match(draftService, /current !== expectedSnapshot/);
+  assert.match(draftService, /generation !== writeGeneration/);
 });
