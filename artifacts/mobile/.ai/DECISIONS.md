@@ -1047,3 +1047,42 @@ DEC-039 is PARTIALLY SUPERSEDED BY DEC-040 only for the wording and scope of the
 Before normal amendment PR merge and verification, the existing governance baseline is FROZEN; this scope amendment is APPROVED FOR GOVERNANCE IMPLEMENTATION / NOT YET EFFECTIVE; DEC-040 is NOT YET EFFECTIVE; Stage 01 is NOT STARTED / LOCKED; and the current permitted wording remains the existing bounded Building Form Impact Analysis.
 
 After normal amendment PR merge, verified GitHub main, exact eight-file allowlist compliance, historical freeze-file and decision-body preservation, and continued Stage 01 lock, this decision is ACTIVE without a second administrative PR. The resulting state is: GOVERNANCE SCOPE AMENDMENT FROZEN; DEC-040 ACTIVE; PRODUCT PRE-IMPLEMENTATION; STAGE 01 NOT STARTED / LOCKED; NEXT PERMITTED ACTION fresh Founder authorization for the expanded Stage 01 Impact Analysis only; WAIT.
+
+---
+
+## [DEC-041] — Property Sequencing, Deferred Native Blocker, and Broker Display Terminology
+Date: 2026-08-28
+Status: APPROVED — sequencing and terminology only; no release or merge authorization.
+Decided by: Founder
+Category: Product Sequencing and Terminology
+
+### Context
+
+Stage 01A and the Stage 01B1 local Property capture vertical slice were implemented after the previous governance tracker was written. PR #7 remains open and unmerged at `4a26835ee2715471f111ffb339aaf634b4cf9967`. Physical Android testing repeatedly reached successful manifest and bundle responses but failed during early post-bundle startup. Removing KeyboardProvider on the preserved diagnostic branch did not prevent the reported failure, and no exact responsible module was identified.
+
+### Decision
+
+Continue governed delivery in this order:
+
+1. Properties
+2. People and Requirements
+3. Matching
+4. Consolidated native-device and persona acceptance testing
+
+The Android startup investigation is deferred during these implementation stages but remains a release blocker. This sequencing decision does not claim the crash is fixed, waive native acceptance, authorize release, or authorize merging PR #7.
+
+For the future People stage, the approved Arabic user-facing Broker display terminology is `وسيط`. This does not claim that People UI has already been implemented. English remains `Broker`. Existing internal role identifiers, stored values, role behavior, and literal user-entered or imported text must not be renamed, translated, duplicated, or rewritten.
+
+### Bounded Task #5 implementation status
+
+The Founder separately authorized Task #5, limited to the existing BASIC built-property Sale/Rent capture reliability layer. The local implementation commit is `fc1ecb4b9defec78c29c803ebfb106161741e331`, based directly on `4a26835ee2715471f111ffb339aaf634b4cf9967`.
+
+Task #5 is implemented locally and provisionally accepted by the Founder based on the submitted implementation and verification report. This acceptance is not an independent Founder code review, native-device acceptance, full Properties completion, or freeze.
+
+The submitted report attributes the completed checks to mobile tests and typecheck, property-domain tests and typecheck, web capture regression, and a bounded agent-assisted CTO review. Android/iOS physical-device acceptance remains outstanding, and the Android startup failure remains unresolved.
+
+This decision does not approve or freeze the full Properties module. Dynamic fields, Land, detail/edit/enrichment, media, maps/PACI, sharing/import, People, Requirements, Matching, integrations, APIs, server persistence, and release remain separately governed.
+
+### Final state
+
+Task #5 is implemented locally, provisionally accepted based on the submitted report, and not frozen. It has not been pushed, merged, or released. PR #7 and the protected and diagnostic branches remain unchanged. Physical Android/iOS acceptance remains outstanding. WAIT.

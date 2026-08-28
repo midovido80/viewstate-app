@@ -1,7 +1,7 @@
 # ViewState App — Current State
 
-**Status:** 🔴 PRE-IMPLEMENTATION  
-**Last updated:** 2026-08-26
+**Status:** 🟡 BOUNDED PROPERTY IMPLEMENTATION — NOT FROZEN
+**Last updated:** 2026-08-28
 
 ---
 
@@ -18,7 +18,7 @@
 | Stage 00.5 | NOT DEFINED | — | — |
 | Governance Reconciliation Corrective Freeze | 🔒 FROZEN | PR #2 merged normally; `main` verified at `fbed357dabf09799c73982bb0643673ef3337a05` | 2026-08-26 |
 | Pre-Stage 01 Property Capture Scope Amendment | 🔒 FROZEN after normal amendment PR merge and verified `main` | DEC-040 ACTIVE; governance-only amendment | 2026-08-26 |
-| Stage 01 | 🔒 NOT STARTED / LOCKED | Next permitted action is fresh Founder authorization for the expanded Stage 01 Impact Analysis only; implementation remains locked | — |
+| Stage 01 | 🟡 PARTIALLY IMPLEMENTED / NOT FROZEN | Stage 01A is on `main`; Stage 01B1 remains in open PR #7; bounded capture-reliability implementation is local-only and provisionally accepted by Founder based on the submitted report; later Property work remains locked | 2026-08-28 |
 
 > **Change Policy:** Any change to Stage 00.1 content requires Change Policy Category A (Founder written approval → exact diff → explicit confirm → new DECISIONS.md entry). See `STAGE_00_1_FREEZE.md` and DEC-014.
 
@@ -43,9 +43,9 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 | Layer | Status | Notes |
 |-------|--------|-------|
 | Governance Package | ✅ COMPLETE | All approved files written and named correctly |
-| App Scaffold | ✅ COMPLETE | Expo blank scaffold — no product UI |
+| App Scaffold | ✅ COMPLETE | Expo scaffold with the bounded Stage 01B1 local Property capture vertical slice |
 | Foundation (auth + DB + API) | 🔒 LOCKED | No broad Foundation prerequisite is authorized; minimum technical impacts may be assessed only after fresh Founder authorization for the expanded Stage 01 Impact Analysis |
-| Property Module | 🔒 LOCKED | The approved future analysis is Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate); implementation remains locked |
+| Property Module | 🟡 PARTIAL / NOT FROZEN | BASIC built-property Sale/Rent capture and bounded reliability work exist; dynamic fields, Land, detail/edit/enrichment, media, sharing/import, and later Property capabilities remain separately locked |
 | Contacts Module | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
 | Requirements Module | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
 | Matching Engine | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
@@ -53,7 +53,7 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 | Contacts Import | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
 | Media Layer | 🔒 LOCKED | Separately locked; not implicitly authorized by the future property-capture analysis |
 | Global Search | 🔒 LOCKED | Built alongside each module per Rule 13 |
-| UI / Screens | 🔒 LOCKED | Requires all modules above |
+| UI / Screens | 🟡 PARTIAL | Only the bounded local Property capture/list/summary/success flow is implemented; unrelated modules remain locked |
 
 ---
 
@@ -251,4 +251,18 @@ Governance Reconciliation is FROZEN. PR #2 merged normally at `fbed357dabf09799c
 
 ## Current Property Capture Scope Amendment Status
 
-Governance Scope Amendment: FROZEN after normal amendment PR merge and verified GitHub `main`. DEC-040: ACTIVE. Product remains PRE-IMPLEMENTATION. Stage 01 remains NOT STARTED / LOCKED. The next permitted action is fresh Founder authorization for the expanded Stage 01 Impact Analysis only — Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate). Land remains a separately analyzed, approved, and frozen later V001 workflow. WAIT.
+Governance Scope Amendment: FROZEN after normal amendment PR merge and verified GitHub `main`. DEC-040: ACTIVE. Stage 01 is PARTIALLY IMPLEMENTED / NOT FROZEN. Stage 01B1 remains in open, unmerged PR #7 at `4a26835ee2715471f111ffb339aaf634b4cf9967`. Bounded Task #5 capture-reliability implementation exists locally at `fc1ecb4b9defec78c29c803ebfb106161741e331`, is provisionally accepted by Founder based on the submitted implementation and verification report, and is not frozen. Land remains a separately analyzed, approved, and frozen later V001 workflow. Later Property stages remain locked pending their own governance lifecycle. WAIT.
+
+---
+
+### Session: 2026-08-28 (Bounded Built-Property Capture Reliability)
+Task: Execute Founder-approved Task #5 — Complete built-property capture reliability.
+Authorization: Written Founder implementation approval dated 2026-08-28; provisional Founder acceptance dated 2026-08-28 based on the submitted implementation and verification report.
+Baseline: New local branch `work/properties-capture-reliability` created directly from authoritative Stage 01B1 commit `4a26835ee2715471f111ffb339aaf634b4cf9967`; diagnostic KeyboardProvider removal was not carried forward.
+Completed: Added failure-safe local save/retry, duplicate-submission prevention, post-save draft-cleanup recovery, ordered draft recovery, explicit unreadable-draft handling, non-destructive Back behavior, cross-platform cancel/discard confirmation, bilingual error distinctions, and accessibility identifiers.
+Reported verification: The submitted implementation report records mobile tests 23/23, mobile typecheck, property-domain tests/typecheck, English Sale and Arabic Rent web regressions, and a bounded agent-assisted CTO review with no blocking finding. This provisional acceptance is not an independent Founder code review or native-device acceptance.
+Native status: Android/iOS physical-device acceptance was not performed. The unresolved Android post-bundle startup failure remains deferred and remains a release blocker.
+Sequence: Properties → People and Requirements → Matching → consolidated native-device and persona acceptance testing.
+Terminology: For the future People stage, the approved Arabic user-facing Broker label is `وسيط`; this does not claim that People UI is implemented. English remains `Broker`. Stored identifiers, role behavior, and literal user-entered/imported text remain unchanged.
+Repository state: Local implementation commit `fc1ecb4b9defec78c29c803ebfb106161741e331`; no push, PR change, merge, release, or freeze. PR #7 and protected/diagnostic branches remain unchanged.
+State: TASK #5 IMPLEMENTED LOCALLY / PROVISIONALLY ACCEPTED BY FOUNDER BASED ON SUBMITTED REPORT / NOT FROZEN — WAIT.
