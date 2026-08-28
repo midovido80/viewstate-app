@@ -170,7 +170,7 @@ pnpm --filter @workspace/db run push
 - **Never skip `isNull(deleted_at)` filter** on soft-deleted tables
 - **Never use offset-based pagination** — use cursor-based
 - **Never store money as float** — use `numeric(15,2)` (Drizzle maps this to string in JS — parse with `parseFloat()` when needed)
-- **Never hard-delete user data** — always soft-delete with `deleted_at`
+- **Never hard-delete user data** — always soft-delete with `deleted_at`, except for the narrow local saved-Property deletion authorized by DEC-042; that exception is not a general database deletion policy.
 - **Never write raw SQL** unless it's a complex reporting query that can't be expressed in the ORM
 
 

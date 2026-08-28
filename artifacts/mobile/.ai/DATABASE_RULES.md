@@ -32,7 +32,7 @@ These are governance planning rules only; no schema or migration is authorized b
 - snake_case throughout: `created_at`, `updated_at`, `property_id`
 - Booleans: `is_` prefix: `is_active`, `is_verified`, `is_deleted`
 - Timestamps: every table has `created_at` and `updated_at`
-- Soft-delete: `deleted_at TIMESTAMPTZ` (nullable) — **never hard-delete user data**
+- Soft-delete: `deleted_at TIMESTAMPTZ` (nullable) — **never hard-delete user data**, except for the narrow local saved-Property deletion boundary in DEC-042. That exception applies only to an explicitly confirmed Property or separately approved fixed snapshot in one identified local storage namespace; it does not authorize deletion of drafts, recovery evidence, preferences, other entities, devices, profiles, environments, or server data.
 - Localized UI/system labels may use approved Arabic/English resources; user-entered or imported free text remains literal and must not be auto-translated or duplicated
 
 ### Indexes
@@ -172,7 +172,7 @@ created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 - All queries use parameterized values — no string interpolation
 - Pagination: **cursor-based** (using `id` or `created_at`) — never offset-based
 - Select only needed columns — avoid `SELECT *`
-- Always filter `isNull(deleted_at)` on soft-delete tables
+- Always filter `isNull(deleted_at)` on soft-delete tables. DEC-042 is a narrow local saved-Property exception and does not change this rule for server-backed or other user data.
 
 
 ---
