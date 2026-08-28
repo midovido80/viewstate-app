@@ -5,6 +5,7 @@ export const MARKET_CONFIG = {
   id: 'kw-v001',
   countryCode: 'KW',
   currencyCode: 'KWD',
+  defaultRentalPeriodId: 'monthly',
   currencyLabel: {
     en: 'KWD',
     ar: 'د.ك',
@@ -71,4 +72,27 @@ export function formatPrice(
     ? MARKET_CONFIG.currencyLabel[language]
     : currencyCode;
   return `${amount.toLocaleString('en-KW')} ${displayCode}`;
+}
+
+export function formatRentalCadence(
+  rentalPeriodId: string | undefined,
+  translate: (key: string) => string,
+): string {
+  return rentalPeriodId === MARKET_CONFIG.defaultRentalPeriodId
+    ? translate('price.cadence.monthly')
+    : rentalPeriodId === 'yearly'
+      ? translate('price.cadence.recorded_yearly')
+      : rentalPeriodId
+        ? `${translate('price.cadence.recorded')}: ${rentalPeriodId}`
+        : translate('price.cadence.missing');
+}
+
+export function formatRentalPrice(
+  amount: number,
+  currencyCode: string,
+  rentalPeriodId: string | undefined,
+  language: Language,
+  translate: (key: string) => string,
+): string {
+  return `${formatPrice(amount, currencyCode, language)} ${formatRentalCadence(rentalPeriodId, translate)}`;
 }

@@ -15,7 +15,7 @@ import { Property, PROPERTY_TYPES, PropertyType, Transaction } from '@workspace/
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
-import { formatPrice } from '@/constants/market';
+import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
 import { getAreaById, searchAreas } from '@/constants/kuwait-areas';
 import { store } from '@/services/persistence';
 import {
@@ -163,13 +163,13 @@ export default function PropertyDetailScreen() {
 
   const selectTransaction = (transaction: Transaction) => {
     if (!draft || transaction === draft.choices.transaction) return;
-    if (transaction === 'rent' && draft.baseline.activeOffer.transaction !== 'rent') {
-      setError(t('edit.transaction_scope'));
-      return;
-    }
+    setError('');
     updateChoices({
       transaction,
       priceAmount: undefined,
+      ...(transaction === 'rent' && draft.baseline.activeOffer.transaction === 'sale'
+        ? { rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId }
+        : {}),
     });
   };
 
@@ -300,9 +300,9 @@ export default function PropertyDetailScreen() {
         caught instanceof PendingPropertyUpdateExistsError ? t('edit.recovery_pending')
           : message.includes('INCOMPATIBLE_TYPE_DETAILS') ? t('edit.type_incompatible')
           : message.includes('INVALID_APPROVED_AREA') ? t('edit.area_invalid')
-            : message.includes('INVALID_PRICE') || message.includes('MISSING_RENTAL_PERIOD')
-              ? t('errors.invalid_price')
-              : t('edit.save_failed'),
+            : message.includes('MISSING_RENTAL_PERIOD') ? t('edit.rental_period_missing')
+              : message.includes('INVALID_PRICE') ? t('errors.invalid_price')
+                : t('edit.save_failed'),
       );
     } finally {
       setSaving(false);
@@ -333,6 +333,11 @@ export default function PropertyDetailScreen() {
     : property.activeOffer.transaction === 'sale'
       ? property.activeOffer.salePrice.amount
       : property.activeOffer.rentalPrice.amount;
+  const shownRentalPeriodId = mode === 'edit' && choices
+    ? choices.rentalPeriodId
+    : property.activeOffer.transaction === 'rent'
+      ? property.activeOffer.rentalPeriodId
+      : undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -376,7 +381,12 @@ export default function PropertyDetailScreen() {
           <>
             <DetailRow label={t('detail.type')} value={t(`propertyType.${property.core.propertyType}` as keyof Translations)} />
             <DetailRow label={t('detail.transaction')} value={t(`transaction.${property.activeOffer.transaction}` as keyof Translations)} />
-            <DetailRow label={t('detail.price')} value={formatPrice(shownPrice!, 'KWD', language)} />
+            <DetailRow
+              label={t('detail.price')}
+              value={property.activeOffer.transaction === 'rent'
+                ? formatRentalPrice(shownPrice!, 'KWD', shownRentalPeriodId, language, t)
+                : formatPrice(shownPrice!, 'KWD', language)}
+            />
             <DetailRow label={t('detail.area')} value={areaName(property.core.locationArea.id)} />
           </>
         ) : choices ? (
@@ -393,7 +403,11 @@ export default function PropertyDetailScreen() {
                 <Choice key={transaction} selected={shownTransaction === transaction} onPress={() => selectTransaction(transaction)} title={t(`transaction.${transaction}` as keyof Translations)} testID={`edit-transaction-${transaction}`} />
               ))}
             </View>
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('price.amount')}</Text>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+              {shownTransaction === 'rent'
+                ? `${t('price.amount')} · ${formatRentalCadence(shownRentalPeriodId, t)}`
+                : t('price.amount')}
+            </Text>
             <TextInput
               value={shownPrice === undefined ? '' : String(shownPrice)}
               onChangeText={value => updateChoices({ priceAmount: value.trim() === '' ? undefined : Number(value) })}

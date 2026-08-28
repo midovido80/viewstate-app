@@ -7,7 +7,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
-import { MARKET_CONFIG } from '@/constants/market';
+import { formatRentalCadence, MARKET_CONFIG } from '@/constants/market';
 
 export default function PriceScreen() {
   const router = useRouter();
@@ -21,7 +21,11 @@ export default function PriceScreen() {
     ? draft.salePrice?.amount?.toString() ?? ''
     : draft.rentalPrice?.amount?.toString() ?? '';
   const numAmount = Number(amount);
-  const isValid = !isNaN(numAmount) && numAmount > 0;
+  const workingRentalPeriodId = draft.rentalPeriodId
+    ?? (draft.rentalPrice === undefined ? MARKET_CONFIG.defaultRentalPeriodId : undefined);
+  const isValid = !isNaN(numAmount)
+    && numAmount > 0
+    && (isSale || workingRentalPeriodId !== undefined);
 
   const handleAmountChange = (value: string) => {
     const parsed = Number(value);
@@ -32,7 +36,12 @@ export default function PriceScreen() {
     if (isSale) {
       updateDraft({ salePrice: price });
     } else {
-      updateDraft({ rentalPrice: price });
+      updateDraft({
+        rentalPrice: price,
+        ...(draft.rentalPrice === undefined && draft.rentalPeriodId === undefined
+          ? { rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId }
+          : {}),
+      });
     }
   };
 
@@ -46,9 +55,10 @@ export default function PriceScreen() {
         rentalPeriodId: undefined
       });
     } else {
+      if (!draft.rentalPeriodId) return;
       updateDraft({ 
         rentalPrice: { amount: numAmount, currencyCode: MARKET_CONFIG.currencyCode },
-        rentalPeriodId: 'yearly',
+        rentalPeriodId: draft.rentalPeriodId,
         salePrice: undefined
       });
     }
@@ -68,7 +78,11 @@ export default function PriceScreen() {
           {isSale ? t('price.sale.title') : t('price.rent.title')}
         </Text>
 
-        <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>{t('price.amount')}</Text>
+        <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+          {isSale
+            ? t('price.amount')
+            : `${t('price.amount')} · ${formatRentalCadence(workingRentalPeriodId, t)}`}
+        </Text>
         <TextInput
           value={amount}
           onChangeText={handleAmountChange}

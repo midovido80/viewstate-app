@@ -6,6 +6,7 @@ import {
   validateProperty,
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
+import { MARKET_CONFIG } from '@/constants/market';
 import { SerialTaskQueue } from '@/services/serialTaskQueue';
 
 export const PROPERTY_UPDATE_OPERATION_KEY = '@viewstate_property_update_operation_v1';
@@ -258,10 +259,10 @@ export function buildPropertyUpdateCandidate(
     throw new Error('INCOMPATIBLE_TYPE_DETAILS');
   }
   if (choices.transaction === 'rent') {
-    if (
-      baseline.activeOffer.transaction !== 'rent'
-      || choices.rentalPeriodId !== baseline.activeOffer.rentalPeriodId
-    ) {
+    const expectedRentalPeriodId = baseline.activeOffer.transaction === 'rent'
+      ? baseline.activeOffer.rentalPeriodId
+      : MARKET_CONFIG.defaultRentalPeriodId;
+    if (choices.rentalPeriodId !== expectedRentalPeriodId) {
       throw new Error('TRANSACTION_SCOPE_RENT_PERIOD');
     }
   }

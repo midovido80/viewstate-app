@@ -25,6 +25,7 @@ import {
 import {
   MARKET_CONFIG,
   formatPrice,
+  formatRentalPrice,
   normalizeDraftCurrency,
   normalizePropertyCurrency,
 } from '../constants/market.ts';
@@ -146,8 +147,8 @@ test('Draft Projection: Rent Path Validation (KWD)', () => {
     offerId: 'offer-456',
     propertyType: 'villa',
     transaction: 'rent',
-    rentalPrice: { amount: 1500, currencyCode: MARKET_CONFIG.currencyCode },
-    rentalPeriodId: 'yearly',
+    rentalPrice: { amount: 500, currencyCode: MARKET_CONFIG.currencyCode },
+    rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId,
     locationAreaId: 'approved-area-id'
   };
 
@@ -156,7 +157,35 @@ test('Draft Projection: Rent Path Validation (KWD)', () => {
   if (result.ok) {
     assert.equal(result.value.activeOffer.transaction, 'rent');
     assert.equal(result.value.activeOffer.rentalPrice?.currencyCode, 'KWD');
+    assert.equal(result.value.activeOffer.rentalPrice?.amount, 500);
+    assert.equal(result.value.activeOffer.rentalPeriodId, 'monthly');
   }
+});
+
+test('Rental price cadence displays monthly bilingually and preserves recorded legacy cadence', () => {
+  const labels: Record<string, string> = {
+    'price.cadence.monthly': 'per month',
+    'price.cadence.recorded_yearly': 'recorded cadence: yearly',
+    'price.cadence.recorded': 'recorded cadence',
+    'price.cadence.missing': 'cadence not recorded',
+  };
+  const translate = (key: string) => labels[key] ?? key;
+  const translateArabic = (key: string) => key === 'price.cadence.monthly' ? 'شهرياً' : labels[key] ?? key;
+  assert.equal(MARKET_CONFIG.defaultRentalPeriodId, 'monthly');
+  assert.equal(formatRentalPrice(500, 'KWD', 'monthly', 'en', translate), '500 KWD per month');
+  assert.equal(formatRentalPrice(500, 'KWD', 'monthly', 'ar', translateArabic), '500 د.ك شهرياً');
+  assert.equal(
+    formatRentalPrice(500, 'KWD', 'yearly', 'en', translate),
+    '500 KWD recorded cadence: yearly',
+  );
+  assert.equal(
+    formatRentalPrice(500, 'KWD', 'quarterly', 'en', translate),
+    '500 KWD recorded cadence: quarterly',
+  );
+  assert.equal(
+    formatRentalPrice(500, 'KWD', undefined, 'en', translate),
+    '500 KWD cadence not recorded',
+  );
 });
 
 test('Approved Kuwait dataset contains 6 governorates and 96 valid areas', () => {
@@ -1036,8 +1065,24 @@ test('Task 6 executable candidate simulation: unchanged type preserves exact ide
   assert.deepEqual((pricePatched.activeOffer.salePrice as any).priceMetadata, { source: 'literal' });
 });
 
-test('Task 6 executable validation simulation: Sale to Rent is out of four-field scope even with caller-injected period', () => {
+test('Task 6 executable validation simulation: explicit Sale to Rent uses the monthly market default', () => {
   const sale = recoveryProperty;
+  const rent = buildPropertyUpdateCandidate(sale, {
+    propertyType: 'apartment',
+    transaction: 'rent',
+    priceAmount: 500,
+    locationAreaId: 'salmiya',
+    rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId,
+  });
+  assert.equal(rent.core.id, sale.core.id);
+  assert.equal(rent.activeOffer.id, sale.activeOffer.id);
+  assert.equal(rent.activeOffer.propertyCoreId, sale.core.id);
+  assert.equal(rent.activeOffer.transaction, 'rent');
+  if (rent.activeOffer.transaction === 'rent') {
+    assert.equal(rent.activeOffer.rentalPrice.amount, 500);
+    assert.equal(rent.activeOffer.rentalPeriodId, 'monthly');
+    assert.equal('salePrice' in rent.activeOffer, false);
+  }
   assert.throws(() => buildPropertyUpdateCandidate(sale, {
     propertyType: 'apartment',
     transaction: 'rent',
@@ -1080,6 +1125,52 @@ test('Task 6 executable validation simulation: original Rent may switch to Sale 
     assert.equal(rentAgain.activeOffer.rentalPeriodId, 'monthly');
     assert.equal(rentAgain.activeOffer.rentalPrice.amount, 650);
   }
+});
+
+test('Task 6 executable validation simulation: legacy rental cadence is retained and never defaulted or converted', () => {
+  const makeRent = (rentalPeriodId: string) => ({
+    core: { id: `legacy-${rentalPeriodId}`, propertyType: 'villa', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: `legacy-${rentalPeriodId}-offer`,
+      propertyCoreId: `legacy-${rentalPeriodId}`,
+      transaction: 'rent' as const,
+      rentalPrice: { amount: 500, currencyCode: 'KWD' },
+      rentalPeriodId,
+    },
+  }) satisfies Property;
+  for (const recordedPeriod of ['yearly', 'quarterly']) {
+    const baseline = makeRent(recordedPeriod);
+    const draft = createEditDraft(baseline);
+    assert.equal(draft.choices.rentalPeriodId, recordedPeriod);
+    const candidate = buildPropertyUpdateCandidate(baseline, {
+      ...draft.choices,
+      priceAmount: 550,
+      locationAreaId: 'qibla',
+    });
+    assert.equal(candidate.activeOffer.transaction, 'rent');
+    if (candidate.activeOffer.transaction === 'rent') {
+      assert.equal(candidate.activeOffer.rentalPeriodId, recordedPeriod);
+      assert.equal(candidate.activeOffer.rentalPrice.amount, 550);
+    }
+  }
+
+  const missingPeriod = {
+    core: { id: 'legacy-missing', propertyType: 'villa', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'legacy-missing-offer',
+      propertyCoreId: 'legacy-missing',
+      transaction: 'rent',
+      rentalPrice: { amount: 500, currencyCode: 'KWD' },
+    },
+  } as unknown as Property;
+  const before = JSON.stringify(missingPeriod);
+  const draft = createEditDraft(missingPeriod);
+  assert.equal(draft.choices.rentalPeriodId, undefined);
+  assert.throws(() => buildPropertyUpdateCandidate(missingPeriod, {
+    ...draft.choices,
+    priceAmount: 550,
+  }), /MISSING_RENTAL_PERIOD/);
+  assert.equal(JSON.stringify(missingPeriod), before);
 });
 
 test('Task 6 executable validation simulation: enrichment mismatch, invalid price and unapproved area fail closed', () => {
@@ -1349,12 +1440,15 @@ test('Task 6 executable recovery simulation: unreadable and unresolved operation
   assert.deepEqual(await loadPropertyUpdateOperation(storage), operation);
 });
 
-test('Task 6 static/source assertions: detail, missing handling, accessibility, back/discard and localized RTL-safe editing are wired', async () => {
+test('Task 6 static/source assertions: detail, monthly cadence, accessibility, back/discard and localized RTL-safe editing are wired', async () => {
   const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
-  const [detail, home, i18n] = await Promise.all([
+  const [detail, home, i18n, market, price, summary] = await Promise.all([
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../app/(tabs)/index.tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+    readFile(sourcePath('../constants/market.ts'), 'utf8'),
+    readFile(sourcePath('../app/capture/price.tsx'), 'utf8'),
+    readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
   ]);
   assert.match(home, /property-card-\$\{item\.core\.id\}/);
   assert.match(home, /accessibilityRole="button"/);
@@ -1370,15 +1464,25 @@ test('Task 6 static/source assertions: detail, missing handling, accessibility, 
   assert.match(detail, /testID="property-edit-keep-draft-exit"/);
   assert.match(detail, /testID="property-edit-discard"/);
   assert.doesNotMatch(detail, /Alert\.alert\(t\('edit\.leave_title'/);
-  assert.doesNotMatch(detail, /'yearly'/);
-  assert.match(detail, /edit\.transaction_scope/);
+  assert.doesNotMatch(detail, /rentalPeriodId:\s*'yearly'/);
+  assert.match(detail, /MARKET_CONFIG\.defaultRentalPeriodId/);
+  assert.match(detail, /formatRentalPrice/);
+  assert.match(home, /formatRentalPrice/);
+  assert.match(summary, /formatRentalPrice/);
+  assert.match(price, /rentalPeriodId: MARKET_CONFIG\.defaultRentalPeriodId/);
+  assert.match(price, /draft\.rentalPrice === undefined && draft\.rentalPeriodId === undefined/);
+  assert.match(price, /if \(!draft\.rentalPeriodId\) return/);
+  assert.match(market, /defaultRentalPeriodId: 'monthly'/);
   assert.match(detail, /capture\.keep_editing/);
   assert.match(detail, /discardPropertyEditDraft/);
   assert.match(detail, /searchAreas\(areaSearch\)/);
   assert.match(detail, /isRTL \? 'right' : 'left'/);
   assert.match(i18n, /'edit\.not_found': 'This property could not be found/);
   assert.match(i18n, /'edit\.not_found': 'تعذر العثور/);
-  assert.match(i18n, /'edit\.transaction_scope': 'Changing a Sale to Rent/);
+  assert.match(i18n, /'price\.cadence\.monthly': 'per month'/);
+  assert.match(i18n, /'price\.cadence\.monthly': 'شهرياً'/);
+  assert.match(i18n, /'edit\.rental_period_missing': 'This rental record has no stored cadence/);
+  assert.match(detail, /message\.includes\('MISSING_RENTAL_PERIOD'\) \? t\('edit\.rental_period_missing'\)/);
   assert.match(i18n, /'edit\.retry_update': 'إعادة محاولة تحديث العقار'/);
 });
 

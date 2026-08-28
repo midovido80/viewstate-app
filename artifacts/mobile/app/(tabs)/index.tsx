@@ -9,7 +9,7 @@ import { Property } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { Button } from '@/components/Button';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatPrice } from '@/constants/market';
+import { formatPrice, formatRentalPrice } from '@/constants/market';
 
 export default function TabOneScreen() {
   const router = useRouter();
@@ -71,7 +71,17 @@ export default function TabOneScreen() {
 
         <View style={styles.cardBody}>
           <Text style={[styles.price, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {price ? formatPrice(price.amount, price.currencyCode, language) : ''}
+            {price
+              ? item.activeOffer.transaction === 'rent'
+                ? formatRentalPrice(
+                    price.amount,
+                    price.currencyCode,
+                    item.activeOffer.rentalPeriodId,
+                    language,
+                    t,
+                  )
+                : formatPrice(price.amount, price.currencyCode, language)
+              : ''}
           </Text>
           <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
             {areaName}

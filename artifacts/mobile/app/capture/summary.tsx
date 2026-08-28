@@ -8,7 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
 import { getAreaById } from '@/constants/kuwait-areas';
-import { formatPrice } from '@/constants/market';
+import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { SingleFlight } from '@/services/serialTaskQueue';
 
 export default function SummaryScreen() {
@@ -118,7 +118,13 @@ export default function SummaryScreen() {
           {draft.transaction === 'rent' && draft.rentalPrice && (
             <SummaryRow 
               label={t('price.rent.title')} 
-              value={formatPrice(draft.rentalPrice.amount, draft.rentalPrice.currencyCode, language)}
+              value={formatRentalPrice(
+                draft.rentalPrice.amount,
+                draft.rentalPrice.currencyCode,
+                draft.rentalPeriodId,
+                language,
+                t,
+              )}
             />
           )}
 
