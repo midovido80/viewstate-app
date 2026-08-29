@@ -1,5 +1,5 @@
 import { View, StyleSheet, Text, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -11,6 +11,7 @@ import { PROPERTY_TYPES } from '@workspace/property-domain';
 
 export default function PropertyTypeScreen() {
   const router = useRouter();
+  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
@@ -18,7 +19,7 @@ export default function PropertyTypeScreen() {
 
   const handleNext = () => {
     if (draft.propertyType) {
-      router.push('/capture/price' as any);
+      router.push({ pathname: '/capture/price', params: linkPersonId ? { linkPersonId } : {} } as never);
     }
   };
 

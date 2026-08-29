@@ -5,6 +5,7 @@ import type {
   PriceValue,
   PrivacyClassification,
   PrivacyMetadata,
+  PropertyAdditiveMetadata,
   Property,
   PropertyCore,
   RentOffer,
@@ -90,6 +91,7 @@ export function createProperty(
   core: PropertyCore,
   activeOffer: Offer,
   typeDetails?: TypeDetails,
+  additiveMetadata: PropertyAdditiveMetadata = {},
 ): ValidationResult<Property> {
   if (typeDetails !== undefined && typeDetails.propertyType !== core.propertyType) {
     return invalid([
@@ -105,5 +107,6 @@ export function createProperty(
     core,
     activeOffer,
     ...(typeDetails === undefined ? {} : { typeDetails }),
+    ...additiveMetadata,
   });
 }

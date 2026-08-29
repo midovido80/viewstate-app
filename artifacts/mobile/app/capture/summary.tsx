@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -10,9 +10,11 @@ import { Button } from '@/components/Button';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { SingleFlight } from '@/services/serialTaskQueue';
+import { store } from '@/services/persistence';
 
 export default function SummaryScreen() {
   const router = useRouter();
+  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -73,7 +75,19 @@ export default function SummaryScreen() {
           return;
         }
 
-        router.replace('/capture/success' as never);
+        const savedId = projection && projection.ok ? projection.property.core.id : draft.propertyCoreId;
+        if (linkPersonId && savedId) {
+          try {
+            await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: savedId });
+          } catch {
+            Alert.alert(t('people.link_failed'), t('people.link_failed_message'));
+            return;
+          }
+        }
+        router.replace({
+          pathname: '/capture/success',
+          params: savedId ? { propertyCoreId: savedId, ...(linkPersonId ? { linkPersonId } : {}) } : {},
+        } as never);
       } finally {
         setSubmitting(false);
       }

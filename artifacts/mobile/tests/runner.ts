@@ -2,7 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-import { projectDraftToProperty, PropertyDraft, Property } from '@workspace/property-domain';
+import {
+  buildPropertySharePreview,
+  createLiteralText,
+  createPrivacyMetadata,
+  createPropertyShareSelection,
+  FURNISHING_VALUES,
+  projectDraftToProperty,
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
+  PROPERTY_TYPES,
+  PropertyDraft,
+  Property,
+  validateProperty,
+  validateTypeDetails,
+} from '@workspace/property-domain';
 import appConfig from '../app.json';
 import {
   parseStoredJson,
@@ -65,6 +78,172 @@ import {
   propertyEditDraftKey,
   savePropertyEditDraft,
 } from '../services/propertyUpdateRecovery.ts';
+import {
+  PERSON_CLASSIFICATIONS,
+  createPerson,
+  normalizePersonPhone,
+  personMatchesSearch,
+} from '../services/people.ts';
+import {
+  persistAttachmentsThenDeleteRemoved,
+  reorderAttachments,
+  setAttachmentCover,
+  type AttachmentFileStore,
+  type LocalAttachment,
+} from '../services/attachmentOperations.ts';
+import { requestInjectedCoordinates } from '../services/coordinateRequest.ts';
+import { executePropertySharePreview } from '../services/propertyShareExecution.ts';
+import { optionalClassifiedLiteral } from '../services/literalText.ts';
+
+const sharedSourcePath = (relativePath: string) =>
+  decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+
+test('Bounded People model preserves literal fields and normalized phone search', () => {
+  assert.deepEqual(PERSON_CLASSIFICATIONS, [
+    'seeker',
+    'owner',
+    'broker',
+    'real_estate_company',
+    'building_guard',
+  ]);
+  const person = createPerson({
+    id: 'person-stable-1',
+    name: '  أحمد الوسيط  ',
+    displayPhone: '+٩٦٥ 5000-1234',
+    notes: '  keep this literally\nas entered  ',
+    classifications: ['broker', 'owner'],
+  });
+  assert.equal(person.id, 'person-stable-1');
+  assert.equal(person.name, '  أحمد الوسيط  ');
+  assert.equal(person.displayPhone, '+٩٦٥ 5000-1234');
+  assert.equal(person.normalizedPhone, '+96550001234');
+  assert.equal(person.notes, '  keep this literally\nas entered  ');
+  assert.equal(normalizePersonPhone('٥٠٠٠ ١٢٣٤'), '50001234');
+  assert.equal(personMatchesSearch(person, 'أحمد'), true);
+  assert.equal(personMatchesSearch(person, '50001234'), true);
+  assert.throws(() => createPerson({
+    id: 'invalid',
+    name: '',
+    displayPhone: '5000',
+    classifications: ['seeker'],
+  }), /PERSON_NAME_REQUIRED/);
+});
+
+test('People source exposes selected contact import, actions, links, and confirmations', async () => {
+  const sourcePath = (relativePath: string) =>
+    decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [form, detail, persistence, translations] = await Promise.all([
+    readFile(sourcePath('../app/person/new.tsx'), 'utf8'),
+    readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
+    readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+  ]);
+  assert.match(form, /requestPermissionsAsync/);
+  assert.match(form, /getContactsAsync/);
+  assert.match(form, /contact-choice-/);
+  assert.match(detail, /person-call/);
+  assert.match(detail, /person-whatsapp/);
+  assert.match(detail, /person-remove-dialog/);
+  assert.match(detail, /unlinkPersonFromProperty/);
+  assert.match(detail, /linkPersonToProperty/);
+  assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
+  assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
+  assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
+});
+
+test('Synthetic enrichment route preserves the bounded post-save entry points', async () => {
+  const sourcePath = (relativePath: string) =>
+    decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [successSource, enrichmentSource, fieldSource] = await Promise.all([
+    readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
+    readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+    readFile(sourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+  ]);
+  assert.match(successSource, /btn-add-details-now/);
+  assert.match(successSource, /summary\.done/);
+  assert.match(enrichmentSource, /persistAttachmentsThenDeleteRemoved/);
+  assert.match(enrichmentSource, /requestCurrentCoordinates/);
+  assert.match(enrichmentSource, /enrich-other-required|OTHER_CLARIFICATION_REQUIRED/);
+  assert.match(fieldSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS/);
+  assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
+  assert.match(fieldSource, /FURNISHING_VALUES/);
+  assert.match(fieldSource, /enrich\.furnishing\./);
+  assert.match(fieldSource, /hasMaidRoom.*hasPool.*hasWaterfront.*hasColdStorage/);
+  assert.doesNotMatch(fieldSource, /\bconstructionYear\b|\broomCount\b/);
+});
+
+test('Synthetic enrichment recovery and detail/share routes are wired fail-closed', async () => {
+  const [recovery, detail, share] = await Promise.all([
+    readFile(sharedSourcePath('../services/propertyEnrichmentRecovery.ts'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId]/share.tsx'), 'utf8'),
+  ]);
+  assert.match(recovery, /writeGeneration/);
+  assert.match(recovery, /clearConfirmedPropertyEnrichmentDraft/);
+  assert.match(detail, /property-enrich-action/);
+  assert.match(detail, /property-share-action/);
+  assert.match(share, /createPropertyShareSelection/);
+  assert.match(share, /buildPropertySharePreview/);
+  assert.match(share, /Private notes can never be shared|share\.sensitive_off/);
+});
+
+test('Synthetic enrichment autosave and reviewed package contract remain deterministic', async () => {
+  const [enrich, recovery, packageSource, share] = await Promise.all([
+    readFile(sharedSourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../services/propertyEnrichmentRecovery.ts'), 'utf8'),
+    readFile(sharedSourcePath('../services/propertySharePackage.ts'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId]/share.tsx'), 'utf8'),
+  ]);
+  assert.match(enrich, /setTimeout/);
+  assert.match(enrich, /AppState\.addEventListener/);
+  assert.match(enrich, /flushPropertyEnrichmentDraftWrites/);
+  assert.match(recovery, /existing\.writeGeneration >= draft\.writeGeneration/);
+  assert.match(packageSource, /property-preview\.txt/);
+  assert.match(packageSource, /await input\.shareZip\(output\.uri\)/);
+  assert.match(packageSource, /finally[\s\S]*await output\.delete/);
+  assert.match(share, /share-preview-attachments/);
+  assert.doesNotMatch(share, /for \(const file of files\)/);
+});
+
+test('BASIC Other remains valid through synthetic autosave restart without clarification', () => {
+  const projected = projectDraftToProperty({
+    propertyCoreId: 'property-basic-other',
+    offerId: 'offer-basic-other',
+    propertyType: 'other_built_property',
+    locationAreaId: KUWAIT_AREAS[0].id,
+    transaction: 'sale',
+    salePrice: { amount: 1, currencyCode: 'KWD' },
+  });
+  assert.equal(projected.ok, true);
+  if (!projected.ok) return;
+  assert.equal(projected.value.typeDetails, undefined);
+
+  const restarted = JSON.parse(JSON.stringify(projected.value)) as Property;
+  assert.equal(restarted.typeDetails, undefined);
+  assert.equal(validateProperty(restarted).ok, true);
+});
+
+test('Property enrichment preserves governed literal whitespace exactly', () => {
+  const values = [
+    '  Description line 1\nالوصف  ',
+    '\tPrivate notes\n  ',
+    '  PACI-123  ',
+    '  Block 4, Street 2  ',
+    '  https://maps.google.com/?q=29.3,48.0  ',
+  ];
+  const privacy = [
+    { classification: 'normal', disclosurePolicy: 'normal' },
+    { classification: 'private_notes', disclosurePolicy: 'never' },
+    { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+    { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+    { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+  ] as const;
+
+  values.forEach((value, index) => {
+    assert.equal(optionalClassifiedLiteral(value, privacy[index])?.value, value);
+  });
+  assert.equal(optionalClassifiedLiteral(' \n\t ', privacy[0]), undefined);
+});
 
 class RecoveryMemoryStorage {
   values = new Map<string, string>();
@@ -1729,4 +1908,265 @@ test('Task 6 static/source assertions: native atomic CAS/shared queue and web ex
   assert.match(persistence, /INSERT INTO properties \(id, data, search_text\)/);
   assert.match(persistence, /PROPERTY_ID_ALREADY_EXISTS/);
   assert.doesNotMatch(persistence, /INSERT OR REPLACE INTO properties/);
+});
+
+test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, and sale/rent compatibility', () => {
+  assert.equal(PROPERTY_TYPES.length, 11);
+  const exactFields = {
+    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount'],
+    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool'],
+    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool'],
+    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool', 'hasWaterfront'],
+    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', 'hasMaidRoom'],
+    floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
+    office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity'],
+    shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
+    whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount'],
+    commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount'],
+    warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage'],
+    other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification'],
+  } as const;
+  const fieldsFor = (propertyType: Property['core']['propertyType'], floorUse?: 'residential' | 'commercial') =>
+    PROPERTY_DETAIL_FIELD_DEFINITIONS
+      .filter(definition => definition.appliesTo.includes(propertyType)
+        && (propertyType !== 'floor' || !definition.floorUses || definition.floorUses.includes(floorUse!)))
+      .map(definition => definition.field)
+      .sort();
+  for (const propertyType of PROPERTY_TYPES.filter(type => type !== 'floor')) {
+    assert.deepEqual(fieldsFor(propertyType), [...(exactFields as Record<string, readonly string[]>)[propertyType]].sort(), `${propertyType} exact field set`);
+  }
+  assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential].sort());
+  assert.deepEqual(fieldsFor('floor', 'commercial'), [...exactFields.floor_commercial].sort());
+  assert.deepEqual(FURNISHING_VALUES, ['unfurnished', 'semi_furnished', 'furnished']);
+  assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('constructionYear' as never)), false);
+  assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('roomCount' as never)), false);
+
+  const normal = (value: string) => createLiteralText(value, createPrivacyMetadata('normal', 'normal'));
+  const enrichedByType: Record<string, Property['typeDetails']> = {
+    apartment: { propertyType: 'apartment', builtUpAreaSquareMeters: 90, apartmentSubtype: 'duplex', bedroomCount: 3, bathroomCount: 2, livingRoomCount: 1, floorNumber: 4, furnishing: 'semi_furnished', hasMaidRoom: true, parkingSpaceCount: 2 },
+    house: { propertyType: 'house', plotAreaSquareMeters: 400, builtUpAreaSquareMeters: 300, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorCount: 2, furnishing: 'unfurnished', hasMaidRoom: true, parkingSpaceCount: 3, hasPool: false },
+    villa: { propertyType: 'villa', plotAreaSquareMeters: 500, builtUpAreaSquareMeters: 350, bedroomCount: 5, bathroomCount: 4, livingRoomCount: 2, floorCount: 3, furnishing: 'furnished', hasMaidRoom: true, parkingSpaceCount: 4, hasPool: true },
+    chalet: { propertyType: 'chalet', plotAreaSquareMeters: 600, builtUpAreaSquareMeters: 250, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorCount: 2, furnishing: 'furnished', hasMaidRoom: false, parkingSpaceCount: 4, hasPool: true, hasWaterfront: true },
+    floor: { propertyType: 'floor', floorUse: 'residential', builtUpAreaSquareMeters: 300, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorNumber: 5, furnishing: 'semi_furnished', hasMaidRoom: false, parkingSpaceCount: 2 },
+    office: { propertyType: 'office', builtUpAreaSquareMeters: 120, floorNumber: 8, bathroomCount: 2, intendedUse: normal('  HQ Mixed-Case  '), commercialActivity: normal('Consulting & Design'), parkingSpaceCount: 3 },
+    shop: { propertyType: 'shop', builtUpAreaSquareMeters: 80, floorNumber: 0, bathroomCount: 1, intendedUse: normal('Retail'), commercialActivity: normal('Coffee & Gifts'), parkingSpaceCount: 1, frontageWidthMeters: 8, ceilingHeightMeters: 4 },
+    whole_building: { propertyType: 'whole_building', plotAreaSquareMeters: 800, builtUpAreaSquareMeters: 1500, floorCount: 5, unitCount: 20, apartmentCount: 12, shopCount: 4, officeCount: 4, elevatorCount: 2, parkingSpaceCount: 20 },
+    commercial_complex: { propertyType: 'commercial_complex', plotAreaSquareMeters: 2000, builtUpAreaSquareMeters: 3500, floorCount: 4, unitCount: 30, apartmentCount: 0, shopCount: 20, officeCount: 10, elevatorCount: 4, parkingSpaceCount: 60 },
+    warehouse: { propertyType: 'warehouse', plotAreaSquareMeters: 1500, builtUpAreaSquareMeters: 1200, bathroomCount: 2, intendedUse: normal('Distribution'), commercialActivity: normal('Food logistics'), parkingSpaceCount: 8, ceilingHeightMeters: 9, loadingBayCount: 4, hasColdStorage: true },
+    other_built_property: { propertyType: 'other_built_property', clarification: normal('  Special mixed-use shell  '), plotAreaSquareMeters: 700, builtUpAreaSquareMeters: 450, parkingSpaceCount: 5 },
+  };
+  for (const propertyType of PROPERTY_TYPES) {
+    for (const transaction of ['sale', 'rent'] as const) {
+      const id = `dec044-${propertyType}-${transaction}`;
+      const basic = projectDraftToProperty({
+        propertyCoreId: `${id}-core`,
+        offerId: `${id}-offer`,
+        propertyType,
+        locationAreaId: 'salmiya',
+        transaction,
+        ...(transaction === 'sale'
+          ? { salePrice: { amount: 101, currencyCode: 'KWD' } }
+          : { rentalPrice: { amount: 101, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' }),
+      });
+      assert.equal(basic.ok, true, `${id} BASIC projection must finalize`);
+      if (!basic.ok) continue;
+      assert.equal(basic.value.typeDetails, undefined, `${id} empty enrichment must omit typeDetails`);
+      const enriched = { ...basic.value, typeDetails: enrichedByType[propertyType] } as Property;
+      assert.equal(validateProperty(enriched).ok, true, `${id} optional enrichment must validate`);
+    }
+  }
+
+  const commercial = {
+    propertyType: 'floor' as const,
+    floorUse: 'commercial' as const,
+    builtUpAreaSquareMeters: 250,
+    bathroomCount: 2,
+    floorNumber: 3,
+    intendedUse: normal('Offices and retail'),
+    commercialActivity: normal('Professional services'),
+    parkingSpaceCount: 5,
+    frontageWidthMeters: 15,
+    ceilingHeightMeters: 4,
+  };
+  assert.ok(validateTypeDetails(commercial, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok);
+  assert.equal(validateTypeDetails({ ...commercial, bedroomCount: 1 } as never, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'floor', builtUpAreaSquareMeters: 10 } as never, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'apartment', builtUpAreaSquareMeters: 0 } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'shop', frontageWidthMeters: Number.POSITIVE_INFINITY } as never, { id: 's', propertyType: 'shop', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'apartment', bedroomCount: 1.5 } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'apartment', bedroomCount: 10_000_000 } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, true);
+  assert.equal(validateTypeDetails({ propertyType: 'apartment', furnishing: 'partly' } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'apartment', hasMaidRoom: 'yes' } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'whole_building', unitCount: 2, apartmentCount: 1, shopCount: 1, officeCount: 1 }, { id: 'b', propertyType: 'whole_building', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'other_built_property', builtUpAreaSquareMeters: 10 } as never, { id: 'o', propertyType: 'other_built_property', locationArea: { id: 'x' } }).ok, false);
+  assert.equal((enrichedByType.office as { intendedUse: { value: string } }).intendedUse.value, '  HQ Mixed-Case  ');
+});
+
+test('V001 synthetic persistence restart preserves enriched edits and safe deletion contract', async () => {
+  const initial = projectDraftToProperty({
+    propertyCoreId: 'v001-restart-core', offerId: 'v001-restart-offer',
+    propertyType: 'apartment', locationAreaId: 'salmiya', transaction: 'sale',
+    salePrice: { amount: 222, currencyCode: 'KWD' },
+  });
+  assert.ok(initial.ok);
+  if (!initial.ok) return;
+  const edited: Property = {
+    ...initial.value,
+    core: {
+      ...initial.value.core,
+      privateNotes: createLiteralText('internal only', createPrivacyMetadata('private_notes', 'never')),
+    },
+    typeDetails: { propertyType: 'apartment', apartmentSubtype: 'duplex', bedroomCount: 3 },
+  };
+  const restartPayload = JSON.stringify([edited]);
+  const restarted = JSON.parse(restartPayload) as Property[];
+  assert.deepEqual(restarted, [edited]);
+  assert.ok(validateProperty(restarted[0]).ok);
+  const store = new SyntheticPropertyStore(restarted);
+  assert.deepEqual(await deleteSavedProperty({
+    expected: restarted[0], store, evidenceStorage: new RecoveryMemoryStorage(),
+  }), { status: 'deleted', count: 1 });
+  assert.equal((await store.getProperty('v001-restart-core')), null);
+  assert.equal(store.canPermanentlyDelete(), true);
+});
+
+test('V001 injected adapters preserve attachment metadata sequencing and nonblocking optional location', async () => {
+  const events: string[] = [];
+  const fileStore: AttachmentFileStore = {
+    copyToProperty: async () => { throw new Error('not used by this synthetic test'); },
+    delete: async uri => { events.push(`delete:${uri}`); },
+  };
+  const previous: LocalAttachment[] = [
+    { id: 'v001-image-a', kind: 'image', originalName: 'a.jpg', mimeType: 'image/jpeg', uri: 'mem://a', order: 0 },
+    { id: 'v001-video-b', kind: 'video', originalName: 'b.mp4', mimeType: 'video/mp4', uri: 'mem://b', order: 1 },
+    { id: 'v001-pdf-c', kind: 'pdf', originalName: 'c.pdf', mimeType: 'application/pdf', uri: 'mem://c', order: 2 },
+  ];
+  const ordered = reorderAttachments(previous, ['v001-video-b', 'v001-image-a', 'v001-pdf-c']);
+  const covered = setAttachmentCover(ordered, 'v001-image-a');
+  assert.deepEqual(covered.map(item => [item.id, item.order, item.isCover ?? false]), [
+    ['v001-video-b', 0, false], ['v001-image-a', 1, true], ['v001-pdf-c', 2, false],
+  ]);
+  await persistAttachmentsThenDeleteRemoved(covered, covered.slice(0, 2), async next => {
+    events.push(`persist:${next.map(item => item.id).join(',')}`);
+  }, fileStore);
+  assert.deepEqual(events, ['persist:v001-video-b,v001-image-a', 'delete:mem://c']);
+
+  const coordinates = await requestInjectedCoordinates({
+    requestForegroundPermissionsAsync: async () => ({ granted: true }),
+    getCurrentPositionAsync: async () => ({ coords: { latitude: 29.3, longitude: 47.9, accuracy: 6 } }),
+  }, 'ios');
+  assert.deepEqual(coordinates, { latitude: 29.3, longitude: 47.9, accuracy: 6 });
+  await assert.rejects(() => requestInjectedCoordinates({
+    requestForegroundPermissionsAsync: async () => ({ granted: false }),
+    getCurrentPositionAsync: async () => { throw new Error('must not request'); },
+  }, 'ios'), /FOREGROUND_LOCATION_PERMISSION_DENIED/);
+  assert.ok(projectDraftToProperty({
+    propertyCoreId: 'v001-no-location-core', offerId: 'v001-no-location-offer',
+    propertyType: 'shop', locationAreaId: 'salmiya', transaction: 'sale',
+    salePrice: { amount: 1, currencyCode: 'KWD' },
+  }).ok, 'location enrichment failure cannot block BASIC finalization');
+});
+
+test('V001 People synthetic model has five classifications, independent links, search seams, and URL actions', async () => {
+  assert.equal(PERSON_CLASSIFICATIONS.length, 5);
+  const imported = createPerson({
+    id: 'v001-imported-person', name: 'Imported أحمد', displayPhone: '+965 5000 0001',
+    notes: 'imported contact', classifications: ['owner', 'broker'],
+  });
+  const manual = createPerson({
+    id: 'v001-manual-person', name: 'Manual Agent', displayPhone: '5000 0002',
+    notes: 'manual note', classifications: ['seeker'],
+  });
+  const links = new Set<string>();
+  const link = (personId: string, propertyCoreId: string) => {
+    const key = `${personId}:${propertyCoreId}`;
+    if (links.has(key)) throw new Error('DUPLICATE_LINK');
+    links.add(key);
+  };
+  const unlink = (personId: string, propertyCoreId: string) => links.delete(`${personId}:${propertyCoreId}`);
+  link(imported.id, 'v001-property-a');
+  link(manual.id, 'v001-property-a');
+  link(imported.id, 'v001-property-b');
+  assert.throws(() => link(imported.id, 'v001-property-a'), /DUPLICATE_LINK/);
+  assert.equal(unlink(imported.id, 'v001-property-a'), true);
+  assert.deepEqual([...links].sort(), [
+    'v001-imported-person:v001-property-b', 'v001-manual-person:v001-property-a',
+  ]);
+  const propertySearch = (personId: string, query: string) => {
+    const linkedPropertyIds = [...links]
+      .filter(linkKey => linkKey.startsWith(`${personId}:`))
+      .map(linkKey => linkKey.split(':')[1]);
+    return linkedPropertyIds.filter(propertyId => propertyId.includes(query));
+  };
+  assert.deepEqual(propertySearch(imported.id, 'property-b'), ['v001-property-b']);
+  assert.deepEqual(propertySearch(manual.id, 'property-b'), []);
+  assert.ok(personMatchesSearch(imported, '50000001'));
+  assert.ok([imported, manual].filter(person => personMatchesSearch(person, 'manual')).includes(manual));
+  const callUrl = `tel:${imported.normalizedPhone}`;
+  const whatsappUrl = `https://wa.me/${imported.normalizedPhone.replace(/\D/g, '')}`;
+  assert.equal(callUrl, 'tel:+96550000001');
+  assert.equal(whatsappUrl, 'https://wa.me/96550000001');
+});
+
+test('V001 selective sharing defaults exclude private notes and injected sharing preserves selected files', async () => {
+  const property: Property = {
+    core: {
+      id: 'v001-share-core', propertyType: 'apartment', locationArea: { id: 'salmiya' },
+      description: createLiteralText('Arabic وصف / English description', createPrivacyMetadata('normal', 'normal')),
+      privateNotes: createLiteralText('never share', createPrivacyMetadata('private_notes', 'never')),
+      ownerSource: createLiteralText('synthetic owner', createPrivacyMetadata('owner_source', 'explicit_per_share')),
+      exactLocation: createLiteralText('synthetic exact', createPrivacyMetadata('exact_location', 'explicit_per_share')),
+    },
+    activeOffer: { id: 'v001-share-offer', propertyCoreId: 'v001-share-core', transaction: 'sale', salePrice: { amount: 9, currencyCode: 'KWD' } },
+    typeDetails: { propertyType: 'apartment', builtUpAreaSquareMeters: 88, furnishing: 'semi_furnished', hasMaidRoom: false },
+  };
+  const defaults = createPropertyShareSelection(property);
+  assert.equal(defaults.attachmentIds.length, 0);
+  assert.equal(defaults.discloseOwnerSource, false);
+  assert.equal(defaults.normalFields.includes('description'), true);
+  assert.equal(defaults.normalFields.includes('type_details'), true);
+  const preview = buildPropertySharePreview({
+    property,
+    selection: { ...defaults, attachmentIds: ['v001-share-image'], discloseOwnerSource: true, discloseExactLocation: true },
+    availableAttachments: [{ id: 'v001-share-image', propertyCoreId: property.core.id }],
+    labels: { propertyType: 'نوع العقار / Property type', ownerSource: 'المصدر / Source', exactLocation: 'الموقع / Location' },
+    detailLabels: { builtUpAreaSquareMeters: 'مساحة البناء', furnishing: 'التأثيث', hasMaidRoom: 'غرفة خادمة' },
+    detailValueLabels: { semi_furnished: 'نصف مؤثث', false: 'لا' },
+  });
+  assert.match(preview.text, /نوع العقار/);
+  assert.match(preview.text, /synthetic owner/);
+  assert.match(preview.text, /synthetic exact/);
+  assert.match(preview.text, /مساحة البناء: 88/);
+  assert.match(preview.text, /التأثيث: نصف مؤثث/);
+  assert.match(preview.text, /غرفة خادمة: لا/);
+  assert.doesNotMatch(preview.text, /never share/);
+  const sent: string[] = [];
+  await executePropertySharePreview(preview, {
+    resolveSelectedLocalFiles: async ids => ids.map(attachmentId => ({
+      attachmentId, uri: `mem://${attachmentId}`, mimeType: 'image/jpeg', name: 'synthetic.jpg',
+    })),
+    shareSelectedLocalFiles: async input => { sent.push(`${input.text}|${input.files[0].attachmentId}`); },
+  }, async () => { throw new Error('text share should not run with selected files'); });
+  assert.equal(sent.length, 1);
+});
+
+test('V001 bilingual labels and source wiring remain explicit', async () => {
+  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [translations, personDetail, enrichment] = await Promise.all([
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+    readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
+    readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+  ]);
+  for (const classification of PERSON_CLASSIFICATIONS) {
+    assert.match(translations, new RegExp(`'people\\.classification\\.${classification}':`));
+  }
+  assert.match(translations, /'enrich\.private_notes': 'Private notes \(never shared\)'/);
+  assert.match(translations, /'enrich\.private_notes': 'ملاحظات خاصة/);
+  assert.match(translations, /'enrich\.furnishing\.unfurnished': 'غير مؤثث'/);
+  assert.match(translations, /'enrich\.furnishing\.semi_furnished': 'نصف مؤثث'/);
+  assert.match(translations, /'enrich\.furnishing\.furnished': 'مؤثث'/);
+  assert.match(personDetail, /tel:\$\{person\.normalizedPhone\}/);
+  assert.match(personDetail, /https:\/\/wa\.me\/\$\{person\.normalizedPhone\.replace/);
+  assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
+  assert.match(enrichment, /requestCurrentCoordinates/);
 });

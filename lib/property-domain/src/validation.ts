@@ -1,14 +1,19 @@
 import {
   isApartmentSubtype,
+  isFloorUse,
+  isFurnishing,
   isPropertyType,
   isTransaction,
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
 } from "./taxonomy.ts";
 import type {
   ClassifiedLiteralText,
+  LocationEnrichmentMetadata,
   Offer,
   PriceValue,
   PrivacyClassification,
   Property,
+  PropertyAttachmentMetadata,
   PropertyCore,
   ShareDisclosurePolicy,
   TypeDetails,
@@ -139,7 +144,22 @@ export function validateTypeDetails(
     issues.push(issue("invalid_apartment_subtype", ["typeDetails", "apartmentSubtype"], "Apartment subtype is not approved."));
   }
 
+  const candidate = details as TypeDetails & Record<string, unknown>;
+  if (candidate.furnishing !== undefined && !isFurnishing(candidate.furnishing)) {
+    issues.push(issue("invalid_furnishing", ["typeDetails", "furnishing"], "Furnishing must be unfurnished, semi_furnished, or furnished."));
+  }
+
+  if (details.propertyType === "floor") {
+    const enrichmentKeys = Object.keys(candidate).filter((key) => key !== "propertyType");
+    if (enrichmentKeys.length > 0 && !isFloorUse(candidate.floorUse)) {
+      issues.push(issue("invalid_floor_use", ["typeDetails", "floorUse"], "Enriched Floor details require Residential or Commercial use."));
+    }
+  }
+
   if (details.propertyType === "other_built_property") {
+    if (details.clarification === undefined) {
+      issues.push(issue("required", ["typeDetails", "clarification"], "Other Built Property details require a clarification."));
+    }
     issues.push(...validateClassifiedLiteralText(
       details.clarification,
       ["typeDetails", "clarification"],
@@ -148,7 +168,196 @@ export function validateTypeDetails(
     ));
   }
 
+  for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
+    const value = candidate[definition.field];
+    if (value === undefined) continue;
+
+    if (!(definition.appliesTo as readonly string[]).includes(details.propertyType)) {
+      issues.push(issue(
+        "incompatible_detail_field",
+        ["typeDetails", definition.field],
+        `${definition.field} is not compatible with ${details.propertyType}.`,
+      ));
+      continue;
+    }
+
+    if (
+      details.propertyType === "floor" &&
+      definition.floorUses !== undefined &&
+      (!isFloorUse(candidate.floorUse) ||
+        !(definition.floorUses as readonly string[]).includes(candidate.floorUse))
+    ) {
+      issues.push(issue(
+        "incompatible_detail_field",
+        ["typeDetails", definition.field],
+        `${definition.field} is not compatible with this Floor use.`,
+      ));
+    }
+  }
+
+  const positiveFields = [
+    "plotAreaSquareMeters",
+    "builtUpAreaSquareMeters",
+    "frontageWidthMeters",
+    "ceilingHeightMeters",
+  ] as const;
+  for (const field of positiveFields) {
+    const value = candidate[field];
+    if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be a positive finite number.`));
+    }
+  }
+
+  const countFields = [
+    "bathroomCount",
+    "parkingSpaceCount",
+    "floorCount",
+    "unitCount",
+    "apartmentCount",
+    "shopCount",
+    "officeCount",
+    "elevatorCount",
+    "bedroomCount",
+    "livingRoomCount",
+    "floorNumber",
+    "loadingBayCount",
+  ] as const;
+  for (const field of countFields) {
+    const value = candidate[field];
+    if (
+      value !== undefined &&
+      (typeof value !== "number" || !Number.isInteger(value) || value < 0)
+    ) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be a non-negative integer.`));
+    }
+  }
+
+  for (const field of ["hasMaidRoom", "hasPool", "hasWaterfront", "hasColdStorage"] as const) {
+    const value = candidate[field];
+    if (value !== undefined && typeof value !== "boolean") {
+      issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be boolean.`));
+    }
+  }
+
+  for (const field of ["intendedUse", "commercialActivity"] as const) {
+    if (candidate[field] !== undefined) {
+      issues.push(...validateClassifiedLiteralText(
+        candidate[field] as ClassifiedLiteralText,
+        ["typeDetails", field],
+        "normal",
+        "normal",
+      ));
+    }
+  }
+
+  if (
+    typeof candidate.unitCount === "number" &&
+    ["apartmentCount", "shopCount", "officeCount"].reduce(
+      (sum, field) => sum + (typeof candidate[field] === "number" ? candidate[field] as number : 0),
+      0,
+    ) > candidate.unitCount
+  ) {
+    issues.push(issue(
+      "invalid_physical_value",
+      ["typeDetails", "unitCount"],
+      "Known apartment, shop, and office counts cannot exceed unitCount.",
+    ));
+  }
+
   return issues.length === 0 ? valid(details) : invalid(issues);
+}
+
+export function validateLocationEnrichment(
+  enrichment: LocationEnrichmentMetadata,
+): ValidationResult<LocationEnrichmentMetadata> {
+  const issues: ValidationIssue[] = [
+    ...validateClassifiedLiteralText(enrichment.paciNumber, ["locationEnrichment", "paciNumber"], "exact_location", "explicit_per_share"),
+    ...validateClassifiedLiteralText(enrichment.manualLocationText, ["locationEnrichment", "manualLocationText"], "exact_location", "explicit_per_share"),
+    ...validateClassifiedLiteralText(enrichment.mapsLink, ["locationEnrichment", "mapsLink"], "exact_location", "explicit_per_share"),
+  ];
+
+  if (enrichment.coordinates !== undefined) {
+    const { latitude, longitude, privacy } = enrichment.coordinates;
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      issues.push(issue("invalid_coordinates", ["locationEnrichment", "coordinates"], "Coordinates must contain valid latitude and longitude."));
+    }
+    if (privacy.classification !== "exact_location") {
+      issues.push(issue("invalid_privacy_classification", ["locationEnrichment", "coordinates", "privacy", "classification"], "Coordinates require exact_location privacy classification."));
+    }
+    if (privacy.disclosurePolicy !== "explicit_per_share") {
+      issues.push(issue("invalid_disclosure_policy", ["locationEnrichment", "coordinates", "privacy", "disclosurePolicy"], "Coordinates require explicit_per_share disclosure."));
+    }
+  }
+
+  return issues.length === 0 ? valid(enrichment) : invalid(issues);
+}
+
+export function validatePropertyAttachments(
+  attachments: readonly PropertyAttachmentMetadata[],
+): ValidationResult<readonly PropertyAttachmentMetadata[]> {
+  const issues: ValidationIssue[] = [];
+  const ids = new Set<string>();
+  const orders = new Set<number>();
+  let coverCount = 0;
+
+  attachments.forEach((attachment, index) => {
+    const path = ["attachments", String(index)];
+    issues.push(...validateRequiredIdentifier(attachment.id, [...path, "id"]));
+    issues.push(...validateRequiredIdentifier(attachment.originalName, [...path, "originalName"]));
+    issues.push(...validateRequiredIdentifier(attachment.mimeType, [...path, "mimeType"]));
+    issues.push(...validateRequiredIdentifier(attachment.managedUri, [...path, "managedUri"]));
+
+    if (ids.has(attachment.id)) {
+      issues.push(issue("invalid_attachment", [...path, "id"], "Attachment identities must be unique."));
+    }
+    ids.add(attachment.id);
+
+    if (!["image", "video", "pdf"].includes(attachment.kind)) {
+      issues.push(issue("invalid_attachment", [...path, "kind"], "Attachment kind must be image, video, or pdf."));
+    }
+    if (!Number.isInteger(attachment.order) || attachment.order < 0) {
+      issues.push(issue("invalid_attachment", [...path, "order"], "Attachment order must be a non-negative integer."));
+    } else if (orders.has(attachment.order)) {
+      issues.push(issue("invalid_attachment", [...path, "order"], "Attachment order values must be unique."));
+    }
+    orders.add(attachment.order);
+    const hasCompatibleMimeType =
+      attachment.kind === "image"
+        ? attachment.mimeType.startsWith("image/")
+        : attachment.kind === "video"
+          ? attachment.mimeType.startsWith("video/")
+          : attachment.kind === "pdf"
+            ? attachment.mimeType === "application/pdf"
+            : false;
+    if (!hasCompatibleMimeType) {
+      issues.push(issue("invalid_attachment", [...path, "mimeType"], "MIME type must match the attachment kind."));
+    }
+    if (attachment.isCover === true) {
+      coverCount += 1;
+      if (attachment.kind !== "image") {
+        issues.push(issue("invalid_attachment", [...path, "isCover"], "Only an image may be the Property cover."));
+      }
+    }
+    if (attachment.privacy.classification !== "normal") {
+      issues.push(issue("invalid_privacy_classification", [...path, "privacy", "classification"], "Attachments require normal privacy classification."));
+    }
+    if (attachment.privacy.disclosurePolicy !== "normal") {
+      issues.push(issue("invalid_disclosure_policy", [...path, "privacy", "disclosurePolicy"], "Attachments require normal disclosure policy."));
+    }
+  });
+
+  if (coverCount > 1) {
+    issues.push(issue("invalid_attachment", ["attachments"], "At most one image may be the Property cover."));
+  }
+
+  return issues.length === 0 ? valid(attachments) : invalid(issues);
 }
 
 export function validateOffer(offer: Offer): ValidationResult<Offer> {
@@ -202,6 +411,16 @@ export function validateProperty(
   if (property.typeDetails !== undefined) {
     const detailsResult = validateTypeDetails(property.typeDetails, property.core);
     if (!detailsResult.ok) issues.push(...detailsResult.issues);
+  }
+
+  if (property.locationEnrichment !== undefined) {
+    const locationResult = validateLocationEnrichment(property.locationEnrichment);
+    if (!locationResult.ok) issues.push(...locationResult.issues);
+  }
+
+  if (property.attachments !== undefined) {
+    const attachmentResult = validatePropertyAttachments(property.attachments);
+    if (!attachmentResult.ok) issues.push(...attachmentResult.issues);
   }
 
   return issues.length === 0 ? valid(property) : invalid(issues);

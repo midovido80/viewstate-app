@@ -8,6 +8,7 @@ export default function CaptureLayout() {
       <Stack.Screen name="price" />
       <Stack.Screen name="location" />
       <Stack.Screen name="summary" />
+      <Stack.Screen name="success" />
     </Stack>
   );
 }

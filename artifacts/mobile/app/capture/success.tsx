@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
@@ -8,6 +8,7 @@ import { useI18n } from '@/contexts/I18nContext';
 
 export default function SuccessScreen() {
   const router = useRouter();
+  const { propertyCoreId, linkPersonId } = useLocalSearchParams<{ propertyCoreId?: string; linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
@@ -43,9 +44,18 @@ export default function SuccessScreen() {
         {t('summary.success_detail')}
       </Text>
       <View style={styles.spacer} />
+      {propertyCoreId ? (
+        <Button
+          title={t('summary.add_details')}
+          onPress={() => router.replace(`/property/${encodeURIComponent(propertyCoreId)}/enrich` as never)}
+          size="large"
+          testID="btn-add-details-now"
+        />
+      ) : null}
       <Button
-        title={t('summary.back_home')}
-        onPress={() => router.replace('/' as never)}
+        title={t('summary.done')}
+        onPress={() => router.replace(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` as never : '/' as never)}
+        variant={propertyCoreId ? 'outline' : undefined}
         size="large"
         testID="btn-back-home"
       />
