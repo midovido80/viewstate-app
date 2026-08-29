@@ -57,6 +57,34 @@ export function formatPropertyDetailValue(field: PropertyDetailField, value: unk
 
 const booleanFields = new Set<PropertyDetailField>(['hasMaidRoom', 'hasPool', 'hasWaterfront', 'hasColdStorage']);
 const literalFields = new Set<PropertyDetailField>(['intendedUse', 'commercialActivity', 'clarification']);
+const countFields = new Set<PropertyDetailField>([
+  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'floorCount', 'apartmentCount', 'shopCount', 'officeCount',
+  'unitCount', 'elevatorCount', 'floorNumber', 'loadingBayCount'
+]);
+const choiceFields = new Set<PropertyDetailField>(['apartmentSubtype', 'floorUse', 'furnishing']);
+const decimalFields = new Set<PropertyDetailField>(['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters']);
+
+function normalizeDigits(value: string): string {
+  return value
+    .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+}
+
+function safeCountInput(value: string): string | null {
+  const normalized = normalizeDigits(value);
+  if (!/^\d*$/.test(normalized)) return null;
+  if (normalized === '') return normalized;
+  return Number.isSafeInteger(Number(normalized)) ? normalized : null;
+}
+
+function safeDecimalInput(value: string): string | null {
+  const normalized = normalizeDigits(value)
+    .replace(/[٫,]/g, '.');
+  if (normalized === '') return normalized;
+  if (!/^(?:\d+\.?\d*|\.\d+)$/.test(normalized)) return null;
+  return Number.isFinite(Number(normalized)) ? normalized : null;
+}
 
 export function PropertyEnrichmentFields({
   propertyType,
@@ -79,87 +107,171 @@ export function PropertyEnrichmentFields({
     ? [PROPERTY_DETAIL_FIELD_DEFINITIONS.find(item => item.field === 'floorUse')!, ...definitions]
     : definitions;
 
+  function renderFieldContent(definition: typeof PROPERTY_DETAIL_FIELD_DEFINITIONS[number]) {
+    const field = definition.field;
+    const testIdField = field === 'floorUse' ? 'floor-use' : field === 'apartmentSubtype' ? 'apartment-subtype' : field;
+
+    if (choiceFields.has(field)) {
+      const options = field === 'floorUse' ? ['residential', 'commercial']
+        : field === 'apartmentSubtype' ? APARTMENT_SUBTYPES
+        : FURNISHING_VALUES;
+
+      return (
+        <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          {options.map(value => {
+            const isSelected = values[field] === value;
+            let label = value;
+            if (field === 'floorUse') label = t(`enrich.${value}` as any);
+            else if (field === 'furnishing') label = t(`enrich.furnishing.${value}` as any);
+            else if (field === 'apartmentSubtype') {
+              label = language === 'ar'
+                ? ({ studio: 'استوديو', standard_apartment: 'شقة عادية', duplex: 'دوبلكس' } as any)[value] || value
+                : ({ studio: 'Studio', standard_apartment: 'Standard apartment', duplex: 'Duplex' } as any)[value] || value;
+            }
+
+            return (
+              <TouchableOpacity
+                key={value}
+                onPress={() => onChange(field, value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                testID={`enrich-${testIdField}-${value}`}
+                style={[
+                  styles.chip,
+                  {
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected ? colors.primary + '11' : colors.card
+                  }
+                ]}
+              >
+                <Text style={[
+                  styles.chipText,
+                  {
+                    color: isSelected ? colors.primary : colors.foreground,
+                    fontFamily: isSelected ? fonts.semiBold : fonts.medium
+                  }
+                ]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      );
+    }
+
+    if (booleanFields.has(field)) {
+      return (
+        <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          {['true', 'false', ''].map(value => {
+            const isSelected = values[field] === value || (value === '' && !values[field]);
+            const label = value === 'true' ? t('enrich.yes') : value === 'false' ? t('enrich.no') : (language === 'ar' ? 'مسح' : 'Clear');
+            return (
+              <TouchableOpacity
+                key={value || 'clear'}
+                onPress={() => onChange(field, value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                testID={`enrich-${testIdField}-${value || 'clear'}`}
+                style={[
+                  styles.chip,
+                  {
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected ? colors.primary + '11' : colors.card
+                  }
+                ]}
+              >
+                <Text style={[
+                  styles.chipText,
+                  {
+                    color: isSelected ? colors.primary : colors.foreground,
+                    fontFamily: isSelected ? fonts.semiBold : fonts.medium
+                  }
+                ]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      );
+    }
+
+    if (countFields.has(field)) {
+      return (
+        <View style={[styles.stepperWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <TouchableOpacity
+            style={[styles.stepperButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={() => {
+              const current = Number.parseInt(values[field] || '0', 10);
+              const next = Number.isNaN(current) ? 0 : Math.max(0, current - 1);
+              onChange(field, String(next));
+            }}
+            testID={`enrich-${field}-minus`}
+            accessibilityRole="button"
+            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} −`}
+          >
+            <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>-</Text>
+          </TouchableOpacity>
+
+          <TextInput
+            value={values[field] ?? ''}
+            onChangeText={value => {
+              const normalized = safeCountInput(value);
+              if (normalized !== null) onChange(field, normalized);
+            }}
+            keyboardType="number-pad"
+            style={[styles.stepperInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+            testID={`enrich-field-${field}`}
+            accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
+          />
+
+          <TouchableOpacity
+            style={[styles.stepperButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={() => {
+              const current = Number.parseInt(values[field] || '0', 10);
+              const next = Number.isNaN(current)
+                ? 1
+                : Number.isSafeInteger(current + 1) ? current + 1 : current;
+              onChange(field, String(next));
+            }}
+            testID={`enrich-${field}-plus`}
+            accessibilityRole="button"
+            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} +`}
+          >
+            <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>+</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <TextInput
+        value={values[field] ?? ''}
+        onChangeText={value => {
+          if (!decimalFields.has(field)) {
+            onChange(field, value);
+            return;
+          }
+          const normalized = safeDecimalInput(value);
+          if (normalized !== null) onChange(field, normalized);
+        }}
+        keyboardType={decimalFields.has(field) ? 'decimal-pad' : 'default'}
+        style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+        testID={`enrich-field-${field}`}
+        accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
+      />
+    );
+  }
+
   return (
     <View style={styles.wrap}>
-      {ordered.map(definition => definition.field === 'floorUse' ? (
-        <View key={definition.field}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('enrich.floor_use')}</Text>
-          <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            {(['residential', 'commercial'] as const).map(value => (
-              <TouchableOpacity
-                key={value}
-                onPress={() => onChange('floorUse', value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: floorUse === value }}
-                testID={`enrich-floor-use-${value}`}
-                style={[styles.choice, { borderColor: floorUse === value ? colors.primary : colors.border, backgroundColor: colors.card }]}
-              >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`enrich.${value}`)}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-       ) : definition.field === 'apartmentSubtype' ? (
-        <View key={definition.field}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-             {propertyDetailLabels.apartmentSubtype[language === 'ar' ? 1 : 0]}
-          </Text>
-          <View style={styles.wrap}>
-            {APARTMENT_SUBTYPES.map(value => (
-              <TouchableOpacity
-                key={value}
-                onPress={() => onChange('apartmentSubtype', value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: values.apartmentSubtype === value }}
-                testID={`enrich-apartment-subtype-${value}`}
-                style={[styles.choice, { borderColor: values.apartmentSubtype === value ? colors.primary : colors.border, backgroundColor: colors.card }]}
-              >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
-                  {language === 'ar'
-                    ? ({ studio: 'استوديو', standard_apartment: 'شقة عادية', duplex: 'دوبلكس' } as const)[value]
-                    : ({ studio: 'Studio', standard_apartment: 'Standard apartment', duplex: 'Duplex' } as const)[value]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-       ) : definition.field === 'furnishing' || booleanFields.has(definition.field) ? (
-        <View key={definition.field}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
-          </Text>
-          <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            {(definition.field === 'furnishing' ? FURNISHING_VALUES : ['true', 'false'] as const).map(value => (
-              <TouchableOpacity
-                key={value}
-                onPress={() => onChange(definition.field, value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: values[definition.field] === value }}
-                testID={`enrich-${definition.field}-${value}`}
-                style={[styles.choice, { borderColor: values[definition.field] === value ? colors.primary : colors.border, backgroundColor: colors.card }]}
-              >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
-                  {definition.field === 'furnishing'
-                    ? t(`enrich.furnishing.${value}`)
-                    : value === 'true' ? t('enrich.yes') : t('enrich.no')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-       ) : (
+      {ordered.map(definition => (
         <View key={definition.field}>
           <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
              {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
           </Text>
-          <TextInput
-            value={values[definition.field] ?? ''}
-            onChangeText={value => onChange(definition.field, value)}
-             keyboardType={literalFields.has(definition.field) ? 'default' : 'decimal-pad'}
-            style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
-            testID={`enrich-field-${definition.field}`}
-             accessibilityLabel={propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
-          />
+          {renderFieldContent(definition)}
         </View>
       ))}
     </View>
@@ -170,6 +282,41 @@ const styles = StyleSheet.create({
   wrap: { gap: 12 },
   label: { fontSize: 14, marginBottom: 6 },
   input: { minHeight: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12 },
-  choices: { gap: 8 },
-  choice: { flex: 1, minHeight: 46, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    minHeight: 38,
+    borderWidth: 1,
+    borderRadius: 19,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  chipText: {
+    fontSize: 14,
+  },
+  stepperWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepperButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperButtonText: {
+    fontSize: 22,
+  },
+  stepperInput: {
+    flex: 1,
+    height: 46,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+    fontSize: 16,
+  }
 });

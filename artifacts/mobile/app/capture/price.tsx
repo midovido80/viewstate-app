@@ -64,10 +64,10 @@ export default function PriceScreen() {
         rentalPeriodId: undefined
       });
     } else {
-      if (!draft.rentalPeriodId) return;
+      if (!workingRentalPeriodId) return;
       updateDraft({ 
         rentalPrice: { amount: numAmount, currencyCode: MARKET_CONFIG.currencyCode },
-        rentalPeriodId: draft.rentalPeriodId,
+        rentalPeriodId: workingRentalPeriodId,
         salePrice: undefined
       });
     }

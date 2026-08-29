@@ -281,6 +281,14 @@ test("supports discriminated enrichment details for all eleven Property Types", 
   }
 });
 
+test("rejects enrichment counts that cannot be represented safely", () => {
+  const result = validateTypeDetails({
+    propertyType: "apartment",
+    bedroomCount: Number.MAX_SAFE_INTEGER + 1,
+  }, core("apartment"));
+  assertEqual(result.ok, false, "Unsafe integer counts must fail without adding a business maximum");
+});
+
 test("uses one canonical detail field applicability definition", () => {
   assert(
     PROPERTY_DETAIL_FIELD_DEFINITIONS.some(

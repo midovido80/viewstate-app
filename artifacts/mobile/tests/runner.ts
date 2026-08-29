@@ -169,6 +169,11 @@ test('Synthetic enrichment route preserves the bounded post-save entry points', 
   assert.match(fieldSource, /FURNISHING_VALUES/);
   assert.match(fieldSource, /enrich\.furnishing\./);
   assert.match(fieldSource, /hasMaidRoom.*hasPool.*hasWaterfront.*hasColdStorage/);
+  assert.match(fieldSource, /value \|\| 'clear'/);
+  assert.match(fieldSource, /Math\.max\(0, current - 1\)/);
+  assert.match(fieldSource, /keyboardType="number-pad"/);
+  assert.match(fieldSource, /safeCountInput/);
+  assert.match(fieldSource, /safeDecimalInput/);
   assert.doesNotMatch(fieldSource, /\bconstructionYear\b|\broomCount\b/);
 });
 
@@ -197,12 +202,85 @@ test('Synthetic enrichment autosave and reviewed package contract remain determi
   assert.match(enrich, /setTimeout/);
   assert.match(enrich, /AppState\.addEventListener/);
   assert.match(enrich, /flushPropertyEnrichmentDraftWrites/);
+  assert.match(enrich, /autosaveFlight/);
+  assert.match(enrich, /autosavePending/);
+  assert.match(enrich, /durableCandidateSnapshot/);
+  assert.match(enrich, /persistInProgress/);
+  assert.match(enrich, /persistFlight/);
+  assert.match(enrich, /await activePersist/);
+  assert.match(enrich, /persistAttachmentChanges/);
+  assert.match(enrich, /AppState\.addEventListener[\s\S]*\}, \[\]\);/);
+  assert.doesNotMatch(enrich, /subscription\.remove\(\)[\s\S]{0,250}setEnrichmentDraft/);
   assert.match(recovery, /existing\.writeGeneration >= draft\.writeGeneration/);
   assert.match(packageSource, /property-preview\.txt/);
   assert.match(packageSource, /await input\.shareZip\(output\.uri\)/);
   assert.match(packageSource, /finally[\s\S]*await output\.delete/);
   assert.match(share, /share-preview-attachments/);
   assert.doesNotMatch(share, /for \(const file of files\)/);
+});
+
+test('Synthetic enrichment coordinator excludes concurrent persists and flushes edits made during one', async () => {
+  let releasePersist: (() => void) | undefined;
+  const persistGate = new Promise<void>(resolve => { releasePersist = resolve; });
+  const order: string[] = [];
+  let activePersist: Promise<void> | null = null;
+  let pendingAutosave = false;
+  let latest = 'before';
+  let evidence: string | null = null;
+
+  const autosave = async (): Promise<void> => {
+    if (activePersist) {
+      pendingAutosave = true;
+      await activePersist.catch(() => undefined);
+      return autosave();
+    }
+    if (pendingAutosave || evidence !== latest) {
+      pendingAutosave = false;
+      evidence = latest;
+      order.push(`autosave:${latest}`);
+    }
+  };
+  const persist = (candidate: string) => {
+    if (activePersist) return Promise.reject(new Error('PERSIST_IN_PROGRESS'));
+    activePersist = (async () => {
+      order.push(`persist:${candidate}`);
+      await persistGate;
+      evidence = candidate;
+    })().finally(() => { activePersist = null; });
+    return activePersist;
+  };
+  const lifecycleFlush = async () => {
+    await autosave();
+    order.push('flush');
+  };
+
+  const first = persist('before');
+  await assert.rejects(persist('concurrent'), /PERSIST_IN_PROGRESS/);
+  latest = 'edited-during-persist';
+  const lifecycle = lifecycleFlush();
+  releasePersist!();
+  await first;
+  await lifecycle;
+  assert.deepEqual(order, ['persist:before', 'autosave:edited-during-persist', 'flush']);
+  assert.equal(evidence, 'edited-during-persist');
+});
+
+test('Synthetic enrichment retry and restart retain failed candidate evidence', async () => {
+  let evidence: string | null = null;
+  let failOnce = true;
+  const persist = async (candidate: string) => {
+    evidence = candidate; // The recovery journal is durable before CAS.
+    if (failOnce) {
+      failOnce = false;
+      throw new Error('PROPERTY_CHANGED');
+    }
+  };
+
+  await assert.rejects(persist('candidate-v1'), /PROPERTY_CHANGED/);
+  const recoveredAfterRestart = evidence;
+  assert.equal(recoveredAfterRestart, 'candidate-v1');
+  await persist(recoveredAfterRestart!);
+  assert.equal(evidence, 'candidate-v1');
 });
 
 test('BASIC Other remains valid through synthetic autosave restart without clarification', () => {
@@ -426,7 +504,16 @@ test('Rental price cadence displays monthly bilingually and preserves recorded l
   );
 });
 
-test('Only a fresh current-provider rent draft receives monthly automatically', () => {
+test('Blank generated scaffolds remain fresh while meaningful rental drafts retain cadence protection', () => {
+  const classify = (draft: PropertyDraft): 'fresh' | 'resumed' =>
+    typeof draft.propertyCoreId === 'string'
+    && draft.propertyCoreId.length > 0
+    && typeof draft.offerId === 'string'
+    && draft.offerId.length > 0
+    && Object.entries(draft).every(([key, value]) =>
+      key === 'propertyCoreId' || key === 'offerId' || value === undefined)
+      ? 'fresh'
+      : 'resumed';
   const defaultPeriod = (
     origin: 'fresh' | 'resumed',
     transaction: 'sale' | 'rent',
@@ -434,6 +521,18 @@ test('Only a fresh current-provider rent draft receives monthly automatically', 
   ) => existing ?? (origin === 'fresh' && transaction === 'rent' ? 'monthly' : undefined);
   const needsConfirmation = (origin: 'fresh' | 'resumed', period?: string) =>
     origin === 'resumed' && period !== 'monthly';
+  assert.equal(classify({ propertyCoreId: 'new-core', offerId: 'new-offer' }), 'fresh');
+  assert.equal(classify({
+    propertyCoreId: 'legacy-core',
+    offerId: 'legacy-offer',
+    transaction: 'rent',
+  }), 'resumed');
+  assert.equal(classify({
+    propertyCoreId: 'legacy-core',
+    offerId: 'legacy-offer',
+    transaction: 'rent',
+    rentalPeriodId: 'yearly',
+  }), 'resumed');
   assert.equal(defaultPeriod('fresh', 'rent'), 'monthly');
   assert.equal(defaultPeriod('resumed', 'rent'), undefined);
   assert.equal(defaultPeriod('resumed', 'rent', 'yearly'), 'yearly');
@@ -1726,7 +1825,7 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.match(summary, /formatRentalPrice/);
   assert.match(price, /confirm-monthly-cadence/);
   assert.match(price, /draftOrigin === 'fresh'/);
-  assert.match(price, /if \(!draft\.rentalPeriodId\) return/);
+  assert.match(price, /if \(!workingRentalPeriodId\) return/);
   assert.match(market, /defaultRentalPeriodId: 'monthly'/);
   assert.match(detail, /capture\.keep_editing/);
   assert.match(detail, /discardPropertyEditDraft/);

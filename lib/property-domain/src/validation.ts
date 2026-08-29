@@ -226,7 +226,7 @@ export function validateTypeDetails(
     const value = candidate[field];
     if (
       value !== undefined &&
-      (typeof value !== "number" || !Number.isInteger(value) || value < 0)
+      (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
     ) {
       issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be a non-negative integer.`));
     }

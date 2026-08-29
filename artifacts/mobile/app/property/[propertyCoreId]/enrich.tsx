@@ -112,23 +112,50 @@ export default function PropertyEnrichmentScreen() {
   const [error, setError] = useState('');
   const [enrichmentDraft, setEnrichmentDraft] = useState<PropertyEnrichmentDraftV1 | null>(null);
   const generation = useRef(0);
+  const mounted = useRef(true);
+  const propertyRef = useRef<Property | null>(null);
+  const enrichmentDraftRef = useRef<PropertyEnrichmentDraftV1 | null>(null);
+  const attachmentsRef = useRef<LocalAttachment[]>(attachments);
+  const durableCandidateSnapshot = useRef<string | null>(null);
+  const buildCandidateRef = useRef<((baseline: Property, nextAttachments?: LocalAttachment[], strict?: boolean) => Property) | undefined>(undefined);
+  const autosaveRef = useRef<(reportFailure?: boolean) => Promise<void>>(async () => undefined);
+  const autosaveFlight = useRef<Promise<void> | null>(null);
+  const autosavePending = useRef(false);
+  const persistInProgress = useRef(false);
+  const persistFlight = useRef<Promise<Property> | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  propertyRef.current = property;
+  enrichmentDraftRef.current = enrichmentDraft;
+  attachmentsRef.current = attachments;
 
   useEffect(() => {
     if (!id) return;
     Promise.all([store.getProperty(id), loadPropertyEnrichmentDraft(id)]).then(async ([saved, recovered]) => {
       if (!saved) {
+        if (!mounted.current) return;
         setError(t('edit.not_found'));
         return;
       }
       if (recovered && JSON.stringify(recovered.candidate) === JSON.stringify(saved)) {
         // CAS completed before the process stopped; only exact evidence is removed.
         await clearConfirmedPropertyEnrichmentDraft(recovered);
+        if (!mounted.current) return;
+        propertyRef.current = saved;
+        enrichmentDraftRef.current = null;
+        durableCandidateSnapshot.current = JSON.stringify(saved);
         setProperty(saved);
         setEnrichmentDraft(null);
       } else if (recovered && JSON.stringify(recovered.baseline) !== JSON.stringify(saved)) {
+        if (!mounted.current) return;
         setError(t('enrich.save_failed'));
         return;
       } else {
+        if (!mounted.current) return;
+        propertyRef.current = saved;
+        enrichmentDraftRef.current = recovered;
+        durableCandidateSnapshot.current = JSON.stringify(recovered?.candidate ?? saved);
+        generation.current = Math.max(generation.current, recovered?.writeGeneration ?? 0);
         setProperty(saved);
         setEnrichmentDraft(recovered);
       }
@@ -147,7 +174,9 @@ export default function PropertyEnrichmentScreen() {
         }
         : undefined);
       setAttachments((visible.attachments ?? []).map(attachmentToLocal).sort((a, b) => a.order - b.order));
-    }).catch(() => setError(t('edit.unreadable')));
+    }).catch(() => {
+      if (mounted.current) setError(t('edit.unreadable'));
+    });
   }, [id, t]);
 
   const buildCandidate = (baseline: Property, nextAttachments = attachments, strict = true): Property => {
@@ -222,100 +251,205 @@ export default function PropertyEnrichmentScreen() {
     return candidate;
   };
 
-  const autosave = async () => {
-    if (!property) return;
-    const candidate = buildCandidate(property, attachments, false);
-    const evidence: PropertyEnrichmentDraftV1 = {
-      version: 1, propertyCoreId: property.core.id, baseline: property, candidate,
-      writeGeneration: Math.max(generation.current, enrichmentDraft?.writeGeneration ?? 0) + 1,
-    };
-    generation.current = evidence.writeGeneration;
-    if (!await savePropertyEnrichmentDraft(evidence, enrichmentDraft)) {
-      setError(t('enrich.save_failed'));
+  buildCandidateRef.current = buildCandidate;
+  autosaveRef.current = async (reportFailure = true) => {
+    autosavePending.current = true;
+    if (persistInProgress.current) {
+      const activePersist = persistFlight.current;
+      if (activePersist) {
+        try {
+          await activePersist;
+        } catch {
+          // A failed explicit save leaves its evidence in place; retry it as autosave.
+        }
+        return autosaveRef.current(reportFailure);
+      }
       return;
     }
-    setEnrichmentDraft(evidence);
+    if (!autosaveFlight.current) {
+      autosaveFlight.current = (async () => {
+        while (autosavePending.current) {
+          autosavePending.current = false;
+          const baseline = propertyRef.current;
+          const build = buildCandidateRef.current;
+          if (!baseline || !build) continue;
+          const candidate = build(baseline, attachmentsRef.current, false);
+          const candidateSnapshot = JSON.stringify(candidate);
+          if (candidateSnapshot === durableCandidateSnapshot.current) continue;
+          const expected = enrichmentDraftRef.current;
+          const evidence: PropertyEnrichmentDraftV1 = {
+            version: 1,
+            propertyCoreId: baseline.core.id,
+            baseline,
+            candidate,
+            writeGeneration: Math.max(generation.current, expected?.writeGeneration ?? 0) + 1,
+          };
+          generation.current = evidence.writeGeneration;
+          if (!await savePropertyEnrichmentDraft(evidence, expected)) {
+            throw new Error('DRAFT_CONFLICT');
+          }
+          enrichmentDraftRef.current = evidence;
+          durableCandidateSnapshot.current = candidateSnapshot;
+          if (mounted.current) setEnrichmentDraft(evidence);
+        }
+      })().finally(() => {
+        autosaveFlight.current = null;
+      });
+    }
+    try {
+      await autosaveFlight.current;
+    } catch (caught) {
+      if (reportFailure && mounted.current) setError(t('enrich.save_failed'));
+      throw caught;
+    }
   };
 
   useEffect(() => {
     if (!property) return;
-    const timer = setTimeout(() => { void autosave().catch(() => setError(t('enrich.save_failed'))); }, 350);
-    return () => clearTimeout(timer);
+    debounceTimer.current = setTimeout(() => {
+      debounceTimer.current = null;
+      void autosaveRef.current().catch(() => undefined);
+    }, 350);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    };
   }, [property, fields, description, privateNotes, paci, manualLocation, mapsLink, coordinates, attachments]);
 
   useEffect(() => {
+    mounted.current = true;
     const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active') void autosave().then(() => flushPropertyEnrichmentDraftWrites()).catch(() => setError(t('enrich.save_failed')));
+      if (state !== 'active') {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        debounceTimer.current = null;
+        void autosaveRef.current()
+          .then(() => flushPropertyEnrichmentDraftWrites())
+          .catch(() => undefined);
+      }
     });
     return () => {
+      mounted.current = false;
       subscription.remove();
-      void autosave().then(() => flushPropertyEnrichmentDraftWrites()).catch(() => undefined);
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+      void autosaveRef.current(false)
+        .then(() => flushPropertyEnrichmentDraftWrites())
+        .catch(() => undefined);
     };
-  }, [property, fields, description, privateNotes, paci, manualLocation, mapsLink, coordinates, attachments, enrichmentDraft]);
+  }, []);
 
-  const persist = async (nextAttachments = attachments) => {
-    if (!property) throw new Error('PROPERTY_MISSING');
-    const candidate = buildCandidate(property, nextAttachments);
-    const evidence: PropertyEnrichmentDraftV1 = {
-      version: 1, propertyCoreId: property.core.id, baseline: property, candidate,
-      writeGeneration: Math.max(generation.current, enrichmentDraft?.writeGeneration ?? 0) + 1,
-    };
-    generation.current = evidence.writeGeneration;
-    if (!await savePropertyEnrichmentDraft(evidence, enrichmentDraft)) throw new Error('DRAFT_CONFLICT');
-    setEnrichmentDraft(evidence);
-    if (!await store.compareAndUpdate(property, candidate)) throw new Error('PROPERTY_CHANGED');
-    if (!await clearConfirmedPropertyEnrichmentDraft(evidence)) throw new Error('DRAFT_CLEANUP_FAILED');
-    await flushPropertyEnrichmentDraftWrites();
-    setProperty(candidate);
-    setEnrichmentDraft(null);
-    setAttachments([...nextAttachments]);
-    return candidate;
+  const persist = (nextAttachments = attachments): Promise<Property> => {
+    if (!property) return Promise.reject(new Error('PROPERTY_MISSING'));
+    if (persistFlight.current) return Promise.reject(new Error('PERSIST_IN_PROGRESS'));
+    persistInProgress.current = true;
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = null;
+    const flight = Promise.resolve().then(async () => {
+      try {
+      if (autosaveFlight.current) {
+        try {
+          await autosaveFlight.current;
+        } catch {
+          // The explicit persist below retries from the latest known evidence.
+        }
+      }
+      autosavePending.current = false;
+      const baseline = propertyRef.current ?? property;
+      const candidate = buildCandidate(baseline, nextAttachments);
+      const evidence: PropertyEnrichmentDraftV1 = {
+        version: 1, propertyCoreId: baseline.core.id, baseline, candidate,
+        writeGeneration: Math.max(generation.current, enrichmentDraftRef.current?.writeGeneration ?? 0) + 1,
+      };
+      generation.current = evidence.writeGeneration;
+      if (!await savePropertyEnrichmentDraft(evidence, enrichmentDraftRef.current)) throw new Error('DRAFT_CONFLICT');
+      enrichmentDraftRef.current = evidence;
+      if (mounted.current) setEnrichmentDraft(evidence);
+      if (!await store.compareAndUpdate(baseline, candidate)) throw new Error('PROPERTY_CHANGED');
+      if (!await clearConfirmedPropertyEnrichmentDraft(evidence)) throw new Error('DRAFT_CLEANUP_FAILED');
+      await flushPropertyEnrichmentDraftWrites();
+      propertyRef.current = candidate;
+      enrichmentDraftRef.current = null;
+      durableCandidateSnapshot.current = JSON.stringify(candidate);
+      attachmentsRef.current = [...nextAttachments];
+      if (mounted.current) {
+        setProperty(candidate);
+        setEnrichmentDraft(null);
+        setAttachments([...nextAttachments]);
+      }
+      return candidate;
+      } finally {
+        persistInProgress.current = false;
+        if (persistFlight.current === flight) persistFlight.current = null;
+        if (autosavePending.current) {
+          void autosaveRef.current().catch(() => undefined);
+        }
+      }
+    });
+    persistFlight.current = flight;
+    return flight;
+  };
+
+  const persistAttachmentChanges = async (next: LocalAttachment[]) => {
+    if (persistFlight.current) return false;
+    await persist(next);
+    return true;
+  };
+  const reportAttachmentFailure = () => {
+    if (mounted.current) setError(t('enrich.attachment_failed'));
   };
 
   const save = async () => {
-    if (!property || saving) return;
+    if (!property || saving || persistFlight.current) return;
     setSaving(true);
     setError('');
     try {
       await persist();
-      Alert.alert(t('enrich.saved'));
-      router.replace(`/property/${encodeURIComponent(property.core.id)}` as never);
+      if (mounted.current) {
+        Alert.alert(t('enrich.saved'));
+        router.replace(`/property/${encodeURIComponent(property.core.id)}` as never);
+      }
     } catch (caught) {
-      setError(caught instanceof Error && caught.message === 'OTHER_CLARIFICATION_REQUIRED'
-        ? t('enrich.other_required') : t('enrich.save_failed'));
+      if (mounted.current) {
+        setError(caught instanceof Error && caught.message === 'OTHER_CLARIFICATION_REQUIRED'
+          ? t('enrich.other_required') : t('enrich.save_failed'));
+      }
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   };
 
   const addMedia = async (pdf: boolean) => {
-    if (!property) return;
+    if (!property || persistFlight.current) return;
     setError('');
     try {
       const added = pdf
         ? await pickAndStorePdfs(property.core.id, attachments, DocumentPicker, { fileStore })
         : await pickAndStoreMedia(property.core.id, attachments, { fileStore });
-      if (added.length) {
+      if (added.length && !persistFlight.current && mounted.current) {
         // Make copied managed files visible and durably recoverable before CAS.
         const attempted = [...attachments, ...added];
+        attachmentsRef.current = attempted;
         setAttachments(attempted);
-        await persist(attempted);
+        await persistAttachmentChanges(attempted);
       }
     } catch {
-      setError(t('enrich.attachment_failed'));
+      if (mounted.current) setError(t('enrich.attachment_failed'));
     }
   };
 
   const replaceAttachments = async (next: LocalAttachment[]) => {
+    if (persistFlight.current) return;
     try {
       await persistAttachmentsThenDeleteRemoved(
         attachments,
         next,
-        async value => { await persist([...value]); },
+        async value => {
+          if (!await persistAttachmentChanges([...value])) throw new Error('PERSIST_IN_PROGRESS');
+        },
         fileStore,
       );
     } catch {
-      setError(t('enrich.attachment_failed'));
+      if (mounted.current) setError(t('enrich.attachment_failed'));
     }
   };
 
@@ -371,14 +505,14 @@ export default function PropertyEnrichmentScreen() {
                 <Text numberOfLines={1} style={{ color: colors.foreground, fontFamily: fonts.medium }}>{attachment.isCover ? '★ ' : ''}{attachment.originalName}</Text>
                 <View style={styles.attachmentActions}>
                   <Action title={t('enrich.open')} id={`enrich-open-${attachment.id}`} onPress={() => void openAttachment(attachment, Sharing).catch(() => setError(t('enrich.attachment_failed')))} />
-                  {attachment.kind === 'image' ? <Action title={t('enrich.cover')} id={`enrich-cover-${attachment.id}`} onPress={() => void persist(setAttachmentCover(attachments, attachment.id)).catch(() => setError(t('enrich.attachment_failed')))} /> : null}
+                  {attachment.kind === 'image' ? <Action title={t('enrich.cover')} id={`enrich-cover-${attachment.id}`} onPress={() => void persistAttachmentChanges(setAttachmentCover(attachments, attachment.id)).catch(reportAttachmentFailure)} /> : null}
                   {index > 0 ? <Action title={t('enrich.move_up')} id={`enrich-up-${attachment.id}`} onPress={() => {
                     const ids = attachments.map(item => item.id); [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
-                    void persist(reorderAttachments(attachments, ids)).catch(() => setError(t('enrich.attachment_failed')));
+                    void persistAttachmentChanges(reorderAttachments(attachments, ids)).catch(reportAttachmentFailure);
                   }} /> : null}
                   {index < attachments.length - 1 ? <Action title={t('enrich.move_down')} id={`enrich-down-${attachment.id}`} onPress={() => {
                     const ids = attachments.map(item => item.id); [ids[index + 1], ids[index]] = [ids[index], ids[index + 1]];
-                    void persist(reorderAttachments(attachments, ids)).catch(() => setError(t('enrich.attachment_failed')));
+                    void persistAttachmentChanges(reorderAttachments(attachments, ids)).catch(reportAttachmentFailure);
                   }} /> : null}
                   <Action title={t('enrich.remove')} id={`enrich-remove-${attachment.id}`} destructive onPress={() => Alert.alert(
                     t('enrich.remove_title'), t('enrich.remove_message'),
