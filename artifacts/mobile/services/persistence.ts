@@ -11,6 +11,15 @@ import {
   STAGE_01B1_PROPERTY_MIGRATION_ID,
   migrateStage01B1WebProperties,
 } from '@/services/stage01B1CurrencyMigration';
+import {
+  Person,
+  PersonPropertyLink,
+  PersonStore,
+  assertValidPerson,
+  getPersonSearchText,
+  normalizePersonPhone,
+  personMatchesSearch,
+} from '@/services/people';
 
 export function getPropertySearchText(property: Property): string {
   const area = getAreaById(property.core.locationArea.id);
@@ -72,7 +81,7 @@ interface LockManager {
 
 const nativeMutations = new SerialTaskQueue();
 
-export class SQLiteStore implements PropertyStore {
+export class SQLiteStore implements PropertyStore, PersonStore {
   private db: SQLite.SQLiteDatabase | null = null;
   private initialization: Promise<void> | null = null;
 
@@ -95,6 +104,16 @@ export class SQLiteStore implements PropertyStore {
       CREATE TABLE IF NOT EXISTS deleted_property_ids (
         id TEXT PRIMARY KEY,
         generation INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS people (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        search_text TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS person_property_links (
+        person_id TEXT NOT NULL,
+        property_core_id TEXT NOT NULL,
+        PRIMARY KEY (person_id, property_core_id)
       );
     `);
 
@@ -248,6 +267,10 @@ export class SQLiteStore implements PropertyStore {
             [property.core.id, JSON.stringify(property)],
           );
           if (deleted.changes !== 1) throw new Error('DELETE_PRECONDITION');
+           await this.db!.runAsync(
+             'DELETE FROM person_property_links WHERE property_core_id = ?',
+             [property.core.id],
+           );
         }
         result = { status: 'deleted', count: expected.length };
       });
@@ -263,11 +286,143 @@ export class SQLiteStore implements PropertyStore {
     const rows = await this.db.getAllAsync<{ id: string }>('SELECT id FROM properties ORDER BY id');
     return { count: rows.length, ids: rows.map(row => row.id) };
   }
+
+  async savePerson(person: Person): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    assertValidPerson(person);
+    await nativeMutations.enqueue(async () => {
+      const existing = await this.db!.getFirstAsync<{ data: string }>(
+        'SELECT data FROM people WHERE id = ?',
+        [person.id],
+      );
+      if (existing) {
+        if (existing.data !== JSON.stringify(person)) throw new Error('PERSON_ID_ALREADY_EXISTS');
+        return;
+      }
+      await this.db!.runAsync(
+        'INSERT INTO people (id, data, search_text) VALUES (?, ?, ?)',
+        [person.id, JSON.stringify(person), getPersonSearchText(person)],
+      );
+    });
+  }
+
+  async getPerson(id: string): Promise<Person | null> {
+    if (!this.db) throw new Error('DB not initialized');
+    const row = await this.db.getFirstAsync<{ data: string }>(
+      'SELECT data FROM people WHERE id = ?',
+      [id],
+    );
+    return row ? JSON.parse(row.data) as Person : null;
+  }
+
+  async updatePerson(expected: Person, replacement: Person): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (expected.id !== replacement.id) return false;
+    assertValidPerson(replacement);
+    let updated = false;
+    await nativeMutations.enqueue(async () => {
+      const result = await this.db!.runAsync(
+        'UPDATE people SET data = ?, search_text = ? WHERE id = ? AND data = ?',
+        [
+          JSON.stringify(replacement),
+          getPersonSearchText(replacement),
+          expected.id,
+          JSON.stringify(expected),
+        ],
+      );
+      updated = result.changes === 1;
+    });
+    return updated;
+  }
+
+  async getPeople(): Promise<Person[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ data: string }>(
+      'SELECT data FROM people ORDER BY id DESC',
+    );
+    return rows.map(row => JSON.parse(row.data) as Person);
+  }
+
+  async searchPeople(query: string): Promise<Person[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const literal = query.toLocaleLowerCase().replace(/[\\%_]/g, value => `\\${value}`);
+    const normalized = normalizePersonPhone(query).replace(/[\\%_]/g, value => `\\${value}`);
+    const rows = await this.db.getAllAsync<{ data: string }>(
+      `SELECT data FROM people
+       WHERE search_text LIKE ? ESCAPE '\\'
+          OR (? <> '' AND search_text LIKE ? ESCAPE '\\')
+       ORDER BY id DESC`,
+      [`%${literal}%`, normalized.replace('+', '') ? normalized : '', `%${normalized}%`],
+    );
+    return rows.map(row => JSON.parse(row.data) as Person);
+  }
+
+  async deletePerson(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    let deleted = false;
+    await nativeMutations.enqueue(async () => {
+      await this.db!.withTransactionAsync(async () => {
+        await this.db!.runAsync('DELETE FROM person_property_links WHERE person_id = ?', [id]);
+        const result = await this.db!.runAsync('DELETE FROM people WHERE id = ?', [id]);
+        deleted = result.changes === 1;
+      });
+    });
+    return deleted;
+  }
+
+  async linkPersonToProperty(link: PersonPropertyLink): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (!link.personId || !link.propertyCoreId) throw new Error('INVALID_PERSON_PROPERTY_LINK');
+    await nativeMutations.enqueue(async () => {
+      const [person, property] = await Promise.all([
+        this.db!.getFirstAsync<{ id: string }>('SELECT id FROM people WHERE id = ?', [link.personId]),
+        this.db!.getFirstAsync<{ id: string }>('SELECT id FROM properties WHERE id = ?', [link.propertyCoreId]),
+      ]);
+      if (!person || !property) throw new Error('PERSON_PROPERTY_LINK_TARGET_MISSING');
+      await this.db!.runAsync(
+        'INSERT OR IGNORE INTO person_property_links (person_id, property_core_id) VALUES (?, ?)',
+        [link.personId, link.propertyCoreId],
+      );
+    });
+  }
+
+  async unlinkPersonFromProperty(link: PersonPropertyLink): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    let unlinked = false;
+    await nativeMutations.enqueue(async () => {
+      const result = await this.db!.runAsync(
+        'DELETE FROM person_property_links WHERE person_id = ? AND property_core_id = ?',
+        [link.personId, link.propertyCoreId],
+      );
+      unlinked = result.changes === 1;
+    });
+    return unlinked;
+  }
+
+  async getPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ personId: string; propertyCoreId: string }>(
+      `SELECT person_id AS personId, property_core_id AS propertyCoreId
+       FROM person_property_links ORDER BY person_id, property_core_id`,
+    );
+    return rows;
+  }
+
+  async getLinksForPerson(personId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks()).filter(link => link.personId === personId);
+  }
+
+  async getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks())
+      .filter(link => link.propertyCoreId === propertyCoreId);
+  }
 }
 
-export class WebStore implements PropertyStore {
+export class WebStore implements PropertyStore, PersonStore {
   private readonly KEY = '@viewstate_properties';
   private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1';
+  private readonly PEOPLE_KEY = '@viewstate_people_v1';
+  private readonly PERSON_PROPERTY_LINKS_KEY = '@viewstate_person_property_links_v1';
   private initialization: Promise<void> | null = null;
 
   constructor(
@@ -416,6 +571,142 @@ export class WebStore implements PropertyStore {
     if (new Set(ids).size !== ids.length) throw new Error('DUPLICATE_PROPERTY');
     return { count: ids.length, ids: [...ids].sort() };
   }
+
+  private async getAllPeople(): Promise<Person[]> {
+    const raw = await this.storage.getItem(this.PEOPLE_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PERSON_STORAGE');
+    return parsed as Person[];
+  }
+
+  private async getAllPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
+    const raw = await this.storage.getItem(this.PERSON_PROPERTY_LINKS_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    return parsed as PersonPropertyLink[];
+  }
+
+  private async withPeopleMutationLock<T>(work: () => Promise<T>): Promise<T> {
+    const locks = this.lockManager;
+    if (!locks) throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
+    return locks.request('viewstate-people-mutation', { mode: 'exclusive' }, work);
+  }
+
+  async savePerson(person: Person): Promise<void> {
+    assertValidPerson(person);
+    await this.withPeopleMutationLock(async () => {
+      const all = await this.getAllPeople();
+      const existing = all.find(item => item.id === person.id);
+      if (existing) {
+        if (JSON.stringify(existing) !== JSON.stringify(person)) {
+          throw new Error('PERSON_ID_ALREADY_EXISTS');
+        }
+        return;
+      }
+      all.unshift(person);
+      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
+    });
+  }
+
+  async getPerson(id: string): Promise<Person | null> {
+    const matching = (await this.getAllPeople()).filter(person => person.id === id);
+    if (matching.length > 1) throw new Error('DUPLICATE_PERSON');
+    return matching[0] ?? null;
+  }
+
+  async updatePerson(expected: Person, replacement: Person): Promise<boolean> {
+    if (expected.id !== replacement.id) return false;
+    assertValidPerson(replacement);
+    return this.withPeopleMutationLock(async () => {
+      const all = await this.getAllPeople();
+      const matching = all
+        .map((person, index) => ({ person, index }))
+        .filter(item => item.person.id === expected.id);
+      if (
+        matching.length !== 1
+        || JSON.stringify(matching[0].person) !== JSON.stringify(expected)
+      ) return false;
+      all[matching[0].index] = replacement;
+      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
+      return true;
+    });
+  }
+
+  async getPeople(): Promise<Person[]> {
+    return this.getAllPeople();
+  }
+
+  async searchPeople(query: string): Promise<Person[]> {
+    return (await this.getAllPeople()).filter(person => personMatchesSearch(person, query));
+  }
+
+  async deletePerson(id: string): Promise<boolean> {
+    return this.withPeopleMutationLock(async () => {
+      const people = await this.getAllPeople();
+      const remainingPeople = people.filter(person => person.id !== id);
+      if (remainingPeople.length === people.length) return false;
+      const links = await this.getAllPersonPropertyLinks();
+      const remainingLinks = links.filter(link => link.personId !== id);
+      if (remainingLinks.length !== links.length) {
+        await this.storage.setItem(
+          this.PERSON_PROPERTY_LINKS_KEY,
+          JSON.stringify(remainingLinks),
+        );
+      }
+      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(remainingPeople));
+      return true;
+    });
+  }
+
+  async linkPersonToProperty(link: PersonPropertyLink): Promise<void> {
+    if (!link.personId || !link.propertyCoreId) throw new Error('INVALID_PERSON_PROPERTY_LINK');
+    await this.withPeopleMutationLock(async () => {
+      const [people, property] = await Promise.all([
+        this.getAllPeople(),
+        this.getProperty(link.propertyCoreId),
+      ]);
+      if (!people.some(person => person.id === link.personId) || !property) {
+        throw new Error('PERSON_PROPERTY_LINK_TARGET_MISSING');
+      }
+      const links = await this.getAllPersonPropertyLinks();
+      if (links.some(item =>
+        item.personId === link.personId && item.propertyCoreId === link.propertyCoreId
+      )) return;
+      links.push({ personId: link.personId, propertyCoreId: link.propertyCoreId });
+      await this.storage.setItem(this.PERSON_PROPERTY_LINKS_KEY, JSON.stringify(links));
+    });
+  }
+
+  async unlinkPersonFromProperty(link: PersonPropertyLink): Promise<boolean> {
+    return this.withPeopleMutationLock(async () => {
+      const links = await this.getAllPersonPropertyLinks();
+      const remaining = links.filter(item =>
+        item.personId !== link.personId || item.propertyCoreId !== link.propertyCoreId
+      );
+      if (remaining.length === links.length) return false;
+      await this.storage.setItem(this.PERSON_PROPERTY_LINKS_KEY, JSON.stringify(remaining));
+      return true;
+    });
+  }
+
+  async getPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
+    const links = await this.getAllPersonPropertyLinks();
+    const pairs = links.map(link => `${link.personId}\u0000${link.propertyCoreId}`);
+    if (new Set(pairs).size !== pairs.length) throw new Error('DUPLICATE_PERSON_PROPERTY_LINK');
+    return links;
+  }
+
+  async getLinksForPerson(personId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks()).filter(link => link.personId === personId);
+  }
+
+  async getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks())
+      .filter(link => link.propertyCoreId === propertyCoreId);
+  }
 }
 
-export const store: PropertyStore = Platform.OS === 'web' ? new WebStore() : new SQLiteStore();
+export const store: PropertyStore & PersonStore =
+  Platform.OS === 'web' ? new WebStore() : new SQLiteStore();

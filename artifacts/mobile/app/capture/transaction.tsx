@@ -1,5 +1,5 @@
 import { View, StyleSheet, Text } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
@@ -11,6 +11,7 @@ import { Transaction } from '@workspace/property-domain';
 
 export default function TransactionScreen() {
   const router = useRouter();
+  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
@@ -18,7 +19,7 @@ export default function TransactionScreen() {
 
   const handleNext = () => {
     if (draft.transaction) {
-      router.push('/capture/property-type' as any);
+      router.push({ pathname: '/capture/property-type', params: linkPersonId ? { linkPersonId } : {} } as never);
     }
   };
 

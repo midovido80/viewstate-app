@@ -33,6 +33,12 @@
         }
       ],
       "expo-font",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow ViewState to let you choose a contact to add to People."
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {

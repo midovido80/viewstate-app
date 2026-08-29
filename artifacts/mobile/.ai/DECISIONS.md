@@ -1121,3 +1121,67 @@ Deletion must fail closed for stale, unreadable, conflicting, pending, unsupport
 ### Compatibility and verification
 
 The bounded implementation must preserve existing Property and Offer identities, unrelated data and current architecture. Deletion and pricing tests use isolated synthetic stores only. Web and Native guarantees and limitations must be reported separately; unavailable platform coverage is not a pass. No commit, push, merge, publication, freeze, or real-data deletion is authorized before the implementation report and CTO review.
+
+---
+
+## [DEC-043] — Bounded V001 Properties and People Completion Authorization
+Date: 2026-08-29
+Status: APPROVED FOR BOUNDED LOCAL IMPLEMENTATION; NOT TESTED, FROZEN, MERGED, OR RELEASED
+Decided by: Founder
+Category: Product + Domain + Local Data + Privacy
+
+### Decision
+
+The Founder authorizes immediate local implementation of the bounded V001 Properties and People completion contract while preserving the existing BASIC Property flow. BASIC remains exactly Property Type, Transaction, transaction-specific Price, and configured Area. Optional enrichment begins only after successful BASIC save and never becomes a fifth BASIC requirement.
+
+The authorized Property enrichment uses the existing eleven built-property types and additive, optional, type-discriminated details. Physical facts remain Property type details and Sale/Rent terms remain in the existing active Offer. Floor enrichment first selects Residential or Commercial and finalizes only compatible fields. A BASIC Other Built Property remains valid without type details; completed Other enrichment requires a nonblank literal clarification distinct from Property description. Existing BASIC-only Properties remain valid. Incompatible saved type details must be explicitly removed before changing Property type.
+
+People use only the active classifications Seeker, Owner, Broker, Real Estate Company, and Building Guard. Final saved People require the governed literal Name and Phone plus at least one existing classification; multi-classification remains supported. Imported names, displayed phones, and notes remain literal. Contact import is local, permission-based, and limited to user-selected contacts. The approved Arabic Broker display term is `وسيط`; stored classification identifiers are unchanged.
+
+Property attachments are optional local image, video, or PDF records with stable identity, original name, MIME metadata, order, and at most one optional image cover. Selected files move to app-managed local storage; persistence stores metadata rather than file binaries or temporary picker paths. Removal is confirmed, metadata is saved safely before file deletion, lists remain lightweight, and PDFs use a system or external viewer. No cloud storage or embedded PDF renderer is authorized.
+
+A Person-to-Property association is private and neutral, contains only stable Person and Property identities, and is unique by pair. It has no role, classification, status, source, priority, ownership, tenancy, buyer interest, or commercial meaning. Unlinking deletes neither record. Deleting either record removes only its associations and never deletes the other record. Cooperation facts belong in private Property Notes.
+
+BASIC Area remains unchanged. Optional private location enrichment may store manual PACI, manual location text, an original Maps link, and platform-neutral coordinates. Current location requires explicit action and foreground permission. No value may silently overwrite Area, PACI, link, text, or coordinates. Failure or denial never blocks Property or Draft save. No PACI lookup, reverse geocoding, or embedded map integration is authorized.
+
+Selective sharing is limited to one validated Property at a time with transient selection and exact Preview. Normal approved Property fields and explicitly selected attachments may be included. Private Notes are never selectable. Owner/source, PACI, exact or manual location, Maps link, and Person contact data default off and require explicit selection for every share. People and neutral links never share automatically, sharing never mutates saved data, and choices are not remembered.
+
+### Boundaries
+
+The implementation is local-first and additive. It must preserve existing Properties, People-compatible future data, stable identities, KWD pricing, fresh monthly Rent wording, legacy cadence truth, Area data, deletion fences, unknown fields, and recovery evidence. It must not introduce Land, Matching, Tasks, Follow-ups, commission logic, Unit entities, Parent Building relationships, cloud synchronization, authentication, server persistence, external PACI lookup, reverse geocoding, or a new search architecture.
+
+This decision resolves the prior implementation lock only for the bounded contract above. It does not authorize a governance rewrite, phase freeze, real-data migration or deletion, commit, push, merge, publication, release, or APK build. Completion and acceptance remain pending implementation, synthetic verification, CTO-style review, and Founder review.
+
+---
+
+## [DEC-044] — Final Bounded V001 Dynamic Details Field Contract
+Date: 2026-08-29
+Status: APPROVED FOR BOUNDED LOCAL IMPLEMENTATION; NOT FROZEN, MERGED, OR RELEASED
+Decided by: Founder
+Category: Property Domain + Local Product
+
+### Decision
+
+The Founder's latest explicit approval establishes the final bounded V001 Dynamic Details field contract for this implementation. It supersedes only unresolved or previously recommended Dynamic Details field proposals and does not approve prior CTO recommendations wholesale. DEC-043 remains active for governed People, neutral links, local media, private manual/current location, selective sharing, compatibility, privacy, and implementation boundaries.
+
+BASIC remains exactly the existing Property Type, Transaction, transaction-specific Price, and configured Area. The existing eleven built-property types remain unchanged. Enrichment is optional after BASIC save. Every new detail field is optional except Floor Use when completing Floor enrichment and nonblank literal clarification when completing Other Built Property enrichment.
+
+Approved applicability:
+
+- Apartment: built-up area, existing apartment subtype, bedrooms, bathrooms, living rooms, floor number, furnishing, maid room, parking spaces.
+- House and Villa: plot area, built-up area, bedrooms, bathrooms, living rooms, total floor count, furnishing, maid room, parking spaces, pool.
+- Chalet: the House/Villa fields plus waterfront.
+- Floor: Residential or Commercial discriminator. Residential uses built-up area, bedrooms, bathrooms, living rooms, floor number, furnishing, maid room, and parking. Commercial uses built-up area, bathrooms, floor number, intended use, literal commercial activity, parking, frontage width, and ceiling height.
+- Office: built-up area, floor number, bathrooms, intended use, literal commercial activity, parking.
+- Shop: built-up area, floor number, intended use, literal commercial activity, parking, frontage width, and ceiling height. PACI remains private Location data.
+- Whole Building and Commercial Complex: plot area, built-up area, total floor count, total unit count, apartment count, shop count, office count, elevator count, and parking spaces.
+- Warehouse: plot area, built-up area, bathrooms, intended use, literal commercial activity, parking, ceiling height, loading bays, and cold storage.
+- Other Built Property: nonblank literal clarification when enrichment is completed, plus plot area, built-up area, and parking spaces where applicable.
+
+Furnishing values are exactly Unfurnished, Semi-furnished, and Furnished, with localized Arabic display equivalents and stable stored identifiers. Property Condition and Availability are not authorized because their final taxonomies remain unresolved. Counts are nonnegative integers with no invented business maximum. When total unit count is present, the sum of known apartment, shop, and office counts must not exceed it; equality is not required.
+
+Physical facts remain in type details. Description and Private Notes remain in their governed Property Core locations. PACI remains private Location data. Sale/Rent terms remain in the existing active Offer.
+
+### Boundaries
+
+Implementation remains local-first, additive, and backward-compatible. It must preserve existing data, identities, pricing and rental-cadence truth, recovery, low-tap capture, bilingual behavior, and tested APK behavior. No Property Condition, Availability, Unit or Parent Building model, Matching, cloud/platform/auth work, Tasks, Follow-ups, commissions, architecture rewrite, real-data operation, GitHub action, commit, publication, or APK build is authorized.

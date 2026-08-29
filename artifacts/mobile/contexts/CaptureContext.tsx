@@ -63,6 +63,15 @@ function createFreshDraft(): PropertyDraft {
   };
 }
 
+function isBlankGeneratedScaffold(draft: PropertyDraft): boolean {
+  return typeof draft.propertyCoreId === 'string'
+    && draft.propertyCoreId.length > 0
+    && typeof draft.offerId === 'string'
+    && draft.offerId.length > 0
+    && Object.entries(draft).every(([key, value]) =>
+      key === 'propertyCoreId' || key === 'offerId' || value === undefined);
+}
+
 export function CaptureProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<PropertyDraft>(DEFAULT_DRAFT);
@@ -143,7 +152,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         const saved = await loadDraft();
         if (saved) {
           setCurrentDraft(saved);
-          setDraftOrigin('resumed');
+          setDraftOrigin(isBlankGeneratedScaffold(saved) ? 'fresh' : 'resumed');
         } else {
           const newDraft = createFreshDraft();
           await saveDraft(newDraft);
@@ -195,6 +204,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       const freshRentDefaults = draftOrigin === 'fresh'
         && changes.transaction === 'rent'
         && prev.rentalPeriodId === undefined
+        && changes.rentalPeriodId === undefined
         ? { rentalPeriodId: 'monthly' }
         : {};
       const next = updatePropertyDraft(prev, { ...changes, ...freshRentDefaults });

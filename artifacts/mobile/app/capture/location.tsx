@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useCapture } from '@/contexts/CaptureContext';
@@ -12,6 +12,7 @@ import { KUWAIT_AREAS, Area, getAreaById, searchAreas } from '@/constants/kuwait
 
 export default function LocationScreen() {
   const router = useRouter();
+  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
@@ -30,7 +31,7 @@ export default function LocationScreen() {
 
   const handleNext = () => {
     if (!isValid) return;
-    router.push('/capture/summary' as any);
+    router.push({ pathname: '/capture/summary', params: linkPersonId ? { linkPersonId } : {} } as never);
   };
 
   const sections = useMemo(() => {

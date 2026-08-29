@@ -39,6 +39,7 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="person" options={{ headerShown: false }} />
       </Stack>
     </View>
   );

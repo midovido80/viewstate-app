@@ -1,5 +1,7 @@
 import {
   APARTMENT_SUBTYPES,
+  FLOOR_USES,
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
   PROPERTY_TYPES,
   createLiteralText,
   createPriceValue,
@@ -9,14 +11,18 @@ import {
   updatePropertyDraft,
   validateOffer,
   validateProperty,
+  validatePropertyAttachments,
   validatePropertyCore,
+  validateTypeDetails,
 } from "./index.ts";
 import type {
   ClassifiedLiteralText,
   Offer,
   Property,
+  PropertyAttachmentMetadata,
   PropertyCore,
   PropertyDraft,
+  TypeDetails,
 } from "./index.ts";
 
 type Test = {
@@ -214,6 +220,7 @@ test("Other Built Property clarification is optional", () => {
     salePrice: price(),
   });
   assert(result.ok, "Clarification must not become required");
+  assertEqual(result.value.typeDetails, undefined, "BASIC Other must omit incomplete details");
 });
 
 test("Other Built Property clarification remains literal", () => {
@@ -251,6 +258,142 @@ test("Other Built Property clarification uses normal privacy classification", ()
     salePrice: price(),
   });
   assertEqual(result.ok, false, "Clarification must use normal privacy classification");
+});
+
+test("supports discriminated enrichment details for all eleven Property Types", () => {
+  const details: readonly TypeDetails[] = [
+    { propertyType: "whole_building", builtUpAreaSquareMeters: 900, floorCount: 4, unitCount: 12 },
+    { propertyType: "commercial_complex", shopCount: 8, officeCount: 3, unitCount: 12 },
+    { propertyType: "apartment", apartmentSubtype: "duplex", bedroomCount: 3, floorNumber: 2 },
+    { propertyType: "floor", floorUse: "residential", bedroomCount: 6, livingRoomCount: 2 },
+    { propertyType: "house", bedroomCount: 4, floorCount: 2 },
+    { propertyType: "villa", bedroomCount: 6, parkingSpaceCount: 3 },
+    { propertyType: "office", bathroomCount: 2, floorNumber: 7 },
+    { propertyType: "shop", builtUpAreaSquareMeters: 75, floorNumber: 0 },
+    { propertyType: "warehouse", ceilingHeightMeters: 8, builtUpAreaSquareMeters: 1_200 },
+    { propertyType: "chalet", bedroomCount: 5, bathroomCount: 4 },
+    { propertyType: "other_built_property", clarification: normalText("Farm building") },
+  ];
+
+  assertEqual(details.length, PROPERTY_TYPES.length, "Every approved type needs a detail variant");
+  for (const item of details) {
+    assert(validateTypeDetails(item, core(item.propertyType)).ok, `Expected valid ${item.propertyType} details`);
+  }
+});
+
+test("rejects enrichment counts that cannot be represented safely", () => {
+  const result = validateTypeDetails({
+    propertyType: "apartment",
+    bedroomCount: Number.MAX_SAFE_INTEGER + 1,
+  }, core("apartment"));
+  assertEqual(result.ok, false, "Unsafe integer counts must fail without adding a business maximum");
+});
+
+test("uses one canonical detail field applicability definition", () => {
+  assert(
+    PROPERTY_DETAIL_FIELD_DEFINITIONS.some(
+      (definition) => definition.field === "builtUpAreaSquareMeters" &&
+        definition.appliesTo.length === PROPERTY_TYPES.length,
+    ),
+    "Built-up area must apply to all Property Types",
+  );
+  assertEqual(FLOOR_USES.length, 2, "Floor has exactly the Residential and Commercial uses");
+});
+
+test("requires a use before nonempty Floor enrichment can finalize", () => {
+  const missingUse = {
+    propertyType: "floor",
+    builtUpAreaSquareMeters: 300,
+  } as unknown as TypeDetails;
+  assertEqual(
+    validateTypeDetails(missingUse, core("floor")).ok,
+    false,
+    "Nonempty Floor enrichment requires a use",
+  );
+  assert(
+    validateTypeDetails({ propertyType: "floor" }, core("floor")).ok,
+    "An empty legacy Floor detail shell remains valid",
+  );
+});
+
+test("rejects fields incompatible with the selected Floor use", () => {
+  const incompatible = {
+    propertyType: "floor",
+    floorUse: "commercial",
+    bedroomCount: 3,
+  } as unknown as TypeDetails;
+  assertEqual(
+    validateTypeDetails(incompatible, core("floor")).ok,
+    false,
+    "Commercial Floor cannot contain residential fields",
+  );
+});
+
+test("requires nonblank literal clarification only when Other details exist", () => {
+  const missing = { propertyType: "other_built_property" } as unknown as TypeDetails;
+  const blank = {
+    propertyType: "other_built_property",
+    clarification: normalText(" \t "),
+  } as TypeDetails;
+  assertEqual(validateTypeDetails(missing, core("other_built_property")).ok, false, "Other detail shell needs clarification");
+  assertEqual(validateTypeDetails(blank, core("other_built_property")).ok, false, "Other clarification cannot be blank");
+  assert(
+    validateProperty(property({
+      id: "offer-1",
+      propertyCoreId: "property-1",
+      transaction: "sale",
+      salePrice: price(),
+    }, "other_built_property")).ok,
+    "BASIC Other without typeDetails stays valid",
+  );
+});
+
+test("validates private location enrichment without changing BASIC Area", () => {
+  const candidate: Property = {
+    ...property({
+      id: "offer-1",
+      propertyCoreId: "property-1",
+      transaction: "sale",
+      salePrice: price(),
+    }),
+    locationEnrichment: {
+      paciNumber: createLiteralText("12345678", createPrivacyMetadata("exact_location", "explicit_per_share")),
+      coordinates: {
+        latitude: 29.3759,
+        longitude: 47.9774,
+        privacy: createPrivacyMetadata("exact_location", "explicit_per_share"),
+      },
+    },
+  };
+  const result = validateProperty(candidate);
+  assert(result.ok, "Correctly classified private location enrichment must validate");
+  assertEqual(result.value.core.locationArea.id, "area-1", "Enrichment must preserve BASIC Area");
+});
+
+test("attachment metadata has stable identity, order, normal privacy, and one image cover", () => {
+  const attachment = (
+    id: string,
+    kind: PropertyAttachmentMetadata["kind"],
+    isCover = false,
+  ): PropertyAttachmentMetadata => ({
+    id,
+    kind,
+    originalName: `${id}.jpg`,
+    mimeType: kind === "image" ? "image/jpeg" : "application/pdf",
+    order: 0,
+    managedUri: `file:///managed/${id}`,
+    ...(isCover ? { isCover: true } : {}),
+    privacy: createPrivacyMetadata("normal", "normal"),
+  });
+  assert(validatePropertyAttachments([attachment("a-1", "image", true)]).ok, "One image cover is valid");
+  assertEqual(
+    validatePropertyAttachments([
+      attachment("a-1", "image", true),
+      attachment("a-2", "image", true),
+    ]).ok,
+    false,
+    "More than one cover must fail",
+  );
 });
 
 test("Draft retains hidden values across type and transaction changes", () => {

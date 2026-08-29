@@ -83,20 +83,18 @@ export function projectDraftToProperty(
         };
 
   let typeDetails: TypeDetails | undefined;
-  if (draft.propertyType === "apartment") {
+  if (draft.propertyType === "apartment" && draft.apartmentSubtype !== undefined) {
     typeDetails = {
       propertyType: "apartment",
-      ...(draft.apartmentSubtype === undefined
-        ? {}
-        : { apartmentSubtype: draft.apartmentSubtype }),
+      apartmentSubtype: draft.apartmentSubtype,
     };
   } else if (draft.propertyType === "other_built_property") {
-    typeDetails = {
-      propertyType: "other_built_property",
-      ...(draft.otherBuiltPropertyClarification === undefined
-        ? {}
-        : { clarification: draft.otherBuiltPropertyClarification }),
-    };
+    if (draft.otherBuiltPropertyClarification !== undefined) {
+      typeDetails = {
+        propertyType: "other_built_property",
+        clarification: draft.otherBuiltPropertyClarification,
+      };
+    }
   }
 
   const property: Property = {

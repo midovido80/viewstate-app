@@ -266,3 +266,35 @@ Sequence: Properties → People and Requirements → Matching → consolidated n
 Terminology: For the future People stage, the approved Arabic user-facing Broker label is `وسيط`; this does not claim that People UI is implemented. English remains `Broker`. Stored identifiers, role behavior, and literal user-entered/imported text remain unchanged.
 Repository state: Local implementation commit `fc1ecb4b9defec78c29c803ebfb106161741e331`; no push, PR change, merge, release, or freeze. PR #7 and protected/diagnostic branches remain unchanged.
 State: TASK #5 IMPLEMENTED LOCALLY / PROVISIONALLY ACCEPTED BY FOUNDER BASED ON SUBMITTED REPORT / NOT FROZEN — WAIT.
+
+---
+
+### Session: 2026-08-29 (Bounded V001 Properties and People Completion Authorization)
+Authorization: Founder explicitly approved immediate local implementation under DEC-043.
+Scope: Preserve the existing four-field BASIC Property flow; add optional post-save built-property enrichment for the existing taxonomy, local attachments, private manual/current location enrichment, literal Property Notes, governed People, neutral Person-to-Property links, and one-Property selective sharing with sensitive data off by default.
+Boundaries: Local-first and additive only. No Land, Matching, Tasks, Follow-ups, commission logic, Unit/Parent Building model, cloud/auth/server architecture, external PACI lookup, reverse geocoding, new search architecture, real-data operation, Git publication, release, or APK build.
+State: AUTHORIZED FOR BOUNDED LOCAL IMPLEMENTATION / IMPLEMENTATION AND SYNTHETIC VERIFICATION PENDING / NOT FROZEN — WAIT.
+
+---
+
+### Session: 2026-08-29 (Bounded V001 Properties and People Local Implementation)
+Implemented: Preserved the four-field BASIC Property flow and added optional post-save type details for the existing eleven built-property types, durable enrichment drafts, private notes/location, local attachments, governed People, neutral Person-to-Property links, local search/actions, and preview-first selective sharing under DEC-043.
+Verification: Synthetic-only Mobile suite 69/69; Mobile TypeScript; Property Domain tests and TypeScript; diff integrity; clean managed Expo/Metro startup and 1,813-module web bundle. No Preview/device data was accessed or altered. Independent CTO-style review: PASS with no blocking finding.
+Compatibility: Existing BASIC-only Properties, Property/Offer identities, KWD and rental-cadence truth, unknown fields, recovery evidence, and deletion fences remain supported. Additions are optional/local and use the existing serialized Property boundary plus bounded People/link persistence.
+State: BOUNDED LOCAL IMPLEMENTATION COMPLETE AND SYNTHETICALLY VERIFIED / CTO REVIEW PASS / NOT NATIVE-DEVICE ACCEPTED / NOT FROZEN, COMMITTED, PUSHED, MERGED, PUBLISHED, RELEASED, OR APK-BUILT — WAIT.
+
+---
+
+### Session: 2026-08-29 (Final Bounded V001 Dynamic Details Field Authorization)
+Authorization: Founder explicitly selected a different final approved field/domain contract and recorded it as DEC-044. This supersedes only unresolved Dynamic Details field proposals; it does not approve prior CTO recommendations wholesale.
+Scope: Align the local DEC-043 implementation to the exact per-type field applicability, exact three-value Furnishing taxonomy, nonnegative integer count rules, aggregate known-unit constraint, Floor Use requirement for completed Floor enrichment, and Other clarification requirement for completed Other enrichment.
+Exclusions: Property Condition and Availability remain unapproved and excluded. All DEC-043 local-only boundaries remain active.
+State: AUTHORIZED FOR IMMEDIATE BOUNDED LOCAL IMPLEMENTATION / RE-VERIFICATION AND CTO REVIEW PENDING / NOT FROZEN — WAIT.
+
+---
+
+### Session: 2026-08-29 (Final Bounded V001 Dynamic Details Implementation)
+Implemented: Replaced the provisional generic Dynamic Details matrix with the exact DEC-044 per-type contract, including the three-value Furnishing taxonomy, Residential/Commercial Floor applicability, literal commercial fields, boolean amenities, building/complex counts, Warehouse details, aggregate known-unit validation, and BASIC-safe Other behavior. Property Condition and Availability remain absent.
+Compatibility: The implementation remains additive and preserves BASIC-only Properties, stable identities, Sale/Rent Offer separation and cadence truth, unknown persisted fields, recovery evidence, literal Description/Private Notes/location text, and all bounded DEC-043 People, link, media, location, sharing, and privacy behavior.
+Verification: Synthetic-only Mobile suite 70/70; Mobile TypeScript; Property Domain tests and TypeScript; diff integrity; clean Expo/Metro startup and 1,707-module web bundle. No Preview/device data was accessed or altered. Independent DEC-044 CTO/governance review: PASS with no blocking finding.
+State: DEC-044 BOUNDED LOCAL IMPLEMENTATION COMPLETE AND SYNTHETICALLY VERIFIED / CTO REVIEW PASS / NOT NATIVE-DEVICE ACCEPTED / NOT FROZEN, COMMITTED, PUSHED, MERGED, PUBLISHED, RELEASED, OR APK-BUILT — WAIT.

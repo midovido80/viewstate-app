@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Property, PROPERTY_TYPES, PropertyType, Transaction } from '@workspace/property-domain';
+import { Property, PROPERTY_DETAIL_FIELD_DEFINITIONS, PROPERTY_TYPES, PropertyDetailField, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
+import { formatPropertyDetailValue, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
@@ -393,6 +394,12 @@ export default function PropertyDetailScreen() {
             <TouchableOpacity onPress={beginEdit} accessibilityRole="button" testID="property-edit-action">
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.edit')}</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/enrich` as never)} accessibilityRole="button" testID="property-enrich-action">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.enrich')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/share` as never)} accessibilityRole="button" testID="property-share-action">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.share')}</Text>
+            </TouchableOpacity>
           </View>
         ) : <View style={styles.headerSpacer} />}
       </View>
@@ -426,6 +433,22 @@ export default function PropertyDetailScreen() {
                 : formatPrice(shownPrice!, 'KWD', language)}
             />
             <DetailRow label={t('detail.area')} value={areaName(property.core.locationArea.id)} />
+            {property.typeDetails ? PROPERTY_DETAIL_FIELD_DEFINITIONS
+              .filter(definition => definition.appliesTo.includes(property.core.propertyType))
+              .map(definition => {
+                const value = (property.typeDetails as unknown as Record<string, unknown>)[definition.field];
+                return value === undefined ? null : (
+                  <DetailRow
+                    key={definition.field}
+                    label={propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
+                    value={formatPropertyDetailValue(definition.field as PropertyDetailField, value, language)}
+                  />
+                );
+              }) : null}
+            {property.core.description ? <DetailRow label={t('enrich.description')} value={property.core.description.value} /> : null}
+            {property.core.privateNotes ? <DetailRow label={t('enrich.private_notes')} value={property.core.privateNotes.value} /> : null}
+            {property.locationEnrichment?.manualLocationText ? <DetailRow label={t('enrich.manual_location')} value={property.locationEnrichment.manualLocationText.value} /> : null}
+            {property.attachments?.map(attachment => <DetailRow key={attachment.id} label={attachment.isCover ? `★ ${attachment.kind}` : attachment.kind} value={attachment.originalName} />)}
           </>
         ) : choices ? (
           <>

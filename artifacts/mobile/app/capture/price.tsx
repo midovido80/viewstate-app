@@ -1,5 +1,5 @@
 import { View, StyleSheet, Text, TextInput } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useCapture } from '@/contexts/CaptureContext';
@@ -14,6 +14,7 @@ import {
 
 export default function PriceScreen() {
   const router = useRouter();
+  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, draftOrigin, updateDraft, isReady } = useCapture();
@@ -63,14 +64,14 @@ export default function PriceScreen() {
         rentalPeriodId: undefined
       });
     } else {
-      if (!draft.rentalPeriodId) return;
+      if (!workingRentalPeriodId) return;
       updateDraft({ 
         rentalPrice: { amount: numAmount, currencyCode: MARKET_CONFIG.currencyCode },
-        rentalPeriodId: draft.rentalPeriodId,
+        rentalPeriodId: workingRentalPeriodId,
         salePrice: undefined
       });
     }
-    router.push('/capture/location' as any);
+    router.push({ pathname: '/capture/location', params: linkPersonId ? { linkPersonId } : {} } as never);
   };
 
   return (

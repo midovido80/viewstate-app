@@ -56,6 +56,18 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen
+        name="people"
+        options={{
+          title: t('people.title'),
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="person.2" tintColor={color} size={24} />
+            ) : (
+              <Feather name="users" size={22} color={color} />
+            ),
+        }}
+      />
     </Tabs>
   );
 }
