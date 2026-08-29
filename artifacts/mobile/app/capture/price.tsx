@@ -76,7 +76,7 @@ export default function PriceScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader step={3} totalSteps={4} />
+      <CaptureHeader step={3} totalSteps={5} />
       
       <KeyboardAwareScrollViewCompat
         style={styles.container}

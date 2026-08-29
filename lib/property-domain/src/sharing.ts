@@ -57,6 +57,8 @@ export interface PropertyShareLabels {
   readonly manualLocation: string;
   readonly mapsLink: string;
   readonly personContact: string;
+  readonly rentalMonthly: string;
+  readonly attribution: string;
 }
 
 export interface PropertyShareRequest {
@@ -70,6 +72,12 @@ export interface PropertyShareRequest {
   readonly labels?: Partial<PropertyShareLabels>;
   readonly detailLabels?: Partial<Record<PropertyDetailField, string>>;
   readonly detailValueLabels?: Readonly<Record<string, string>>;
+  /** Localized display values for BASIC enums and the approved Area ID. */
+  readonly normalValueLabels?: Readonly<Record<string, string>>;
+  /** Optional localized price rendering; the canonical amount is still selected here. */
+  readonly formattedPrice?: string;
+  /** Localized rendering of the stored rent cadence (for example, "per month"). */
+  readonly rentalCadence?: string;
 }
 
 export interface PropertySharePreview {
@@ -117,6 +125,8 @@ const defaultLabels: PropertyShareLabels = {
   manualLocation: "Manual location",
   mapsLink: "Maps link",
   personContact: "Contact",
+  rentalMonthly: "per month",
+  attribution: "Shared via ViewState",
 };
 
 /**
@@ -246,6 +256,10 @@ export function buildPropertySharePreview(
     mapsLink: suppliedLabels?.mapsLink ?? defaultLabels.mapsLink,
     personContact:
       suppliedLabels?.personContact ?? defaultLabels.personContact,
+    rentalMonthly:
+      suppliedLabels?.rentalMonthly ?? defaultLabels.rentalMonthly,
+    attribution:
+      suppliedLabels?.attribution ?? defaultLabels.attribution,
   };
   const lines: string[] = [];
   const fields = new Set(selection.normalFields);
@@ -253,15 +267,34 @@ export function buildPropertySharePreview(
     if (value !== undefined && value.length > 0) lines.push(`${label}: ${value}`);
   };
 
-  if (fields.has("property_type")) add(labels.propertyType, property.core.propertyType);
-  if (fields.has("transaction")) add(labels.transaction, property.activeOffer.transaction);
+  const localizedNormalValue = (value: string) =>
+    request.normalValueLabels?.[value] ?? value;
+  if (fields.has("property_type")) {
+    add(labels.propertyType, localizedNormalValue(property.core.propertyType));
+  }
+  if (fields.has("transaction")) {
+    add(labels.transaction, localizedNormalValue(property.activeOffer.transaction));
+  }
   if (fields.has("price")) {
     const price = property.activeOffer.transaction === "sale"
       ? property.activeOffer.salePrice
       : property.activeOffer.rentalPrice;
-    add(labels.price, `${price.amount} ${price.currencyCode}`);
+    const renderedPrice = request.formattedPrice ?? `${price.amount} ${price.currencyCode}`;
+    add(
+      labels.price,
+      property.activeOffer.transaction === "rent"
+        ? `${renderedPrice} ${
+          request.rentalCadence
+            ?? (property.activeOffer.rentalPeriodId === "monthly"
+              ? labels.rentalMonthly
+              : property.activeOffer.rentalPeriodId)
+        }`
+        : renderedPrice,
+    );
   }
-  if (fields.has("area")) add(labels.area, property.core.locationArea.id);
+  if (fields.has("area")) {
+    add(labels.area, localizedNormalValue(property.core.locationArea.id));
+  }
   if (fields.has("type_details") && property.typeDetails !== undefined) {
     const details = property.typeDetails as unknown as Record<string, unknown>;
     for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
@@ -327,6 +360,10 @@ export function buildPropertySharePreview(
       );
     }
     add(labels.personContact, `${contact.name} — ${contact.phone}`);
+  }
+
+  if (lines.length > 0 && labels.attribution.length > 0) {
+    lines.push("", labels.attribution);
   }
 
   return {

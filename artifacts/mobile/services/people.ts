@@ -31,6 +31,7 @@ export interface PersonInput {
   classifications: readonly PersonClassification[];
   name: string;
   displayPhone: string;
+  normalizedPhone?: string;
   notes?: string;
 }
 
@@ -58,7 +59,7 @@ export function createPerson(input: PersonInput): Person {
     classifications: [...input.classifications],
     name: input.name,
     displayPhone: input.displayPhone,
-    normalizedPhone: normalizePersonPhone(input.displayPhone),
+    normalizedPhone: normalizePersonPhone(input.normalizedPhone ?? input.displayPhone),
     notes: input.notes ?? '',
   };
   assertValidPerson(person);
@@ -71,7 +72,15 @@ export function assertValidPerson(person: Person): void {
   if (!person.displayPhone.trim() || !person.normalizedPhone.replace('+', '')) {
     throw new Error('PERSON_PHONE_REQUIRED');
   }
-  if (person.normalizedPhone !== normalizePersonPhone(person.displayPhone)) {
+  const displayNormalized = normalizePersonPhone(person.displayPhone);
+  const normalizedIsCanonical = person.normalizedPhone === normalizePersonPhone(person.normalizedPhone);
+  const displayNationalDigits = displayNormalized.replace(/\D/g, '').replace(/^0+/, '');
+  const isCountryQualifiedDisplay = person.normalizedPhone.startsWith('+')
+    && person.normalizedPhone.replace(/\D/g, '').endsWith(displayNationalDigits);
+  if (!normalizedIsCanonical || (
+    person.normalizedPhone !== displayNormalized
+    && !isCountryQualifiedDisplay
+  )) {
     throw new Error('PERSON_PHONE_NORMALIZATION_MISMATCH');
   }
   if (!Array.isArray(person.classifications) || person.classifications.length === 0) {

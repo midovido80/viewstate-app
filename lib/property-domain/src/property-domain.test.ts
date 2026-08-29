@@ -3,6 +3,7 @@ import {
   FLOOR_USES,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   PROPERTY_TYPES,
+  buildPropertySharePreview,
   createLiteralText,
   createPriceValue,
   createPrivacyMetadata,
@@ -537,6 +538,130 @@ test("final aggregate requires matching Property Core and Offer identities", () 
     salePrice: price(),
   }));
   assertEqual(result.ok, false, "Mismatched identities must fail");
+});
+
+test("share preview uses supplied localized BASIC labels and monthly rent wording", () => {
+  const preview = buildPropertySharePreview({
+    property: {
+      core: {
+        id: "property-1",
+        propertyType: "apartment",
+        locationArea: { id: "area-salmiya" },
+      },
+      activeOffer: {
+        id: "offer-1",
+        propertyCoreId: "property-1",
+        transaction: "rent",
+        rentalPrice: price(1_250),
+        rentalPeriodId: "monthly",
+      },
+    },
+    selection: {
+      normalFields: ["property_type", "transaction", "price", "area"],
+      attachmentIds: [],
+      discloseOwnerSource: false,
+      discloseExactLocation: false,
+      disclosePaci: false,
+      discloseManualLocation: false,
+      discloseMapsLink: false,
+      personContactIds: [],
+    },
+    availableAttachments: [],
+    labels: {
+      propertyType: "Tipo",
+      transaction: "Operación",
+      price: "Precio",
+      area: "Zona",
+      rentalMonthly: "al mes",
+      attribution: "Publicado por Casa",
+    },
+    normalValueLabels: {
+      apartment: "Apartamento",
+      rent: "Alquiler",
+      "area-salmiya": "Salmiya",
+    },
+    formattedPrice: "1.250 KWD",
+  });
+
+  assertEqual(
+    preview.text,
+    "Tipo: Apartamento\nOperación: Alquiler\nPrecio: 1.250 KWD al mes\nZona: Salmiya\n\nPublicado por Casa",
+    "Localized preview text must be exact and must not expose stored enum values",
+  );
+});
+
+test("share preview fail-closes exact locations and maps while never exposing private notes", () => {
+  const sharedProperty: Property = {
+    core: {
+      id: "property-1",
+      propertyType: "apartment",
+      locationArea: { id: "area-1" },
+      privateNotes: createLiteralText(
+        "PRIVATE-NOTES-SECRET",
+        createPrivacyMetadata("private_notes", "never"),
+      ),
+      exactLocation: createLiteralText(
+        "EXACT-LOCATION-SECRET",
+        createPrivacyMetadata("exact_location", "explicit_per_share"),
+      ),
+    },
+    activeOffer: {
+      id: "offer-1",
+      propertyCoreId: "property-1",
+      transaction: "sale",
+      salePrice: price(),
+    },
+  };
+  const baseSelection = {
+    normalFields: ["property_type"] as const,
+    attachmentIds: [],
+    discloseOwnerSource: false,
+    discloseExactLocation: false,
+    disclosePaci: false,
+    discloseManualLocation: false,
+    discloseMapsLink: false,
+    personContactIds: [],
+  };
+  const privateLocation = { mapsLink: "https://maps.example/EXACT-MAPS-SECRET" };
+  const hiddenPreview = buildPropertySharePreview({
+    property: sharedProperty,
+    selection: baseSelection,
+    availableAttachments: [],
+    privateLocation,
+    labels: { attribution: "" },
+  });
+  assertEqual(hiddenPreview.text, "Property type: apartment", "Unselected private values must be absent");
+  assertEqual(
+    hiddenPreview.text.includes("SECRET"),
+    false,
+    "Private notes, exact location, and maps link must fail closed",
+  );
+
+  const explicitPreview = buildPropertySharePreview({
+    property: sharedProperty,
+    selection: {
+      ...baseSelection,
+      discloseExactLocation: true,
+      discloseMapsLink: true,
+    },
+    availableAttachments: [],
+    privateLocation,
+    labels: {
+      exactLocation: "Ubicación exacta",
+      mapsLink: "Mapa",
+      attribution: "",
+    },
+  });
+  assertEqual(
+    explicitPreview.text,
+    "Property type: apartment\nUbicación exacta: EXACT-LOCATION-SECRET\nMapa: https://maps.example/EXACT-MAPS-SECRET",
+    "Only explicit exact-location and maps selections may add their deterministic lines",
+  );
+  assertEqual(
+    explicitPreview.text.includes("PRIVATE-NOTES-SECRET"),
+    false,
+    "Private notes must never enter the preview, even with other disclosures",
+  );
 });
 
 const failures: string[] = [];

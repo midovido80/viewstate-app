@@ -1,0 +1,1 @@
+- [Expo Preview screenshot timing](expo-preview-screenshot-timing.md) — a blank capture can be transient; verify a direct route, logs, and accessibility state before judging the UI broken.

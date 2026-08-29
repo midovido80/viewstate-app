@@ -1,13 +1,22 @@
-import { useState } from 'react';
-import { Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { FlatList, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { Button } from '@/components/Button';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/services/people';
 import { store } from '@/services/persistence';
+import {
+  buildContactPhoneChoices,
+  inferPhoneCountry,
+  normalizePhoneForCountry,
+  PHONE_COUNTRIES,
+  PhoneCountryCode,
+  phoneDigits,
+} from '@/services/phoneEntry';
 
 export default function NewPersonScreen() {
   const router = useRouter();
@@ -16,15 +25,30 @@ export default function NewPersonScreen() {
   const { t, isRTL, fonts } = useI18n();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>('KW');
+  const [countryOpen, setCountryOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [classifications, setClassifications] = useState<PersonClassification[]>([]);
   const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const toggle = (value: PersonClassification) => setClassifications(current =>
     current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
+
+  const contactChoices = useMemo(() => buildContactPhoneChoices(contacts), [contacts]);
+  const filteredContactChoices = useMemo(() => {
+    const literalQuery = contactSearch.trim().toLocaleLowerCase();
+    const digitQuery = phoneDigits(contactSearch);
+    if (!literalQuery) return contactChoices;
+    return contactChoices.filter(choice =>
+      choice.name.toLocaleLowerCase().includes(literalQuery)
+      || (!!digitQuery && choice.normalizedDigits.includes(digitQuery)));
+  }, [contactChoices, contactSearch]);
+  const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
+    ?? PHONE_COUNTRIES[0];
 
   const importContact = async () => {
     setError('');
@@ -32,17 +56,22 @@ export default function NewPersonScreen() {
       setError(t('people.contacts_unavailable'));
       return;
     }
-    const permission = await Contacts.requestPermissionsAsync();
-    if (permission.status !== 'granted') {
-      setError(t('people.contacts_denied'));
-      return;
+    try {
+      const permission = await Contacts.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setError(t('people.contacts_denied'));
+        return;
+      }
+      const result = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      setContacts(result.data);
+      setContactSearch('');
+      setContactsOpen(true);
+    } catch {
+      setError(t('people.contacts_load_failed'));
     }
-    const result = await Contacts.getContactsAsync({
-      fields: [Contacts.Fields.PhoneNumbers],
-      sort: Contacts.SortTypes.FirstName,
-    });
-    setContacts(result.data.filter(contact => contact.name && contact.phoneNumbers?.some(item => item.number)));
-    setContactsOpen(true);
   };
 
   const save = async () => {
@@ -54,6 +83,7 @@ export default function NewPersonScreen() {
         id: `person-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         name,
         displayPhone: phone,
+        normalizedPhone: normalizePhoneForCountry(phone, phoneCountry),
         notes,
         classifications,
       });
@@ -77,6 +107,8 @@ export default function NewPersonScreen() {
     textAlign: isRTL ? 'right' as const : 'left' as const,
     fontFamily: fonts.regular,
   }];
+  const textAlign = isRTL ? 'right' as const : 'left' as const;
+  const contactAlignItems = isRTL ? 'flex-end' as const : 'flex-start' as const;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -87,9 +119,22 @@ export default function NewPersonScreen() {
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.add')}</Text>
         <View style={{ width: 45 }} />
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={60}>
         <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} placeholderTextColor={colors.mutedForeground} style={inputStyle} testID="person-name" />
-        <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={inputStyle} testID="person-phone" />
+        <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <TouchableOpacity
+            onPress={() => setCountryOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t(selectedCountry.translationKey)}
+            style={[styles.countryButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            testID="person-phone-country"
+          >
+            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign }}>
+              {selectedCountry.code} +{selectedCountry.dialCode}
+            </Text>
+          </TouchableOpacity>
+          <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
+        </View>
         <Button title={t('people.import_contact')} onPress={() => void importContact()} variant="outline" testID="person-import-contact" />
         <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
         <View style={styles.choices}>
@@ -109,28 +154,69 @@ export default function NewPersonScreen() {
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
       <Modal visible={contactsOpen} animationType="slide" onRequestClose={() => setContactsOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.choose_contact')}</Text>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            {contacts.map((contact, index) => {
-              const number = contact.phoneNumbers?.find(item => item.number)?.number;
-              if (!number) return null;
-              const contactKey = `${contact.name}-${number}-${index}`;
-              return (
-                <TouchableOpacity key={contactKey} onPress={() => {
-                  setName(contact.name);
-                  setPhone(number);
-                  setContactsOpen(false);
-                }} style={[styles.contact, { borderBottomColor: colors.border }]} testID={`contact-choice-${contactKey}`}>
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{contact.name}</Text>
-                  <Text style={{ color: colors.mutedForeground }}>{number}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            <Button title={t('capture.cancel')} onPress={() => setContactsOpen(false)} variant="outline" testID="contact-picker-cancel" />
-          </ScrollView>
+          <View style={[styles.modalHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign }]}>{t('people.choose_contact')}</Text>
+            <TouchableOpacity onPress={() => setContactsOpen(false)} accessibilityRole="button" testID="contact-picker-cancel">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign }}>{t('capture.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            value={contactSearch}
+            onChangeText={setContactSearch}
+            placeholder={t('people.contact_search')}
+            placeholderTextColor={colors.mutedForeground}
+            style={[inputStyle, styles.contactSearch]}
+            testID="contact-search"
+          />
+          <FlatList
+            data={filteredContactChoices}
+            keyExtractor={item => item.key}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            scrollEnabled={filteredContactChoices.length > 0}
+            contentContainerStyle={styles.contactList}
+            renderItem={({ item }) => (
+              <TouchableOpacity onPress={() => {
+                setName(item.name);
+                setPhone(item.phone);
+                const inferredCountry = inferPhoneCountry(item.phone);
+                if (inferredCountry) setPhoneCountry(inferredCountry);
+                setContactsOpen(false);
+              }} style={[styles.contact, { borderBottomColor: colors.border, alignItems: contactAlignItems }]} testID={`contact-choice-${item.key}`}>
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign }}>{item.name}</Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{item.phone}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </Modal>
+      <Modal visible={countryOpen} animationType="fade" transparent onRequestClose={() => setCountryOpen(false)}>
+        <View style={[styles.modalBackdrop, { backgroundColor: `${colors.foreground}59` }]}>
+          <View style={[styles.countryPicker, { backgroundColor: colors.card }]}>
+            <Text style={[styles.countryTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign }]}>
+              {t('people.country')}
+            </Text>
+            {PHONE_COUNTRIES.map(country => (
+              <TouchableOpacity
+                key={country.code}
+                onPress={() => {
+                  setPhoneCountry(country.code);
+                  setCountryOpen(false);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: phoneCountry === country.code }}
+                style={[styles.countryChoice, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                testID={`person-phone-country-${country.code}`}
+              >
+                <Text style={[styles.countryName, { color: colors.foreground, fontFamily: fonts.medium, textAlign }]}>{t(country.translationKey)}</Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{country.code} +{country.dialCode}</Text>
+              </TouchableOpacity>
+            ))}
+            <Button title={t('capture.cancel')} onPress={() => setCountryOpen(false)} variant="outline" testID="country-picker-cancel" />
+          </View>
         </View>
       </Modal>
     </View>
@@ -143,10 +229,21 @@ const styles = StyleSheet.create({
   title: { fontSize: 20 },
   content: { padding: 20, paddingBottom: 48, gap: 14 },
   input: { minHeight: 54, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, fontSize: 16 },
+  phoneRow: { gap: 8 },
+  phoneInput: { flex: 1 },
+  countryButton: { minHeight: 54, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 10 },
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   label: { fontSize: 16 },
   choices: { gap: 8 },
   choice: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderRadius: 10 },
-  modalTitle: { fontSize: 22, padding: 20 },
+  modalHeader: { minHeight: 64, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
+  modalTitle: { fontSize: 22 },
+  contactSearch: { marginHorizontal: 20, marginBottom: 8 },
+  contactList: { paddingHorizontal: 20, paddingBottom: 32 },
   contact: { minHeight: 64, borderBottomWidth: 1, justifyContent: 'center', gap: 4 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
+  countryPicker: { borderRadius: 14, padding: 16, gap: 4 },
+  countryTitle: { fontSize: 20, marginBottom: 8 },
+  countryChoice: { minHeight: 50, alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
+  countryName: { flex: 1 },
 });
