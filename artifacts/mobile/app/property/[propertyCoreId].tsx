@@ -20,6 +20,7 @@ import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } fr
 import { getAreaById, searchAreas } from '@/constants/kuwait-areas';
 import { store } from '@/services/persistence';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
+import { loadPropertyEnrichmentDraft } from '@/services/propertyEnrichmentRecovery';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -46,6 +47,7 @@ export default function PropertyDetailScreen() {
   const insets = useSafeAreaInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
+  const [hasEnrichmentDraft, setHasEnrichmentDraft] = useState(false);
   const [draft, setDraft] = useState<PropertyEditDraftV1 | null>(null);
   const draftRef = useRef<PropertyEditDraftV1 | null>(null);
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
@@ -64,6 +66,7 @@ export default function PropertyDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id) {
+      setHasEnrichmentDraft(false);
       setStatus('missing');
       return;
     }
@@ -95,16 +98,22 @@ export default function PropertyDetailScreen() {
         setPendingOperation(null);
         setRecoveryStatus(null);
       }
-      const saved = await store.getProperty(id);
+      const [saved, enrichmentDraft] = await Promise.all([
+        store.getProperty(id),
+        loadPropertyEnrichmentDraft(id).catch(() => null),
+      ]);
       if (!saved) {
         setProperty(null);
+        setHasEnrichmentDraft(false);
         setStatus('missing');
         return;
       }
       setProperty(saved);
+      setHasEnrichmentDraft(enrichmentDraft !== null);
       setStatus('ready');
     } catch {
       setProperty(null);
+      setHasEnrichmentDraft(false);
       setStatus('unreadable');
     }
   }, [id, t]);
@@ -395,7 +404,9 @@ export default function PropertyDetailScreen() {
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.edit')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/enrich` as never)} accessibilityRole="button" testID="property-enrich-action">
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.enrich')}</Text>
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>
+                {t(hasEnrichmentDraft ? 'detail.continue_details' : 'detail.add_details')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/share` as never)} accessibilityRole="button" testID="property-share-action">
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.share')}</Text>
