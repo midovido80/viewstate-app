@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -8,10 +9,16 @@ import { useI18n } from '@/contexts/I18nContext';
 
 export default function SuccessScreen() {
   const router = useRouter();
+  const navigationStartedRef = useRef(false);
   const { propertyCoreId, linkPersonId } = useLocalSearchParams<{ propertyCoreId?: string; linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
+  const replaceOnce = (destination: string) => {
+    if (navigationStartedRef.current) return;
+    navigationStartedRef.current = true;
+    router.replace(destination as never);
+  };
 
   return (
     <View
@@ -47,17 +54,17 @@ export default function SuccessScreen() {
       {propertyCoreId ? (
         <Button
           title={t('summary.add_details')}
-          onPress={() => router.replace(`/property/${encodeURIComponent(propertyCoreId)}/enrich` as never)}
+          onPress={() => replaceOnce(`/property/${encodeURIComponent(propertyCoreId)}/enrich`)}
           size="large"
           testID="btn-add-details-now"
         />
       ) : null}
       <Button
-        title={t('summary.done')}
-        onPress={() => router.replace(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` as never : '/' as never)}
+        title={t('summary.later')}
+        onPress={() => replaceOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/')}
         variant={propertyCoreId ? 'outline' : undefined}
         size="large"
-        testID="btn-back-home"
+        testID="btn-later"
       />
     </View>
   );

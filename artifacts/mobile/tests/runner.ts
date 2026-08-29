@@ -151,16 +151,30 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
 });
 
-test('Synthetic enrichment route preserves the bounded post-save entry points', async () => {
+test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Later action', async () => {
   const sourcePath = (relativePath: string) =>
     decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
-  const [successSource, enrichmentSource, fieldSource] = await Promise.all([
+  const [successSource, enrichmentSource, fieldSource, detailSource, translations] = await Promise.all([
     readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
     readFile(sourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+    readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
   assert.match(successSource, /btn-add-details-now/);
-  assert.match(successSource, /summary\.done/);
+  assert.match(successSource, /btn-later/);
+  assert.match(successSource, /summary\.later/);
+  assert.match(successSource, /navigationStartedRef/);
+  assert.match(successSource, /replaceOnce/);
+  assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
+  assert.match(detailSource, /loadPropertyEnrichmentDraft/);
+  assert.match(detailSource, /loadPropertyEnrichmentDraft\(id\)\.catch\(\(\) => null\)/);
+  assert.doesNotMatch(detailSource, /loadPropertyEnrichmentDraft\(id\)\.catch\(\(\) => ['"]unreadable['"]/);
+  assert.match(detailSource, /hasEnrichmentDraft \? 'detail\.continue_details' : 'detail\.add_details'/);
+  assert.match(translations, /'summary\.later': 'Later'/);
+  assert.match(translations, /'summary\.later': 'لاحقًا'/);
+  assert.match(translations, /'detail\.continue_details': 'Continue details'/);
+  assert.match(translations, /'detail\.continue_details': 'متابعة التفاصيل'/);
   assert.match(enrichmentSource, /persistAttachmentsThenDeleteRemoved/);
   assert.match(enrichmentSource, /requestCurrentCoordinates/);
   assert.match(enrichmentSource, /enrich-other-required|OTHER_CLARIFICATION_REQUIRED/);
