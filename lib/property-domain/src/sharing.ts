@@ -57,8 +57,6 @@ export interface PropertyShareLabels {
   readonly manualLocation: string;
   readonly mapsLink: string;
   readonly personContact: string;
-  readonly rentalMonthly: string;
-  readonly attribution: string;
 }
 
 export interface PropertyShareRequest {
@@ -76,8 +74,10 @@ export interface PropertyShareRequest {
   readonly normalValueLabels?: Readonly<Record<string, string>>;
   /** Optional localized price rendering; the canonical amount is still selected here. */
   readonly formattedPrice?: string;
-  /** Localized rendering of the stored rent cadence (for example, "per month"). */
-  readonly rentalCadence?: string;
+  /** Localized rendering of the stored rent cadence, supplied by the presentation layer. */
+  readonly rentalCadence: string;
+  /** Localized product attribution, supplied by the presentation layer. */
+  readonly attribution: string;
 }
 
 export interface PropertySharePreview {
@@ -125,8 +125,6 @@ const defaultLabels: PropertyShareLabels = {
   manualLocation: "Manual location",
   mapsLink: "Maps link",
   personContact: "Contact",
-  rentalMonthly: "per month",
-  attribution: "Shared via ViewState",
 };
 
 /**
@@ -256,10 +254,6 @@ export function buildPropertySharePreview(
     mapsLink: suppliedLabels?.mapsLink ?? defaultLabels.mapsLink,
     personContact:
       suppliedLabels?.personContact ?? defaultLabels.personContact,
-    rentalMonthly:
-      suppliedLabels?.rentalMonthly ?? defaultLabels.rentalMonthly,
-    attribution:
-      suppliedLabels?.attribution ?? defaultLabels.attribution,
   };
   const lines: string[] = [];
   const fields = new Set(selection.normalFields);
@@ -283,12 +277,7 @@ export function buildPropertySharePreview(
     add(
       labels.price,
       property.activeOffer.transaction === "rent"
-        ? `${renderedPrice} ${
-          request.rentalCadence
-            ?? (property.activeOffer.rentalPeriodId === "monthly"
-              ? labels.rentalMonthly
-              : property.activeOffer.rentalPeriodId)
-        }`
+        ? `${renderedPrice} ${request.rentalCadence}`
         : renderedPrice,
     );
   }
@@ -362,8 +351,8 @@ export function buildPropertySharePreview(
     add(labels.personContact, `${contact.name} — ${contact.phone}`);
   }
 
-  if (lines.length > 0 && labels.attribution.length > 0) {
-    lines.push("", labels.attribution);
+  if (lines.length > 0 && request.attribution.length > 0) {
+    lines.push("", request.attribution);
   }
 
   return {

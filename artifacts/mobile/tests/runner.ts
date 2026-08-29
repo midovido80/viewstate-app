@@ -2251,6 +2251,8 @@ test('V001 selective sharing defaults exclude private notes and injected sharing
     labels: { propertyType: 'نوع العقار / Property type', ownerSource: 'المصدر / Source', exactLocation: 'الموقع / Location' },
     detailLabels: { builtUpAreaSquareMeters: 'مساحة البناء', furnishing: 'التأثيث', hasMaidRoom: 'غرفة خادمة' },
     detailValueLabels: { semi_furnished: 'نصف مؤثث', false: 'لا' },
+    rentalCadence: 'شهرياً / monthly',
+    attribution: 'عبر ViewState / Shared via ViewState',
   });
   assert.match(preview.text, /نوع العقار/);
   assert.match(preview.text, /synthetic owner/);
@@ -2373,6 +2375,8 @@ test('Share selection fails closed for every private location value until explic
       manualLocation: property.locationEnrichment?.manualLocationText?.value,
       mapsLink: property.locationEnrichment?.mapsLink?.value,
     },
+    rentalCadence: 'شهرياً / monthly',
+    attribution: '',
   });
   for (const secret of ['owner-only', 'exact-only', 'PACI-only', 'manual-only', 'maps.example/private']) {
     assert.doesNotMatch(preview.text, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

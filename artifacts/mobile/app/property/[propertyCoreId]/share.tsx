@@ -50,7 +50,7 @@ export default function PropertyShareScreen() {
         availableAttachments: (property.attachments ?? []).map(item => ({ id: item.id, propertyCoreId: property.core.id })),
         privateLocation: { paci: property.locationEnrichment?.paciNumber?.value, manualLocation: property.locationEnrichment?.manualLocationText?.value, mapsLink: property.locationEnrichment?.mapsLink?.value },
         contacts: contacts.filter(person => !!person.displayPhone).map(person => ({ id: person.id, name: person.name, phone: person.displayPhone })),
-        labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), manualLocation: t('enrich.manual_location'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact'), rentalMonthly: t('price.cadence.monthly'), attribution: shareT('share.attribution') },
+        labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), manualLocation: t('enrich.manual_location'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact') },
         detailLabels: Object.fromEntries(Object.entries(propertyDetailLabels).map(([field, labels]) => [field, labels[language === 'ar' ? 1 : 0]])),
         detailValueLabels: {
           true: t('enrich.yes'),
@@ -76,7 +76,8 @@ export default function PropertyShareScreen() {
         ),
         rentalCadence: property.activeOffer.transaction === 'rent'
           ? formatRentalCadence(property.activeOffer.rentalPeriodId, t as (key: string) => string)
-          : undefined,
+          : t('price.cadence.monthly'),
+        attribution: shareT('share.attribution'),
       });
     } catch { return null; }
   }, [property, selection, t, language, contacts]);

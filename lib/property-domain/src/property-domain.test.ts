@@ -572,8 +572,6 @@ test("share preview uses supplied localized BASIC labels and monthly rent wordin
       transaction: "Operación",
       price: "Precio",
       area: "Zona",
-      rentalMonthly: "al mes",
-      attribution: "Publicado por Casa",
     },
     normalValueLabels: {
       apartment: "Apartamento",
@@ -581,6 +579,8 @@ test("share preview uses supplied localized BASIC labels and monthly rent wordin
       "area-salmiya": "Salmiya",
     },
     formattedPrice: "1.250 KWD",
+    rentalCadence: "al mes",
+    attribution: "Publicado por Casa",
   });
 
   assertEqual(
@@ -628,7 +628,8 @@ test("share preview fail-closes exact locations and maps while never exposing pr
     selection: baseSelection,
     availableAttachments: [],
     privateLocation,
-    labels: { attribution: "" },
+    rentalCadence: "al mes",
+    attribution: "",
   });
   assertEqual(hiddenPreview.text, "Property type: apartment", "Unselected private values must be absent");
   assertEqual(
@@ -649,8 +650,9 @@ test("share preview fail-closes exact locations and maps while never exposing pr
     labels: {
       exactLocation: "Ubicación exacta",
       mapsLink: "Mapa",
-      attribution: "",
     },
+    rentalCadence: "al mes",
+    attribution: "",
   });
   assertEqual(
     explicitPreview.text,
