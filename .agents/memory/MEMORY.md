@@ -1,1 +1,0 @@
-- [Native confirmation dialogs](native-confirmation-dialogs.md) — use explicit localized modals when destructive confirmations must work in native and Expo web preview.
