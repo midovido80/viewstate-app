@@ -272,6 +272,15 @@ const en: Translations = {
   'errors.draft_read_title': 'Draft recovery needed',
   'errors.draft_read': 'The existing draft could not be read and has not been replaced. Discard it only if you intend to permanently remove its stored values.',
   'errors.draft_reset': 'The draft could not be reset. No navigation occurred.',
+  'startup.title': 'Local data could not be opened',
+  'startup.message': 'ViewState could not finish opening your local data. Nothing was deleted, reset, or replaced.',
+  'startup.retrying_message': 'ViewState is trying to open your local data again. Your saved records are not being reset or deleted.',
+  'startup.retry': 'Retry',
+  'startup.retrying': 'Retrying…',
+  'startup.diagnostic': 'Safe diagnostic: local storage initialization did not complete.',
+  'integrity.title': 'Some local data needs attention',
+  'integrity.message': 'Readable records remain available. Unreadable records are still preserved locally and were not deleted or changed.',
+  'integrity.count': 'Unreadable local records:',
 };
 
 const ar: Translations = {
@@ -538,6 +547,15 @@ const ar: Translations = {
   'errors.draft_read_title': 'يلزم استرداد المسودة',
   'errors.draft_read': 'تعذرت قراءة المسودة الحالية ولم يتم استبدالها. احذفها فقط إذا كنت تقصد إزالة قيمها المخزنة نهائياً.',
   'errors.draft_reset': 'تعذر إعادة ضبط المسودة. لم تتم المغادرة.',
+  'startup.title': 'تعذر فتح البيانات المحلية',
+  'startup.message': 'تعذر على ViewState إكمال فتح بياناتك المحلية. لم يتم حذف أي بيانات أو إعادة ضبطها أو استبدالها.',
+  'startup.retrying_message': 'يحاول ViewState فتح بياناتك المحلية مرة أخرى. لن تتم إعادة ضبط سجلاتك المحفوظة أو حذفها.',
+  'startup.retry': 'إعادة المحاولة',
+  'startup.retrying': 'جارٍ إعادة المحاولة…',
+  'startup.diagnostic': 'تشخيص آمن: لم يكتمل بدء تشغيل التخزين المحلي.',
+  'integrity.title': 'بعض البيانات المحلية تحتاج إلى الانتباه',
+  'integrity.message': 'لا تزال السجلات المقروءة متاحة. السجلات غير المقروءة محفوظة محلياً ولم يتم حذفها أو تغييرها.',
+  'integrity.count': 'عدد السجلات المحلية غير المقروءة:',
 };
 
 export const translations = { en, ar };

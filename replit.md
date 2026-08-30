@@ -1,8 +1,8 @@
 # ViewState App
 
-A lean bilingual (Arabic/English) real estate mobile beta for Egyptian brokers. Lets real estate professionals manage contacts, property inventory, and buyer requirements — with automatic matching when a fit exists.
+A Kuwait-first, GCC-ready bilingual (Arabic/English) real estate mobile app for brokers and real estate professionals. The implemented Release 1.0.x foundation is local-first and keeps people, property inventory, capture, enrichment, private source relationships, attachments, and controlled sharing on the device.
 
-**Current status:** 🔴 PRE-IMPLEMENTATION — Governance Package complete. No product features built yet.
+**Current status:** Release 1.0.x implementation is in pre-release verification. Core local property and people workflows are built; requirements, matching, import inbox, global search, backup/restore, network, land, tasks, and follow-ups remain separately staged future work.
 
 ---
 
@@ -19,7 +19,7 @@ A lean bilingual (Arabic/English) real estate mobile beta for Egyptian brokers. 
 
 ## Stack
 
-- **Mobile:** React Native + Expo (SDK 53+), Expo Router, TanStack React Query, AsyncStorage
+- **Mobile:** React Native + Expo SDK 54, Expo Router, SQLite/AsyncStorage local persistence
 - **Backend:** Express 5 + TypeScript (`artifacts/api-server`)
 - **Database:** PostgreSQL + Drizzle ORM (`lib/db`)
 - **Validation:** Zod v4 + drizzle-zod
@@ -62,14 +62,16 @@ All governance lives in `artifacts/mobile/.ai/`. Read `artifacts/mobile/.ai/READ
 
 ---
 
-## V001 Product Scope
+## Current Release Scope
 
-**In scope:** Contacts, Properties, Matching, Import/Export, Global Search, User Profile, Arabic/English  
-**Not V001:** Tasks, Deals, Commission, Reports, Network Marketplace, advanced AI chat, voice assistant
+**Implemented now:** Kuwait property capture and enrichment, people, private property sources, local attachments, controlled sharing, Arabic/English, and resilient local persistence.
+
+**Separately staged future work:** Requirements, matching, import inbox, global search, backup/restore, network, land, tasks, follow-ups, deals, commission, reports, marketplace features, and advanced assistant capabilities.
 
 ## User Preferences
 
 - Governance-first: all AI sessions must start by reading `artifacts/mobile/.ai/README.md`
-- Every implementation prompt must follow the Rule 18 structured command format
+- Founder-to-CTO governance remains authoritative for scope and stage approval
+- Every technical implementation prompt must be written in English and follow the Rule 18 structured command format
 - No feature built without explicit Founder `IMPLEMENT: [layer]` command
-- PRE-IMPLEMENTATION state is the default — not the exception
+- Future modules remain unimplemented until separately authorized and staged
