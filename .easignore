@@ -3,7 +3,7 @@
 # needed to resolve and build the mobile app; omit repository-only metadata.
 
 # Repository, GitHub, Replit, Agent, and workspace metadata.
-.git/
+.git
 .github/
 .cursor/
 .vscode/
