@@ -2400,7 +2400,7 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
     readFile(sourcePath('../services/attachments.ts'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
-    readFile(sourcePath('../.easignore'), 'utf8'),
+    readFile(sourcePath('../../../.easignore'), 'utf8'),
   ]);
 
   assert.match(sqliteInitialization, /property_core_id TEXT PRIMARY KEY/);
@@ -2429,8 +2429,8 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
   assert.match(translations, /'enrich\.attachment_missing': 'هذا الملف المحلي مفقود/);
 
   for (const pattern of [
-    '.git/', '.local/', '.replit', '**/.env', '**/*.db',
-    'attached_assets/', '**/*.apk', '**/*.aab',
+    '.git', '.local', '.replit', '**/.env', '**/*.db',
+    'attached_assets', '**/*.apk', '**/*.aab',
   ]) {
     assert.ok(easIgnore.includes(pattern), `missing EAS exclusion: ${pattern}`);
   }
