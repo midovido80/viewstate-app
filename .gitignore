@@ -47,3 +47,16 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local data, unrelated attachments, and release output
+attached_assets/
+**/attached_assets/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.apk
+*.aab
+*.ipa
+*.xcarchive/
+test-output/
