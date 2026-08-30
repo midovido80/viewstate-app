@@ -1996,7 +1996,10 @@ test('Synthetic deletion service simulation never reports storage failure as suc
 test('Deletion source keeps cancellation inert and safeguards privacy-minimal', async () => {
   const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
   const detail = await readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8');
-  const persistence = await readFile(sourcePath('../services/persistence.ts'), 'utf8');
+  const [persistence, sqliteInitialization] = await Promise.all([
+    readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+    readFile(sourcePath('../services/sqliteStoreInitialization.ts'), 'utf8'),
+  ]);
   const coordinator = await readFile(sourcePath('../services/propertyDeletion.ts'), 'utf8');
   assert.match(detail, /testID="property-delete-cancel"/);
   assert.match(detail, /const canPermanentlyDelete = store\.canPermanentlyDelete\(\)/);
@@ -2005,7 +2008,7 @@ test('Deletion source keeps cancellation inert and safeguards privacy-minimal', 
   assert.match(detail, /if \(!store\.canPermanentlyDelete\(\)\)/);
   assert.match(detail, /onPress=\{\(\) => setDeleteVisible\(false\)\}/);
   assert.match(detail, /result\.status !== 'deleted'/);
-  assert.match(persistence, /CREATE TABLE IF NOT EXISTS deleted_property_ids/);
+  assert.match(sqliteInitialization, /CREATE TABLE IF NOT EXISTS deleted_property_ids/);
   assert.match(persistence, /private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1'/);
   assert.match(persistence, /canPermanentlyDelete\(\) \{\s+return false;/);
   assert.match(persistence, /private async getAllRaw/);
@@ -2380,6 +2383,7 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
   const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
   const [
     persistence,
+    sqliteInitialization,
     propertyDetail,
     personDetail,
     sharing,
@@ -2389,6 +2393,7 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
     easIgnore,
   ] = await Promise.all([
     readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+    readFile(sourcePath('../services/sqliteStoreInitialization.ts'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
     readFile(sourcePath('../../../lib/property-domain/src/sharing.ts'), 'utf8'),
@@ -2398,7 +2403,7 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
     readFile(sourcePath('../.easignore'), 'utf8'),
   ]);
 
-  assert.match(persistence, /property_core_id TEXT PRIMARY KEY/);
+  assert.match(sqliteInitialization, /property_core_id TEXT PRIMARY KEY/);
   assert.match(persistence, /ON CONFLICT\(property_core_id\) DO UPDATE SET person_id = excluded\.person_id, role = excluded\.role/);
   assert.match(persistence, /getPropertySourcesForPerson/);
   assert.match(persistence, /DELETE FROM property_sources WHERE person_id = \?/);

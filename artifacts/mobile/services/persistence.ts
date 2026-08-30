@@ -3,20 +3,18 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Property, validateProperty } from '@workspace/property-domain';
 import { SerialTaskQueue } from '@/services/serialTaskQueue';
-import { getAreaById } from '@/constants/kuwait-areas';
-import {
-  normalizePropertyCurrency,
-} from '@/constants/market';
 import { validatePropertySource } from '@workspace/property-domain';
 import {
   appendUnreadableRecord,
   parseStoredRecord,
   type UnreadableRecord,
 } from '@/services/localRecordParser';
+import { migrateStage01B1WebProperties } from '@/services/stage01B1CurrencyMigration';
 import {
-  STAGE_01B1_PROPERTY_MIGRATION_ID,
-  migrateStage01B1WebProperties,
-} from '@/services/stage01B1CurrencyMigration';
+  getPropertySearchText,
+  initializeSQLiteStore,
+  type SQLiteInitializationDatabase,
+} from '@/services/sqliteStoreInitialization';
 import {
   Person,
   PersonPropertyLink,
@@ -28,23 +26,7 @@ import {
   personMatchesSearch,
 } from '@/services/people';
 
-export function getPropertySearchText(property: Property): string {
-  const area = getAreaById(property.core.locationArea.id);
-  const price = property.activeOffer.transaction === 'sale'
-    ? property.activeOffer.salePrice
-    : property.activeOffer.rentalPrice;
-  return [
-    property.core.propertyType,
-    property.activeOffer.transaction,
-    property.core.locationArea.id,
-    property.core.id,
-    area?.en,
-    area?.ar,
-    area?.governorateEn,
-    area?.governorateAr,
-    price.currencyCode,
-  ].filter(Boolean).join(' ').toLocaleLowerCase();
-}
+export { getPropertySearchText };
 
 export interface PropertyStore {
   init(): Promise<void>;
@@ -97,6 +79,11 @@ export class SQLiteStore implements PropertyStore, PersonStore {
   private db: SQLite.SQLiteDatabase | null = null;
   private initialization: Promise<void> | null = null;
   private integrityWarnings: UnreadableRecord[] = [];
+
+  constructor(
+    private readonly databaseFactory: () => Promise<SQLite.SQLiteDatabase> =
+      () => SQLite.openDatabaseAsync('viewstate.db'),
+  ) {}
 
   async init() {
     if (!this.initialization) {
@@ -164,71 +151,13 @@ export class SQLiteStore implements PropertyStore, PersonStore {
 
   private async initialize() {
     this.integrityWarnings = [];
-    this.db = await SQLite.openDatabaseAsync('viewstate.db');
-    await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS properties (
-        id TEXT PRIMARY KEY,
-        data TEXT NOT NULL,
-        search_text TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS app_migrations (
-        id TEXT PRIMARY KEY
-      );
-      CREATE TABLE IF NOT EXISTS deleted_property_ids (
-        id TEXT PRIMARY KEY,
-        generation INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS people (
-        id TEXT PRIMARY KEY,
-        data TEXT NOT NULL,
-        search_text TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS person_property_links (
-        person_id TEXT NOT NULL,
-        property_core_id TEXT NOT NULL,
-        PRIMARY KEY (person_id, property_core_id)
-      );
-      CREATE TABLE IF NOT EXISTS property_sources (
-        property_core_id TEXT PRIMARY KEY,
-        person_id TEXT NOT NULL,
-        role TEXT NOT NULL
-      );
-    `);
-
-    const completed = await this.db.getFirstAsync<{ id: string }>(
-      'SELECT id FROM app_migrations WHERE id = ?',
-      [STAGE_01B1_PROPERTY_MIGRATION_ID],
-    );
-    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
-      'SELECT id, data FROM properties',
-    );
-    for (const row of rows) {
-      const property = this.parsePropertyRow(row);
-      if (!property || completed) continue;
-      const normalized = normalizePropertyCurrency(property);
-      if (normalized.changed) {
-        await nativeMutations.enqueue(async () => {
-          await this.db!.runAsync(
-            'UPDATE properties SET data = ?, search_text = ? WHERE id = ?',
-            [
-              JSON.stringify(normalized.property),
-              getPropertySearchText(normalized.property),
-              row.id,
-            ],
-          );
-        });
-      }
-    }
-    const people = await this.db.getAllAsync<{ id: string; data: string }>(
-      'SELECT id, data FROM people',
-    );
-    for (const row of people) this.parsePersonRow(row);
-    if (!completed) {
-      await this.db.runAsync(
-        'INSERT INTO app_migrations (id) VALUES (?)',
-        [STAGE_01B1_PROPERTY_MIGRATION_ID],
-      );
-    }
+    this.db = await this.databaseFactory();
+    await initializeSQLiteStore({
+      db: this.db as SQLiteInitializationDatabase,
+      parsePropertyRow: row => this.parsePropertyRow(row),
+      parsePersonRow: row => this.parsePersonRow(row),
+      runMutation: task => nativeMutations.enqueue(task),
+    });
   }
 
   async saveProperty(property: Property) {
