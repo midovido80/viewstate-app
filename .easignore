@@ -4,45 +4,45 @@
 
 # Repository, GitHub, Replit, Agent, and workspace metadata.
 .git
-.github/
-.cursor/
-.vscode/
-.agents/
-.local/
-.cache/
-.config/
-.ai/
+.github
+.cursor
+.vscode
+.agents
+.local
+.cache
+.config
+.ai
 replit.md
 .replit
 .replitignore
-**/.replit-artifact/
+**/.replit-artifact
 **/.gitignore
 **/.easignore
 .npmrc
 
 # Local CLI state, dependencies, build output, and caches.
-.expo/
-**/.expo/
-**/.expo-shared/
-**/node_modules/
-**/dist/
-**/build/
-**/out-tsc/
-**/tmp/
-**/.metro/
-**/.turbo/
-**/.parcel-cache/
-**/web-build/
-**/static-build/
+.expo
+**/.expo
+**/.expo-shared
+**/node_modules
+**/dist
+**/build
+**/out-tsc
+**/tmp
+**/.metro
+**/.turbo
+**/.parcel-cache
+**/web-build
+**/static-build
 **/*.tsbuildinfo
 
 # Tests and test output are not part of the build source.
-**/tests/
-**/__tests__/
+**/tests
+**/__tests__
 **/*.test.*
 **/*.spec.*
-**/test-output/
-**/coverage/
+**/test-output
+**/coverage
 
 # Secrets, credentials, signing material, and local databases.
 **/.env
@@ -61,9 +61,9 @@ replit.md
 **/*.mobileprovision
 
 # Unrelated attached assets and generated release artifacts.
-attached_assets/
-**/attached_assets/
+attached_assets
+**/attached_assets
 **/*.apk
 **/*.aab
 **/*.ipa
-**/*.xcarchive/
+**/*.xcarchive
