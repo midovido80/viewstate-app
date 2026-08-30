@@ -60,7 +60,7 @@ export default function LocationScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader step={4} totalSteps={4} />
+      <CaptureHeader step={4} totalSteps={5} />
       
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>

@@ -25,7 +25,7 @@ export default function TransactionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader step={1} totalSteps={4} />
+      <CaptureHeader step={1} totalSteps={5} />
       
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('transaction.title')}</Text>

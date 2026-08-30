@@ -94,6 +94,12 @@ import {
 import { requestInjectedCoordinates } from '../services/coordinateRequest.ts';
 import { executePropertySharePreview } from '../services/propertyShareExecution.ts';
 import { optionalClassifiedLiteral } from '../services/literalText.ts';
+import {
+  buildContactPhoneChoices,
+  inferPhoneCountry,
+  normalizePhoneForCountry,
+  phoneDigits,
+} from '../services/phoneEntry.ts';
 
 const sharedSourcePath = (relativePath: string) =>
   decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
@@ -2245,6 +2251,8 @@ test('V001 selective sharing defaults exclude private notes and injected sharing
     labels: { propertyType: 'نوع العقار / Property type', ownerSource: 'المصدر / Source', exactLocation: 'الموقع / Location' },
     detailLabels: { builtUpAreaSquareMeters: 'مساحة البناء', furnishing: 'التأثيث', hasMaidRoom: 'غرفة خادمة' },
     detailValueLabels: { semi_furnished: 'نصف مؤثث', false: 'لا' },
+    rentalCadence: 'شهرياً / monthly',
+    attribution: 'عبر ViewState / Shared via ViewState',
   });
   assert.match(preview.text, /نوع العقار/);
   assert.match(preview.text, /synthetic owner/);
@@ -2282,4 +2290,211 @@ test('V001 bilingual labels and source wiring remain explicit', async () => {
   assert.match(personDetail, /https:\/\/wa\.me\/\$\{person\.normalizedPhone\.replace/);
   assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
   assert.match(enrichment, /requestCurrentCoordinates/);
+});
+
+test('Phone entry helpers keep selected contact display text while choosing one canonical number', () => {
+  assert.equal(phoneDigits('٠٠٩٦٥ ٥٠٠٠-١٢٣٤'), '0096550001234');
+  assert.equal(inferPhoneCountry('+965 5000 1234'), 'KW');
+  assert.equal(inferPhoneCountry('00966 501 234 567'), 'SA');
+  assert.equal(inferPhoneCountry('٠٠٩٧١ ٥٠١٢٣٤٥٦٧'), 'AE');
+  assert.equal(inferPhoneCountry('50001234'), null, 'national input must not guess a country');
+  assert.equal(normalizePhoneForCountry('5000 1234', 'KW'), '+96550001234');
+  assert.equal(normalizePhoneForCountry('+966 501 234 567', 'KW'), '+966501234567');
+  assert.equal(normalizePhoneForCountry('٠٠٩٧١ ٥٠١٢٣٤٥٦٧', 'KW'), '+971501234567');
+
+  const choices = buildContactPhoneChoices([
+    {
+      id: 'primary',
+      name: 'Primary contact',
+      phoneNumbers: [
+        { number: '5000 0001' },
+        { number: '+965 5000 0002', isPrimary: true },
+        { number: '00965 5000 0002' },
+      ],
+    },
+    {
+      id: 'alias',
+      name: 'Alias copy',
+      phoneNumbers: [{ number: '٠٠٩٦٥ ٥٠٠٠ ٠٠٠٢' }],
+    },
+    {
+      id: 'first',
+      name: 'First contact',
+      phoneNumbers: [{ number: '6000 0001' }, { number: '6000 0002' }],
+    },
+    {
+      id: 'distinct',
+      name: 'Distinct number',
+      phoneNumbers: [{ number: '+965 5000 0003' }],
+    },
+  ]);
+  assert.deepEqual(choices.map(choice => [choice.name, choice.phone]), [
+    ['Primary contact', '+965 5000 0002'],
+    ['First contact', '6000 0001'],
+    ['Distinct number', '+965 5000 0003'],
+  ]);
+  assert.equal(choices[0].normalizedDigits, '96550000002');
+  assert.equal(choices[2].normalizedDigits, '96550000003');
+});
+
+test('Share selection fails closed for every private location value until explicitly chosen', () => {
+  const exact = createPrivacyMetadata('exact_location', 'explicit_per_share');
+  const property: Property = {
+    core: {
+      id: 'privacy-selection-core',
+      propertyType: 'apartment',
+      locationArea: { id: 'salmiya' },
+      ownerSource: createLiteralText('owner-only', createPrivacyMetadata('owner_source', 'explicit_per_share')),
+      exactLocation: createLiteralText('exact-only', exact),
+    },
+    activeOffer: {
+      id: 'privacy-selection-offer',
+      propertyCoreId: 'privacy-selection-core',
+      transaction: 'sale',
+      salePrice: { amount: 1, currencyCode: 'KWD' },
+    },
+    locationEnrichment: {
+      paciNumber: createLiteralText('PACI-only', exact),
+      manualLocationText: createLiteralText('manual-only', exact),
+      mapsLink: createLiteralText('https://maps.example/private', exact),
+      coordinates: { latitude: 29.3, longitude: 48, privacy: exact },
+    },
+  };
+  const selection = createPropertyShareSelection(property);
+  assert.equal(selection.discloseOwnerSource, false);
+  assert.equal(selection.discloseExactLocation, false);
+  assert.equal(selection.disclosePaci, false);
+  assert.equal(selection.discloseManualLocation, false);
+  assert.equal(selection.discloseMapsLink, false);
+  const preview = buildPropertySharePreview({
+    property,
+    selection,
+    availableAttachments: [],
+    privateLocation: {
+      paci: property.locationEnrichment?.paciNumber?.value,
+      manualLocation: property.locationEnrichment?.manualLocationText?.value,
+      mapsLink: property.locationEnrichment?.mapsLink?.value,
+    },
+    rentalCadence: 'شهرياً / monthly',
+    attribution: '',
+  });
+  for (const secret of ['owner-only', 'exact-only', 'PACI-only', 'manual-only', 'maps.example/private']) {
+    assert.doesNotMatch(preview.text, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+});
+
+test('Completed mobile batch source contracts remain localized, keyboard-safe, and privacy fail-closed', async () => {
+  const source = (relativePath: string) => sharedSourcePath(relativePath);
+  const [
+    translations,
+    rootLayout,
+    detail,
+    share,
+    shareIntent,
+    enrichment,
+    enrichmentFields,
+    keyboardScroll,
+    peopleNew,
+    captureHeader,
+    transaction,
+    propertyType,
+    price,
+    location,
+    summary,
+  ] = await Promise.all([
+    readFile(source('../contexts/I18nContext.tsx'), 'utf8'),
+    readFile(source('../app/_layout.tsx'), 'utf8'),
+    readFile(source('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(source('../app/property/[propertyCoreId]/share.tsx'), 'utf8'),
+    readFile(source('../services/propertyShareIntent.ts'), 'utf8'),
+    readFile(source('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+    readFile(source('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+    readFile(source('../components/KeyboardAwareScrollViewCompat.tsx'), 'utf8'),
+    readFile(source('../app/person/new.tsx'), 'utf8'),
+    readFile(source('../components/CaptureHeader.tsx'), 'utf8'),
+    readFile(source('../app/capture/transaction.tsx'), 'utf8'),
+    readFile(source('../app/capture/property-type.tsx'), 'utf8'),
+    readFile(source('../app/capture/price.tsx'), 'utf8'),
+    readFile(source('../app/capture/location.tsx'), 'utf8'),
+    readFile(source('../app/capture/summary.tsx'), 'utf8'),
+  ]);
+
+  // EN/AR action labels are user-facing translations, including destructive
+  // deletion and every offered share destination.
+  assert.match(translations, /'detail\.delete': 'Delete'/);
+  assert.match(translations, /'detail\.delete': 'حذف'/);
+  assert.match(translations, /'share\.whatsapp': 'WhatsApp'/);
+  assert.match(translations, /'share\.whatsapp': 'واتساب'/);
+  assert.match(translations, /'share\.whatsapp_business': 'WhatsApp Business'/);
+  assert.match(translations, /'share\.whatsapp_business': 'واتساب للأعمال'/);
+  assert.match(detail, /testID="property-delete-action"[\s\S]{0,300}t\('detail\.delete'\)/);
+  assert.match(share, /title=\{shareT\('share\.whatsapp'\)\}/);
+  assert.match(share, /title=\{shareT\('share\.whatsapp_business'\)\}/);
+  assert.match(share, /shareT\('share\.system_share'\)/);
+  assert.doesNotMatch(share, /title=\{['"]whatsapp(?:_business)?['"]\}/i);
+
+  // The native detail view stays consumer-facing: no implementation/technical
+  // header is exposed, while its Delete and Share actions remain reachable.
+  assert.match(detail, /property-delete-action/);
+  assert.match(detail, /property-share-action/);
+  assert.match(rootLayout, /name="property\/\[propertyCoreId\]" options=\{\{ headerShown: false \}\}/);
+  assert.match(rootLayout, /name="property\/\[propertyCoreId\]\/enrich" options=\{\{ headerShown: false \}\}/);
+  assert.match(rootLayout, /name="property\/\[propertyCoreId\]\/share" options=\{\{ headerShown: false \}\}/);
+  assert.doesNotMatch(rootLayout, /Stack\.Screen name="property"/);
+  assert.doesNotMatch(detail, /Technical (?:details|header)|native technical/i);
+
+  // The reusable input is module-scoped before the screen component, so typing
+  // does not define/remount a new Input component on every render.
+  assert.ok(enrichment.indexOf('function Input(') < enrichment.indexOf('export default function PropertyEnrichmentScreen'));
+  assert.match(enrichment, /<KeyboardAwareScrollViewCompat[\s\S]*keyboardShouldPersistTaps="handled"[\s\S]*keyboardDismissMode="interactive"/);
+  assert.match(keyboardScroll, /forwardRef<ScrollView, Props>/);
+  assert.match(keyboardScroll, /KeyboardAwareScrollView/);
+  assert.match(keyboardScroll, /keyboardShouldPersistTaps/);
+
+  // Contact imports are searchable, virtualized, and choose a single row.
+  assert.match(peopleNew, /<FlatList/);
+  assert.match(peopleNew, /data=\{filteredContactChoices\}/);
+  assert.match(peopleNew, /testID="contact-search"/);
+  assert.match(peopleNew, /phoneDigits\(contactSearch\)/);
+  assert.match(peopleNew, /buildContactPhoneChoices\(contacts\)/);
+  assert.match(peopleNew, /setPhone\(item\.phone\)/);
+
+  // Five callers supply the five-chip capture progression; chip state is
+  // explicitly completed/current/future rather than inferred from labels.
+  for (const [screen, step] of [[transaction, 1], [propertyType, 2], [price, 3], [location, 4], [summary, 5]] as const) {
+    assert.match(screen, new RegExp(`<CaptureHeader[^>]*step=\\{${step}\\}[^>]*totalSteps=\\{5\\}`));
+  }
+  assert.match(captureHeader, /CAPTURE_STEPS = \[[\s\S]*capture\.progress\.review/);
+  assert.match(captureHeader, /const isCompleted = chipStep < currentStep/);
+  assert.match(captureHeader, /const isCurrent = chipStep === currentStep/);
+  assert.match(captureHeader, /const isFuture = chipStep > currentStep/);
+
+  // Manual location is intentionally not editable, but restored and projected
+  // values survive save/recovery so previously captured state is not erased.
+  assert.match(enrichment, /const \[manualLocation, setManualLocation\] = useState\(''\)/);
+  assert.match(enrichment, /setManualLocation\(visible\.locationEnrichment\?\.manualLocationText\?\.value \?\? ''\)/);
+  assert.match(enrichment, /manualLocationText: optionalClassifiedLiteral\(manualLocation, exactPrivacy\)/);
+  assert.doesNotMatch(enrichment, /testID="enrich-manual-location"|label=\{t\('enrich\.manual_location'\)\}/);
+
+  // Attachment cards provide both preview/open affordances; mutations remain
+  // serialized and metadata is committed before a local file is removed.
+  assert.match(enrichment, /testID=\{`enrich-preview-\$\{attachment\.id\}`\}/);
+  assert.match(enrichment, /id=\{`enrich-open-\$\{attachment\.id\}`\}/);
+  assert.match(enrichment, /const attachmentMutationFlight = useRef<Promise<void>>/);
+  assert.match(enrichment, /const enqueueAttachmentMutation/);
+  assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
+  assert.match(enrichment, /await persistAttachmentChanges\(\[\.\.\.value\]\)/);
+
+  // Sensitive fields start off and require explicit selection; the preview
+  // given to WhatsApp/Business is the exact reviewed preview, with system
+  // share retained as the attachment-capable fallback.
+  assert.match(share, /createPropertyShareSelection\(value\)/);
+  assert.match(share, /discloseOwnerSource.*!current\[name\]/);
+  assert.match(share, /discloseExactLocation/);
+  assert.match(share, /preview\.text/);
+  assert.match(share, /preview\.attachmentIds\.length.*attachments_system_only/);
+  assert.match(share, /testID="share-send"/);
+  assert.match(shareIntent, /encodeURIComponent\(exactPreviewText\)/);
+  assert.match(shareIntent, /destination: AndroidPropertyShareDestination/);
+  assert.match(enrichmentFields, /testID=\{`enrich-\$\{testIdField\}-\$\{value \|\| 'clear'\}`\}/);
 });

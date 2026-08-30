@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -50,6 +51,174 @@ const normalPrivacy = { classification: 'normal', disclosurePolicy: 'normal' } a
 const privateNotesPrivacy = { classification: 'private_notes', disclosurePolicy: 'never' } as const;
 const exactPrivacy = { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' } as const;
 const fileStore = createExpoFileStore(FileSystem);
+
+type ScreenColors = ReturnType<typeof useColors>;
+type ScreenFonts = ReturnType<typeof useI18n>['fonts'];
+
+function Section({
+  title,
+  children,
+  colors,
+  fonts,
+  isRTL,
+}: {
+  title: string;
+  children: React.ReactNode;
+  colors: ScreenColors;
+  fonts: ScreenFonts;
+  isRTL: boolean;
+}) {
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, {
+        color: colors.foreground,
+        fontFamily: fonts.bold,
+        textAlign: isRTL ? 'right' : 'left',
+      }]}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Input({
+  label,
+  colors,
+  fonts,
+  isRTL,
+  ...inputProps
+}: React.ComponentProps<typeof TextInput> & {
+  label: string;
+  colors: ScreenColors;
+  fonts: ScreenFonts;
+  isRTL: boolean;
+}) {
+  return (
+    <View>
+      <Text style={[styles.label, {
+        color: colors.foreground,
+        fontFamily: fonts.semiBold,
+        textAlign: isRTL ? 'right' : 'left',
+      }]}>{label}</Text>
+      <TextInput
+        {...inputProps}
+        placeholderTextColor={colors.mutedForeground}
+        style={[
+          styles.input,
+          inputProps.multiline && styles.multiline,
+          {
+            color: colors.foreground,
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            textAlign: isRTL ? 'right' : 'left',
+          },
+        ]}
+        accessibilityLabel={label}
+      />
+    </View>
+  );
+}
+
+function Action({
+  title,
+  id,
+  onPress,
+  destructive,
+  colors,
+  fonts,
+}: {
+  title: string;
+  id: string;
+  onPress: () => void;
+  destructive?: boolean;
+  colors: ScreenColors;
+  fonts: ScreenFonts;
+}) {
+  return (
+    <TouchableOpacity accessibilityRole="button" testID={id} onPress={onPress}>
+      <Text style={{
+        color: destructive ? colors.destructive : colors.primary,
+        fontFamily: fonts.semiBold,
+      }}>{title}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function AttachmentCard({
+  attachment,
+  index,
+  count,
+  isRTL,
+  colors,
+  fonts,
+  labels,
+  onOpen,
+  onCover,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+}: {
+  attachment: LocalAttachment;
+  index: number;
+  count: number;
+  isRTL: boolean;
+  colors: ScreenColors;
+  fonts: ScreenFonts;
+  labels: { open: string; cover: string; moveUp: string; moveDown: string; remove: string };
+  onOpen: () => void;
+  onCover: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View style={[styles.attachment, { borderColor: colors.border, backgroundColor: colors.card }]}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`${labels.open}: ${attachment.originalName}`}
+        testID={`enrich-preview-${attachment.id}`}
+        onPress={onOpen}
+        style={[styles.attachmentPreview, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+      >
+        {attachment.kind === 'image' ? (
+          <Image source={{ uri: attachment.uri }} style={styles.attachmentThumbnail} resizeMode="cover" />
+        ) : (
+          <View style={[styles.attachmentTile, { backgroundColor: colors.background }]}>
+            <Feather
+              name={attachment.kind === 'video' ? 'play-circle' : 'file-text'}
+              size={30}
+              color={colors.primary}
+            />
+          </View>
+        )}
+        <View style={styles.attachmentName}>
+          <Text
+            numberOfLines={2}
+            style={{
+              color: colors.foreground,
+              fontFamily: fonts.medium,
+              textAlign: isRTL ? 'right' : 'left',
+            }}
+          >
+            {attachment.isCover ? '★ ' : ''}{attachment.originalName}
+          </Text>
+        </View>
+      </TouchableOpacity>
+      <View style={[styles.attachmentActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <Action title={labels.open} id={`enrich-open-${attachment.id}`} onPress={onOpen} colors={colors} fonts={fonts} />
+        {attachment.kind === 'image' ? (
+          <Action title={labels.cover} id={`enrich-cover-${attachment.id}`} onPress={onCover} colors={colors} fonts={fonts} />
+        ) : null}
+        {index > 0 ? (
+          <Action title={labels.moveUp} id={`enrich-up-${attachment.id}`} onPress={onMoveUp} colors={colors} fonts={fonts} />
+        ) : null}
+        {index < count - 1 ? (
+          <Action title={labels.moveDown} id={`enrich-down-${attachment.id}`} onPress={onMoveDown} colors={colors} fonts={fonts} />
+        ) : null}
+        <Action title={labels.remove} id={`enrich-remove-${attachment.id}`} destructive onPress={onRemove} colors={colors} fonts={fonts} />
+      </View>
+    </View>
+  );
+}
 
 function attachmentToLocal(item: PropertyAttachmentMetadata): LocalAttachment {
   return {
@@ -123,6 +292,7 @@ export default function PropertyEnrichmentScreen() {
   const autosavePending = useRef(false);
   const persistInProgress = useRef(false);
   const persistFlight = useRef<Promise<Property> | null>(null);
+  const attachmentMutationFlight = useRef<Promise<void>>(Promise.resolve());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   propertyRef.current = property;
@@ -389,11 +559,54 @@ export default function PropertyEnrichmentScreen() {
     return flight;
   };
 
-  const persistAttachmentChanges = async (next: LocalAttachment[]) => {
-    if (persistFlight.current) return false;
-    await persist(next);
-    return true;
+  const enqueueAttachmentMutation = <T,>(operation: () => Promise<T>): Promise<T> => {
+    const mutation = attachmentMutationFlight.current
+      .catch(() => undefined)
+      .then(operation);
+    // Keep subsequent work serialized even when this operation reports its
+    // failure to its caller.
+    attachmentMutationFlight.current = mutation.then(() => undefined, () => undefined);
+    return mutation;
   };
+
+  const persistAttachmentChanges = async (next: LocalAttachment[]) => {
+    // An explicit save owns the existing persist mutex. Wait for it rather
+    // than dropping a copied file's metadata update.
+    if (persistFlight.current) await persistFlight.current;
+    await persist(next);
+  };
+
+  const applyAttachmentMutation = async (
+    transform: (current: readonly LocalAttachment[]) => LocalAttachment[],
+    deleteRemoved = false,
+  ) => {
+    const previous = attachmentsRef.current;
+    const next = transform(previous);
+    if (next === previous) return;
+
+    // Updating this ref before persistence lets the existing autosave/recovery
+    // path retain evidence if the explicit metadata save reports an error.
+    attachmentsRef.current = next;
+    if (mounted.current) setAttachments(next);
+    if (deleteRemoved) {
+      await persistAttachmentsThenDeleteRemoved(
+        previous,
+        next,
+        async value => {
+          await persistAttachmentChanges([...value]);
+        },
+        fileStore,
+      );
+      return;
+    }
+    await persistAttachmentChanges(next);
+  };
+
+  const updateAttachments = (
+    transform: (current: readonly LocalAttachment[]) => LocalAttachment[],
+    deleteRemoved = false,
+  ) => enqueueAttachmentMutation(() => applyAttachmentMutation(transform, deleteRemoved));
+
   const reportAttachmentFailure = () => {
     if (mounted.current) setError(t('enrich.attachment_failed'));
   };
@@ -419,39 +632,61 @@ export default function PropertyEnrichmentScreen() {
   };
 
   const addMedia = async (pdf: boolean) => {
-    if (!property || persistFlight.current) return;
-    setError('');
+    if (!property) return;
+    const mutation = enqueueAttachmentMutation(async () => {
+        const currentProperty = propertyRef.current;
+        if (!currentProperty) return;
+        if (persistFlight.current) await persistFlight.current;
+        if (mounted.current) setError('');
+
+        // The picker and file copy are inside the queue as well: a second tap
+        // cannot copy against stale metadata while the first addition is pending.
+        const sourceAttachments = attachmentsRef.current;
+        const added = pdf
+          ? await pickAndStorePdfs(currentProperty.core.id, sourceAttachments, DocumentPicker, { fileStore })
+          : await pickAndStoreMedia(currentProperty.core.id, sourceAttachments, { fileStore });
+        if (!added.length) return;
+
+        // Rebase copied files on the latest committed in-memory order. This is
+        // deliberately read while holding the attachment mutation queue.
+        await applyAttachmentMutation(currentAttachments => [
+          ...currentAttachments,
+          ...added.map((attachment, index) => ({
+            ...attachment,
+            order: currentAttachments.length + index,
+          })),
+        ]);
+      });
     try {
-      const added = pdf
-        ? await pickAndStorePdfs(property.core.id, attachments, DocumentPicker, { fileStore })
-        : await pickAndStoreMedia(property.core.id, attachments, { fileStore });
-      if (added.length && !persistFlight.current && mounted.current) {
-        // Make copied managed files visible and durably recoverable before CAS.
-        const attempted = [...attachments, ...added];
-        attachmentsRef.current = attempted;
-        setAttachments(attempted);
-        await persistAttachmentChanges(attempted);
-      }
+      await mutation;
     } catch {
       if (mounted.current) setError(t('enrich.attachment_failed'));
     }
   };
 
-  const replaceAttachments = async (next: LocalAttachment[]) => {
-    if (persistFlight.current) return;
+  const removeAttachment = async (attachmentId: string) => {
     try {
-      await persistAttachmentsThenDeleteRemoved(
-        attachments,
-        next,
-        async value => {
-          if (!await persistAttachmentChanges([...value])) throw new Error('PERSIST_IN_PROGRESS');
-        },
-        fileStore,
+      await updateAttachments(
+        current => current.filter(attachment => attachment.id !== attachmentId),
+        true,
       );
     } catch {
       if (mounted.current) setError(t('enrich.attachment_failed'));
     }
   };
+
+  const setCover = (attachmentId: string) => void updateAttachments(
+    current => setAttachmentCover(current, attachmentId),
+  ).catch(reportAttachmentFailure);
+
+  const moveAttachment = (attachmentId: string, offset: -1 | 1) => void updateAttachments(current => {
+    const index = current.findIndex(attachment => attachment.id === attachmentId);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= current.length) return current as LocalAttachment[];
+    const ids = current.map(attachment => attachment.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    return reorderAttachments(current, ids);
+  }).catch(reportAttachmentFailure);
 
   const coordinatesLabel = useMemo(() => coordinates
     ? `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`
@@ -470,56 +705,84 @@ export default function PropertyEnrichmentScreen() {
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('enrich.title')}</Text>
         <View style={styles.headerSpace} />
       </View>
-      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]} bottomOffset={24}>
+       <KeyboardAwareScrollViewCompat
+         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+         bottomOffset={24}
+         keyboardShouldPersistTaps="handled"
+         keyboardDismissMode="interactive"
+       >
         {error ? <Text testID="enrich-error" accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{error}</Text> : null}
         <PropertyEnrichmentFields
           propertyType={property.core.propertyType}
           values={fields}
           onChange={(field, value) => setFields(current => ({ ...current, [field]: value }))}
         />
-        <Section title={t('enrich.notes')}>
-          <Input label={t('enrich.description')} value={description} onChangeText={setDescription} testID="enrich-description" multiline />
-          <Input label={t('enrich.private_notes')} value={privateNotes} onChangeText={setPrivateNotes} testID="enrich-private-notes" multiline />
+         <Section title={t('enrich.notes')} colors={colors} fonts={fonts} isRTL={isRTL}>
+           <Input label={t('enrich.description')} value={description} onChangeText={setDescription} testID="enrich-description" multiline colors={colors} fonts={fonts} isRTL={isRTL} />
+           <Input label={t('enrich.private_notes')} value={privateNotes} onChangeText={setPrivateNotes} testID="enrich-private-notes" multiline colors={colors} fonts={fonts} isRTL={isRTL} />
         </Section>
-        <Section title={t('enrich.location')}>
-          <Input label={t('enrich.paci')} value={paci} onChangeText={setPaci} testID="enrich-paci" />
-          <Input label={t('enrich.manual_location')} value={manualLocation} onChangeText={setManualLocation} testID="enrich-manual-location" />
-          <Input label={t('enrich.maps_link')} value={mapsLink} onChangeText={setMapsLink} testID="enrich-maps-link" autoCapitalize="none" />
+         <Section title={t('enrich.location')} colors={colors} fonts={fonts} isRTL={isRTL}>
+           <Input label={t('enrich.paci')} value={paci} onChangeText={setPaci} testID="enrich-paci" colors={colors} fonts={fonts} isRTL={isRTL} />
+           <Input label={t('enrich.maps_link')} value={mapsLink} onChangeText={setMapsLink} testID="enrich-maps-link" autoCapitalize="none" colors={colors} fonts={fonts} isRTL={isRTL} />
           <Button title={t('enrich.current_location')} testID="enrich-current-location" variant="outline" onPress={async () => {
             try { setCoordinates(await requestCurrentCoordinates()); } catch { setError(t('enrich.location_failed')); }
           }} />
-          {coordinatesLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{coordinatesLabel}</Text> : null}
-          {coordinates ? <Button title={t('enrich.open_maps')} testID="enrich-open-maps" variant="outline" onPress={() => void openGoogleMaps(coordinates).catch(() => setError(t('enrich.location_failed')))} /> : null}
-          {mapsLink.trim() ? <Button title={t('enrich.open_maps')} testID="enrich-open-original-link" variant="outline" onPress={() => {
-            try { void openPastedLocationLink(pastedMapLocation(mapsLink.trim())).catch(() => setError(t('enrich.location_failed'))); } catch { setError(t('enrich.location_failed')); }
-          }} /> : null}
+           {coordinatesLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{coordinatesLabel}</Text> : null}
+           {coordinates || mapsLink.trim() ? (
+             <Button title={t('enrich.open_maps')} testID="enrich-open-maps" variant="outline" onPress={() => {
+               if (coordinates) {
+                 void openGoogleMaps(coordinates).catch(() => setError(t('enrich.location_failed')));
+                 return;
+               }
+               try {
+                 void openPastedLocationLink(pastedMapLocation(mapsLink.trim())).catch(() => setError(t('enrich.location_failed')));
+               } catch {
+                 setError(t('enrich.location_failed'));
+               }
+             }} />
+           ) : null}
+           <Text style={[styles.privacyText, {
+             color: colors.mutedForeground,
+             fontFamily: fonts.regular,
+             textAlign: isRTL ? 'right' : 'left',
+           }]}>{t('enrich.location_privacy')}</Text>
         </Section>
         {Platform.OS !== 'web' ? (
-          <Section title={t('enrich.media')}>
+           <Section title={t('enrich.media')} colors={colors} fonts={fonts} isRTL={isRTL}>
             <View style={[styles.buttonRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <View style={styles.flex}><Button title={t('enrich.add_media')} testID="enrich-add-media" variant="outline" onPress={() => void addMedia(false)} /></View>
               <View style={styles.flex}><Button title={t('enrich.add_pdf')} testID="enrich-add-pdf" variant="outline" onPress={() => void addMedia(true)} /></View>
             </View>
-            {attachments.map((attachment, index) => (
-              <View key={attachment.id} style={[styles.attachment, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                <Text numberOfLines={1} style={{ color: colors.foreground, fontFamily: fonts.medium }}>{attachment.isCover ? '★ ' : ''}{attachment.originalName}</Text>
-                <View style={styles.attachmentActions}>
-                  <Action title={t('enrich.open')} id={`enrich-open-${attachment.id}`} onPress={() => void openAttachment(attachment, Sharing).catch(() => setError(t('enrich.attachment_failed')))} />
-                  {attachment.kind === 'image' ? <Action title={t('enrich.cover')} id={`enrich-cover-${attachment.id}`} onPress={() => void persistAttachmentChanges(setAttachmentCover(attachments, attachment.id)).catch(reportAttachmentFailure)} /> : null}
-                  {index > 0 ? <Action title={t('enrich.move_up')} id={`enrich-up-${attachment.id}`} onPress={() => {
-                    const ids = attachments.map(item => item.id); [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
-                    void persistAttachmentChanges(reorderAttachments(attachments, ids)).catch(reportAttachmentFailure);
-                  }} /> : null}
-                  {index < attachments.length - 1 ? <Action title={t('enrich.move_down')} id={`enrich-down-${attachment.id}`} onPress={() => {
-                    const ids = attachments.map(item => item.id); [ids[index + 1], ids[index]] = [ids[index], ids[index + 1]];
-                    void persistAttachmentChanges(reorderAttachments(attachments, ids)).catch(reportAttachmentFailure);
-                  }} /> : null}
-                  <Action title={t('enrich.remove')} id={`enrich-remove-${attachment.id}`} destructive onPress={() => Alert.alert(
+             <Text style={[styles.privacyText, {
+               color: colors.mutedForeground,
+               fontFamily: fonts.regular,
+               textAlign: isRTL ? 'right' : 'left',
+             }]}>{t('enrich.attachment_privacy')}</Text>
+             {attachments.map((attachment, index) => (
+               <AttachmentCard
+                 key={attachment.id}
+                 attachment={attachment}
+                 index={index}
+                 count={attachments.length}
+                 isRTL={isRTL}
+                 colors={colors}
+                 fonts={fonts}
+                 labels={{
+                   open: t('enrich.open'),
+                   cover: t('enrich.cover'),
+                   moveUp: t('enrich.move_up'),
+                   moveDown: t('enrich.move_down'),
+                   remove: t('enrich.remove'),
+                 }}
+                 onOpen={() => void openAttachment(attachment, Sharing).catch(() => setError(t('enrich.attachment_failed')))}
+                 onCover={() => setCover(attachment.id)}
+                 onMoveUp={() => moveAttachment(attachment.id, -1)}
+                 onMoveDown={() => moveAttachment(attachment.id, 1)}
+                 onRemove={() => Alert.alert(
                     t('enrich.remove_title'), t('enrich.remove_message'),
-                    [{ text: t('capture.cancel'), style: 'cancel' }, { text: t('enrich.remove'), style: 'destructive', onPress: () => void replaceAttachments(attachments.filter(item => item.id !== attachment.id)) }],
-                  )} />
-                </View>
-              </View>
+                     [{ text: t('capture.cancel'), style: 'cancel' }, { text: t('enrich.remove'), style: 'destructive', onPress: () => void removeAttachment(attachment.id) }],
+                 )}
+               />
             ))}
           </Section>
         ) : null}
@@ -527,17 +790,6 @@ export default function PropertyEnrichmentScreen() {
       </KeyboardAwareScrollViewCompat>
     </View>
   );
-
-  function Section({ title, children }: { title: string; children: React.ReactNode }) {
-    return <View style={styles.section}><Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>{children}</View>;
-  }
-  function Input(props: React.ComponentProps<typeof TextInput> & { label: string }) {
-    const { label, ...inputProps } = props;
-    return <View><Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text><TextInput {...inputProps} placeholderTextColor={colors.mutedForeground} style={[styles.input, inputProps.multiline && styles.multiline, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left' }]} accessibilityLabel={label} /></View>;
-  }
-  function Action({ title, id, onPress, destructive }: { title: string; id: string; onPress: () => void; destructive?: boolean }) {
-    return <TouchableOpacity accessibilityRole="button" testID={id} onPress={onPress}><Text style={{ color: destructive ? colors.destructive : colors.primary, fontFamily: fonts.semiBold }}>{title}</Text></TouchableOpacity>;
-  }
 }
 
 const styles = StyleSheet.create({
@@ -555,5 +807,10 @@ const styles = StyleSheet.create({
   buttonRow: { gap: 8 },
   flex: { flex: 1 },
   attachment: { borderWidth: 1, borderRadius: 10, padding: 12, gap: 10 },
-  attachmentActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  attachmentPreview: { alignItems: 'center', gap: 12 },
+  attachmentThumbnail: { width: 72, height: 72, borderRadius: 8 },
+  attachmentTile: { width: 72, height: 72, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  attachmentName: { flex: 1 },
+  attachmentActions: { flexWrap: 'wrap', gap: 16 },
+  privacyText: { fontSize: 13, lineHeight: 19 },
 });

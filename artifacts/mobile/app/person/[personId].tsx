@@ -13,6 +13,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Property } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -22,6 +23,12 @@ import {
   PERSON_CLASSIFICATIONS,
   PersonClassification,
 } from '@/services/people';
+import {
+  inferPhoneCountry,
+  normalizePhoneForCountry,
+  PHONE_COUNTRIES,
+  PhoneCountryCode,
+} from '@/services/phoneEntry';
 import { store } from '@/services/persistence';
 
 export default function PersonDetailScreen() {
@@ -38,8 +45,10 @@ export default function PersonDetailScreen() {
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>('KW');
   const [notes, setNotes] = useState('');
   const [classifications, setClassifications] = useState<PersonClassification[]>([]);
+  const [countryOpen, setCountryOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState('');
@@ -65,6 +74,11 @@ export default function PersonDetailScreen() {
     if (!person) return;
     setName(person.name);
     setPhone(person.displayPhone);
+    setPhoneCountry(
+      inferPhoneCountry(person.displayPhone)
+      ?? inferPhoneCountry(person.normalizedPhone)
+      ?? 'KW',
+    );
     setNotes(person.notes);
     setClassifications([...person.classifications]);
     setMode('edit');
@@ -80,6 +94,7 @@ export default function PersonDetailScreen() {
         id: person.id,
         name,
         displayPhone: phone,
+        normalizedPhone: normalizePhoneForCountry(phone, phoneCountry),
         notes,
         classifications,
       });
@@ -121,6 +136,21 @@ export default function PersonDetailScreen() {
     await load();
   };
 
+  const call = async () => {
+    if (!person) return;
+    setError('');
+    const phoneUrl = `tel:${person.normalizedPhone}`;
+    try {
+      if (!await Linking.canOpenURL(phoneUrl)) {
+        setError(t('people.call_unavailable'));
+        return;
+      }
+      await Linking.openURL(phoneUrl);
+    } catch {
+      setError(t('people.call_unavailable'));
+    }
+  };
+
   const remove = async () => {
     if (!person || busy) return;
     setBusy(true);
@@ -160,29 +190,68 @@ export default function PersonDetailScreen() {
     textAlign: isRTL ? 'right' as const : 'left' as const,
     fontFamily: fonts.regular,
   }];
+  const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
+    ?? PHONE_COUNTRIES[0];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <TouchableOpacity onPress={() => mode === 'edit' ? setMode('detail') : router.back()} testID="person-detail-back" accessibilityRole="button">
-          <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t(mode === 'edit' ? 'capture.cancel' : 'capture.back')}</Text>
+        <TouchableOpacity
+          onPress={() => mode === 'edit' ? setMode('detail') : router.back()}
+          testID="person-detail-back"
+          accessibilityRole="button"
+          style={[styles.headerSide, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}
+        >
+          <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+            {t(mode === 'edit' ? 'capture.cancel' : 'capture.back')}
+          </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{mode === 'edit' ? t('people.edit') : t('people.detail')}</Text>
+        <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>
+          {mode === 'edit' ? t('people.edit') : t('people.detail')}
+        </Text>
         {mode === 'detail' ? (
-          <TouchableOpacity onPress={beginEdit} testID="person-edit" accessibilityRole="button">
-            <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('detail.edit')}</Text>
+          <TouchableOpacity
+            onPress={beginEdit}
+            testID="person-edit"
+            accessibilityRole="button"
+            style={[styles.headerSide, { alignItems: isRTL ? 'flex-start' : 'flex-end' }]}
+          >
+            <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('detail.edit')}</Text>
           </TouchableOpacity>
-        ) : <View style={{ width: 40 }} />}
+        ) : <View style={styles.headerSide} />}
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
+        bottomOffset={mode === 'edit' ? 72 : 20}
+      >
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-detail-error">{error}</Text> : null}
         {mode === 'edit' ? (
           <>
             <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} style={inputStyle} testID="person-edit-name" />
-            <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} keyboardType="phone-pad" style={inputStyle} testID="person-edit-phone" />
+            <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <TouchableOpacity
+                onPress={() => setCountryOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t(selectedCountry.translationKey)}
+                style={[styles.countryButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                testID="person-edit-phone-country"
+              >
+                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
+                  {selectedCountry.code} +{selectedCountry.dialCode}
+                </Text>
+              </TouchableOpacity>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                placeholder={t('people.phone')}
+                keyboardType="phone-pad"
+                style={[inputStyle, styles.phoneInput]}
+                testID="person-edit-phone"
+              />
+            </View>
             {PERSON_CLASSIFICATIONS.map(value => (
               <TouchableOpacity key={value} onPress={() => toggle(value)} accessibilityRole="checkbox" accessibilityState={{ checked: classifications.includes(value) }} testID={`person-edit-classification-${value}`} style={[styles.choice, { borderColor: classifications.includes(value) ? colors.primary : colors.border }]}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`people.classification.${value}` as keyof Translations)}</Text>
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t(`people.classification.${value}` as keyof Translations)}</Text>
               </TouchableOpacity>
             ))}
             <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} multiline style={[inputStyle, styles.notes]} testID="person-edit-notes" />
@@ -195,32 +264,32 @@ export default function PersonDetailScreen() {
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            <View style={styles.actions}>
-              <Button title={t('people.call')} onPress={() => void Linking.openURL(`tel:${person.normalizedPhone}`)} variant="outline" testID="person-call" style={styles.flex} />
+            <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <Button title={t('people.call')} onPress={() => void call()} variant="outline" testID="person-call" style={styles.flex} />
               <Button title={t('people.whatsapp')} onPress={() => void Linking.openURL(`https://wa.me/${person.normalizedPhone.replace(/\D/g, '')}`)} variant="outline" testID="person-whatsapp" style={styles.flex} />
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.linked_properties')}</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
               <TouchableOpacity onPress={() => void openLink()} testID="person-link-property" accessibilityRole="button">
-                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('people.link')}</Text>
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('people.link')}</Text>
               </TouchableOpacity>
             </View>
             {linked.map(property => (
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)} testID={`linked-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
-                  <Text style={{ color: colors.mutedForeground }}>{property.core.id}</Text>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+                  <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{property.core.id}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => void unlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('people.unlink')}</Text>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('people.unlink')}</Text>
                 </TouchableOpacity>
               </View>
             ))}
             <Button title={t('people.remove')} onPress={() => setDeleteOpen(true)} variant="outline" testID="person-remove" />
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
 
       <Modal visible={linkOpen} animationType="slide" onRequestClose={() => setLinkOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -234,6 +303,35 @@ export default function PersonDetailScreen() {
             <Button title={t('people.quick_add_property')} onPress={() => router.push({ pathname: '/capture/transaction', params: { linkPersonId: person.id } } as never)} testID="person-quick-add-property" />
             <Button title={t('capture.cancel')} onPress={() => setLinkOpen(false)} variant="outline" testID="link-property-cancel" />
           </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={countryOpen} animationType="fade" transparent onRequestClose={() => setCountryOpen(false)}>
+        <View style={[styles.modalBackdrop, { backgroundColor: `${colors.foreground}59` }]}>
+          <View style={[styles.countryPicker, { backgroundColor: colors.card }]}>
+            <Text style={[styles.countryTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('people.country')}
+            </Text>
+            {PHONE_COUNTRIES.map(country => (
+              <TouchableOpacity
+                key={country.code}
+                onPress={() => {
+                  setPhoneCountry(country.code);
+                  setCountryOpen(false);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: phoneCountry === country.code }}
+                style={[styles.countryChoice, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                testID={`person-edit-phone-country-${country.code}`}
+              >
+                <Text style={[styles.countryName, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t(country.translationKey)}
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{country.code} +{country.dialCode}</Text>
+              </TouchableOpacity>
+            ))}
+            <Button title={t('capture.cancel')} onPress={() => setCountryOpen(false)} variant="outline" testID="person-edit-country-picker-cancel" />
+          </View>
         </View>
       </Modal>
 
@@ -255,14 +353,18 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 20 },
   header: { minHeight: 60, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontSize: 20 },
-  content: { padding: 20, paddingBottom: 48, gap: 14 },
+  headerTitle: { flex: 2, fontSize: 20, textAlign: 'center' },
+  headerSide: { flex: 1, minWidth: 0 },
+  content: { padding: 20, gap: 14 },
   name: { fontSize: 28 },
   phone: { fontSize: 18 },
   input: { minHeight: 54, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, fontSize: 16 },
+  phoneRow: { gap: 8 },
+  phoneInput: { flex: 1 },
+  countryButton: { minHeight: 54, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 10 },
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   choice: { minHeight: 48, justifyContent: 'center', padding: 12, borderWidth: 1, borderRadius: 10 },
-  actions: { flexDirection: 'row', gap: 10 },
+  actions: { gap: 10 },
   flex: { flex: 1 },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
@@ -270,6 +372,11 @@ const styles = StyleSheet.create({
   property: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
   modalSearch: { margin: 20 },
   propertyChoice: { minHeight: 58, justifyContent: 'center', borderBottomWidth: 1 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
+  countryPicker: { borderRadius: 14, padding: 16, gap: 4 },
+  countryTitle: { fontSize: 20, marginBottom: 8 },
+  countryChoice: { minHeight: 50, alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
+  countryName: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(10,29,31,.45)', justifyContent: 'center', padding: 24 },
   dialog: { borderWidth: 1, borderRadius: 12, padding: 20, gap: 14 },
 });

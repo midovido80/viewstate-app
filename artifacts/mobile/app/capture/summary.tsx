@@ -108,7 +108,7 @@ export default function SummaryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader title={t('summary.title')} />
+      <CaptureHeader title={t('summary.title')} step={5} totalSteps={5} />
       
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         

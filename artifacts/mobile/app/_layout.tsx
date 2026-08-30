@@ -39,7 +39,11 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
-        <Stack.Screen name="person" options={{ headerShown: false }} />
+        <Stack.Screen name="person/new" options={{ headerShown: false }} />
+        <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />
+        <Stack.Screen name="property/[propertyCoreId]" options={{ headerShown: false }} />
+        <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
+        <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
       </Stack>
     </View>
   );
