@@ -6,6 +6,7 @@ import {
   isTransaction,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
 } from "./taxonomy.ts";
+import { PROPERTY_SOURCE_ROLES } from "./types.ts";
 import type {
   ClassifiedLiteralText,
   LocationEnrichmentMetadata,
@@ -15,6 +16,7 @@ import type {
   Property,
   PropertyAttachmentMetadata,
   PropertyCore,
+  PropertySource,
   ShareDisclosurePolicy,
   TypeDetails,
   ValidationIssue,
@@ -358,6 +360,23 @@ export function validatePropertyAttachments(
   }
 
   return issues.length === 0 ? valid(attachments) : invalid(issues);
+}
+
+export function validatePropertySource(
+  source: PropertySource,
+): ValidationResult<PropertySource> {
+  const issues = [
+    ...validateRequiredIdentifier(source.propertyCoreId, ["propertyCoreId"]),
+    ...validateRequiredIdentifier(source.personId, ["personId"]),
+  ];
+  if (!PROPERTY_SOURCE_ROLES.includes(source.role)) {
+    issues.push(issue(
+      "invalid_source_role",
+      ["role"],
+      "Property source role is not approved.",
+    ));
+  }
+  return issues.length === 0 ? valid(source) : invalid(issues);
 }
 
 export function validateOffer(offer: Offer): ValidationResult<Offer> {

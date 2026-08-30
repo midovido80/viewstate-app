@@ -11,12 +11,15 @@ import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/se
 import { store } from '@/services/persistence';
 import {
   buildContactPhoneChoices,
+  ContactPhoneChoice,
   inferPhoneCountry,
   normalizePhoneForCountry,
   PHONE_COUNTRIES,
   PhoneCountryCode,
   phoneDigits,
 } from '@/services/phoneEntry';
+
+let sessionContactChoices: ContactPhoneChoice[] | null = null;
 
 export default function NewPersonScreen() {
   const router = useRouter();
@@ -29,16 +32,16 @@ export default function NewPersonScreen() {
   const [countryOpen, setCountryOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [classifications, setClassifications] = useState<PersonClassification[]>([]);
-  const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
+  const [contactChoices, setContactChoices] = useState<ContactPhoneChoice[]>([]);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
+  const [contactStatus, setContactStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const toggle = (value: PersonClassification) => setClassifications(current =>
     current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
 
-  const contactChoices = useMemo(() => buildContactPhoneChoices(contacts), [contacts]);
   const filteredContactChoices = useMemo(() => {
     const literalQuery = contactSearch.trim().toLocaleLowerCase();
     const digitQuery = phoneDigits(contactSearch);
@@ -50,28 +53,42 @@ export default function NewPersonScreen() {
   const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
     ?? PHONE_COUNTRIES[0];
 
-  const importContact = async () => {
+  const loadContacts = async () => {
+    try {
+      const permission = await Contacts.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setContactStatus('error');
+        return;
+      }
+      const result = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.FirstName, Contacts.Fields.LastName, Contacts.Fields.PhoneNumbers],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      const normalized = buildContactPhoneChoices(result.data);
+      sessionContactChoices = normalized;
+      setContactChoices(normalized);
+      setContactStatus('ready');
+    } catch {
+      setContactStatus('error');
+    }
+  };
+
+  const importContact = () => {
     setError('');
     if (Platform.OS === 'web') {
       setError(t('people.contacts_unavailable'));
       return;
     }
-    try {
-      const permission = await Contacts.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setError(t('people.contacts_denied'));
-        return;
-      }
-      const result = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers],
-        sort: Contacts.SortTypes.FirstName,
-      });
-      setContacts(result.data);
-      setContactSearch('');
-      setContactsOpen(true);
-    } catch {
-      setError(t('people.contacts_load_failed'));
+    setContactSearch('');
+    setContactsOpen(true);
+    if (sessionContactChoices !== null) {
+      setContactChoices(sessionContactChoices);
+      setContactStatus('ready');
+      return;
     }
+    setContactChoices([]);
+    setContactStatus('loading');
+    void loadContacts();
   };
 
   const save = async () => {
@@ -135,7 +152,7 @@ export default function NewPersonScreen() {
           </TouchableOpacity>
           <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
         </View>
-        <Button title={t('people.import_contact')} onPress={() => void importContact()} variant="outline" testID="person-import-contact" />
+        <Button title={t('people.import_contact')} onPress={importContact} variant="outline" testID="person-import-contact" />
         <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
         <View style={styles.choices}>
           {PERSON_CLASSIFICATIONS.map(value => (
@@ -178,6 +195,15 @@ export default function NewPersonScreen() {
             keyboardShouldPersistTaps="handled"
             scrollEnabled={filteredContactChoices.length > 0}
             contentContainerStyle={styles.contactList}
+            ListEmptyComponent={(
+              <Text style={[styles.contactEmpty, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }]}>
+                {contactStatus === 'loading'
+                  ? t('people.contacts_loading')
+                  : contactStatus === 'error'
+                    ? t('people.contacts_load_failed')
+                    : t('people.contacts_empty')}
+              </Text>
+            )}
             renderItem={({ item }) => (
               <TouchableOpacity onPress={() => {
                 setName(item.name);
@@ -240,6 +266,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 22 },
   contactSearch: { marginHorizontal: 20, marginBottom: 8 },
   contactList: { paddingHorizontal: 20, paddingBottom: 32 },
+  contactEmpty: { paddingVertical: 28, lineHeight: 22 },
   contact: { minHeight: 64, borderBottomWidth: 1, justifyContent: 'center', gap: 4 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
   countryPicker: { borderRadius: 14, padding: 16, gap: 4 },

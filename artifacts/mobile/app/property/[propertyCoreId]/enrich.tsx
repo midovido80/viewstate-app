@@ -599,6 +599,19 @@ export default function PropertyEnrichmentScreen() {
     if (mounted.current) setError(t('enrich.attachment_failed'));
   };
 
+  const openManagedAttachment = async (attachment: LocalAttachment) => {
+    setError('');
+    try {
+      await openAttachment(attachment, Sharing);
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message === 'ATTACHMENT_FILE_MISSING'
+          ? t('enrich.attachment_missing')
+          : t('enrich.attachment_failed'),
+      );
+    }
+  };
+
   const save = async () => {
     if (!property || saving || persistFlight.current) return;
     setSaving(true);
@@ -750,7 +763,7 @@ export default function PropertyEnrichmentScreen() {
                    moveDown: t('enrich.move_down'),
                    remove: t('enrich.remove'),
                  }}
-                 onOpen={() => void openAttachment(attachment, Sharing).catch(() => setError(t('enrich.attachment_failed')))}
+                  onOpen={() => void openManagedAttachment(attachment)}
                  onCover={() => setCover(attachment.id)}
                  onMoveUp={() => moveAttachment(attachment.id, -1)}
                  onMoveDown={() => moveAttachment(attachment.id, 1)}

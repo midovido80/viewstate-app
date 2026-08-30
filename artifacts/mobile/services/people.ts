@@ -1,3 +1,8 @@
+import {
+  PROPERTY_SOURCE_ROLES,
+  PropertySourceRole,
+} from '@workspace/property-domain';
+
 export const PERSON_CLASSIFICATIONS = [
   'seeker',
   'owner',
@@ -7,6 +12,15 @@ export const PERSON_CLASSIFICATIONS = [
 ] as const;
 
 export type PersonClassification = typeof PERSON_CLASSIFICATIONS[number];
+
+export { PROPERTY_SOURCE_ROLES };
+export type { PropertySourceRole };
+
+export interface PropertySource {
+  propertyCoreId: string;
+  personId: string;
+  role: PropertySourceRole;
+}
 
 /**
  * User-authored fields are kept exactly as entered. normalizedPhone is the
@@ -122,4 +136,8 @@ export interface PersonStore {
   getPersonPropertyLinks(): Promise<PersonPropertyLink[]>;
   getLinksForPerson(personId: string): Promise<PersonPropertyLink[]>;
   getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]>;
+  setPropertySource(source: PropertySource): Promise<void>;
+  getPropertySource(propertyCoreId: string): Promise<PropertySource | null>;
+  removePropertySource(propertyCoreId: string): Promise<boolean>;
+  getPropertySourcesForPerson(personId: string): Promise<PropertySource[]>;
 }

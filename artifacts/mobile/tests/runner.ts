@@ -11,9 +11,11 @@ import {
   projectDraftToProperty,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   PROPERTY_TYPES,
+  PROPERTY_SOURCE_ROLES,
   PropertyDraft,
   Property,
   validateProperty,
+  validatePropertySource,
   validateTypeDetails,
 } from '@workspace/property-domain';
 import appConfig from '../app.json';
@@ -2343,6 +2345,90 @@ test('Phone entry helpers keep selected contact display text while choosing one 
   ]);
   assert.equal(choices[0].normalizedDigits, '96550000002');
   assert.equal(choices[2].normalizedDigits, '96550000003');
+  assert.deepEqual(
+    buildContactPhoneChoices([
+      { id: 'tel', name: 'Original', phoneNumbers: [{ number: 'tel:+965 5000 0040' }] },
+      { id: 'sms', name: 'Messaging alias', phoneNumbers: [{ number: 'sms:00965 5000 0040' }] },
+      { id: 'voicemail', name: 'Voicemail alias', phoneNumbers: [{ number: 'voicemail:+965 5000 0040' }] },
+    ]).map(choice => choice.phone),
+    ['+965 5000 0040'],
+  );
+  assert.equal(normalizePhoneForCountry('tel:+965 5000 0040', 'KW'), '+96550000040');
+  assert.equal(normalizePhoneForCountry('sms:00966 501 234 567', 'KW'), '+966501234567');
+});
+
+test('Private Property Source domain stays additive and restricted to approved roles', () => {
+  assert.deepEqual(PROPERTY_SOURCE_ROLES, [
+    'owner',
+    'broker',
+    'real_estate_company',
+    'building_guard',
+  ]);
+  assert.equal(validatePropertySource({
+    propertyCoreId: 'property-source-one',
+    personId: 'person-source-one',
+    role: 'broker',
+  }).ok, true);
+  assert.equal(validatePropertySource({
+    propertyCoreId: 'property-source-one',
+    personId: 'person-source-one',
+    role: 'tenant' as never,
+  }).ok, false);
+});
+
+test('Private source persistence, UI, privacy, attachment opening, and archive policy are explicit', async () => {
+  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [
+    persistence,
+    propertyDetail,
+    personDetail,
+    sharing,
+    attachments,
+    enrichment,
+    translations,
+    easIgnore,
+  ] = await Promise.all([
+    readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+    readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
+    readFile(sourcePath('../../../lib/property-domain/src/sharing.ts'), 'utf8'),
+    readFile(sourcePath('../services/attachments.ts'), 'utf8'),
+    readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+    readFile(sourcePath('../.easignore'), 'utf8'),
+  ]);
+
+  assert.match(persistence, /property_core_id TEXT PRIMARY KEY/);
+  assert.match(persistence, /ON CONFLICT\(property_core_id\) DO UPDATE SET person_id = excluded\.person_id, role = excluded\.role/);
+  assert.match(persistence, /getPropertySourcesForPerson/);
+  assert.match(persistence, /DELETE FROM property_sources WHERE person_id = \?/);
+  assert.match(propertyDetail, /testID="property-source-person"/);
+  assert.match(propertyDetail, /testID="property-source-unlink"/);
+  assert.match(propertyDetail, /testID="property-source-unlink-dialog"/);
+  assert.match(propertyDetail, /testID="property-source-unlink-cancel"/);
+  assert.match(propertyDetail, /testID="property-source-unlink-confirm"/);
+  assert.match(personDetail, /testID=\{`source-property-\$\{property\.core\.id\}`\}/);
+  assert.match(personDetail, /testID=\{`unlink-source-property-\$\{property\.core\.id\}`\}/);
+  assert.match(personDetail, /testID="person-source-unlink-dialog"/);
+  assert.doesNotMatch(sharing, /PropertySource|sourcePerson|propertySource/);
+
+  assert.match(attachments, /fileExists\(attachment\.uri\)/);
+  assert.match(attachments, /ATTACHMENT_FILE_MISSING/);
+  assert.match(attachments, /getContentUriAsync\(attachment\.uri\)/);
+  assert.match(attachments, /android\.intent\.action\.VIEW/);
+  assert.match(attachments, /type: attachment\.mimeType/);
+  assert.match(enrichment, /caught\.message === 'ATTACHMENT_FILE_MISSING'/);
+  assert.match(enrichment, /enrich\.attachment_missing/);
+  assert.doesNotMatch(enrichment, /ATTACHMENT_FILE_MISSING[\s\S]{0,500}(?:removeAttachment|deleteLocalAttachment)/);
+  assert.match(translations, /'enrich\.attachment_missing': 'This local file is missing/);
+  assert.match(translations, /'enrich\.attachment_missing': 'هذا الملف المحلي مفقود/);
+
+  for (const pattern of [
+    '.git/', '.local/', '.replit', '**/.env', '**/*.db',
+    'attached_assets/', '**/*.apk', '**/*.aab',
+  ]) {
+    assert.ok(easIgnore.includes(pattern), `missing EAS exclusion: ${pattern}`);
+  }
 });
 
 test('Share selection fails closed for every private location value until explicitly chosen', () => {
@@ -2465,7 +2551,13 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(peopleNew, /data=\{filteredContactChoices\}/);
   assert.match(peopleNew, /testID="contact-search"/);
   assert.match(peopleNew, /phoneDigits\(contactSearch\)/);
-  assert.match(peopleNew, /buildContactPhoneChoices\(contacts\)/);
+  assert.match(peopleNew, /sessionContactChoices = normalized/);
+  assert.ok(
+    peopleNew.indexOf('setContactsOpen(true)') < peopleNew.indexOf('void loadContacts()'),
+    'picker must open before native contact loading begins',
+  );
+  assert.match(peopleNew, /Contacts\.Fields\.FirstName[\s\S]*Contacts\.Fields\.LastName[\s\S]*Contacts\.Fields\.PhoneNumbers/);
+  assert.match(peopleNew, /people\.contacts_loading/);
   assert.match(peopleNew, /setPhone\(item\.phone\)/);
 
   // Five callers supply the five-chip capture progression; chip state is
@@ -2508,6 +2600,6 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(share, /share\.whatsapp_unavailable/);
   assert.match(shareIntent, /encodeURIComponent\(exactPreviewText\)/);
   assert.match(shareIntent, /destination: AndroidPropertyShareDestination/);
-  assert.match(enrichmentFields, /const options = \['true', 'false'\]/);
+  assert.match(enrichmentFields, /\['true', 'false'\]\.map\(value =>/);
   assert.doesNotMatch(enrichmentFields, /value \|\| 'clear'|enrich\.clear/);
 });

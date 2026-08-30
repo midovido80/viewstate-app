@@ -19,6 +19,12 @@ import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
 import { getAreaById, searchAreas } from '@/constants/kuwait-areas';
 import { store } from '@/services/persistence';
+import {
+  Person,
+  PROPERTY_SOURCE_ROLES,
+  PropertySource,
+  PropertySourceRole,
+} from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
 import { loadPropertyEnrichmentDraft } from '@/services/propertyEnrichmentRecovery';
 import {
@@ -62,6 +68,14 @@ export default function PropertyDetailScreen() {
   const [recoveryStatus, setRecoveryStatus] = useState<PropertyUpdateRecoveryResult['status'] | null>(null);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [source, setSource] = useState<PropertySource | null>(null);
+  const [sourcePerson, setSourcePerson] = useState<Person | null>(null);
+  const [sourcePeople, setSourcePeople] = useState<Person[]>([]);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourcePersonId, setSourcePersonId] = useState('');
+  const [sourceRole, setSourceRole] = useState<PropertySourceRole>('owner');
+  const [sourceBusy, setSourceBusy] = useState(false);
+  const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
   const canPermanentlyDelete = store.canPermanentlyDelete();
 
   const load = useCallback(async () => {
@@ -98,9 +112,10 @@ export default function PropertyDetailScreen() {
         setPendingOperation(null);
         setRecoveryStatus(null);
       }
-      const [saved, enrichmentDraft] = await Promise.all([
+      const [saved, enrichmentDraft, savedSource] = await Promise.all([
         store.getProperty(id),
         loadPropertyEnrichmentDraft(id).catch(() => null),
+        store.getPropertySource(id),
       ]);
       if (!saved) {
         setProperty(null);
@@ -110,6 +125,8 @@ export default function PropertyDetailScreen() {
       }
       setProperty(saved);
       setHasEnrichmentDraft(enrichmentDraft !== null);
+      setSource(savedSource);
+      setSourcePerson(savedSource ? await store.getPerson(savedSource.personId) : null);
       setStatus('ready');
     } catch {
       setProperty(null);
@@ -125,6 +142,53 @@ export default function PropertyDetailScreen() {
   const areaName = (areaId: string) => {
     const area = getAreaById(areaId);
     return area ? (language === 'ar' ? area.ar : area.en) : areaId;
+  };
+
+  const openSource = async () => {
+    setError('');
+    try {
+      setSourcePeople(await store.getPeople());
+      setSourcePersonId(source?.personId ?? '');
+      setSourceRole(source?.role ?? 'owner');
+      setSourceOpen(true);
+    } catch {
+      setError(t('source.load_failed'));
+    }
+  };
+
+  const saveSource = async () => {
+    if (!id || !sourcePersonId || sourceBusy) return;
+    setSourceBusy(true);
+    setError('');
+    try {
+      await store.setPropertySource({ propertyCoreId: id, personId: sourcePersonId, role: sourceRole });
+      setSourceOpen(false);
+      await load();
+    } catch {
+      setError(t('source.save_failed'));
+    } finally {
+      setSourceBusy(false);
+    }
+  };
+
+  const removeSource = async () => {
+    if (!id || sourceBusy) return;
+    setSourceConfirmVisible(false);
+    setSourceBusy(true);
+    setError('');
+    try {
+      await store.removePropertySource(id);
+      setSource(null);
+      setSourcePerson(null);
+    } catch {
+      setError(t('source.save_failed'));
+    } finally {
+      setSourceBusy(false);
+    }
+  };
+
+  const confirmRemoveSource = () => {
+    setSourceConfirmVisible(true);
   };
 
   const beginEdit = async () => {
@@ -460,6 +524,34 @@ export default function PropertyDetailScreen() {
                 : formatPrice(shownPrice!, 'KWD', language)}
             />
             <DetailRow label={t('detail.area')} value={areaName(property.core.locationArea.id)} />
+            <View style={[styles.sourceSection, { borderColor: colors.border, backgroundColor: colors.card }]}>
+              <View style={[styles.sourceHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <View style={styles.sourceTitle}>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.private')}</Text>
+                </View>
+                <TouchableOpacity onPress={() => void openSource()} testID="property-source-change" accessibilityRole="button">
+                  <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t(source ? 'source.change' : 'source.choose')}</Text>
+                </TouchableOpacity>
+              </View>
+              {source && sourcePerson ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() => router.push(`/person/${encodeURIComponent(sourcePerson.id)}` as never)}
+                    testID="property-source-person"
+                    accessibilityRole="button"
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={confirmRemoveSource} testID="property-source-unlink" accessibilityRole="button">
+                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('source.unlink')}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none')}</Text>
+              )}
+            </View>
             {property.typeDetails ? PROPERTY_DETAIL_FIELD_DEFINITIONS
               .filter(definition => definition.appliesTo.includes(property.core.propertyType))
               .map(definition => {
@@ -546,6 +638,71 @@ export default function PropertyDetailScreen() {
             ))}
           </ScrollView>
           <Button title={t('capture.cancel')} onPress={() => setAreaOpen(false)} variant="outline" />
+        </View>
+      </Modal>
+
+      <Modal visible={sourceOpen} animationType="slide" onRequestClose={() => !sourceBusy && setSourceOpen(false)}>
+        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+          <View style={[styles.sourcePickerHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('source.choose')}</Text>
+            <TouchableOpacity onPress={() => setSourceOpen(false)} disabled={sourceBusy} testID="property-source-cancel" accessibilityRole="button">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.content}>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.role')}</Text>
+            <View style={styles.options}>
+              {PROPERTY_SOURCE_ROLES.map(role => (
+                <Choice
+                  key={role}
+                  selected={sourceRole === role}
+                  onPress={() => setSourceRole(role)}
+                  title={t(`source.role.${role}`)}
+                  testID={`property-source-role-${role}`}
+                />
+              ))}
+            </View>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.person')}</Text>
+            {sourcePeople.map(person => (
+              <TouchableOpacity
+                key={person.id}
+                onPress={() => setSourcePersonId(person.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: sourcePersonId === person.id }}
+                testID={`property-source-choice-${person.id}`}
+                style={[styles.choice, {
+                  borderColor: sourcePersonId === person.id ? colors.primary : colors.border,
+                  backgroundColor: colors.card,
+                }]}
+              >
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{person.name}</Text>
+              </TouchableOpacity>
+            ))}
+            {!sourcePeople.length ? (
+              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.people_empty')}</Text>
+            ) : null}
+            <Button title={t('source.save')} onPress={() => void saveSource()} disabled={!sourcePersonId} loading={sourceBusy} testID="property-source-save" />
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={sourceConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !sourceBusy && setSourceConfirmVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]} accessibilityRole="alert" testID="property-source-unlink-dialog">
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.unlink_title')}</Text>
+            <Text style={[styles.modalMessage, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.unlink_message')}</Text>
+            <TouchableOpacity onPress={() => setSourceConfirmVisible(false)} disabled={sourceBusy} style={[styles.modalAction, { borderColor: colors.border }]} testID="property-source-unlink-cancel" accessibilityRole="button">
+              <Text style={[styles.modalActionText, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('source.unlink_cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => void removeSource()} disabled={sourceBusy} style={[styles.modalAction, { borderColor: colors.destructive, opacity: sourceBusy ? 0.6 : 1 }]} testID="property-source-unlink-confirm" accessibilityRole="button">
+              <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>{t('source.unlink_confirm')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -696,6 +853,10 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 48, gap: 16 },
   detailRow: { paddingVertical: 18, borderBottomWidth: 1 },
   detailValue: { fontSize: 18, marginTop: 6 },
+  sourceSection: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
+  sourceHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  sourceTitle: { flex: 1, gap: 3 },
+  sourcePickerHeader: { minHeight: 60, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   label: { fontSize: 16, marginTop: 8 },
   options: { gap: 8 },
   horizontal: { flexDirection: 'row', gap: 8 },

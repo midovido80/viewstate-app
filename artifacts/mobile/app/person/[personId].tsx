@@ -24,6 +24,7 @@ import {
   Person,
   PERSON_CLASSIFICATIONS,
   PersonClassification,
+  PropertySource,
 } from '@/services/people';
 import {
   inferPhoneCountry,
@@ -43,6 +44,7 @@ export default function PersonDetailScreen() {
   const { t, language, isRTL, fonts } = useI18n();
   const [person, setPerson] = useState<Person | null>(null);
   const [linked, setLinked] = useState<Property[]>([]);
+  const [sourced, setSourced] = useState<{ source: PropertySource; property: Property }[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertySearch, setPropertySearch] = useState('');
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
@@ -56,6 +58,7 @@ export default function PersonDetailScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -63,9 +66,19 @@ export default function PersonDetailScreen() {
       const saved = await store.getPerson(id);
       setPerson(saved);
       if (!saved) return;
-      const links = await store.getLinksForPerson(id);
-      const results = await Promise.all(links.map(link => store.getProperty(link.propertyCoreId)));
+      const [links, sources] = await Promise.all([
+        store.getLinksForPerson(id),
+        store.getPropertySourcesForPerson(id),
+      ]);
+      const [results, sourceProperties] = await Promise.all([
+        Promise.all(links.map(link => store.getProperty(link.propertyCoreId))),
+        Promise.all(sources.map(source => store.getProperty(source.propertyCoreId))),
+      ]);
       setLinked(results.filter((value): value is Property => value !== null));
+      setSourced(sources.flatMap((source, index) => {
+        const property = sourceProperties[index];
+        return property ? [{ source, property }] : [];
+      }));
     } catch {
       setError(t('people.load_failed'));
     }
@@ -128,15 +141,36 @@ export default function PersonDetailScreen() {
 
   const link = async (property: Property) => {
     if (!person) return;
-    await store.linkPersonToProperty({ personId: person.id, propertyCoreId: property.core.id });
-    setLinkOpen(false);
-    await load();
+    setError('');
+    try {
+      await store.linkPersonToProperty({ personId: person.id, propertyCoreId: property.core.id });
+      setLinkOpen(false);
+      await load();
+    } catch {
+      setError(t('people.link_action_failed'));
+    }
   };
 
   const unlink = async (propertyCoreId: string) => {
     if (!person) return;
-    await store.unlinkPersonFromProperty({ personId: person.id, propertyCoreId });
-    await load();
+    setError('');
+    try {
+      await store.unlinkPersonFromProperty({ personId: person.id, propertyCoreId });
+      await load();
+    } catch {
+      setError(t('people.unlink_failed'));
+    }
+  };
+
+  const unlinkSource = async (propertyCoreId: string) => {
+    setSourceUnlinkId(null);
+    setError('');
+    try {
+      await store.removePropertySource(propertyCoreId);
+      await load();
+    } catch {
+      setError(t('source.save_failed'));
+    }
   };
 
   const confirmUnlink = (propertyCoreId: string) => {
@@ -152,6 +186,10 @@ export default function PersonDetailScreen() {
         },
       ],
     );
+  };
+
+  const confirmSourceUnlink = (propertyCoreId: string) => {
+    setSourceUnlinkId(propertyCoreId);
   };
 
   const call = async () => {
@@ -317,6 +355,26 @@ export default function PersonDetailScreen() {
                 </TouchableOpacity>
               </View>
             ))}
+            <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.sourced_properties')}</Text>
+            </View>
+            {sourced.length ? sourced.map(({ source, property }) => (
+              <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <TouchableOpacity
+                  onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)}
+                  testID={`source-property-${property.core.id}`}
+                  accessibilityRole="button"
+                >
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button">
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('source.unlink')}</Text>
+                </TouchableOpacity>
+              </View>
+            )) : (
+              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none_for_person')}</Text>
+            )}
             <Button title={t('people.remove')} onPress={() => setDeleteOpen(true)} variant="outline" testID="person-remove" />
           </>
         )}
@@ -373,6 +431,22 @@ export default function PersonDetailScreen() {
             <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('people.remove_message')}</Text>
             <Button title={t('capture.cancel')} onPress={() => setDeleteOpen(false)} variant="outline" disabled={busy} testID="person-remove-cancel" />
             <Button title={t('people.remove_confirm')} onPress={() => void remove()} variant="outline" loading={busy} testID="person-remove-confirm" />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={sourceUnlinkId !== null} transparent animationType="fade" onRequestClose={() => setSourceUnlinkId(null)}>
+        <View style={styles.overlay}>
+          <View style={[styles.dialog, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="alert" testID="person-source-unlink-dialog">
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.unlink_title')}</Text>
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.unlink_message')}</Text>
+            <Button title={t('source.unlink_cancel')} onPress={() => setSourceUnlinkId(null)} variant="outline" testID="person-source-unlink-cancel" />
+            <Button
+              title={t('source.unlink_confirm')}
+              onPress={() => sourceUnlinkId && void unlinkSource(sourceUnlinkId)}
+              variant="outline"
+              testID="person-source-unlink-confirm"
+            />
           </View>
         </View>
       </Modal>

@@ -1,6 +1,9 @@
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
+import * as FileSystem from 'expo-file-system';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import {
   persistAttachmentsThenDeleteRemoved,
   reorderAttachments,
@@ -42,6 +45,7 @@ export interface ExpoFileSystemModule {
   };
   readonly File: new (...parts: any[]) => {
     readonly uri: string;
+    readonly exists: boolean;
     copy(destination: unknown): void | Promise<void>;
     delete(): void | Promise<void>;
   };
@@ -214,8 +218,33 @@ export async function openAttachment(
   sharing: SharingModule,
   platform: string = Platform.OS,
   opener: LinkOpener = Linking,
+  fileSystem: AttachmentOpenFileSystem = {
+    fileExists: uri => new FileSystem.File(uri).exists,
+    getContentUriAsync: uri => LegacyFileSystem.getContentUriAsync(uri),
+  },
+  intentLauncher: AndroidIntentLauncher = IntentLauncher,
 ): Promise<void> {
   assertNative(platform);
+  if (!await fileSystem.fileExists(attachment.uri)) {
+    throw new Error('ATTACHMENT_FILE_MISSING');
+  }
+  if (platform === 'android') {
+    try {
+      const contentUri = await fileSystem.getContentUriAsync(attachment.uri);
+      await intentLauncher.startActivityAsync('android.intent.action.VIEW', {
+        data: contentUri,
+        type: attachment.mimeType,
+        flags: 1,
+      });
+      return;
+    } catch {
+      if (await sharing.isAvailableAsync()) {
+        await sharing.shareAsync(attachment.uri, { mimeType: attachment.mimeType });
+        return;
+      }
+      throw new Error('ATTACHMENT_OPEN_UNAVAILABLE');
+    }
+  }
   if (await opener.canOpenURL(attachment.uri)) {
     await opener.openURL(attachment.uri);
     return;
@@ -230,4 +259,16 @@ export async function openAttachment(
 export interface LinkOpener {
   canOpenURL(url: string): Promise<boolean>;
   openURL(url: string): Promise<unknown>;
+}
+
+export interface AttachmentOpenFileSystem {
+  fileExists(uri: string): boolean | Promise<boolean>;
+  getContentUriAsync(uri: string): Promise<string>;
+}
+
+export interface AndroidIntentLauncher {
+  startActivityAsync(
+    action: string,
+    params: { data: string; type: string; flags: number },
+  ): Promise<unknown>;
 }

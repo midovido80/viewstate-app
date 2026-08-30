@@ -243,6 +243,25 @@ export interface PropertyAttachmentMetadata {
   readonly privacy: PrivacyMetadata;
 }
 
+export const PROPERTY_SOURCE_ROLES = [
+  "owner",
+  "broker",
+  "real_estate_company",
+  "building_guard",
+] as const;
+
+export type PropertySourceRole = typeof PROPERTY_SOURCE_ROLES[number];
+
+/**
+ * A private local relationship between one Property and one source person.
+ * This is intentionally separate from shareable PropertyCore text.
+ */
+export interface PropertySource {
+  readonly propertyCoreId: PropertyCoreId;
+  readonly personId: string;
+  readonly role: PropertySourceRole;
+}
+
 export interface PropertyAdditiveMetadata {
   readonly locationEnrichment?: LocationEnrichmentMetadata;
   readonly attachments?: readonly PropertyAttachmentMetadata[];
@@ -310,6 +329,7 @@ export type ValidationIssueCode =
   | "invalid_physical_value"
   | "invalid_coordinates"
   | "invalid_attachment"
+  | "invalid_source_role"
   | "invalid_transaction"
   | "invalid_price"
   | "invalid_currency_code"

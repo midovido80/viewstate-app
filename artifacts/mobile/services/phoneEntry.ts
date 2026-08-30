@@ -49,13 +49,17 @@ function startsWithInternationalZeroPrefix(trimmed: string): boolean {
     && toAsciiDigit(characters[1]) === '0';
 }
 
+function contactPhonePayload(value: string): string {
+  return value.trim().replace(/^(?:tel|sms|smsto|mms|mmsto|voicemail|whatsapp):/i, '').trim();
+}
+
 function hasExplicitInternationalPrefix(value: string): boolean {
-  const trimmed = value.trim();
+  const trimmed = contactPhonePayload(value);
   return trimmed.startsWith('+') || startsWithInternationalZeroPrefix(trimmed);
 }
 
 function explicitInternationalDigits(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = contactPhonePayload(value);
   const digits = phoneDigits(trimmed);
   return startsWithInternationalZeroPrefix(trimmed) ? digits.slice(2) : digits;
 }
@@ -66,11 +70,11 @@ function explicitInternationalDigits(value: string): string {
  * explicit prefix, a number beginning with a country code is ambiguous.
  */
 function contactPhoneDedupeKey(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = contactPhonePayload(value);
   const digits = phoneDigits(trimmed);
-  if (!hasExplicitInternationalPrefix(value)) return digits;
+  if (!hasExplicitInternationalPrefix(trimmed)) return digits;
   if (trimmed.startsWith('+')) return `+${digits}`;
-  return `+${explicitInternationalDigits(value)}`;
+  return `+${explicitInternationalDigits(trimmed)}`;
 }
 
 export function inferPhoneCountry(value: string): PhoneCountryCode | null {
@@ -116,7 +120,7 @@ export function buildContactPhoneChoices(
       isPrimary: boolean;
     }>();
     contact.phoneNumbers?.forEach(phone => {
-      const number = phone.number;
+      const number = phone.number ? contactPhonePayload(phone.number) : phone.number;
       if (!number?.trim()) return;
       const normalizedDigits = phoneDigits(number);
       if (!normalizedDigits) return;
