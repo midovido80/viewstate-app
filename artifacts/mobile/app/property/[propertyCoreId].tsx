@@ -406,31 +406,27 @@ export default function PropertyDetailScreen() {
           <View style={styles.headerSide} />
         </View>
         {mode === 'detail' ? (
-          <View
-            style={[
-              styles.headerActions,
-              {
-                flexDirection: isRTL ? 'row-reverse' : 'row',
-                justifyContent: isRTL ? 'flex-start' : 'flex-end',
-              },
-            ]}
-          >
-            {canPermanentlyDelete ? (
-              <TouchableOpacity onPress={() => setDeleteVisible(true)} accessibilityRole="button" testID="property-delete-action" style={styles.headerAction}>
-                <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.delete')}</Text>
+          <View style={styles.headerActionGroups}>
+            <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <TouchableOpacity onPress={beginEdit} accessibilityRole="button" testID="property-edit-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('detail.edit')}</Text>
               </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/enrich` as never)} accessibilityRole="button" testID="property-enrich-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>
+                  {t(hasEnrichmentDraft ? 'detail.continue_details' : 'detail.add_details')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/share` as never)} accessibilityRole="button" testID="property-share-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('detail.share')}</Text>
+              </TouchableOpacity>
+            </View>
+            {canPermanentlyDelete ? (
+              <View style={[styles.destructiveActionRow, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+                <TouchableOpacity onPress={() => setDeleteVisible(true)} accessibilityRole="button" testID="property-delete-action" style={[styles.headerAction, styles.destructiveAction, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('detail.delete')}</Text>
+                </TouchableOpacity>
+              </View>
             ) : null}
-            <TouchableOpacity onPress={beginEdit} accessibilityRole="button" testID="property-edit-action" style={styles.headerAction}>
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.edit')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/enrich` as never)} accessibilityRole="button" testID="property-enrich-action" style={styles.headerAction}>
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
-                {t(hasEnrichmentDraft ? 'detail.continue_details' : 'detail.add_details')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/share` as never)} accessibilityRole="button" testID="property-share-action" style={styles.headerAction}>
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.share')}</Text>
-            </TouchableOpacity>
           </View>
         ) : null}
       </View>
@@ -692,8 +688,11 @@ const styles = StyleSheet.create({
   headerMain: { minHeight: 60, alignItems: 'center' },
   headerTitle: { flex: 2, fontSize: 20, textAlign: 'center' },
   headerSide: { flex: 1, minWidth: 0 },
-  headerActions: { flexWrap: 'wrap', alignItems: 'center', columnGap: 18, rowGap: 2 },
-  headerAction: { minHeight: 40, justifyContent: 'center', flexShrink: 0 },
+  headerActionGroups: { gap: 8 },
+  headerActions: { flexWrap: 'wrap', alignItems: 'stretch', gap: 8 },
+  destructiveActionRow: { width: '100%' },
+  headerAction: { minHeight: 40, minWidth: 84, maxWidth: '100%', justifyContent: 'center', flexGrow: 1, flexBasis: 96, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 },
+  destructiveAction: { flexGrow: 0, flexBasis: 96 },
   content: { padding: 20, paddingBottom: 48, gap: 16 },
   detailRow: { paddingVertical: 18, borderBottomWidth: 1 },
   detailValue: { fontSize: 18, marginTop: 6 },

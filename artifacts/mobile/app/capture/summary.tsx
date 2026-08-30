@@ -114,24 +114,24 @@ export default function SummaryScreen() {
         
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}>
           <SummaryRow 
-            label={t('transaction.title')} 
+            label={t('summary.transaction')}
             value={draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''} 
           />
           <SummaryRow 
-            label={t('propertyType.title')} 
+            label={t('summary.property_type')}
             value={draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : ''} 
           />
           
           {draft.transaction === 'sale' && draft.salePrice && (
             <SummaryRow 
-              label={t('price.sale.title')} 
+              label={t('summary.sale_price')}
               value={formatPrice(draft.salePrice.amount, draft.salePrice.currencyCode, language)}
             />
           )}
           
           {draft.transaction === 'rent' && draft.rentalPrice && (
             <SummaryRow 
-              label={t('price.rent.title')} 
+              label={t('summary.rent_price')}
               value={formatRentalPrice(
                 draft.rentalPrice.amount,
                 draft.rentalPrice.currencyCode,
@@ -143,7 +143,7 @@ export default function SummaryScreen() {
           )}
 
           <SummaryRow 
-            label={t('location.title')} 
+            label={t('summary.location')}
             value={areaDisplay}
           />
         </View>

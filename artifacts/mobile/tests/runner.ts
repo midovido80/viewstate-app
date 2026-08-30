@@ -149,8 +149,12 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(form, /contact-choice-/);
   assert.match(detail, /person-call/);
   assert.match(detail, /person-whatsapp/);
+  assert.match(detail, /person-whatsapp-business/);
+  assert.ok(detail.indexOf('person-whatsapp-business') < detail.indexOf('person-whatsapp"'));
+  assert.match(detail, /openAndroidWhatsAppContactCompose/);
   assert.match(detail, /person-remove-dialog/);
   assert.match(detail, /unlinkPersonFromProperty/);
+  assert.match(detail, /Alert\.alert\([\s\S]*people\.unlink_title[\s\S]*people\.unlink_confirm/);
   assert.match(detail, /linkPersonToProperty/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
@@ -182,14 +186,16 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(translations, /'detail\.continue_details': 'Continue details'/);
   assert.match(translations, /'detail\.continue_details': 'متابعة التفاصيل'/);
   assert.match(enrichmentSource, /persistAttachmentsThenDeleteRemoved/);
-  assert.match(enrichmentSource, /requestCurrentCoordinates/);
+  assert.doesNotMatch(enrichmentSource, /requestCurrentCoordinates|enrich-current-location/);
+  assert.match(enrichmentSource, /\.\.\.\(\(baseline\.locationEnrichment \?\? \{\}\)/);
   assert.match(enrichmentSource, /enrich-other-required|OTHER_CLARIFICATION_REQUIRED/);
   assert.match(fieldSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS/);
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
   assert.match(fieldSource, /FURNISHING_VALUES/);
   assert.match(fieldSource, /enrich\.furnishing\./);
   assert.match(fieldSource, /hasMaidRoom.*hasPool.*hasWaterfront.*hasColdStorage/);
-  assert.match(fieldSource, /value \|\| 'clear'/);
+  assert.doesNotMatch(fieldSource, /value \|\| 'clear'|enrich\.clear/);
+  assert.match(fieldSource, /\['true', 'false'\]/);
   assert.match(fieldSource, /Math\.max\(0, current - 1\)/);
   assert.match(fieldSource, /keyboardType="number-pad"/);
   assert.match(fieldSource, /safeCountInput/);
@@ -1843,8 +1849,9 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.match(detail, /formatRentalPrice/);
   assert.match(home, /formatRentalPrice/);
   assert.match(summary, /formatRentalPrice/);
-  assert.match(price, /confirm-monthly-cadence/);
-  assert.match(price, /draftOrigin === 'fresh'/);
+  assert.doesNotMatch(price, /confirm-monthly-cadence|needsCadenceConfirmation|draftOrigin/);
+  assert.match(price, /draft\.transaction === 'rent' \? MARKET_CONFIG\.defaultRentalPeriodId/);
+  assert.match(price, /rentalPeriodId: workingRentalPeriodId/);
   assert.match(price, /if \(!workingRentalPeriodId\) return/);
   assert.match(market, /defaultRentalPeriodId: 'monthly'/);
   assert.match(detail, /capture\.keep_editing/);
@@ -2287,9 +2294,10 @@ test('V001 bilingual labels and source wiring remain explicit', async () => {
   assert.match(translations, /'enrich\.furnishing\.semi_furnished': 'نصف مؤثث'/);
   assert.match(translations, /'enrich\.furnishing\.furnished': 'مؤثث'/);
   assert.match(personDetail, /tel:\$\{person\.normalizedPhone\}/);
-  assert.match(personDetail, /https:\/\/wa\.me\/\$\{person\.normalizedPhone\.replace/);
+  assert.match(personDetail, /openAndroidWhatsAppContactCompose/);
+  assert.match(personDetail, /person-whatsapp-business/);
   assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
-  assert.match(enrichment, /requestCurrentCoordinates/);
+  assert.doesNotMatch(enrichment, /requestCurrentCoordinates|enrich-current-location/);
 });
 
 test('Phone entry helpers keep selected contact display text while choosing one canonical number', () => {
@@ -2430,6 +2438,7 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(detail, /testID="property-delete-action"[\s\S]{0,300}t\('detail\.delete'\)/);
   assert.match(share, /title=\{shareT\('share\.whatsapp'\)\}/);
   assert.match(share, /title=\{shareT\('share\.whatsapp_business'\)\}/);
+  assert.ok(share.indexOf("title={shareT('share.whatsapp_business')}") < share.indexOf("title={shareT('share.whatsapp')}"));
   assert.match(share, /shareT\('share\.system_share'\)/);
   assert.doesNotMatch(share, /title=\{['"]whatsapp(?:_business)?['"]\}/i);
 
@@ -2494,7 +2503,11 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(share, /preview\.text/);
   assert.match(share, /preview\.attachmentIds\.length.*attachments_system_only/);
   assert.match(share, /testID="share-send"/);
+  assert.match(share, /function CheckRow/);
+  assert.match(share, /styles\.checkIndicator/);
+  assert.match(share, /share\.whatsapp_unavailable/);
   assert.match(shareIntent, /encodeURIComponent\(exactPreviewText\)/);
   assert.match(shareIntent, /destination: AndroidPropertyShareDestination/);
-  assert.match(enrichmentFields, /testID=\{`enrich-\$\{testIdField\}-\$\{value \|\| 'clear'\}`\}/);
+  assert.match(enrichmentFields, /const options = \['true', 'false'\]/);
+  assert.doesNotMatch(enrichmentFields, /value \|\| 'clear'|enrich\.clear/);
 });

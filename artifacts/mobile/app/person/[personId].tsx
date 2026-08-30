@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
+  Alert,
   Linking,
   Modal,
   ScrollView,
@@ -15,6 +16,7 @@ import { Property } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
+import { toEnglishDigits } from '@/constants/market';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import {
@@ -30,6 +32,7 @@ import {
   PhoneCountryCode,
 } from '@/services/phoneEntry';
 import { store } from '@/services/persistence';
+import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 
 export default function PersonDetailScreen() {
   const params = useLocalSearchParams<{ personId?: string | string[] }>();
@@ -136,6 +139,21 @@ export default function PersonDetailScreen() {
     await load();
   };
 
+  const confirmUnlink = (propertyCoreId: string) => {
+    Alert.alert(
+      t('people.unlink_title'),
+      t('people.unlink_message'),
+      [
+        { text: t('people.unlink_cancel'), style: 'cancel' },
+        {
+          text: t('people.unlink_confirm'),
+          style: 'destructive',
+          onPress: () => void unlink(propertyCoreId),
+        },
+      ],
+    );
+  };
+
   const call = async () => {
     if (!person) return;
     setError('');
@@ -148,6 +166,16 @@ export default function PersonDetailScreen() {
       await Linking.openURL(phoneUrl);
     } catch {
       setError(t('people.call_unavailable'));
+    }
+  };
+
+  const openWhatsApp = async (destination: 'whatsapp_business' | 'whatsapp') => {
+    if (!person) return;
+    setError('');
+    try {
+      await openAndroidWhatsAppContactCompose(destination, person.normalizedPhone);
+    } catch {
+      setError(t('people.whatsapp_unavailable'));
     }
   };
 
@@ -236,8 +264,8 @@ export default function PersonDetailScreen() {
                 style={[styles.countryButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 testID="person-edit-phone-country"
               >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
-                  {selectedCountry.code} +{selectedCountry.dialCode}
+                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, writingDirection: 'ltr', textAlign: 'left' }}>
+                  {selectedCountry.code} +{toEnglishDigits(selectedCountry.dialCode)}
                 </Text>
               </TouchableOpacity>
               <TextInput
@@ -245,7 +273,7 @@ export default function PersonDetailScreen() {
                 onChangeText={setPhone}
                 placeholder={t('people.phone')}
                 keyboardType="phone-pad"
-                style={[inputStyle, styles.phoneInput]}
+                style={[inputStyle, styles.phoneInput, styles.ltrText]}
                 testID="person-edit-phone"
               />
             </View>
@@ -260,13 +288,16 @@ export default function PersonDetailScreen() {
         ) : (
           <>
             <Text style={[styles.name, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{person.name}</Text>
-            <Text style={[styles.phone, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.displayPhone}</Text>
+            <Text style={[styles.phone, styles.ltrText, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{toEnglishDigits(person.displayPhone)}</Text>
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Button title={t('people.call')} onPress={() => void call()} variant="outline" testID="person-call" style={styles.flex} />
-              <Button title={t('people.whatsapp')} onPress={() => void Linking.openURL(`https://wa.me/${person.normalizedPhone.replace(/\D/g, '')}`)} variant="outline" testID="person-whatsapp" style={styles.flex} />
+            <View style={styles.actions}>
+              <Button title={t('people.whatsapp_business')} onPress={() => void openWhatsApp('whatsapp_business')} testID="person-whatsapp-business" />
+              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <Button title={t('people.whatsapp')} onPress={() => void openWhatsApp('whatsapp')} variant="outline" testID="person-whatsapp" style={styles.flex} />
+                <Button title={t('people.call')} onPress={() => void call()} variant="outline" testID="person-call" style={styles.flex} />
+              </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -279,9 +310,9 @@ export default function PersonDetailScreen() {
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)} testID={`linked-property-${property.core.id}`} accessibilityRole="button">
                   <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
-                  <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{property.core.id}</Text>
+                  <Text style={[styles.ltrText, { color: colors.mutedForeground }]}>{toEnglishDigits(property.core.id)}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => void unlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button">
+                <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button">
                   <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('people.unlink')}</Text>
                 </TouchableOpacity>
               </View>
@@ -365,7 +396,9 @@ const styles = StyleSheet.create({
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   choice: { minHeight: 48, justifyContent: 'center', padding: 12, borderWidth: 1, borderRadius: 10 },
   actions: { gap: 10 },
+  secondaryActions: { gap: 10 },
   flex: { flex: 1 },
+  ltrText: { writingDirection: 'ltr', textAlign: 'left' },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   sectionTitle: { fontSize: 18 },

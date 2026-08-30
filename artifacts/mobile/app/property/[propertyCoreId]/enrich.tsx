@@ -33,10 +33,8 @@ import {
   setAttachmentCover,
 } from '@/services/attachments';
 import {
-  openGoogleMaps,
   openPastedLocationLink,
   pastedMapLocation,
-  requestCurrentCoordinates,
 } from '@/services/location';
 import {
   PropertyEnrichmentDraftV1,
@@ -275,7 +273,6 @@ export default function PropertyEnrichmentScreen() {
   const [paci, setPaci] = useState('');
   const [manualLocation, setManualLocation] = useState('');
   const [mapsLink, setMapsLink] = useState('');
-  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number; accuracy: number | null }>();
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -336,13 +333,6 @@ export default function PropertyEnrichmentScreen() {
       setPaci(visible.locationEnrichment?.paciNumber?.value ?? '');
       setManualLocation(visible.locationEnrichment?.manualLocationText?.value ?? '');
       setMapsLink(visible.locationEnrichment?.mapsLink?.value ?? '');
-      setCoordinates(visible.locationEnrichment?.coordinates
-        ? {
-          latitude: visible.locationEnrichment.coordinates.latitude,
-          longitude: visible.locationEnrichment.coordinates.longitude,
-          accuracy: null,
-        }
-        : undefined);
       setAttachments((visible.attachments ?? []).map(attachmentToLocal).sort((a, b) => a.order - b.order));
     }).catch(() => {
       if (mounted.current) setError(t('edit.unreadable'));
@@ -399,12 +389,10 @@ export default function PropertyEnrichmentScreen() {
       ...(optionalClassifiedLiteral(paci, exactPrivacy) ? { paciNumber: optionalClassifiedLiteral(paci, exactPrivacy) } : {}),
       ...(optionalClassifiedLiteral(manualLocation, exactPrivacy) ? { manualLocationText: optionalClassifiedLiteral(manualLocation, exactPrivacy) } : {}),
       ...(optionalClassifiedLiteral(mapsLink, exactPrivacy) ? { mapsLink: optionalClassifiedLiteral(mapsLink, exactPrivacy) } : {}),
-      ...(coordinates ? { coordinates: { latitude: coordinates.latitude, longitude: coordinates.longitude, privacy: exactPrivacy } } : {}),
     };
     if (!paci.trim()) delete locationEnrichment.paciNumber;
     if (!manualLocation.trim()) delete locationEnrichment.manualLocationText;
     if (!mapsLink.trim()) delete locationEnrichment.mapsLink;
-    if (!coordinates) delete locationEnrichment.coordinates;
     const candidate = {
       ...baseline,
       core: {
@@ -484,7 +472,7 @@ export default function PropertyEnrichmentScreen() {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
     };
-  }, [property, fields, description, privateNotes, paci, manualLocation, mapsLink, coordinates, attachments]);
+  }, [property, fields, description, privateNotes, paci, manualLocation, mapsLink, attachments]);
 
   useEffect(() => {
     mounted.current = true;
@@ -688,10 +676,6 @@ export default function PropertyEnrichmentScreen() {
     return reorderAttachments(current, ids);
   }).catch(reportAttachmentFailure);
 
-  const coordinatesLabel = useMemo(() => coordinates
-    ? `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`
-    : '', [coordinates]);
-
   if (!property) {
     return <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}><Text style={{ color: colors.foreground }}>{error || t('edit.loading')}</Text></View>;
   }
@@ -724,16 +708,8 @@ export default function PropertyEnrichmentScreen() {
          <Section title={t('enrich.location')} colors={colors} fonts={fonts} isRTL={isRTL}>
            <Input label={t('enrich.paci')} value={paci} onChangeText={setPaci} testID="enrich-paci" colors={colors} fonts={fonts} isRTL={isRTL} />
            <Input label={t('enrich.maps_link')} value={mapsLink} onChangeText={setMapsLink} testID="enrich-maps-link" autoCapitalize="none" colors={colors} fonts={fonts} isRTL={isRTL} />
-          <Button title={t('enrich.current_location')} testID="enrich-current-location" variant="outline" onPress={async () => {
-            try { setCoordinates(await requestCurrentCoordinates()); } catch { setError(t('enrich.location_failed')); }
-          }} />
-           {coordinatesLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{coordinatesLabel}</Text> : null}
-           {coordinates || mapsLink.trim() ? (
+           {mapsLink.trim() ? (
              <Button title={t('enrich.open_maps')} testID="enrich-open-maps" variant="outline" onPress={() => {
-               if (coordinates) {
-                 void openGoogleMaps(coordinates).catch(() => setError(t('enrich.location_failed')));
-                 return;
-               }
                try {
                  void openPastedLocationLink(pastedMapLocation(mapsLink.trim())).catch(() => setError(t('enrich.location_failed')));
                } catch {

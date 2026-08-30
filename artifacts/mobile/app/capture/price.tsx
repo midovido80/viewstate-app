@@ -7,17 +7,14 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
-import {
-  formatRentalCadence,
-  MARKET_CONFIG,
-} from '@/constants/market';
+import { MARKET_CONFIG } from '@/constants/market';
 
 export default function PriceScreen() {
   const router = useRouter();
   const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { draft, draftOrigin, updateDraft, isReady } = useCapture();
+  const { draft, updateDraft, isReady } = useCapture();
   const { t, isRTL, fonts } = useI18n();
   
   const isSale = draft.transaction === 'sale';
@@ -26,15 +23,10 @@ export default function PriceScreen() {
     : draft.rentalPrice?.amount?.toString() ?? '';
   const numAmount = Number(amount);
   const workingRentalPeriodId = draft.rentalPeriodId
-    ?? (draftOrigin === 'fresh' && draft.transaction === 'rent'
-      ? MARKET_CONFIG.defaultRentalPeriodId
-      : undefined);
-  const needsCadenceConfirmation = draftOrigin === 'resumed'
-    && draft.transaction === 'rent'
-    && draft.rentalPeriodId !== MARKET_CONFIG.defaultRentalPeriodId;
+    ?? (draft.transaction === 'rent' ? MARKET_CONFIG.defaultRentalPeriodId : undefined);
   const isValid = !isNaN(numAmount)
     && numAmount > 0
-    && (isSale || (workingRentalPeriodId !== undefined && !needsCadenceConfirmation));
+    && (isSale || workingRentalPeriodId !== undefined);
 
   const handleAmountChange = (value: string) => {
     const parsed = Number(value);
@@ -47,7 +39,7 @@ export default function PriceScreen() {
     } else {
       updateDraft({
         rentalPrice: price,
-        ...(draftOrigin === 'fresh' && draft.rentalPeriodId === undefined
+        ...(draft.rentalPeriodId === undefined
           ? { rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId }
           : {}),
       });
@@ -90,7 +82,7 @@ export default function PriceScreen() {
         <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
           {isSale
             ? t('price.amount')
-            : `${t('price.amount')} · ${formatRentalCadence(workingRentalPeriodId, t)}`}
+            : `${t('price.amount')} · ${t('price.cadence.monthly')}`}
         </Text>
         <TextInput
           value={amount}
@@ -111,19 +103,6 @@ export default function PriceScreen() {
           ]}
           testID="input-price"
         />
-        {needsCadenceConfirmation ? (
-          <View style={[styles.confirmation, { borderColor: colors.border, backgroundColor: colors.card }]}>
-            <Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
-              {t('price.cadence.confirm_message')}
-            </Text>
-            <Button
-              title={t('price.cadence.confirm_monthly')}
-              onPress={() => updateDraft({ rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId })}
-              variant="outline"
-              testID="confirm-monthly-cadence"
-            />
-          </View>
-        ) : null}
       </KeyboardAwareScrollViewCompat>
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>

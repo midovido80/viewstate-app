@@ -2,6 +2,7 @@ import { APARTMENT_SUBTYPES, FURNISHING_VALUES, PROPERTY_DETAIL_FIELD_DEFINITION
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
+import { toEnglishDigits } from '@/constants/market';
 
 export type EnrichmentFieldValues = Partial<Record<PropertyDetailField, string>>;
 
@@ -36,7 +37,7 @@ export const propertyDetailLabels: Record<PropertyDetailField, [string, string]>
 
 export function formatPropertyDetailValue(field: PropertyDetailField, value: unknown, language: 'en' | 'ar'): string {
   if (typeof value === 'object' && value && 'value' in value) {
-    return String((value as { value: unknown }).value);
+    return toEnglishDigits(String((value as { value: unknown }).value));
   }
   if (typeof value === 'boolean') {
     return value ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No');
@@ -52,7 +53,7 @@ export function formatPropertyDetailValue(field: PropertyDetailField, value: unk
       ? (language === 'ar' ? 'سكني' : 'Residential')
       : value === 'commercial' ? (language === 'ar' ? 'تجاري' : 'Commercial') : String(value);
   }
-  return String(value);
+  return toEnglishDigits(String(value));
 }
 
 const booleanFields = new Set<PropertyDetailField>(['hasMaidRoom', 'hasPool', 'hasWaterfront', 'hasColdStorage']);
@@ -163,16 +164,16 @@ export function PropertyEnrichmentFields({
     if (booleanFields.has(field)) {
       return (
         <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          {['true', 'false', ''].map(value => {
-            const isSelected = values[field] === value || (value === '' && !values[field]);
-            const label = value === 'true' ? t('enrich.yes') : value === 'false' ? t('enrich.no') : (language === 'ar' ? 'مسح' : 'Clear');
+          {['true', 'false'].map(value => {
+            const isSelected = values[field] === value;
+            const label = value === 'true' ? t('enrich.yes') : t('enrich.no');
             return (
               <TouchableOpacity
-                key={value || 'clear'}
+                key={value}
                 onPress={() => onChange(field, value)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
-                testID={`enrich-${testIdField}-${value || 'clear'}`}
+                testID={`enrich-${testIdField}-${value}`}
                 style={[
                   styles.chip,
                   {

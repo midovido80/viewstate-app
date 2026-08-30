@@ -56,9 +56,14 @@ export async function openGoogleMaps(
   opener: LinkOpener = Linking,
 ): Promise<void> {
   const query = `${coordinates.latitude},${coordinates.longitude}`;
-  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  if (!(await opener.canOpenURL(url))) throw new Error('GOOGLE_MAPS_UNAVAILABLE');
-  await opener.openURL(url);
+  const appUrl = `comgooglemaps://?api=1&query=${encodeURIComponent(query)}`;
+  const webUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  if (await opener.canOpenURL(appUrl)) {
+    await opener.openURL(appUrl);
+    return;
+  }
+  if (!(await opener.canOpenURL(webUrl))) throw new Error('GOOGLE_MAPS_UNAVAILABLE');
+  await opener.openURL(webUrl);
 }
 
 export async function openPastedLocationLink(
@@ -66,6 +71,11 @@ export async function openPastedLocationLink(
   opener: LinkOpener = Linking,
 ): Promise<void> {
   if (location.source !== 'pasted_link') throw new Error('LOCATION_LINK_MISSING');
+  const appUrl = `comgooglemaps://?q=${encodeURIComponent(location.link)}`;
+  if (await opener.canOpenURL(appUrl)) {
+    await opener.openURL(appUrl);
+    return;
+  }
   if (!(await opener.canOpenURL(location.link))) throw new Error('LOCATION_LINK_UNAVAILABLE');
   await opener.openURL(location.link);
 }

@@ -29,3 +29,26 @@ export async function openAndroidPropertyShareCompose(
     throw new Error('SHARE_DESTINATION_UNAVAILABLE');
   }
 }
+
+/**
+ * Opens a selected Android WhatsApp app to the named contact without sending.
+ * The user must still review and press Send inside the destination app.
+ */
+export async function openAndroidWhatsAppContactCompose(
+  destination: AndroidPropertyShareDestination,
+  normalizedPhone: string,
+): Promise<void> {
+  if (Platform.OS !== 'android') {
+    throw new Error('ANDROID_SHARE_DESTINATION_UNSUPPORTED');
+  }
+  const phone = normalizedPhone.replace(/\D/g, '');
+  const url = `${destinationSchemes[destination]}://send?phone=${encodeURIComponent(phone)}`;
+  try {
+    if (!phone || !await Linking.canOpenURL(url)) {
+      throw new Error('SHARE_DESTINATION_UNAVAILABLE');
+    }
+    await Linking.openURL(url);
+  } catch {
+    throw new Error('SHARE_DESTINATION_UNAVAILABLE');
+  }
+}
