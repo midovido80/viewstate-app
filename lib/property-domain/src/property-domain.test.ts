@@ -585,7 +585,7 @@ test("share preview uses supplied localized BASIC labels and monthly rent wordin
 
   assertEqual(
     preview.text,
-    "Tipo: Apartamento\nOperación: Alquiler\nPrecio: 1.250 KWD al mes\nZona: Salmiya\n\nPublicado por Casa",
+    "🏠 Tipo: \u2068Apartamento\u2069\n↔ Operación: \u2068Alquiler\u2069\n💰 Precio: \u20681.250 KWD al mes\u2069\n📍 Zona: \u2068Salmiya\u2069\n\nPublicado por Casa",
     "Localized preview text must be exact and must not expose stored enum values",
   );
 });
@@ -631,7 +631,7 @@ test("share preview fail-closes exact locations and maps while never exposing pr
     rentalCadence: "al mes",
     attribution: "",
   });
-  assertEqual(hiddenPreview.text, "Property type: apartment", "Unselected private values must be absent");
+  assertEqual(hiddenPreview.text, "🏠 Property type: \u2068apartment\u2069", "Unselected private values must be absent");
   assertEqual(
     hiddenPreview.text.includes("SECRET"),
     false,
@@ -656,7 +656,7 @@ test("share preview fail-closes exact locations and maps while never exposing pr
   });
   assertEqual(
     explicitPreview.text,
-    "Property type: apartment\nUbicación exacta: EXACT-LOCATION-SECRET\nMapa: https://maps.example/EXACT-MAPS-SECRET",
+    "🏠 Property type: \u2068apartment\u2069\n📍 Ubicación exacta: \u2068EXACT-LOCATION-SECRET\u2069\n🗺 Mapa: \u2068https://maps.example/EXACT-MAPS-SECRET\u2069",
     "Only explicit exact-location and maps selections may add their deterministic lines",
   );
   assertEqual(

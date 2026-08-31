@@ -95,6 +95,16 @@ import {
 } from '../services/attachmentOperations.ts';
 import { requestInjectedCoordinates } from '../services/coordinateRequest.ts';
 import { executePropertySharePreview } from '../services/propertyShareExecution.ts';
+import {
+  normalizeGoogleMapsLink,
+  openGoogleMapsQuery,
+  openPastedGoogleMapsLink,
+} from '../services/mapsLink.ts';
+import { selectWhatsAppScheme } from '../services/whatsappResolution.ts';
+import {
+  buildWhatsAppComposeUrl,
+  openWhatsAppComposeWithOpener,
+} from '../services/whatsappCompose.ts';
 import { optionalClassifiedLiteral } from '../services/literalText.ts';
 import {
   buildContactPhoneChoices,
@@ -151,8 +161,7 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(form, /contact-choice-/);
   assert.match(detail, /person-call/);
   assert.match(detail, /person-whatsapp/);
-  assert.match(detail, /person-whatsapp-business/);
-  assert.ok(detail.indexOf('person-whatsapp-business') < detail.indexOf('person-whatsapp"'));
+  assert.doesNotMatch(detail, /person-whatsapp-business/);
   assert.match(detail, /openAndroidWhatsAppContactCompose/);
   assert.match(detail, /person-remove-dialog/);
   assert.match(detail, /unlinkPersonFromProperty/);
@@ -2239,6 +2248,61 @@ test('V001 People synthetic model has five classifications, independent links, s
   assert.equal(whatsappUrl, 'https://wa.me/96550000001');
 });
 
+test('Unified WhatsApp resolution covers no, one, and both installed variants', async () => {
+  assert.equal(selectWhatsAppScheme([]), null);
+  assert.equal(selectWhatsAppScheme(['whatsapp']), 'whatsapp');
+  assert.equal(selectWhatsAppScheme(['whatsapp_business']), 'whatsapp-business');
+  assert.equal(selectWhatsAppScheme(['whatsapp', 'whatsapp_business']), 'whatsapp');
+  assert.equal(selectWhatsAppScheme(['whatsapp', 'whatsapp']), 'whatsapp');
+  assert.equal(buildWhatsAppComposeUrl('phone=96550000000'), 'whatsapp://send?phone=96550000000');
+  const opened: string[] = [];
+  await openWhatsAppComposeWithOpener('text=reviewed', {
+    openURL: async url => { opened.push(url); },
+  });
+  assert.deepEqual(opened, ['whatsapp://send?text=reviewed']);
+  await assert.rejects(
+    () => openWhatsAppComposeWithOpener('text=reviewed', {
+      openURL: async () => { throw new Error('no handler'); },
+    }),
+    /SHARE_DESTINATION_UNAVAILABLE/,
+  );
+});
+
+test('Google Maps capture accepts only safe short/full links and prefers native app with web fallback', async () => {
+  const full = 'https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z';
+  const short = 'https://maps.app.goo.gl/AbCdEf123';
+  assert.equal(normalizeGoogleMapsLink(`  ${full}  `), full);
+  assert.equal(normalizeGoogleMapsLink(short), short);
+  for (const rejected of [
+    'http://www.google.com/maps/place/Salmiya',
+    'https://example.com/maps/place/Salmiya',
+    'https://google.com/search?q=maps',
+    'javascript:alert(1)',
+  ]) {
+    assert.throws(() => normalizeGoogleMapsLink(rejected), /INVALID_LOCATION_LINK/);
+  }
+
+  const opened: string[] = [];
+  const nativeOpener = {
+    openURL: async (url: string) => { opened.push(url); },
+  };
+  await openGoogleMapsQuery('Salmiya, Kuwait', nativeOpener, 'android');
+  assert.match(opened[0], /^geo:/);
+
+  opened.length = 0;
+  const webOpener = {
+    openURL: async (url: string) => {
+      if (url.startsWith('geo:')) throw new Error('no Maps handler');
+      opened.push(url);
+    },
+  };
+  await openGoogleMapsQuery('Salmiya, Kuwait', webOpener, 'android');
+  assert.match(opened[0], /^https:\/\/www\.google\.com\/maps\/search/);
+  opened.length = 0;
+  await openPastedGoogleMapsLink(short, nativeOpener, 'android');
+  assert.deepEqual(opened, [short]);
+});
+
 test('V001 selective sharing defaults exclude private notes and injected sharing preserves selected files', async () => {
   const property: Property = {
     core: {
@@ -2269,9 +2333,9 @@ test('V001 selective sharing defaults exclude private notes and injected sharing
   assert.match(preview.text, /نوع العقار/);
   assert.match(preview.text, /synthetic owner/);
   assert.match(preview.text, /synthetic exact/);
-  assert.match(preview.text, /مساحة البناء: 88/);
-  assert.match(preview.text, /التأثيث: نصف مؤثث/);
-  assert.match(preview.text, /غرفة خادمة: لا/);
+  assert.match(preview.text, /مساحة البناء: .*88/);
+  assert.match(preview.text, /التأثيث: .*نصف مؤثث/);
+  assert.match(preview.text, /غرفة خادمة: .*لا/);
   assert.doesNotMatch(preview.text, /never share/);
   const sent: string[] = [];
   await executePropertySharePreview(preview, {
@@ -2300,7 +2364,8 @@ test('V001 bilingual labels and source wiring remain explicit', async () => {
   assert.match(translations, /'enrich\.furnishing\.furnished': 'مؤثث'/);
   assert.match(personDetail, /tel:\$\{person\.normalizedPhone\}/);
   assert.match(personDetail, /openAndroidWhatsAppContactCompose/);
-  assert.match(personDetail, /person-whatsapp-business/);
+  assert.match(personDetail, /person-whatsapp"/);
+  assert.doesNotMatch(personDetail, /person-whatsapp-business/);
   assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
   assert.doesNotMatch(enrichment, /requestCurrentCoordinates|enrich-current-location/);
 });
@@ -2430,7 +2495,7 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
 
   for (const pattern of [
     '.git', '.local', '.replit', '**/.env', '**/.env.*',
-    '**/*.db', '**/*.keystore', 'attached_assets', '**/*.apk', '**/*.aab',
+    'attached_assets', '**/*.db', '**/*.keystore', '**/*.apk', '**/*.aab',
   ]) {
     assert.ok(easIgnore.includes(pattern), `missing EAS exclusion: ${pattern}`);
   }
@@ -2519,17 +2584,15 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   ]);
 
   // EN/AR action labels are user-facing translations, including destructive
-  // deletion and every offered share destination.
+  // deletion and the unified WhatsApp destination.
   assert.match(translations, /'detail\.delete': 'Delete'/);
   assert.match(translations, /'detail\.delete': 'حذف'/);
   assert.match(translations, /'share\.whatsapp': 'WhatsApp'/);
   assert.match(translations, /'share\.whatsapp': 'واتساب'/);
-  assert.match(translations, /'share\.whatsapp_business': 'WhatsApp Business'/);
-  assert.match(translations, /'share\.whatsapp_business': 'واتساب للأعمال'/);
+  assert.doesNotMatch(translations, /share\.whatsapp_business/);
   assert.match(detail, /testID="property-delete-action"[\s\S]{0,300}t\('detail\.delete'\)/);
   assert.match(share, /title=\{shareT\('share\.whatsapp'\)\}/);
-  assert.match(share, /title=\{shareT\('share\.whatsapp_business'\)\}/);
-  assert.ok(share.indexOf("title={shareT('share.whatsapp_business')}") < share.indexOf("title={shareT('share.whatsapp')}"));
+  assert.doesNotMatch(share, /share-whatsapp-business|share\.whatsapp_business/);
   assert.match(share, /shareT\('share\.system_share'\)/);
   assert.doesNotMatch(share, /title=\{['"]whatsapp(?:_business)?['"]\}/i);
 
@@ -2546,10 +2609,11 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   // The reusable input is module-scoped before the screen component, so typing
   // does not define/remount a new Input component on every render.
   assert.ok(enrichment.indexOf('function Input(') < enrichment.indexOf('export default function PropertyEnrichmentScreen'));
-  assert.match(enrichment, /<KeyboardAwareScrollViewCompat[\s\S]*keyboardShouldPersistTaps="handled"[\s\S]*keyboardDismissMode="interactive"/);
+  assert.match(enrichment, /<KeyboardAwareScrollViewCompat[\s\S]*keyboardShouldPersistTaps="handled"[\s\S]*keyboardDismissMode="on-drag"/);
   assert.match(keyboardScroll, /forwardRef<ScrollView, Props>/);
   assert.match(keyboardScroll, /KeyboardAwareScrollView/);
   assert.match(keyboardScroll, /keyboardShouldPersistTaps/);
+  assert.match(keyboardScroll, /nestedScrollEnabled = true/);
 
   // Contact imports are searchable, virtualized, and choose a single row.
   assert.match(peopleNew, /<FlatList/);
@@ -2592,7 +2656,7 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(enrichment, /await persistAttachmentChanges\(\[\.\.\.value\]\)/);
 
   // Sensitive fields start off and require explicit selection; the preview
-  // given to WhatsApp/Business is the exact reviewed preview, with system
+  // given to WhatsApp is the exact reviewed preview, with system
   // share retained as the attachment-capable fallback.
   assert.match(share, /createPropertyShareSelection\(value\)/);
   assert.match(share, /discloseOwnerSource.*!current\[name\]/);
@@ -2604,7 +2668,9 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(share, /styles\.checkIndicator/);
   assert.match(share, /share\.whatsapp_unavailable/);
   assert.match(shareIntent, /encodeURIComponent\(exactPreviewText\)/);
-  assert.match(shareIntent, /destination: AndroidPropertyShareDestination/);
+  assert.match(shareIntent, /openWhatsAppComposeWithOpener/);
+  assert.doesNotMatch(shareIntent, /canOpenURL/);
+  assert.doesNotMatch(shareIntent, /destination: AndroidPropertyShareDestination/);
   assert.match(enrichmentFields, /\['true', 'false'\]\.map\(value =>/);
   assert.doesNotMatch(enrichmentFields, /value \|\| 'clear'|enrich\.clear/);
 });

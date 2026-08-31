@@ -207,11 +207,11 @@ export default function PersonDetailScreen() {
     }
   };
 
-  const openWhatsApp = async (destination: 'whatsapp_business' | 'whatsapp') => {
+  const openWhatsApp = async () => {
     if (!person) return;
     setError('');
     try {
-      await openAndroidWhatsAppContactCompose(destination, person.normalizedPhone);
+      await openAndroidWhatsAppContactCompose(person.normalizedPhone);
     } catch {
       setError(t('people.whatsapp_unavailable'));
     }
@@ -331,10 +331,9 @@ export default function PersonDetailScreen() {
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
             <View style={styles.actions}>
-              <Button title={t('people.whatsapp_business')} onPress={() => void openWhatsApp('whatsapp_business')} testID="person-whatsapp-business" />
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                <Button title={t('people.whatsapp')} onPress={() => void openWhatsApp('whatsapp')} variant="outline" testID="person-whatsapp" style={styles.flex} />
-                <Button title={t('people.call')} onPress={() => void call()} variant="outline" testID="person-call" style={styles.flex} />
+                <Button title={t('people.whatsapp')} onPress={() => void openWhatsApp()} variant="whatsapp" testID="person-whatsapp" style={styles.flex} />
+                <Button title={t('people.call')} onPress={() => void call()} variant="whatsapp" testID="person-call" style={styles.flex} />
               </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
@@ -350,8 +349,8 @@ export default function PersonDetailScreen() {
                   <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
                   <Text style={[styles.ltrText, { color: colors.mutedForeground }]}>{toEnglishDigits(property.core.id)}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('people.unlink')}</Text>
+                <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('people.unlink')}</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -368,8 +367,8 @@ export default function PersonDetailScreen() {
                   <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
                   <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('source.unlink')}</Text>
+                <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
                 </TouchableOpacity>
               </View>
             )) : (
@@ -477,6 +476,7 @@ const styles = StyleSheet.create({
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   sectionTitle: { fontSize: 18 },
   property: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
+  unlinkButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   modalSearch: { margin: 20 },
   propertyChoice: { minHeight: 58, justifyContent: 'center', borderBottomWidth: 1 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },

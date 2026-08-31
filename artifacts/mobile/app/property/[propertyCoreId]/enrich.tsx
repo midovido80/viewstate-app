@@ -33,9 +33,12 @@ import {
   setAttachmentCover,
 } from '@/services/attachments';
 import {
+  normalizeGoogleMapsLink,
+  openGoogleMapsQuery,
   openPastedLocationLink,
   pastedMapLocation,
 } from '@/services/location';
+import { getAreaById } from '@/constants/kuwait-areas';
 import {
   PropertyEnrichmentDraftV1,
   clearConfirmedPropertyEnrichmentDraft,
@@ -121,6 +124,7 @@ function Action({
   id,
   onPress,
   destructive,
+  disabled,
   colors,
   fonts,
 }: {
@@ -128,14 +132,26 @@ function Action({
   id: string;
   onPress: () => void;
   destructive?: boolean;
+  disabled?: boolean;
   colors: ScreenColors;
   fonts: ScreenFonts;
 }) {
   return (
-    <TouchableOpacity accessibilityRole="button" testID={id} onPress={onPress}>
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      testID={id}
+      onPress={onPress}
+      style={[styles.attachmentAction, {
+        borderColor: destructive ? colors.destructive : colors.border,
+        opacity: disabled ? 0.45 : 1,
+      }]}
+    >
       <Text style={{
         color: destructive ? colors.destructive : colors.primary,
         fontFamily: fonts.semiBold,
+        textAlign: 'center',
       }}>{title}</Text>
     </TouchableOpacity>
   );
@@ -168,6 +184,7 @@ function AttachmentCard({
   onMoveDown: () => void;
   onRemove: () => void;
 }) {
+  const [previewFailed, setPreviewFailed] = useState(false);
   return (
     <View style={[styles.attachment, { borderColor: colors.border, backgroundColor: colors.card }]}>
       <TouchableOpacity
@@ -177,8 +194,8 @@ function AttachmentCard({
         onPress={onOpen}
         style={[styles.attachmentPreview, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
       >
-        {attachment.kind === 'image' ? (
-          <Image source={{ uri: attachment.uri }} style={styles.attachmentThumbnail} resizeMode="cover" />
+        {attachment.kind === 'image' && !previewFailed ? (
+          <Image source={{ uri: attachment.uri }} style={styles.attachmentThumbnail} resizeMode="cover" onError={() => setPreviewFailed(true)} />
         ) : (
           <View style={[styles.attachmentTile, { backgroundColor: colors.background }]}>
             <Feather
@@ -206,12 +223,8 @@ function AttachmentCard({
         {attachment.kind === 'image' ? (
           <Action title={labels.cover} id={`enrich-cover-${attachment.id}`} onPress={onCover} colors={colors} fonts={fonts} />
         ) : null}
-        {index > 0 ? (
-          <Action title={labels.moveUp} id={`enrich-up-${attachment.id}`} onPress={onMoveUp} colors={colors} fonts={fonts} />
-        ) : null}
-        {index < count - 1 ? (
-          <Action title={labels.moveDown} id={`enrich-down-${attachment.id}`} onPress={onMoveDown} colors={colors} fonts={fonts} />
-        ) : null}
+        <Action title={labels.moveUp} id={`enrich-up-${attachment.id}`} onPress={onMoveUp} disabled={index === 0} colors={colors} fonts={fonts} />
+        <Action title={labels.moveDown} id={`enrich-down-${attachment.id}`} onPress={onMoveDown} disabled={index === count - 1} colors={colors} fonts={fonts} />
         <Action title={labels.remove} id={`enrich-remove-${attachment.id}`} destructive onPress={onRemove} colors={colors} fonts={fonts} />
       </View>
     </View>
@@ -265,7 +278,7 @@ export default function PropertyEnrichmentScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { t, isRTL, fonts } = useI18n();
+  const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
   const [fields, setFields] = useState<EnrichmentFieldValues>({});
   const [description, setDescription] = useState('');
@@ -291,10 +304,15 @@ export default function PropertyEnrichmentScreen() {
   const persistFlight = useRef<Promise<Property> | null>(null);
   const attachmentMutationFlight = useRef<Promise<void>>(Promise.resolve());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapsLinkRef = useRef('');
+  const mapsLaunchPending = useRef(false);
+  const tRef = useRef(t);
 
   propertyRef.current = property;
   enrichmentDraftRef.current = enrichmentDraft;
   attachmentsRef.current = attachments;
+  mapsLinkRef.current = mapsLink;
+  tRef.current = t;
 
   useEffect(() => {
     if (!id) return;
@@ -384,11 +402,19 @@ export default function PropertyEnrichmentScreen() {
     const projectedTypeDetails = populatedDetailKeys.length > 0
       ? rawDetails as unknown as Property['typeDetails']
       : undefined;
+    let validatedMapsLink: string | undefined;
+    if (mapsLink.trim()) {
+      try {
+        validatedMapsLink = normalizeGoogleMapsLink(mapsLink);
+      } catch {
+        if (strict) throw new Error('INVALID_LOCATION_LINK');
+      }
+    }
     const locationEnrichment = {
       ...((baseline.locationEnrichment ?? {}) as unknown as Record<string, unknown>),
       ...(optionalClassifiedLiteral(paci, exactPrivacy) ? { paciNumber: optionalClassifiedLiteral(paci, exactPrivacy) } : {}),
       ...(optionalClassifiedLiteral(manualLocation, exactPrivacy) ? { manualLocationText: optionalClassifiedLiteral(manualLocation, exactPrivacy) } : {}),
-      ...(optionalClassifiedLiteral(mapsLink, exactPrivacy) ? { mapsLink: optionalClassifiedLiteral(mapsLink, exactPrivacy) } : {}),
+      ...(optionalClassifiedLiteral(validatedMapsLink ?? '', exactPrivacy) ? { mapsLink: optionalClassifiedLiteral(validatedMapsLink ?? '', exactPrivacy) } : {}),
     };
     if (!paci.trim()) delete locationEnrichment.paciNumber;
     if (!manualLocation.trim()) delete locationEnrichment.manualLocationText;
@@ -477,7 +503,17 @@ export default function PropertyEnrichmentScreen() {
   useEffect(() => {
     mounted.current = true;
     const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active') {
+      if (state === 'active' && mapsLaunchPending.current) {
+        mapsLaunchPending.current = false;
+        try {
+          if (mapsLinkRef.current.trim()) {
+            setMapsLink(normalizeGoogleMapsLink(mapsLinkRef.current));
+            Alert.alert(tRef.current('enrich.maps_link_confirmed'));
+          }
+        } catch {
+          setError(tRef.current('enrich.maps_link_invalid'));
+        }
+      } else if (state !== 'active') {
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = null;
         void autosaveRef.current()
@@ -612,6 +648,27 @@ export default function PropertyEnrichmentScreen() {
     }
   };
 
+  const openMaps = async () => {
+    setError('');
+    try {
+      if (mapsLink.trim()) {
+        const normalized = normalizeGoogleMapsLink(mapsLink);
+        setMapsLink(normalized);
+        await openPastedLocationLink(pastedMapLocation(normalized));
+      } else {
+        const area = getAreaById(property?.core.locationArea.id ?? '');
+        await openGoogleMapsQuery(area?.[language] ?? property?.core.locationArea.id ?? '');
+      }
+      mapsLaunchPending.current = true;
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message === 'INVALID_LOCATION_LINK'
+          ? t('enrich.maps_link_invalid')
+          : t('enrich.maps_unavailable'),
+      );
+    }
+  };
+
   const save = async () => {
     if (!property || saving || persistFlight.current) return;
     setSaving(true);
@@ -706,30 +763,44 @@ export default function PropertyEnrichmentScreen() {
          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
          bottomOffset={24}
          keyboardShouldPersistTaps="handled"
-         keyboardDismissMode="interactive"
+         keyboardDismissMode="on-drag"
        >
         {error ? <Text testID="enrich-error" accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{error}</Text> : null}
-        <PropertyEnrichmentFields
-          propertyType={property.core.propertyType}
-          values={fields}
-          onChange={(field, value) => setFields(current => ({ ...current, [field]: value }))}
-        />
+        <Section title={t('enrich.property_details')} colors={colors} fonts={fonts} isRTL={isRTL}>
+          <PropertyEnrichmentFields
+            propertyType={property.core.propertyType}
+            values={fields}
+            onChange={(field, value) => setFields(current => ({ ...current, [field]: value }))}
+          />
+        </Section>
          <Section title={t('enrich.notes')} colors={colors} fonts={fonts} isRTL={isRTL}>
            <Input label={t('enrich.description')} value={description} onChangeText={setDescription} testID="enrich-description" multiline colors={colors} fonts={fonts} isRTL={isRTL} />
            <Input label={t('enrich.private_notes')} value={privateNotes} onChangeText={setPrivateNotes} testID="enrich-private-notes" multiline colors={colors} fonts={fonts} isRTL={isRTL} />
         </Section>
          <Section title={t('enrich.location')} colors={colors} fonts={fonts} isRTL={isRTL}>
            <Input label={t('enrich.paci')} value={paci} onChangeText={setPaci} testID="enrich-paci" colors={colors} fonts={fonts} isRTL={isRTL} />
-           <Input label={t('enrich.maps_link')} value={mapsLink} onChangeText={setMapsLink} testID="enrich-maps-link" autoCapitalize="none" colors={colors} fonts={fonts} isRTL={isRTL} />
-           {mapsLink.trim() ? (
-             <Button title={t('enrich.open_maps')} testID="enrich-open-maps" variant="outline" onPress={() => {
+           <Input
+             label={t('enrich.maps_link')}
+             value={mapsLink}
+             onChangeText={setMapsLink}
+             onBlur={() => {
+               if (!mapsLink.trim()) return;
                try {
-                 void openPastedLocationLink(pastedMapLocation(mapsLink.trim())).catch(() => setError(t('enrich.location_failed')));
+                 setMapsLink(normalizeGoogleMapsLink(mapsLink));
+                 setError('');
                } catch {
-                 setError(t('enrich.location_failed'));
+                 setError(t('enrich.maps_link_invalid'));
                }
-             }} />
-           ) : null}
+             }}
+             testID="enrich-maps-link"
+             autoCapitalize="none"
+             autoCorrect={false}
+             keyboardType="url"
+             colors={colors}
+             fonts={fonts}
+             isRTL={isRTL}
+           />
+           <Button title={t('enrich.open_maps')} testID="enrich-open-maps" variant="outline" onPress={() => void openMaps()} />
            <Text style={[styles.privacyText, {
              color: colors.mutedForeground,
              fontFamily: fonts.regular,
@@ -801,5 +872,6 @@ const styles = StyleSheet.create({
   attachmentTile: { width: 72, height: 72, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   attachmentName: { flex: 1 },
   attachmentActions: { flexWrap: 'wrap', gap: 16 },
+  attachmentAction: { minHeight: 44, minWidth: 84, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
   privacyText: { fontSize: 13, lineHeight: 19 },
 });

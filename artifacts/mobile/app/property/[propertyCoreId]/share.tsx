@@ -137,15 +137,23 @@ export default function PropertyShareScreen() {
     } catch { return null; }
   }, [property, selection, t, language, contacts]);
   const fileAdapter = useMemo(() => {
-    if (!property) return undefined;
+    if (!property || !selection) return undefined;
+    const selectedCover = (property.attachments ?? []).find(item =>
+      item.isCover && item.kind === 'image' && selection.attachmentIds.includes(item.id));
     return createPropertyPackageShareAdapter(
       property.attachments ?? [],
       async uri => {
         if (!await Sharing.isAvailableAsync()) throw new Error('LOCAL_FILE_SHARING_UNAVAILABLE');
         await Sharing.shareAsync(uri, { mimeType: 'application/zip', dialogTitle: t('share.send') });
       },
+      Platform.OS === 'ios' && selectedCover ? {
+        attachmentId: selectedCover.id,
+        shareWithText: async ({ uri, text }) => {
+          await Share.share({ message: text, url: uri });
+        },
+      } : undefined,
     );
-  }, [property, t]);
+  }, [property, selection, t]);
   if (!property || !selection) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.foreground }}>{error || t('edit.loading')}</Text></View>;
   const toggleAttachment = (attachmentId: string) => setSelection(current => current && ({ ...current, attachmentIds: current.attachmentIds.includes(attachmentId) ? current.attachmentIds.filter(id => id !== attachmentId) : [...current.attachmentIds, attachmentId] }));
   const toggleNormal = (field: PropertyShareSelection['normalFields'][number]) => setSelection(current => current && ({ ...current, normalFields: current.normalFields.includes(field) ? current.normalFields.filter(item => item !== field) : [...current.normalFields, field] }));
@@ -179,10 +187,9 @@ export default function PropertyShareScreen() {
        {contacts.length ? <><Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{shareT('share.contacts')}</Text>{contacts.map(contact => <CheckRow key={contact.id} checked={selection.personContactIds.includes(contact.id)} title={contact.name} subtitle={toEnglishDigits(contact.displayPhone)} onPress={() => toggleContact(contact.id)} testID={`share-contact-${contact.id}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}</> : null}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.preview')}</Text>
       <Text selectable testID="share-preview" style={[styles.preview, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{preview?.text || '—'}</Text>
-       {preview?.attachmentIds.length ? <Text testID="share-preview-attachments" style={{ color: colors.mutedForeground, textAlign: 'left', writingDirection: 'ltr' }}>{t('share.attachments')}: {property.attachments?.filter(item => preview.attachmentIds.includes(item.id)).map(item => item.originalName).join(', ')}</Text> : null}
+        {preview?.attachmentIds.length ? <Text testID="share-preview-attachments" style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }}>{shareT('share.attachments_selected').replace('{count}', toEnglishDigits(String(preview.attachmentIds.length)))}</Text> : null}
         {Platform.OS === 'android' ? <>
-          <Button title={shareT('share.whatsapp_business')} testID="share-whatsapp-business" disabled={!preview} onPress={() => { if (!preview) return; if (preview.attachmentIds.length) { setError(shareT('share.attachments_system_only')); return; } setError(''); void openAndroidPropertyShareCompose('whatsapp_business', preview.text).catch(() => setError(shareT('share.whatsapp_unavailable'))); }} />
-          <Button title={shareT('share.whatsapp')} testID="share-whatsapp" disabled={!preview} variant="outline" onPress={() => { if (!preview) return; if (preview.attachmentIds.length) { setError(shareT('share.attachments_system_only')); return; } setError(''); void openAndroidPropertyShareCompose('whatsapp', preview.text).catch(() => setError(shareT('share.whatsapp_unavailable'))); }} />
+           <Button title={shareT('share.whatsapp')} testID="share-whatsapp" disabled={!preview} variant="whatsapp" onPress={() => { if (!preview) return; if (preview.attachmentIds.length) { setError(shareT('share.attachments_system_only')); return; } setError(''); void openAndroidPropertyShareCompose(preview.text).catch(() => setError(shareT('share.whatsapp_unavailable'))); }} />
         </> : null}
        <Button title={Platform.OS === 'android' ? shareT('share.system_share') : t('share.send')} testID="share-send" disabled={!preview} onPress={() => { if (preview) { setError(''); void sharePropertyPreview(preview, fileAdapter, text => Share.share({ message: text })).catch(() => setError(t('share.failed'))); } }} />
       {error ? <Text accessibilityRole="alert" style={{ color: colors.destructive }}>{error}</Text> : null}

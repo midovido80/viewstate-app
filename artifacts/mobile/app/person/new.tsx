@@ -191,7 +191,7 @@ export default function NewPersonScreen() {
           <FlatList
             data={filteredContactChoices}
             keyExtractor={item => item.key}
-            keyboardDismissMode="interactive"
+            keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             scrollEnabled={filteredContactChoices.length > 0}
             contentContainerStyle={styles.contactList}

@@ -225,7 +225,13 @@ export async function openAttachment(
   intentLauncher: AndroidIntentLauncher = IntentLauncher,
 ): Promise<void> {
   assertNative(platform);
-  if (!await fileSystem.fileExists(attachment.uri)) {
+  let exists = false;
+  try {
+    exists = !!await fileSystem.fileExists(attachment.uri);
+  } catch {
+    exists = false;
+  }
+  if (!exists) {
     throw new Error('ATTACHMENT_FILE_MISSING');
   }
   if (platform === 'android') {

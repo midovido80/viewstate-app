@@ -544,8 +544,8 @@ export default function PropertyDetailScreen() {
                     <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
                     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={confirmRemoveSource} testID="property-source-unlink" accessibilityRole="button">
-                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('source.unlink')}</Text>
+                  <TouchableOpacity onPress={confirmRemoveSource} testID="property-source-unlink" accessibilityRole="button" style={[styles.relationshipUnlink, { borderColor: colors.destructive }]}>
+                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -856,6 +856,7 @@ const styles = StyleSheet.create({
   sourceSection: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
   sourceHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   sourceTitle: { flex: 1, gap: 3 },
+  relationshipUnlink: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   sourcePickerHeader: { minHeight: 60, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   label: { fontSize: 16, marginTop: 8 },
   options: { gap: 8 },

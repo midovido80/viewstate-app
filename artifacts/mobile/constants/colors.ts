@@ -33,6 +33,8 @@ const colors = {
     destructiveForeground: '#FFFFFF',
 
     success: '#A6D96A',
+    whatsapp: '#25D366',
+    whatsappForeground: '#062B18',
     warning: '#FFB84D',
 
     border: '#E5E7EB',
