@@ -15,6 +15,16 @@ import {
 import { SingleFlight } from '../services/serialTaskQueue.ts';
 import { STAGE_01B1_PROPERTY_MIGRATION_ID } from '../services/stage01B1CurrencyMigration.ts';
 import {
+  STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID,
+  UNKNOWN_CREATION_TIMESTAMP,
+  WEB_PERSON_CHRONOLOGY_KEY,
+  WEB_PROPERTY_CHRONOLOGY_KEY,
+  compareChronology,
+  getLegacyCreationTimestamp,
+  migrateWebStoreChronology,
+  sortByChronology,
+} from '../services/chronology.ts';
+import {
   initializeSQLiteStore,
   type SQLiteInitializationDatabase,
   type SQLitePropertyRow,
@@ -39,6 +49,8 @@ const legacyProperty = (id: string): Property => ({
 
 class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
   readonly properties = new Map<string, { id: string; data: string; searchText: string }>();
+  readonly propertyChronology = new Map<string, number>();
+  readonly personChronology = new Map<string, number>();
   readonly migrations = new Set<string>();
   readonly writes: Array<{ sql: string; params: unknown[] }> = [];
   schemaExecutions = 0;
@@ -52,6 +64,8 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
   async execAsync(source: string): Promise<void> {
     assert.match(source, /CREATE TABLE IF NOT EXISTS properties/);
     assert.match(source, /CREATE TABLE IF NOT EXISTS app_migrations/);
+    assert.match(source, /CREATE TABLE IF NOT EXISTS property_creation_chronology/);
+    assert.match(source, /CREATE TABLE IF NOT EXISTS person_creation_chronology/);
     this.schemaExecutions += 1;
   }
 
@@ -79,6 +93,20 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
       const row = this.properties.get(id);
       assert.ok(row, `Expected property ${id} to exist`);
       this.properties.set(id, { id, data, searchText });
+      return { changes: 1 };
+    }
+    if (sql === 'INSERT OR IGNORE INTO property_creation_chronology (id, created_at) VALUES (?, ?)') {
+      const id = String(params[0]);
+      if (!this.propertyChronology.has(id)) {
+        this.propertyChronology.set(id, Number(params[1]));
+      }
+      return { changes: 1 };
+    }
+    if (sql === 'INSERT OR IGNORE INTO person_creation_chronology (id, created_at) VALUES (?, ?)') {
+      const id = String(params[0]);
+      if (!this.personChronology.has(id)) {
+        this.personChronology.set(id, Number(params[1]));
+      }
       return { changes: 1 };
     }
     if (sql === 'INSERT INTO app_migrations (id) VALUES (?)') {
@@ -265,6 +293,7 @@ test('SQLite migration withholds completion until a preserved malformed row is r
 
   assert.equal(db.raw(malformedId), malformedRaw);
   assert.equal(db.migrations.has(STAGE_01B1_PROPERTY_MIGRATION_ID), false);
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), false);
   assert.deepEqual(firstWarnings, [{ type: 'property', id: malformedId }]);
   assert.deepEqual(Object.keys(firstWarnings[0]).sort(), ['id', 'type']);
   assert.equal(JSON.parse(db.raw(validId)).activeOffer.salePrice.currencyCode, 'KWD');
@@ -287,13 +316,16 @@ test('SQLite migration withholds completion until a preserved malformed row is r
   assert.equal(JSON.parse(db.raw(malformedId)).activeOffer.salePrice.currencyCode, 'KWD');
   assert.equal(JSON.parse(db.raw(validId)).activeOffer.salePrice.currencyCode, 'KWD');
   assert.equal(db.migrations.has(STAGE_01B1_PROPERTY_MIGRATION_ID), true);
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), true);
   assert.deepEqual([...db.properties.keys()], [malformedId, validId]);
   assert.equal(
     db.writes.filter(write => write.sql.startsWith('UPDATE properties')).length,
     1,
   );
   assert.equal(
-    db.writes.filter(write => write.sql.startsWith('INSERT INTO app_migrations')).length,
+    db.writes.filter(write =>
+      write.sql.startsWith('INSERT INTO app_migrations')
+      && write.params[0] === STAGE_01B1_PROPERTY_MIGRATION_ID).length,
     1,
   );
 
@@ -320,6 +352,7 @@ test('SQLite migration completes normally and remains idempotent when every row 
 
   await initializeHarness(db, []);
   assert.equal(db.migrations.has(STAGE_01B1_PROPERTY_MIGRATION_ID), true);
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), true);
   assert.equal(JSON.parse(db.raw(firstId)).activeOffer.salePrice.currencyCode, 'KWD');
   assert.equal(JSON.parse(db.raw(secondId)).activeOffer.salePrice.currencyCode, 'KWD');
   assert.equal(
@@ -338,6 +371,100 @@ test('SQLite migration completes normally and remains idempotent when every row 
   );
   assert.equal(db.writes.length, 0);
   assert.deepEqual([...db.properties.keys()], [firstId, secondId]);
+});
+
+test('legacy chronology parsing is exact and unknown IDs use a deterministic fallback', () => {
+  const timestamp = 1788202178934;
+  assert.equal(
+    getLegacyCreationTimestamp('property', `${timestamp}abcdefghi`),
+    timestamp,
+  );
+  assert.equal(
+    getLegacyCreationTimestamp('person', `person-${timestamp}-abcdefgh`),
+    timestamp,
+  );
+  assert.equal(getLegacyCreationTimestamp('property', String(timestamp)), null);
+  assert.equal(getLegacyCreationTimestamp('property', `custom-${timestamp}`), null);
+  assert.equal(getLegacyCreationTimestamp('person', `person-${timestamp}-short`), null);
+  assert.equal(UNKNOWN_CREATION_TIMESTAMP, 0);
+  assert.ok(compareChronology(
+    { id: 'b', createdAt: timestamp },
+    { id: 'a', createdAt: timestamp },
+  ) < 0);
+
+  const ordered = sortByChronology([
+    { id: 'legacy-old', createdAt: timestamp - 1 },
+    { id: 'uuid-new', createdAt: timestamp + 1 },
+    { id: 'legacy-new', createdAt: timestamp + 2 },
+    { id: 'tie-a', createdAt: timestamp },
+    { id: 'tie-b', createdAt: timestamp },
+  ], value => value);
+  assert.deepEqual(
+    ordered.map(value => value.id),
+    ['legacy-new', 'uuid-new', 'tie-b', 'tie-a', 'legacy-old'],
+  );
+});
+
+test('empty SQLite chronology migration completes and a failed write cannot mark completion', async () => {
+  const empty = new SQLitePersistenceHarness([]);
+  await initializeHarness(empty, []);
+  assert.equal(empty.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), true);
+
+  const propertyId = 'property-valid-write-failure';
+  const failing = new SQLitePersistenceHarness([
+    { id: propertyId, data: JSON.stringify(legacyProperty(propertyId)) },
+  ]);
+  const originalRun = failing.runAsync.bind(failing);
+  failing.runAsync = async (source, params) => {
+    if (source.includes('property_creation_chronology')) {
+      throw new Error('synthetic chronology write failure');
+    }
+    return originalRun(source, params);
+  };
+  await assert.rejects(initializeHarness(failing, []), /synthetic chronology write failure/);
+  assert.equal(failing.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), false);
+});
+
+test('Web chronology migration preserves record arrays byte-for-byte and is idempotent', async () => {
+  const timestamp = 1788202178934;
+  const propertyId = `${timestamp}abcdefghi`;
+  const personId = `person-${timestamp}-abcdefgh`;
+  const propertiesKey = '@properties';
+  const peopleKey = '@people';
+  const propertyRaw = JSON.stringify([legacyProperty(propertyId)]);
+  const peopleRaw = JSON.stringify([{
+    id: personId,
+    classifications: ['owner'],
+    name: 'Legacy owner',
+    displayPhone: '50000000',
+    normalizedPhone: '50000000',
+    notes: '',
+  }]);
+  const values = new Map<string, string>([
+    [propertiesKey, propertyRaw],
+    [peopleKey, peopleRaw],
+  ]);
+  const storage = {
+    getItem: async (key: string) => values.get(key) ?? null,
+    setItem: async (key: string, value: string) => { values.set(key, value); },
+  };
+
+  await migrateWebStoreChronology({ storage, propertiesKey, peopleKey });
+  assert.equal(values.get(propertiesKey), propertyRaw);
+  assert.equal(values.get(peopleKey), peopleRaw);
+  assert.equal(
+    JSON.parse(values.get(WEB_PROPERTY_CHRONOLOGY_KEY)!).entries[propertyId],
+    timestamp,
+  );
+  assert.equal(
+    JSON.parse(values.get(WEB_PERSON_CHRONOLOGY_KEY)!).entries[personId],
+    timestamp,
+  );
+  assert.equal(values.get(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), 'complete');
+
+  const snapshot = new Map(values);
+  await migrateWebStoreChronology({ storage, propertiesKey, peopleKey });
+  assert.deepEqual(values, snapshot);
 });
 
 test('Arabic and English recovery and preservation warnings are present', async () => {

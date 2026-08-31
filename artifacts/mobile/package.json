@@ -69,6 +69,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@expo-google-fonts/tajawal": "^0.4.1"
+    "@expo-google-fonts/tajawal": "^0.4.1",
+    "expo-crypto": "~15.0.9"
   }
 }

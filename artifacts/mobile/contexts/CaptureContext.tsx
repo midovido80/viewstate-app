@@ -21,6 +21,7 @@ import {
   SaveRecoveryResult,
   serializeRecoveryValue,
 } from '@/services/propertySaveRecovery';
+import { generateDomainId } from '@/services/identity';
 
 type SaveRecoveryStatus =
   | 'none'
@@ -51,15 +52,11 @@ const DEFAULT_DRAFT: PropertyDraft = {
   transaction: undefined,
 };
 
-function generateId(): string {
-  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
-}
-
 function createFreshDraft(): PropertyDraft {
   return {
     ...DEFAULT_DRAFT,
-    propertyCoreId: generateId(),
-    offerId: generateId(),
+    propertyCoreId: generateDomainId(),
+    offerId: generateDomainId(),
   };
 }
 

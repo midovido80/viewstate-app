@@ -22,9 +22,16 @@ import {
   PropertySource,
   assertValidPerson,
   getPersonSearchText,
-  normalizePersonPhone,
   personMatchesSearch,
 } from '@/services/people';
+import {
+  addWebChronology,
+  createCreationTimestamp,
+  getWebChronology,
+  migrateWebStoreChronology,
+  sortByChronology,
+  UNKNOWN_CREATION_TIMESTAMP,
+} from '@/services/chronology';
 
 export { getPropertySearchText };
 
@@ -179,10 +186,16 @@ export class SQLiteStore implements PropertyStore, PersonStore {
         }
         return;
       }
-      await this.db!.runAsync(
-        'INSERT INTO properties (id, data, search_text) VALUES (?, ?, ?)',
-        [property.core.id, JSON.stringify(property), searchText],
-      );
+      await this.db!.withTransactionAsync(async () => {
+        await this.db!.runAsync(
+          'INSERT INTO properties (id, data, search_text) VALUES (?, ?, ?)',
+          [property.core.id, JSON.stringify(property), searchText],
+        );
+        await this.db!.runAsync(
+          'INSERT OR IGNORE INTO property_creation_chronology (id, created_at) VALUES (?, ?)',
+          [property.core.id, createCreationTimestamp()],
+        );
+      });
     });
   }
 
@@ -230,12 +243,27 @@ export class SQLiteStore implements PropertyStore, PersonStore {
   async getProperties(): Promise<Property[]> {
     if (!this.db) throw new Error('DB not initialized');
     const rows = await this.db.getAllAsync<{ id: string; data: string }>(
-      'SELECT id, data FROM properties ORDER BY id DESC',
+      'SELECT id, data FROM properties',
     );
-    return rows.flatMap(row => {
+    const chronology = await this.db.getAllAsync<{ id: string; created_at: number }>(
+      'SELECT id, created_at FROM property_creation_chronology',
+      [],
+    );
+    const chronologyById = new Map(chronology.map(row => [row.id, row.created_at]));
+    const properties = rows.flatMap(row => {
       const property = this.parsePropertyRow(row);
-      return property ? [property] : [];
+      return property
+        ? [{
+          property,
+          entry: {
+            id: row.id,
+            createdAt: chronologyById.get(row.id)
+              ?? UNKNOWN_CREATION_TIMESTAMP,
+          },
+        }]
+        : [];
     });
+    return sortByChronology(properties, item => item.entry).map(item => item.property);
   }
 
   async searchProperties(query: string): Promise<Property[]> {
@@ -321,10 +349,16 @@ export class SQLiteStore implements PropertyStore, PersonStore {
         if (existing.data !== JSON.stringify(person)) throw new Error('PERSON_ID_ALREADY_EXISTS');
         return;
       }
-      await this.db!.runAsync(
-        'INSERT INTO people (id, data, search_text) VALUES (?, ?, ?)',
-        [person.id, JSON.stringify(person), getPersonSearchText(person)],
-      );
+      await this.db!.withTransactionAsync(async () => {
+        await this.db!.runAsync(
+          'INSERT INTO people (id, data, search_text) VALUES (?, ?, ?)',
+          [person.id, JSON.stringify(person), getPersonSearchText(person)],
+        );
+        await this.db!.runAsync(
+          'INSERT OR IGNORE INTO person_creation_chronology (id, created_at) VALUES (?, ?)',
+          [person.id, createCreationTimestamp()],
+        );
+      });
     });
   }
 
@@ -360,29 +394,32 @@ export class SQLiteStore implements PropertyStore, PersonStore {
   async getPeople(): Promise<Person[]> {
     if (!this.db) throw new Error('DB not initialized');
     const rows = await this.db.getAllAsync<{ id: string; data: string }>(
-      'SELECT id, data FROM people ORDER BY id DESC',
+      'SELECT id, data FROM people',
     );
-    return rows.flatMap(row => {
+    const chronology = await this.db.getAllAsync<{ id: string; created_at: number }>(
+      'SELECT id, created_at FROM person_creation_chronology',
+      [],
+    );
+    const chronologyById = new Map(chronology.map(row => [row.id, row.created_at]));
+    const people = rows.flatMap(row => {
       const person = this.parsePersonRow(row);
-      return person ? [person] : [];
+      return person
+        ? [{
+          person,
+          entry: {
+            id: row.id,
+            createdAt: chronologyById.get(row.id)
+              ?? UNKNOWN_CREATION_TIMESTAMP,
+          },
+        }]
+        : [];
     });
+    return sortByChronology(people, item => item.entry).map(item => item.person);
   }
 
   async searchPeople(query: string): Promise<Person[]> {
     if (!this.db) throw new Error('DB not initialized');
-    const literal = query.toLocaleLowerCase().replace(/[\\%_]/g, value => `\\${value}`);
-    const normalized = normalizePersonPhone(query).replace(/[\\%_]/g, value => `\\${value}`);
-    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
-      `SELECT id, data FROM people
-       WHERE search_text LIKE ? ESCAPE '\\'
-          OR (? <> '' AND search_text LIKE ? ESCAPE '\\')
-       ORDER BY id DESC`,
-      [`%${literal}%`, normalized.replace('+', '') ? normalized : '', `%${normalized}%`],
-    );
-    return rows.flatMap(row => {
-      const person = this.parsePersonRow(row);
-      return person ? [person] : [];
-    });
+    return (await this.getPeople()).filter(person => personMatchesSearch(person, query));
   }
 
   async deletePerson(id: string): Promise<boolean> {
@@ -526,10 +563,14 @@ export class WebStore implements PropertyStore, PersonStore {
 
   async init() {
     if (!this.initialization) {
-      const attempt = migrateStage01B1WebProperties(
-        this.storage,
-        this.KEY,
-      ).then(() => undefined);
+      const attempt = migrateStage01B1WebProperties(this.storage, this.KEY)
+        .then(() => this.withChronologyMutationLock(() =>
+          migrateWebStoreChronology({
+            storage: this.storage,
+            propertiesKey: this.KEY,
+            peopleKey: this.PEOPLE_KEY,
+          })))
+        .then(() => undefined);
       this.initialization = attempt;
       attempt.catch(() => {
         if (this.initialization === attempt) this.initialization = null;
@@ -577,22 +618,44 @@ export class WebStore implements PropertyStore, PersonStore {
     return locks.request('viewstate-properties-mutation', { mode: 'exclusive' }, work);
   }
 
+  private async withChronologyMutationLock<T>(work: () => Promise<T>): Promise<T> {
+    const locks = this.lockManager;
+    // Without Web Locks, browser mutations are already disabled. Initialization
+    // may still safely perform its one-time migration because no writer can race it.
+    if (!locks) return work();
+    return locks.request('viewstate-chronology-mutation', { mode: 'exclusive' }, work);
+  }
+
   async saveProperty(property: Property) {
-    await this.withMutationLock(async () => {
-      const all = await this.getAllRaw();
-      if ((await this.getDeletedIds()).has(property.core.id)) {
-        throw new Error('PROPERTY_ID_DELETED');
-      }
-      const existing = all.findIndex(p => p.core.id === property.core.id);
-      if (existing >= 0) {
-        if (JSON.stringify(all[existing]) !== JSON.stringify(property)) {
-          throw new Error('PROPERTY_ID_ALREADY_EXISTS');
+    await this.withChronologyMutationLock(() =>
+      this.withMutationLock(async () => {
+        const all = await this.getAllRaw();
+        if ((await this.getDeletedIds()).has(property.core.id)) {
+          throw new Error('PROPERTY_ID_DELETED');
         }
-        return;
-      }
-      all.unshift(property);
-      await this.storage.setItem(this.KEY, JSON.stringify(all));
-    });
+        const existing = all.findIndex(p => p.core.id === property.core.id);
+        if (existing >= 0) {
+          if (JSON.stringify(all[existing]) !== JSON.stringify(property)) {
+            throw new Error('PROPERTY_ID_ALREADY_EXISTS');
+          }
+          const chronology = await getWebChronology(this.storage, 'property');
+          await addWebChronology(
+            this.storage,
+            'property',
+            property.core.id,
+            chronology.get(property.core.id) ?? UNKNOWN_CREATION_TIMESTAMP,
+          );
+          return;
+        }
+        await addWebChronology(
+          this.storage,
+          'property',
+          property.core.id,
+          createCreationTimestamp(),
+        );
+        all.unshift(property);
+        await this.storage.setItem(this.KEY, JSON.stringify(all));
+      }));
   }
 
   async getProperty(id: string): Promise<Property | null> {
@@ -630,11 +693,19 @@ export class WebStore implements PropertyStore, PersonStore {
   }
 
   async getProperties(): Promise<Property[]> {
-    return this.getAll();
+    const [properties, chronology] = await Promise.all([
+      this.getAll(),
+      getWebChronology(this.storage, 'property'),
+    ]);
+    return sortByChronology(properties, property => ({
+      id: property.core.id,
+      createdAt: chronology.get(property.core.id)
+        ?? UNKNOWN_CREATION_TIMESTAMP,
+    }));
   }
 
   async searchProperties(query: string): Promise<Property[]> {
-    const all = await this.getAll();
+    const all = await this.getProperties();
     const q = query.toLowerCase();
     return all.filter(p => {
       return getPropertySearchText(p).includes(q);
@@ -715,18 +786,27 @@ export class WebStore implements PropertyStore, PersonStore {
 
   async savePerson(person: Person): Promise<void> {
     assertValidPerson(person);
-    await this.withPeopleMutationLock(async () => {
-      const all = await this.getAllPeople();
-      const existing = all.find(item => item.id === person.id);
-      if (existing) {
-        if (JSON.stringify(existing) !== JSON.stringify(person)) {
-          throw new Error('PERSON_ID_ALREADY_EXISTS');
+    await this.withChronologyMutationLock(() =>
+      this.withPeopleMutationLock(async () => {
+        const all = await this.getAllPeople();
+        const existing = all.find(item => item.id === person.id);
+        if (existing) {
+          if (JSON.stringify(existing) !== JSON.stringify(person)) {
+            throw new Error('PERSON_ID_ALREADY_EXISTS');
+          }
+          const chronology = await getWebChronology(this.storage, 'person');
+          await addWebChronology(
+            this.storage,
+            'person',
+            person.id,
+            chronology.get(person.id) ?? UNKNOWN_CREATION_TIMESTAMP,
+          );
+          return;
         }
-        return;
-      }
-      all.unshift(person);
-      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
-    });
+        await addWebChronology(this.storage, 'person', person.id, createCreationTimestamp());
+        all.unshift(person);
+        await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
+      }));
   }
 
   async getPerson(id: string): Promise<Person | null> {
@@ -754,11 +834,19 @@ export class WebStore implements PropertyStore, PersonStore {
   }
 
   async getPeople(): Promise<Person[]> {
-    return this.getAllPeople();
+    const [people, chronology] = await Promise.all([
+      this.getAllPeople(),
+      getWebChronology(this.storage, 'person'),
+    ]);
+    return sortByChronology(people, person => ({
+      id: person.id,
+      createdAt: chronology.get(person.id)
+        ?? UNKNOWN_CREATION_TIMESTAMP,
+    }));
   }
 
   async searchPeople(query: string): Promise<Person[]> {
-    return (await this.getAllPeople()).filter(person => personMatchesSearch(person, query));
+    return (await this.getPeople()).filter(person => personMatchesSearch(person, query));
   }
 
   async deletePerson(id: string): Promise<boolean> {

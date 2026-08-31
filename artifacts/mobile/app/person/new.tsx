@@ -18,6 +18,7 @@ import {
   PhoneCountryCode,
   phoneDigits,
 } from '@/services/phoneEntry';
+import { generateDomainId } from '@/services/identity';
 
 let sessionContactChoices: ContactPhoneChoice[] | null = null;
 
@@ -97,7 +98,7 @@ export default function NewPersonScreen() {
     setSaving(true);
     try {
       const person = createPerson({
-        id: `person-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        id: generateDomainId(),
         name,
         displayPhone: phone,
         normalizedPhone: normalizePhoneForCountry(phone, phoneCountry),

@@ -3,6 +3,10 @@ import type { Property } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { normalizePropertyCurrency } from '@/constants/market';
 import { STAGE_01B1_PROPERTY_MIGRATION_ID } from '@/services/stage01B1CurrencyMigration';
+import {
+  getCreationTimestamp,
+  STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID,
+} from '@/services/chronology';
 
 export interface SQLitePropertyRow {
   id: string;
@@ -59,6 +63,14 @@ export async function initializeSQLiteStore(options: {
       data TEXT NOT NULL,
       search_text TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS property_creation_chronology (
+      id TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS person_creation_chronology (
+      id TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS person_property_links (
       person_id TEXT NOT NULL,
       property_core_id TEXT NOT NULL,
@@ -75,6 +87,10 @@ export async function initializeSQLiteStore(options: {
     'SELECT id FROM app_migrations WHERE id = ?',
     [STAGE_01B1_PROPERTY_MIGRATION_ID],
   );
+  const chronologyCompleted = await db.getFirstAsync<{ id: string }>(
+    'SELECT id FROM app_migrations WHERE id = ?',
+    [STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID],
+  );
   const rows = await db.getAllAsync<SQLitePropertyRow>(
     'SELECT id, data FROM properties',
     [],
@@ -86,20 +102,28 @@ export async function initializeSQLiteStore(options: {
       allPropertiesReadable = false;
       continue;
     }
-    if (completed) continue;
-
-    const normalized = normalizePropertyCurrency(property);
-    if (normalized.changed) {
+    if (!chronologyCompleted) {
       await options.runMutation(async () => {
         await db.runAsync(
-          'UPDATE properties SET data = ?, search_text = ? WHERE id = ?',
-          [
-            JSON.stringify(normalized.property),
-            getPropertySearchText(normalized.property),
-            row.id,
-          ],
+          'INSERT OR IGNORE INTO property_creation_chronology (id, created_at) VALUES (?, ?)',
+          [row.id, getCreationTimestamp('property', row.id)],
         );
       });
+    }
+    if (!completed) {
+      const normalized = normalizePropertyCurrency(property);
+      if (normalized.changed) {
+        await options.runMutation(async () => {
+          await db.runAsync(
+            'UPDATE properties SET data = ?, search_text = ? WHERE id = ?',
+            [
+              JSON.stringify(normalized.property),
+              getPropertySearchText(normalized.property),
+              row.id,
+            ],
+          );
+        });
+      }
     }
   }
 
@@ -107,12 +131,33 @@ export async function initializeSQLiteStore(options: {
     'SELECT id, data FROM people',
     [],
   );
-  for (const row of people) options.parsePersonRow(row);
+  let allPeopleReadable = true;
+  for (const row of people) {
+    const person = options.parsePersonRow(row);
+    if (!person) {
+      allPeopleReadable = false;
+      continue;
+    }
+    if (!chronologyCompleted) {
+      await options.runMutation(async () => {
+        await db.runAsync(
+          'INSERT OR IGNORE INTO person_creation_chronology (id, created_at) VALUES (?, ?)',
+          [row.id, getCreationTimestamp('person', row.id)],
+        );
+      });
+    }
+  }
 
   if (!completed && allPropertiesReadable) {
     await db.runAsync(
       'INSERT INTO app_migrations (id) VALUES (?)',
       [STAGE_01B1_PROPERTY_MIGRATION_ID],
+    );
+  }
+  if (!chronologyCompleted && allPropertiesReadable && allPeopleReadable) {
+    await db.runAsync(
+      'INSERT INTO app_migrations (id) VALUES (?)',
+      [STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID],
     );
   }
 }
