@@ -21,7 +21,7 @@ A Kuwait-first, GCC-ready bilingual (Arabic/English) real estate mobile app for 
 
 - **Mobile:** React Native + Expo SDK 54, Expo Router, SQLite/AsyncStorage local persistence
 - **Backend:** Express 5 + TypeScript (`artifacts/api-server`)
-- **Database:** PostgreSQL + Drizzle ORM (`lib/db`)
+- **Database:** PostgreSQL + Drizzle ORM (`lib/db`) — future server-side persistence architecture; mobile runtime persistence remains local SQLite/AsyncStorage
 - **Validation:** Zod v4 + drizzle-zod
 - **API codegen:** Orval (from OpenAPI spec in `lib/api-spec/`)
 - **Localization:** Arabic (RTL, primary) + English (LTR, secondary)
@@ -55,7 +55,7 @@ All governance lives in `artifacts/mobile/.ai/`. Read `artifacts/mobile/.ai/READ
 - `artifacts/mobile/` — Expo mobile app
 - `artifacts/api-server/` — Express API server
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (source of truth)
-- `lib/db/src/schema/` — Drizzle schema (source of truth for DB)
+- `lib/db/src/schema/` — planned Drizzle schema for future server-side persistence (not the current mobile runtime schema authority)
 - `lib/api-client-react/src/generated/` — generated React Query hooks
 - `artifacts/mobile/.ai/` — Governance Package
 - `artifacts/mobile/docs/` — Module, UX, and database documentation

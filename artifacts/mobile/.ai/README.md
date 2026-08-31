@@ -1,7 +1,7 @@
 # ViewState App — Governance Package
 
 **Project:** ViewState App  
-**Status:** 🔴 PRE-IMPLEMENTATION — No product features may be built without explicit Founder approval  
+**Status:** 🟡 BOUNDED LOCAL IMPLEMENTATION — Further product stages require explicit Founder approval; see `CURRENT_STATE.md`
 **Stage 00.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_1_FREEZE.md` and DEC-014  
 **Stage 00.2.1:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_1_FREEZE.md` and DEC-017  
 **Stage 00.2.2:** 🔒 FROZEN / APPROVED (2026-08-13) — see `STAGE_00_2_2_FREEZE.md` and DEC-021  
@@ -10,22 +10,31 @@
 **Stage 00.4:** 🔒 HISTORICALLY FROZEN
 **Stage 00.5:** NOT DEFINED
 **Governance Reconciliation:** 🔒 FROZEN — corrective reconciliation verified on GitHub `main` at `fbed357dabf09799c73982bb0643673ef3337a05`; PR #2 merged normally
-**Stage 01:** NOT STARTED / LOCKED — Fresh Founder authorization is required for the expanded Stage 01 Impact Analysis after the amendment freeze
+**Stage 01:** PARTIALLY IMPLEMENTED / NOT FROZEN — Current bounded scope and remaining locks are recorded in `CURRENT_STATE.md`
 **Language:** Bilingual Arabic / English (ar / en)  
 **Platform:** React Native + Expo — Android-first rollout and pilot; iOS architectural compatibility maintained continuously
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-31
 
 ---
 
 ## Current Effective V001 Contract
 
-The approved future Stage 01 title is **Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate)**. Stage 01 remains NOT STARTED / LOCKED. The expanded Impact Analysis requires fresh Founder authorization after this governance amendment freeze; Land remains a separately analyzed, approved, and frozen later V001 workflow.
+The approved future Stage 01 title is **Property Capture Architecture & Dynamic Form Impact Analysis (Sale & Rent — Built Properties; Land Workflow Separate)**. Stage 01 is now partially implemented and not frozen as recorded in `CURRENT_STATE.md`; this does not unlock any remaining stage or module. Land remains a separately analyzed, approved, and frozen later V001 workflow.
 
 - ViewState App is one Android/iOS product. Android is first for rollout and pilot validation; iOS architectural compatibility is continuous. Expo Go is a preview/testing option, not an exclusive dependency gate; every dependency requires Android, iOS, and Expo compatibility review.
 - The exact Person classifications are Seeker / باحث, Owner / مالك, Broker / دلال, Real Estate Company / شركة عقارية, and Building Guard / حارس. Requirements are separate Seeker-owned records; their purpose is Rent or Buy, and a Seeker may have multiple Requirements.
 - UI and system-authored content are localized in Arabic and English. User-entered or imported names, notes, descriptions, and source text remain literal and are not automatically translated or duplicated.
 - The minimum Tasks and Follow-ups capability is in scope. Its four separate optional labels are Follow Up, Important, Pending, and Order Complete / Closed Deal.
 - Property workflow is property-first with separate Rental Price and Sale Price, Draft-first Property Import, one-Property-at-a-time Safe Share, PACI/Location/Maps behavior, private-by-default disclosure, and no-silent-loss Draft recovery.
+
+### Current Runtime and Persistence Precedence
+
+For current implementation status and persistence operations, `CURRENT_STATE.md` and its **Persistence Authority Boundary** control over older PRE-IMPLEMENTATION, “no implemented dataset,” or conditional “if data is discovered” wording retained in historical reconciliation and freeze records.
+
+- The implemented mobile app has a known local SQLite/AsyncStorage dataset governed by shared mobile domain validation/contracts.
+- PostgreSQL/Drizzle remains future server-side architecture and is not the current mobile runtime schema authority.
+- Any future server schema or synchronization work must first assess compatibility and migration for the known local dataset; it must not silently remap or discard data.
+- Foundation Fix 01 remains frozen and unchanged. Foundation Fix 02 is documentation-only and remains pending Founder/CTO review. Matching has not started.
 
 ## What This Package Is
 
@@ -59,7 +68,7 @@ The Governance Package is the **single source of truth** that governs every deci
 These rules are non-negotiable and apply to every AI session and every implementation stage.
 
 ### Implementation Control
-1. **PRE-IMPLEMENTATION LOCK.** The project remains PRE-IMPLEMENTATION. No feature implementation may begin without explicit Founder approval.
+1. **IMPLEMENTATION GATE.** Existing bounded local implementation does not authorize further features or stages. No additional feature implementation may begin without explicit Founder approval.
 2. **Founder approval gate.** No feature, screen, dependency, or architecture change may be made without explicit Founder sign-off.
 3. **One layer at a time.** Build one layer at a time. Do not mix unrelated layers in a single session.
 4. **No inventing.** Replit must not invent requirements, fields, workflows, dependencies, architecture changes, or UX behavior not defined in governance.

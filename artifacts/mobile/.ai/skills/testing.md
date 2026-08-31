@@ -213,13 +213,13 @@ pnpm --filter @workspace/mobile run test -- --watch
 
 This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
 
-- Status remains PRE-IMPLEMENTATION.
+- The future server database layer remains PRE-IMPLEMENTATION and separately locked; the bounded mobile local implementation is recorded in `CURRENT_STATE.md`.
 - Stage 00.5 is not defined and must not be fabricated.
 - Stage 01 has not begun.
 - Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
 - No database migration is authorized or required by this reconciliation.
 - Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- The implemented mobile app has a known local SQLite/AsyncStorage dataset. Before future server schema or synchronization work, the relevant stage must stop for a fresh compatibility and migration assessment.
 - ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
 - Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
 

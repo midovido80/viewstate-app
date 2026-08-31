@@ -18,8 +18,10 @@ TypeScript is configured with `strict: true`. Every `tsconfig.json` in this mono
 ```typescript
 import { z } from 'zod/v4';
 
-// All API response parsing uses generated Zod schemas from drizzle-zod
-// Never write a Zod schema that duplicates a Drizzle table definition
+// Parse server API responses with the approved generated API contract/schema.
+// Future server persistence validation may use generated Zod schemas from drizzle-zod.
+// Do not derive the implemented mobile domain or local persistence contract from
+// the future server Drizzle tables.
 // For third-party data (WhatsApp export, contacts), write a dedicated Zod schema
 ```
 
@@ -74,12 +76,12 @@ const title = property?.title_ar ?? property?.title_en ?? 'Untitled';
 
 ---
 
-## ViewState Domain Types
+## Boundary-Specific ViewState Types
 
-These types will be generated from the Drizzle schema via drizzle-zod. Do not write them manually. This section shows the intended shape for reference only:
+Types are boundary-specific. The implemented mobile runtime uses its shared mobile domain contracts and validation with local SQLite/AsyncStorage persistence. Future server records may be generated from the future server Drizzle schema via drizzle-zod. Do not treat the future server schema as the mobile runtime contract. The interfaces below are reference-only examples for the future server boundary:
 
 ```typescript
-// REFERENCE ONLY — will be generated from DB schema
+// REFERENCE ONLY — future server boundary; not the implemented mobile contract
 interface User {
   id: string;
   phone: string;

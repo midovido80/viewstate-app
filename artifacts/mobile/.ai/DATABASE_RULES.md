@@ -11,11 +11,18 @@ These are governance planning rules only; no schema or migration is authorized b
 
 **Pre-Stage 01 Property Capture Amendment Boundary:** BASIC Property capture follows DEC-022 exactly: Property Type, Purpose, Price, and Market-configured Location Area. Title is not a required BASIC Property field, and this amendment creates no fifth BASIC requirement. The taxonomy and persistence examples below are non-final planning guidance only. Property/Offer/Unit alternatives, parent relationships, simultaneous Sale/Rent representation, and persisted price representation remain unresolved for the separately Founder-authorized Stage 01 Impact Analysis. Land remains a separate later V001 workflow. No schema or migration is authorized.
 
+### Persistence Authority Boundary
+
+- **Current mobile runtime:** Local SQLite and AsyncStorage, together with shared mobile domain validation and contracts, are authoritative for the implemented mobile app's persisted data and runtime data shape.
+- **Future server runtime:** PostgreSQL and Drizzle are future server-side persistence architecture only. The planned tables and Drizzle schema in `lib/db/src/schema/` are not the current authoritative schema for the running mobile app.
+- These rules describe future server-side database planning and must not be used to authorize moving, replacing, or synchronizing the current mobile persistence implementation.
+
 
 ## Philosophy
 
-- The Drizzle schema in `lib/db/src/schema/` is the **single source of truth**. No type is ever manually duplicated elsewhere.
-- Use `drizzle-zod` to derive Zod schemas from Drizzle tables. Never write a Zod schema that mirrors an existing table by hand.
+- PostgreSQL with Drizzle ORM is the planned **future server-side** persistence authority, once that server architecture is separately authorized and implemented. It is not the current mobile runtime schema authority.
+- For the implemented mobile runtime, preserve the local SQLite/AsyncStorage boundary and shared domain validation/contracts; do not derive mobile runtime persistence from the planned Drizzle tables.
+- Within the future server boundary, use `drizzle-zod` to derive Zod schemas from Drizzle tables. Never write a future server Zod schema that mirrors an existing table by hand.
 - Migrations are generated via `drizzle-kit` — never write raw SQL migrations by hand.
 - Schema changes require Founder approval before being pushed to any environment.
 - Design every table with V002+ features in mind (Rule 17) — leave extension points, avoid constraints that would block future AI or marketplace features.

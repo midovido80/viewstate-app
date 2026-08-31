@@ -57,6 +57,21 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 
 ---
 
+## Persistence Authority Boundary
+
+- **Current mobile runtime authority:** Local SQLite and AsyncStorage persistence, together with shared mobile domain validation and contracts, govern the implemented mobile app's persisted data and runtime data shape.
+- **Future server authority:** PostgreSQL with Drizzle ORM remains future server-side architecture. The planned Drizzle schema is not the current mobile runtime schema authority.
+- No persistence migration, synchronization, server schema implementation, or application behavior change is part of this clarification.
+- **Operational precedence:** This live boundary controls current persistence work over older PRE-IMPLEMENTATION, “no implemented dataset,” or conditional dataset-discovery wording retained in historical reconciliation and freeze records. Those older statements remain historical evidence, not instructions to ignore the known local dataset.
+
+## Foundation Fix Status
+
+- **Foundation Fix 01:** Existing freeze boundary preserved unchanged.
+- **Foundation Fix 02:** Documentation-only correction clarifying the separate mobile-local and future-server persistence authorities. No production code, tests, schema, dependencies, migrations, configuration, API/backend behavior, Auth, Circle of Trust, Requirements, Matching, or implementation was changed.
+- **Next step:** Founder/CTO review. Matching remains not started.
+
+---
+
 ## Governance Files (Approved Names)
 
 | File | Status |
@@ -298,3 +313,12 @@ Implemented: Replaced the provisional generic Dynamic Details matrix with the ex
 Compatibility: The implementation remains additive and preserves BASIC-only Properties, stable identities, Sale/Rent Offer separation and cadence truth, unknown persisted fields, recovery evidence, literal Description/Private Notes/location text, and all bounded DEC-043 People, link, media, location, sharing, and privacy behavior.
 Verification: Synthetic-only Mobile suite 70/70; Mobile TypeScript; Property Domain tests and TypeScript; diff integrity; clean Expo/Metro startup and 1,707-module web bundle. No Preview/device data was accessed or altered. Independent DEC-044 CTO/governance review: PASS with no blocking finding.
 State: DEC-044 BOUNDED LOCAL IMPLEMENTATION COMPLETE AND SYNTHETICALLY VERIFIED / CTO REVIEW PASS / NOT NATIVE-DEVICE ACCEPTED / NOT FROZEN, COMMITTED, PUSHED, MERGED, PUBLISHED, RELEASED, OR APK-BUILT — WAIT.
+
+---
+
+### Session: 2026-08-31 (Foundation Fix 02 — Persistence Authority Documentation Correction)
+Scope: Corrected governance wording only so the implemented mobile local persistence authority is distinct from the future server persistence authority.
+Completed: Identified local SQLite/AsyncStorage plus shared mobile domain validation/contracts as the current mobile runtime boundary; labeled PostgreSQL/Drizzle as future server-side architecture; preserved the Foundation Fix 01 freeze boundary.
+Boundaries: No production code, tests, schema, dependencies, migrations, configuration, API/backend behavior, Auth, Circle of Trust, Requirements, Matching, or Foundation Fix 02 implementation was changed. Matching remains not started.
+Next step: Founder/CTO review.
+State: FOUNDATION FIX 02 DOCUMENTATION-ONLY CORRECTION / PENDING FOUNDER/CTO REVIEW — WAIT.
