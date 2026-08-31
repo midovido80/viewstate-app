@@ -2,9 +2,10 @@ import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system';
 import type { ResolvedLocalShareFile, SelectedLocalFileShareAdapter } from '@/services/propertySharing';
 
-const safeName = (name: string, index: number) => {
-  const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '') || `attachment-${index + 1}`;
-  return `${String(index + 1).padStart(2, '0')}-${cleaned}`;
+const safeName = (name: string, mimeType: string, index: number) => {
+  const extension = name.match(/(\.[a-z0-9]{1,10})$/i)?.[1]?.toLowerCase()
+    ?? (mimeType === 'application/pdf' ? '.pdf' : mimeType.split('/')[1] ? `.${mimeType.split('/')[1]}` : '');
+  return `${String(index + 1).padStart(2, '0')}-attachment${extension}`;
 };
 
 /**
@@ -20,7 +21,7 @@ export async function shareReviewedPropertyPackage(input: {
   zip.file('property-preview.txt', input.text);
   for (const [index, file] of input.files.entries()) {
     const source = new FileSystem.File(file.uri) as unknown as { arrayBuffer(): Promise<ArrayBuffer> };
-    zip.file(`attachments/${safeName(file.name, index)}`, await source.arrayBuffer());
+    zip.file(`attachments/${safeName(file.name, file.mimeType, index)}`, await source.arrayBuffer());
   }
   const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
   const folder = new FileSystem.Directory(FileSystem.Paths.cache, 'property-share-packages');
@@ -39,6 +40,10 @@ export async function shareReviewedPropertyPackage(input: {
 export function createPropertyPackageShareAdapter(
   attachments: readonly { id: string; managedUri: string; mimeType: string; originalName: string }[],
   shareZip: (uri: string) => Promise<void>,
+  coverShare?: {
+    readonly attachmentId: string;
+    readonly shareWithText: (input: { uri: string; mimeType: string; text: string }) => Promise<void>;
+  },
 ): SelectedLocalFileShareAdapter {
   return {
     async resolveSelectedLocalFiles(ids) {
@@ -49,6 +54,18 @@ export function createPropertyPackageShareAdapter(
       });
     },
     async shareSelectedLocalFiles({ text, files }) {
+      if (
+        coverShare
+        && files.length === 1
+        && files[0].attachmentId === coverShare.attachmentId
+      ) {
+        await coverShare.shareWithText({
+          uri: files[0].uri,
+          mimeType: files[0].mimeType,
+          text,
+        });
+        return;
+      }
       await shareReviewedPropertyPackage({ text, files, shareZip });
     },
   };

@@ -5,9 +5,16 @@ import {
   requestInjectedCoordinates,
   type Coordinates,
 } from './coordinateRequest';
+import {
+  normalizeGoogleMapsLink,
+  openGoogleMapsQuery as openGoogleMapsQueryWithOpener,
+  openPastedGoogleMapsLink,
+  type LinkOpener,
+} from './mapsLink';
 
 export type { Coordinates } from './coordinateRequest';
 export { requestInjectedCoordinates } from './coordinateRequest';
+export { normalizeGoogleMapsLink } from './mapsLink';
 
 export type PropertyMapLocation =
   | { readonly source: 'coordinates'; readonly coordinates: Coordinates }
@@ -26,11 +33,6 @@ export interface LocationSource {
   }>;
 }
 
-export interface LinkOpener {
-  canOpenURL(url: string): Promise<boolean>;
-  openURL(url: string): Promise<unknown>;
-}
-
 export async function requestCurrentCoordinates(
   source: LocationSource = Location,
   platform: string = Platform.OS,
@@ -39,16 +41,7 @@ export async function requestCurrentCoordinates(
 }
 
 export function pastedMapLocation(link: string): PropertyMapLocation {
-  let parsed: URL;
-  try {
-    parsed = new URL(link);
-  } catch {
-    throw new Error('INVALID_LOCATION_LINK');
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error('INVALID_LOCATION_LINK');
-  }
-  return { source: 'pasted_link', link };
+  return { source: 'pasted_link', link: normalizeGoogleMapsLink(link) };
 }
 
 export async function openGoogleMaps(
@@ -56,9 +49,14 @@ export async function openGoogleMaps(
   opener: LinkOpener = Linking,
 ): Promise<void> {
   const query = `${coordinates.latitude},${coordinates.longitude}`;
-  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  if (!(await opener.canOpenURL(url))) throw new Error('GOOGLE_MAPS_UNAVAILABLE');
-  await opener.openURL(url);
+  await openGoogleMapsQuery(query, opener);
+}
+
+export async function openGoogleMapsQuery(
+  query: string,
+  opener: LinkOpener = Linking,
+): Promise<void> {
+  await openGoogleMapsQueryWithOpener(query, opener, Platform.OS);
 }
 
 export async function openPastedLocationLink(
@@ -66,6 +64,10 @@ export async function openPastedLocationLink(
   opener: LinkOpener = Linking,
 ): Promise<void> {
   if (location.source !== 'pasted_link') throw new Error('LOCATION_LINK_MISSING');
-  if (!(await opener.canOpenURL(location.link))) throw new Error('LOCATION_LINK_UNAVAILABLE');
-  await opener.openURL(location.link);
+  try {
+    await openPastedGoogleMapsLink(location.link, opener, Platform.OS);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_LOCATION_LINK') throw error;
+    throw new Error('LOCATION_LINK_UNAVAILABLE');
+  }
 }

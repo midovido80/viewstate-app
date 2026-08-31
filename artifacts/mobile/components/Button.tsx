@@ -6,7 +6,7 @@ import { useI18n } from '@/contexts/I18nContext';
 interface ButtonProps {
   onPress: () => void;
   title: string;
-  variant?: 'primary' | 'secondary' | 'outline';
+  variant?: 'primary' | 'secondary' | 'outline' | 'whatsapp';
   size?: 'default' | 'large';
   disabled?: boolean;
   loading?: boolean;
@@ -31,6 +31,7 @@ export function Button({
 
   const isPrimary = variant === 'primary';
   const isOutline = variant === 'outline';
+  const isWhatsApp = variant === 'whatsapp';
   
   const baseStyle: ViewStyle = {
     borderRadius: colors.inputRadius,
@@ -41,13 +42,15 @@ export function Button({
     flexDirection: 'row',
     opacity: disabled ? 0.6 : 1,
     ...(isOutline ? { borderWidth: 1, borderColor: colors.border } : {}),
-    ...(variant === 'secondary' ? { backgroundColor: colors.secondary } : {})
+    ...(variant === 'secondary' ? { backgroundColor: colors.secondary } : {}),
+    ...(isWhatsApp ? { backgroundColor: colors.whatsapp } : {}),
   };
 
   const textColors = {
     primary: colors.primaryForeground,
     secondary: colors.secondaryForeground,
-    outline: colors.foreground
+    outline: colors.foreground,
+    whatsapp: colors.whatsappForeground,
   };
 
   const content = (

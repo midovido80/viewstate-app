@@ -257,17 +257,21 @@ export function buildPropertySharePreview(
   };
   const lines: string[] = [];
   const fields = new Set(selection.normalFields);
-  const add = (label: string, value: string | undefined) => {
-    if (value !== undefined && value.length > 0) lines.push(`${label}: ${value}`);
+  const add = (label: string, value: string | undefined, icon = "•") => {
+    if (value !== undefined && value.length > 0) {
+      // First-strong isolates keep Arabic labels, Latin names, and English
+      // digits stable when the reviewed text is rendered in either direction.
+      lines.push(`${icon} ${label}: \u2068${value}\u2069`);
+    }
   };
 
   const localizedNormalValue = (value: string) =>
     request.normalValueLabels?.[value] ?? value;
   if (fields.has("property_type")) {
-    add(labels.propertyType, localizedNormalValue(property.core.propertyType));
+    add(labels.propertyType, localizedNormalValue(property.core.propertyType), "🏠");
   }
   if (fields.has("transaction")) {
-    add(labels.transaction, localizedNormalValue(property.activeOffer.transaction));
+    add(labels.transaction, localizedNormalValue(property.activeOffer.transaction), "↔");
   }
   if (fields.has("price")) {
     const price = property.activeOffer.transaction === "sale"
@@ -279,10 +283,11 @@ export function buildPropertySharePreview(
       property.activeOffer.transaction === "rent"
         ? `${renderedPrice} ${request.rentalCadence}`
         : renderedPrice,
+      "💰",
     );
   }
   if (fields.has("area")) {
-    add(labels.area, localizedNormalValue(property.core.locationArea.id));
+    add(labels.area, localizedNormalValue(property.core.locationArea.id), "📍");
   }
   if (fields.has("type_details") && property.typeDetails !== undefined) {
     const details = property.typeDetails as unknown as Record<string, unknown>;
@@ -293,10 +298,10 @@ export function buildPropertySharePreview(
         ? String((value as { value: unknown }).value)
         : request.detailValueLabels?.[String(value)]
           ?? (typeof value === "boolean" ? value ? "Yes" : "No" : String(value));
-      add(request.detailLabels?.[definition.field] ?? `${labels.typeDetails} · ${definition.field}`, literalValue);
+       add(request.detailLabels?.[definition.field] ?? `${labels.typeDetails} · ${definition.field}`, literalValue, "▫");
     }
   }
-  if (fields.has("description")) add(labels.description, property.core.description?.value);
+  if (fields.has("description")) add(labels.description, property.core.description?.value, "📝");
 
   add(
     labels.ownerSource,
@@ -304,7 +309,7 @@ export function buildPropertySharePreview(
       selection.discloseOwnerSource,
       property.core.ownerSource?.value,
       labels.ownerSource,
-    ),
+    ), "🔒",
   );
   add(
     labels.exactLocation,
@@ -312,7 +317,7 @@ export function buildPropertySharePreview(
       selection.discloseExactLocation,
       property.core.exactLocation?.value,
       labels.exactLocation,
-    ),
+    ), "📍",
   );
   add(
     labels.paci,
@@ -320,7 +325,7 @@ export function buildPropertySharePreview(
       selection.disclosePaci,
       request.privateLocation?.paci,
       labels.paci,
-    ),
+    ), "📌",
   );
   add(
     labels.manualLocation,
@@ -328,7 +333,7 @@ export function buildPropertySharePreview(
       selection.discloseManualLocation,
       request.privateLocation?.manualLocation,
       labels.manualLocation,
-    ),
+    ), "📍",
   );
   add(
     labels.mapsLink,
@@ -336,7 +341,7 @@ export function buildPropertySharePreview(
       selection.discloseMapsLink,
       request.privateLocation?.mapsLink,
       labels.mapsLink,
-    ),
+    ), "🗺",
   );
 
   const contacts = new Map((request.contacts ?? []).map(contact => [contact.id, contact]));
@@ -348,7 +353,7 @@ export function buildPropertySharePreview(
         `Person contact is not available for explicit sharing: ${id}`,
       );
     }
-    add(labels.personContact, `${contact.name} — ${contact.phone}`);
+    add(labels.personContact, `${contact.name} — ${contact.phone}`, "☎");
   }
 
   if (lines.length > 0 && request.attribution.length > 0) {

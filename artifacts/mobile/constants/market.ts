@@ -12,6 +12,12 @@ export const MARKET_CONFIG = {
   },
 } as const;
 
+export function toEnglishDigits(value: string | number): string {
+  return String(value)
+    .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+}
+
 function normalizePrice(price: PriceValue): PriceValue;
 function normalizePrice(price: PriceValue | undefined): PriceValue | undefined;
 function normalizePrice(price: PriceValue | undefined): PriceValue | undefined {
@@ -71,7 +77,7 @@ export function formatPrice(
   const displayCode = currencyCode === MARKET_CONFIG.currencyCode
     ? MARKET_CONFIG.currencyLabel[language]
     : currencyCode;
-  return `${amount.toLocaleString('en-KW')} ${displayCode}`;
+  return `${toEnglishDigits(amount.toLocaleString('en-KW'))} ${displayCode}`;
 }
 
 export function formatRentalCadence(
@@ -83,7 +89,7 @@ export function formatRentalCadence(
     : rentalPeriodId === 'yearly'
       ? translate('price.cadence.recorded_yearly')
       : rentalPeriodId
-        ? `${translate('price.cadence.recorded')}: ${rentalPeriodId}`
+        ? `${translate('price.cadence.recorded')}: ${toEnglishDigits(rentalPeriodId)}`
         : translate('price.cadence.missing');
 }
 

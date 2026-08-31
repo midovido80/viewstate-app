@@ -10,8 +10,9 @@ export const KeyboardAwareScrollViewCompat = forwardRef<ScrollView, Props>(
   (
     {
       bottomOffset = 0,
-      keyboardDismissMode = 'interactive',
+      keyboardDismissMode = 'on-drag',
       keyboardShouldPersistTaps = 'handled',
+      nestedScrollEnabled = true,
       ...props
     },
     ref,
@@ -20,6 +21,7 @@ export const KeyboardAwareScrollViewCompat = forwardRef<ScrollView, Props>(
       ...props,
       keyboardDismissMode,
       keyboardShouldPersistTaps,
+      nestedScrollEnabled,
     };
 
     if (Platform.OS === 'web') {

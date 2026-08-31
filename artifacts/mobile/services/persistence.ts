@@ -1,43 +1,32 @@
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Property } from '@workspace/property-domain';
+import { Property, validateProperty } from '@workspace/property-domain';
 import { SerialTaskQueue } from '@/services/serialTaskQueue';
-import { getAreaById } from '@/constants/kuwait-areas';
+import { validatePropertySource } from '@workspace/property-domain';
 import {
-  normalizePropertyCurrency,
-} from '@/constants/market';
+  appendUnreadableRecord,
+  parseStoredRecord,
+  type UnreadableRecord,
+} from '@/services/localRecordParser';
+import { migrateStage01B1WebProperties } from '@/services/stage01B1CurrencyMigration';
 import {
-  STAGE_01B1_PROPERTY_MIGRATION_ID,
-  migrateStage01B1WebProperties,
-} from '@/services/stage01B1CurrencyMigration';
+  getPropertySearchText,
+  initializeSQLiteStore,
+  type SQLiteInitializationDatabase,
+} from '@/services/sqliteStoreInitialization';
 import {
   Person,
   PersonPropertyLink,
   PersonStore,
+  PropertySource,
   assertValidPerson,
   getPersonSearchText,
   normalizePersonPhone,
   personMatchesSearch,
 } from '@/services/people';
 
-export function getPropertySearchText(property: Property): string {
-  const area = getAreaById(property.core.locationArea.id);
-  const price = property.activeOffer.transaction === 'sale'
-    ? property.activeOffer.salePrice
-    : property.activeOffer.rentalPrice;
-  return [
-    property.core.propertyType,
-    property.activeOffer.transaction,
-    property.core.locationArea.id,
-    property.core.id,
-    area?.en,
-    area?.ar,
-    area?.governorateEn,
-    area?.governorateAr,
-    price.currencyCode,
-  ].filter(Boolean).join(' ').toLocaleLowerCase();
-}
+export { getPropertySearchText };
 
 export interface PropertyStore {
   init(): Promise<void>;
@@ -65,6 +54,11 @@ export interface PropertyInventory {
   ids: string[];
 }
 
+export interface LocalStoreIntegrityStatus {
+  readonly unreadableRecords: readonly UnreadableRecord[];
+  readonly hasUnreadableRecords: boolean;
+}
+
 export interface PropertyDeletionCapability {
   /** The caller has excluded old writers that do not honor deletion fences. */
   cooperatingWritersConfirmed: true;
@@ -84,67 +78,86 @@ const nativeMutations = new SerialTaskQueue();
 export class SQLiteStore implements PropertyStore, PersonStore {
   private db: SQLite.SQLiteDatabase | null = null;
   private initialization: Promise<void> | null = null;
+  private integrityWarnings: UnreadableRecord[] = [];
+
+  constructor(
+    private readonly databaseFactory: () => Promise<SQLite.SQLiteDatabase> =
+      () => SQLite.openDatabaseAsync('viewstate.db'),
+  ) {}
 
   async init() {
-    this.initialization ??= this.initialize();
+    if (!this.initialization) {
+      const attempt = this.initialize();
+      this.initialization = attempt;
+      attempt.catch(() => {
+        if (this.initialization === attempt) this.initialization = null;
+      });
+    }
     await this.initialization;
   }
 
-  private async initialize() {
-    this.db = await SQLite.openDatabaseAsync('viewstate.db');
-    await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS properties (
-        id TEXT PRIMARY KEY,
-        data TEXT NOT NULL,
-        search_text TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS app_migrations (
-        id TEXT PRIMARY KEY
-      );
-      CREATE TABLE IF NOT EXISTS deleted_property_ids (
-        id TEXT PRIMARY KEY,
-        generation INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS people (
-        id TEXT PRIMARY KEY,
-        data TEXT NOT NULL,
-        search_text TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS person_property_links (
-        person_id TEXT NOT NULL,
-        property_core_id TEXT NOT NULL,
-        PRIMARY KEY (person_id, property_core_id)
-      );
-    `);
+  getIntegrityStatus(): LocalStoreIntegrityStatus {
+    return {
+      unreadableRecords: [...this.integrityWarnings],
+      hasUnreadableRecords: this.integrityWarnings.length > 0,
+    };
+  }
 
-    const completed = await this.db.getFirstAsync<{ id: string }>(
-      'SELECT id FROM app_migrations WHERE id = ?',
-      [STAGE_01B1_PROPERTY_MIGRATION_ID],
-    );
-    if (!completed) {
-      const rows = await this.db.getAllAsync<{ id: string; data: string }>(
-        'SELECT id, data FROM properties',
-      );
-      for (const row of rows) {
-        const normalized = normalizePropertyCurrency(JSON.parse(row.data) as Property);
-        if (normalized.changed) {
-          await nativeMutations.enqueue(async () => {
-            await this.db!.runAsync(
-              'UPDATE properties SET data = ?, search_text = ? WHERE id = ?',
-              [
-                JSON.stringify(normalized.property),
-                getPropertySearchText(normalized.property),
-                row.id,
-              ],
-            );
-          });
+  private addIntegrityWarning(warning: UnreadableRecord): void {
+    appendUnreadableRecord(this.integrityWarnings, warning);
+  }
+
+  private parsePropertyRow(row: { id: string; data: string }): Property | null {
+    const result = parseStoredRecord<Property>(
+      row.data,
+      { type: 'property', id: row.id },
+      value => {
+        try {
+          const property = value as Property;
+          return property.core?.id === row.id && validateProperty(property).ok;
+        } catch {
+          return false;
         }
-      }
-      await this.db.runAsync(
-        'INSERT INTO app_migrations (id) VALUES (?)',
-        [STAGE_01B1_PROPERTY_MIGRATION_ID],
-      );
+      },
+    );
+    if (!result.ok) {
+      this.addIntegrityWarning(result.warning);
+      return null;
     }
+    return result.value;
+  }
+
+  private parsePersonRow(row: { id: string; data: string }): Person | null {
+    const result = parseStoredRecord<Person>(
+      row.data,
+      { type: 'person', id: row.id },
+      value => {
+        try {
+          const person = value as Person;
+          if (person.id !== row.id) return false;
+          assertValidPerson(person);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    );
+    if (!result.ok) {
+      this.addIntegrityWarning(result.warning);
+      return null;
+    }
+    return result.value;
+  }
+
+  private async initialize() {
+    this.integrityWarnings = [];
+    this.db = await this.databaseFactory();
+    await initializeSQLiteStore({
+      db: this.db as SQLiteInitializationDatabase,
+      parsePropertyRow: row => this.parsePropertyRow(row),
+      parsePersonRow: row => this.parsePersonRow(row),
+      runMutation: task => nativeMutations.enqueue(task),
+    });
   }
 
   async saveProperty(property: Property) {
@@ -175,11 +188,11 @@ export class SQLiteStore implements PropertyStore, PersonStore {
 
   async getProperty(id: string): Promise<Property | null> {
     if (!this.db) throw new Error('DB not initialized');
-    const row = await this.db.getFirstAsync<{ data: string }>(
-      'SELECT data FROM properties WHERE id = ?',
+    const row = await this.db.getFirstAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM properties WHERE id = ?',
       [id],
     );
-    return row ? JSON.parse(row.data) as Property : null;
+    return row ? this.parsePropertyRow(row) : null;
   }
 
   async compareAndUpdate(expected: Property, replacement: Property): Promise<boolean> {
@@ -216,8 +229,13 @@ export class SQLiteStore implements PropertyStore, PersonStore {
 
   async getProperties(): Promise<Property[]> {
     if (!this.db) throw new Error('DB not initialized');
-    const rows = await this.db.getAllAsync<{ data: string }>('SELECT data FROM properties ORDER BY id DESC');
-    return rows.map(row => JSON.parse(row.data) as Property);
+    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM properties ORDER BY id DESC',
+    );
+    return rows.flatMap(row => {
+      const property = this.parsePropertyRow(row);
+      return property ? [property] : [];
+    });
   }
 
   async searchProperties(query: string): Promise<Property[]> {
@@ -271,6 +289,10 @@ export class SQLiteStore implements PropertyStore, PersonStore {
              'DELETE FROM person_property_links WHERE property_core_id = ?',
              [property.core.id],
            );
+            await this.db!.runAsync(
+              'DELETE FROM property_sources WHERE property_core_id = ?',
+              [property.core.id],
+            );
         }
         result = { status: 'deleted', count: expected.length };
       });
@@ -308,11 +330,11 @@ export class SQLiteStore implements PropertyStore, PersonStore {
 
   async getPerson(id: string): Promise<Person | null> {
     if (!this.db) throw new Error('DB not initialized');
-    const row = await this.db.getFirstAsync<{ data: string }>(
-      'SELECT data FROM people WHERE id = ?',
+    const row = await this.db.getFirstAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM people WHERE id = ?',
       [id],
     );
-    return row ? JSON.parse(row.data) as Person : null;
+    return row ? this.parsePersonRow(row) : null;
   }
 
   async updatePerson(expected: Person, replacement: Person): Promise<boolean> {
@@ -337,24 +359,30 @@ export class SQLiteStore implements PropertyStore, PersonStore {
 
   async getPeople(): Promise<Person[]> {
     if (!this.db) throw new Error('DB not initialized');
-    const rows = await this.db.getAllAsync<{ data: string }>(
-      'SELECT data FROM people ORDER BY id DESC',
+    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM people ORDER BY id DESC',
     );
-    return rows.map(row => JSON.parse(row.data) as Person);
+    return rows.flatMap(row => {
+      const person = this.parsePersonRow(row);
+      return person ? [person] : [];
+    });
   }
 
   async searchPeople(query: string): Promise<Person[]> {
     if (!this.db) throw new Error('DB not initialized');
     const literal = query.toLocaleLowerCase().replace(/[\\%_]/g, value => `\\${value}`);
     const normalized = normalizePersonPhone(query).replace(/[\\%_]/g, value => `\\${value}`);
-    const rows = await this.db.getAllAsync<{ data: string }>(
-      `SELECT data FROM people
+    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
+      `SELECT id, data FROM people
        WHERE search_text LIKE ? ESCAPE '\\'
           OR (? <> '' AND search_text LIKE ? ESCAPE '\\')
        ORDER BY id DESC`,
       [`%${literal}%`, normalized.replace('+', '') ? normalized : '', `%${normalized}%`],
     );
-    return rows.map(row => JSON.parse(row.data) as Person);
+    return rows.flatMap(row => {
+      const person = this.parsePersonRow(row);
+      return person ? [person] : [];
+    });
   }
 
   async deletePerson(id: string): Promise<boolean> {
@@ -363,6 +391,7 @@ export class SQLiteStore implements PropertyStore, PersonStore {
     await nativeMutations.enqueue(async () => {
       await this.db!.withTransactionAsync(async () => {
         await this.db!.runAsync('DELETE FROM person_property_links WHERE person_id = ?', [id]);
+        await this.db!.runAsync('DELETE FROM property_sources WHERE person_id = ?', [id]);
         const result = await this.db!.runAsync('DELETE FROM people WHERE id = ?', [id]);
         deleted = result.changes === 1;
       });
@@ -416,6 +445,70 @@ export class SQLiteStore implements PropertyStore, PersonStore {
     return (await this.getPersonPropertyLinks())
       .filter(link => link.propertyCoreId === propertyCoreId);
   }
+
+  async setPropertySource(source: PropertySource): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    const validation = validatePropertySource(source);
+    if (!validation.ok) throw new Error('INVALID_PROPERTY_SOURCE');
+    await nativeMutations.enqueue(async () => {
+      await this.db!.withTransactionAsync(async () => {
+        const [person, property] = await Promise.all([
+          this.db!.getFirstAsync<{ id: string }>('SELECT id FROM people WHERE id = ?', [source.personId]),
+          this.db!.getFirstAsync<{ id: string }>('SELECT id FROM properties WHERE id = ?', [source.propertyCoreId]),
+        ]);
+        if (!person || !property) throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
+        await this.db!.runAsync(
+          `INSERT INTO property_sources (property_core_id, person_id, role) VALUES (?, ?, ?)
+           ON CONFLICT(property_core_id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role`,
+          [source.propertyCoreId, source.personId, source.role],
+        );
+      });
+    });
+  }
+
+  async getPropertySource(propertyCoreId: string): Promise<PropertySource | null> {
+    if (!this.db) throw new Error('DB not initialized');
+    const row = await this.db.getFirstAsync<{
+      propertyCoreId: string; personId: string; role: PropertySource['role'];
+    }>(
+      `SELECT property_core_id AS propertyCoreId, person_id AS personId, role
+       FROM property_sources WHERE property_core_id = ?`,
+      [propertyCoreId],
+    );
+    if (!row) return null;
+    const source = { propertyCoreId: row.propertyCoreId, personId: row.personId, role: row.role };
+    if (!validatePropertySource(source).ok) throw new Error('UNREADABLE_PROPERTY_SOURCE');
+    return source;
+  }
+
+  async removePropertySource(propertyCoreId: string): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    let removed = false;
+    await nativeMutations.enqueue(async () => {
+      const result = await this.db!.runAsync(
+        'DELETE FROM property_sources WHERE property_core_id = ?',
+        [propertyCoreId],
+      );
+      removed = result.changes === 1;
+    });
+    return removed;
+  }
+
+  async getPropertySourcesForPerson(personId: string): Promise<PropertySource[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{
+      propertyCoreId: string; personId: string; role: PropertySource['role'];
+    }>(
+      `SELECT property_core_id AS propertyCoreId, person_id AS personId, role
+       FROM property_sources WHERE person_id = ? ORDER BY property_core_id`,
+      [personId],
+    );
+    const sources = rows.map(row => ({ propertyCoreId: row.propertyCoreId, personId: row.personId, role: row.role }));
+    if (sources.some(source => !validatePropertySource(source).ok)) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE');
+    }
+    return sources;
+  }
 }
 
 export class WebStore implements PropertyStore, PersonStore {
@@ -423,6 +516,7 @@ export class WebStore implements PropertyStore, PersonStore {
   private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1';
   private readonly PEOPLE_KEY = '@viewstate_people_v1';
   private readonly PERSON_PROPERTY_LINKS_KEY = '@viewstate_person_property_links_v1';
+  private readonly PROPERTY_SOURCES_KEY = '@viewstate_property_sources_v1';
   private initialization: Promise<void> | null = null;
 
   constructor(
@@ -431,11 +525,21 @@ export class WebStore implements PropertyStore, PersonStore {
   ) {}
 
   async init() {
-    this.initialization ??= migrateStage01B1WebProperties(
-      this.storage,
-      this.KEY,
-    ).then(() => undefined);
+    if (!this.initialization) {
+      const attempt = migrateStage01B1WebProperties(
+        this.storage,
+        this.KEY,
+      ).then(() => undefined);
+      this.initialization = attempt;
+      attempt.catch(() => {
+        if (this.initialization === attempt) this.initialization = null;
+      });
+    }
     await this.initialization;
+  }
+
+  getIntegrityStatus(): LocalStoreIntegrityStatus {
+    return { unreadableRecords: [], hasUnreadableRecords: false };
   }
 
   /** Raw array access for non-deletion mutations; never call from visible reads. */
@@ -588,6 +692,21 @@ export class WebStore implements PropertyStore, PersonStore {
     return parsed as PersonPropertyLink[];
   }
 
+  private async getAllPropertySources(): Promise<PropertySource[]> {
+    const raw = await this.storage.getItem(this.PROPERTY_SOURCES_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    const sources = parsed as PropertySource[];
+    if (sources.some(source => !validatePropertySource(source).ok)) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    }
+    if (new Set(sources.map(source => source.propertyCoreId)).size !== sources.length) {
+      throw new Error('DUPLICATE_PROPERTY_SOURCE');
+    }
+    return sources;
+  }
+
   private async withPeopleMutationLock<T>(work: () => Promise<T>): Promise<T> {
     const locks = this.lockManager;
     if (!locks) throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
@@ -655,6 +774,11 @@ export class WebStore implements PropertyStore, PersonStore {
           JSON.stringify(remainingLinks),
         );
       }
+      const sources = await this.getAllPropertySources();
+      const remainingSources = sources.filter(source => source.personId !== id);
+      if (remainingSources.length !== sources.length) {
+        await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(remainingSources));
+      }
       await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(remainingPeople));
       return true;
     });
@@ -706,7 +830,50 @@ export class WebStore implements PropertyStore, PersonStore {
     return (await this.getPersonPropertyLinks())
       .filter(link => link.propertyCoreId === propertyCoreId);
   }
+
+  async setPropertySource(source: PropertySource): Promise<void> {
+    const validation = validatePropertySource(source);
+    if (!validation.ok) throw new Error('INVALID_PROPERTY_SOURCE');
+    await this.withPeopleMutationLock(async () => {
+      const [people, property, sources] = await Promise.all([
+        this.getAllPeople(),
+        this.getProperty(source.propertyCoreId),
+        this.getAllPropertySources(),
+      ]);
+      if (!people.some(person => person.id === source.personId) || !property) {
+        throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
+      }
+      const next = [
+        ...sources.filter(item => item.propertyCoreId !== source.propertyCoreId),
+        source,
+      ];
+      await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(next));
+    });
+  }
+
+  async getPropertySource(propertyCoreId: string): Promise<PropertySource | null> {
+    const matching = (await this.getAllPropertySources())
+      .filter(source => source.propertyCoreId === propertyCoreId);
+    if (matching.length > 1) throw new Error('DUPLICATE_PROPERTY_SOURCE');
+    return matching[0] ?? null;
+  }
+
+  async removePropertySource(propertyCoreId: string): Promise<boolean> {
+    return this.withPeopleMutationLock(async () => {
+      const sources = await this.getAllPropertySources();
+      const remaining = sources.filter(source => source.propertyCoreId !== propertyCoreId);
+      if (remaining.length === sources.length) return false;
+      await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(remaining));
+      return true;
+    });
+  }
+
+  async getPropertySourcesForPerson(personId: string): Promise<PropertySource[]> {
+    return (await this.getAllPropertySources()).filter(source => source.personId === personId);
+  }
 }
 
-export const store: PropertyStore & PersonStore =
+export const store: PropertyStore & PersonStore & {
+  getIntegrityStatus(): LocalStoreIntegrityStatus;
+} =
   Platform.OS === 'web' ? new WebStore() : new SQLiteStore();

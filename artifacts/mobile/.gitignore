@@ -39,3 +39,16 @@ yarn-error.*
 .vercel
 
 .env
+
+# local databases, test output, and native release artifacts
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+test-output/
+coverage/
+*.apk
+*.aab
+*.ipa
+*.xcarchive/
+attached_assets/

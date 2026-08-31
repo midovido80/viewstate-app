@@ -8,7 +8,8 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx tests/runner.ts"
+    "test": "tsx --test tests/runner.ts tests/resilience.test.ts",
+    "test:resilience": "tsx --test tests/resilience.test.ts"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -37,6 +38,7 @@
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
     "expo-image-picker": "~17.0.9",
+    "expo-intent-launcher": "~13.0.8",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.10",
     "expo-localization": "~17.0.9",

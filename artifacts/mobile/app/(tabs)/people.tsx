@@ -8,6 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { Person } from '@/services/people';
 import { store } from '@/services/persistence';
+import { toEnglishDigits } from '@/constants/market';
 
 export default function PeopleScreen() {
   const router = useRouter();
@@ -63,10 +64,10 @@ export default function PeopleScreen() {
             style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}
             testID={`person-card-${item.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`${item.name}, ${item.displayPhone}`}
+            accessibilityLabel={`${item.name}, ${toEnglishDigits(item.displayPhone)}`}
           >
             <Text style={[styles.name, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{item.name}</Text>
-            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{item.displayPhone}</Text>
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'left', writingDirection: 'ltr' }}>{toEnglishDigits(item.displayPhone)}</Text>
             <Text style={[styles.classes, { color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
               {item.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>

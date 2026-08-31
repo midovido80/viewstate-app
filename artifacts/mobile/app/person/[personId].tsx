@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
+  Alert,
   Linking,
   Modal,
   ScrollView,
@@ -15,6 +16,7 @@ import { Property } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
+import { toEnglishDigits } from '@/constants/market';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import {
@@ -22,6 +24,7 @@ import {
   Person,
   PERSON_CLASSIFICATIONS,
   PersonClassification,
+  PropertySource,
 } from '@/services/people';
 import {
   inferPhoneCountry,
@@ -30,6 +33,7 @@ import {
   PhoneCountryCode,
 } from '@/services/phoneEntry';
 import { store } from '@/services/persistence';
+import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 
 export default function PersonDetailScreen() {
   const params = useLocalSearchParams<{ personId?: string | string[] }>();
@@ -40,6 +44,7 @@ export default function PersonDetailScreen() {
   const { t, language, isRTL, fonts } = useI18n();
   const [person, setPerson] = useState<Person | null>(null);
   const [linked, setLinked] = useState<Property[]>([]);
+  const [sourced, setSourced] = useState<{ source: PropertySource; property: Property }[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertySearch, setPropertySearch] = useState('');
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
@@ -53,6 +58,7 @@ export default function PersonDetailScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -60,9 +66,19 @@ export default function PersonDetailScreen() {
       const saved = await store.getPerson(id);
       setPerson(saved);
       if (!saved) return;
-      const links = await store.getLinksForPerson(id);
-      const results = await Promise.all(links.map(link => store.getProperty(link.propertyCoreId)));
+      const [links, sources] = await Promise.all([
+        store.getLinksForPerson(id),
+        store.getPropertySourcesForPerson(id),
+      ]);
+      const [results, sourceProperties] = await Promise.all([
+        Promise.all(links.map(link => store.getProperty(link.propertyCoreId))),
+        Promise.all(sources.map(source => store.getProperty(source.propertyCoreId))),
+      ]);
       setLinked(results.filter((value): value is Property => value !== null));
+      setSourced(sources.flatMap((source, index) => {
+        const property = sourceProperties[index];
+        return property ? [{ source, property }] : [];
+      }));
     } catch {
       setError(t('people.load_failed'));
     }
@@ -125,15 +141,55 @@ export default function PersonDetailScreen() {
 
   const link = async (property: Property) => {
     if (!person) return;
-    await store.linkPersonToProperty({ personId: person.id, propertyCoreId: property.core.id });
-    setLinkOpen(false);
-    await load();
+    setError('');
+    try {
+      await store.linkPersonToProperty({ personId: person.id, propertyCoreId: property.core.id });
+      setLinkOpen(false);
+      await load();
+    } catch {
+      setError(t('people.link_action_failed'));
+    }
   };
 
   const unlink = async (propertyCoreId: string) => {
     if (!person) return;
-    await store.unlinkPersonFromProperty({ personId: person.id, propertyCoreId });
-    await load();
+    setError('');
+    try {
+      await store.unlinkPersonFromProperty({ personId: person.id, propertyCoreId });
+      await load();
+    } catch {
+      setError(t('people.unlink_failed'));
+    }
+  };
+
+  const unlinkSource = async (propertyCoreId: string) => {
+    setSourceUnlinkId(null);
+    setError('');
+    try {
+      await store.removePropertySource(propertyCoreId);
+      await load();
+    } catch {
+      setError(t('source.save_failed'));
+    }
+  };
+
+  const confirmUnlink = (propertyCoreId: string) => {
+    Alert.alert(
+      t('people.unlink_title'),
+      t('people.unlink_message'),
+      [
+        { text: t('people.unlink_cancel'), style: 'cancel' },
+        {
+          text: t('people.unlink_confirm'),
+          style: 'destructive',
+          onPress: () => void unlink(propertyCoreId),
+        },
+      ],
+    );
+  };
+
+  const confirmSourceUnlink = (propertyCoreId: string) => {
+    setSourceUnlinkId(propertyCoreId);
   };
 
   const call = async () => {
@@ -148,6 +204,16 @@ export default function PersonDetailScreen() {
       await Linking.openURL(phoneUrl);
     } catch {
       setError(t('people.call_unavailable'));
+    }
+  };
+
+  const openWhatsApp = async () => {
+    if (!person) return;
+    setError('');
+    try {
+      await openAndroidWhatsAppContactCompose(person.normalizedPhone);
+    } catch {
+      setError(t('people.whatsapp_unavailable'));
     }
   };
 
@@ -236,8 +302,8 @@ export default function PersonDetailScreen() {
                 style={[styles.countryButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 testID="person-edit-phone-country"
               >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
-                  {selectedCountry.code} +{selectedCountry.dialCode}
+                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, writingDirection: 'ltr', textAlign: 'left' }}>
+                  {selectedCountry.code} +{toEnglishDigits(selectedCountry.dialCode)}
                 </Text>
               </TouchableOpacity>
               <TextInput
@@ -245,7 +311,7 @@ export default function PersonDetailScreen() {
                 onChangeText={setPhone}
                 placeholder={t('people.phone')}
                 keyboardType="phone-pad"
-                style={[inputStyle, styles.phoneInput]}
+                style={[inputStyle, styles.phoneInput, styles.ltrText]}
                 testID="person-edit-phone"
               />
             </View>
@@ -260,13 +326,15 @@ export default function PersonDetailScreen() {
         ) : (
           <>
             <Text style={[styles.name, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{person.name}</Text>
-            <Text style={[styles.phone, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.displayPhone}</Text>
+            <Text style={[styles.phone, styles.ltrText, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{toEnglishDigits(person.displayPhone)}</Text>
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Button title={t('people.call')} onPress={() => void call()} variant="outline" testID="person-call" style={styles.flex} />
-              <Button title={t('people.whatsapp')} onPress={() => void Linking.openURL(`https://wa.me/${person.normalizedPhone.replace(/\D/g, '')}`)} variant="outline" testID="person-whatsapp" style={styles.flex} />
+            <View style={styles.actions}>
+              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <Button title={t('people.whatsapp')} onPress={() => void openWhatsApp()} variant="whatsapp" testID="person-whatsapp" style={styles.flex} />
+                <Button title={t('people.call')} onPress={() => void call()} variant="whatsapp" testID="person-call" style={styles.flex} />
+              </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -279,13 +347,33 @@ export default function PersonDetailScreen() {
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)} testID={`linked-property-${property.core.id}`} accessibilityRole="button">
                   <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
-                  <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{property.core.id}</Text>
+                  <Text style={[styles.ltrText, { color: colors.mutedForeground }]}>{toEnglishDigits(property.core.id)}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => void unlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('people.unlink')}</Text>
+                <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('people.unlink')}</Text>
                 </TouchableOpacity>
               </View>
             ))}
+            <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.sourced_properties')}</Text>
+            </View>
+            {sourced.length ? sourced.map(({ source, property }) => (
+              <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <TouchableOpacity
+                  onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)}
+                  testID={`source-property-${property.core.id}`}
+                  accessibilityRole="button"
+                >
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
+                </TouchableOpacity>
+              </View>
+            )) : (
+              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none_for_person')}</Text>
+            )}
             <Button title={t('people.remove')} onPress={() => setDeleteOpen(true)} variant="outline" testID="person-remove" />
           </>
         )}
@@ -345,6 +433,22 @@ export default function PersonDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={sourceUnlinkId !== null} transparent animationType="fade" onRequestClose={() => setSourceUnlinkId(null)}>
+        <View style={styles.overlay}>
+          <View style={[styles.dialog, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="alert" testID="person-source-unlink-dialog">
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.unlink_title')}</Text>
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.unlink_message')}</Text>
+            <Button title={t('source.unlink_cancel')} onPress={() => setSourceUnlinkId(null)} variant="outline" testID="person-source-unlink-cancel" />
+            <Button
+              title={t('source.unlink_confirm')}
+              onPress={() => sourceUnlinkId && void unlinkSource(sourceUnlinkId)}
+              variant="outline"
+              testID="person-source-unlink-confirm"
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -365,11 +469,14 @@ const styles = StyleSheet.create({
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   choice: { minHeight: 48, justifyContent: 'center', padding: 12, borderWidth: 1, borderRadius: 10 },
   actions: { gap: 10 },
+  secondaryActions: { gap: 10 },
   flex: { flex: 1 },
+  ltrText: { writingDirection: 'ltr', textAlign: 'left' },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   sectionTitle: { fontSize: 18 },
   property: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
+  unlinkButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   modalSearch: { margin: 20 },
   propertyChoice: { minHeight: 58, justifyContent: 'center', borderBottomWidth: 1 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
