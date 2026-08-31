@@ -33,8 +33,8 @@ For current implementation status and persistence operations, `CURRENT_STATE.md`
 
 - The implemented mobile app has a known local SQLite/AsyncStorage dataset governed by shared mobile domain validation/contracts.
 - PostgreSQL/Drizzle remains future server-side architecture and is not the current mobile runtime schema authority.
-- Any future server schema or synchronization work must first assess compatibility and migration for the known local dataset; it must not silently remap or discard data.
-- Foundation Fix 01 remains frozen and unchanged. Foundation Fix 02 is documentation-only and remains pending Founder/CTO review. Matching has not started.
+- Any future server schema or synchronization work must first establish a separately approved compatibility, mapping, and migration boundary for the known local dataset; it must not silently remap or discard data.
+- Foundation Fix 01 remains frozen and unchanged. Foundation Fix 02 is documentation-only, passed Founder/CTO review, and is now FROZEN. Matching has not started.
 
 ## What This Package Is
 
