@@ -29,6 +29,12 @@ import {
   type SQLiteInitializationDatabase,
   type SQLitePropertyRow,
 } from '../services/sqliteStoreInitialization.ts';
+import {
+  assertValidPerson,
+  createPerson,
+  type Person,
+} from '../services/people.ts';
+import './platformModuleStubs.ts';
 
 const sourcePath = (relativePath: string) =>
   decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
@@ -47,17 +53,47 @@ const legacyProperty = (id: string): Property => ({
   },
 });
 
+const kwdProperty = (id: string): Property => {
+  const property = legacyProperty(id);
+  if (property.activeOffer.transaction !== 'sale') {
+    throw new Error('Expected sale fixture');
+  }
+  return {
+    ...property,
+    activeOffer: {
+      ...property.activeOffer,
+      salePrice: { amount: 350, currencyCode: 'KWD' },
+    },
+  };
+};
+
+const fixturePerson = (id: string, name = `Shared ${id}`): Person =>
+  createPerson({
+    id,
+    classifications: ['owner'],
+    name,
+    displayPhone: '50000000',
+    notes: `notes for ${id}`,
+  });
+
 class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
   readonly properties = new Map<string, { id: string; data: string; searchText: string }>();
+  readonly people = new Map<string, { id: string; data: string; searchText: string }>();
   readonly propertyChronology = new Map<string, number>();
   readonly personChronology = new Map<string, number>();
   readonly migrations = new Set<string>();
   readonly writes: Array<{ sql: string; params: unknown[] }> = [];
   schemaExecutions = 0;
 
-  constructor(rows: readonly SQLitePropertyRow[]) {
+  constructor(
+    rows: readonly SQLitePropertyRow[],
+    people: readonly { id: string; data: string }[] = [],
+  ) {
     for (const row of rows) {
       this.properties.set(row.id, { ...row, searchText: `original:${row.id}` });
+    }
+    for (const row of people) {
+      this.people.set(row.id, { ...row, searchText: `original:${row.id}` });
     }
   }
 
@@ -77,10 +113,24 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
   }
 
   async getAllAsync<T>(source: string): Promise<T[]> {
+    if (source.includes('FROM property_creation_chronology')) {
+      return [...this.propertyChronology].map(([id, created_at]) => ({
+        id,
+        created_at,
+      })) as T[];
+    }
+    if (source.includes('FROM person_creation_chronology')) {
+      return [...this.personChronology].map(([id, created_at]) => ({
+        id,
+        created_at,
+      })) as T[];
+    }
     if (source.includes('FROM properties')) {
       return [...this.properties.values()].map(({ id, data }) => ({ id, data })) as T[];
     }
-    if (source.includes('FROM people')) return [];
+    if (source.includes('FROM people')) {
+      return [...this.people.values()].map(({ id, data }) => ({ id, data })) as T[];
+    }
     throw new Error(`Unexpected read: ${source}`);
   }
 
@@ -128,6 +178,18 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
     return row.data;
   }
 
+  replaceFixturePerson(id: string, data: string): void {
+    const row = this.people.get(id);
+    assert.ok(row, `Expected person ${id} to exist`);
+    this.people.set(id, { ...row, data });
+  }
+
+  rawPerson(id: string): string {
+    const row = this.people.get(id);
+    assert.ok(row, `Expected person ${id} to exist`);
+    return row.data;
+  }
+
   clearWrites(): void {
     this.writes.length = 0;
   }
@@ -157,9 +219,69 @@ const initializeHarness = async (
     }
     return result.value;
   },
-  parsePersonRow: () => null,
+  parsePersonRow: row => {
+    const result = parseStoredRecord<Person>(
+      row.data,
+      { type: 'person', id: row.id },
+      value => {
+        try {
+          const person = value as Person;
+          if (person.id !== row.id) return false;
+          assertValidPerson(person);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    );
+    if (!result.ok) {
+      warnings.push(result.warning);
+      return null;
+    }
+    return result.value;
+  },
   runMutation: task => task(),
 });
+
+class WebStorageHarness {
+  readonly values: Map<string, string>;
+  readonly writes: string[] = [];
+  private readonly failures = new Map<string, number>();
+
+  constructor(entries: readonly (readonly [string, string])[]) {
+    this.values = new Map(entries);
+  }
+
+  failNext(key: string): void {
+    this.failures.set(key, (this.failures.get(key) ?? 0) + 1);
+  }
+
+  async getItem(key: string): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    this.writes.push(key);
+    const remaining = this.failures.get(key) ?? 0;
+    if (remaining > 0) {
+      this.failures.set(key, remaining - 1);
+      throw new Error(`synthetic storage write failure for ${key}`);
+    }
+    this.values.set(key, value);
+  }
+}
+
+const synchronousWebLocks = {
+  request: async <T>(
+    _name: string,
+    _options: { mode: 'exclusive' },
+    callback: () => Promise<T>,
+  ): Promise<T> => callback(),
+};
+
+const WEB_PROPERTIES_KEY = '@viewstate_properties';
+const WEB_PEOPLE_KEY = '@viewstate_people_v1';
+const WEB_MIGRATION_KEY = '@viewstate_migration_stage01b1_sar_to_kwd_v1';
 
 test('malformed rows are isolated while valid peers continue loading', () => {
   const validRaw = '{"core":{"id":"property-valid"}}';
@@ -373,6 +495,169 @@ test('SQLite migration completes normally and remains idempotent when every row 
   assert.deepEqual([...db.properties.keys()], [firstId, secondId]);
 });
 
+test('SQLiteStore orders mixed legacy and UUID properties and people, including searches', async () => {
+  const { SQLiteStore } = await import('../services/persistence.ts');
+  const timestamp = 1788202178934;
+  const propertyIds = [
+    'tie-property-a',
+    'uuid-property',
+    `${timestamp}abcdefghi`,
+    'tie-property-z',
+  ];
+  const personIds = [
+    'tie-person-a',
+    'uuid-person',
+    `person-${timestamp}-abcdefgh`,
+    'tie-person-z',
+  ];
+  const db = new SQLitePersistenceHarness(
+    propertyIds.map(id => ({ id, data: JSON.stringify(kwdProperty(id)) })),
+    personIds.map(id => ({ id, data: JSON.stringify(fixturePerson(id)) })),
+  );
+  db.migrations.add(STAGE_01B1_PROPERTY_MIGRATION_ID);
+  db.migrations.add(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID);
+  db.propertyChronology.set('uuid-property', timestamp + 2);
+  db.propertyChronology.set(`${timestamp}abcdefghi`, timestamp);
+  db.propertyChronology.set('tie-property-a', timestamp - 1);
+  db.propertyChronology.set('tie-property-z', timestamp - 1);
+  db.personChronology.set('uuid-person', timestamp + 2);
+  db.personChronology.set(`person-${timestamp}-abcdefgh`, timestamp);
+  db.personChronology.set('tie-person-a', timestamp - 1);
+  db.personChronology.set('tie-person-z', timestamp - 1);
+  const propertyRawBefore = new Map(
+    [...db.properties].map(([id, row]) => [id, row.data]),
+  );
+  const personRawBefore = new Map(
+    [...db.people].map(([id, row]) => [id, row.data]),
+  );
+  const store = new SQLiteStore(
+    async () => db as unknown as import('expo-sqlite').SQLiteDatabase,
+  );
+
+  await store.init();
+  assert.deepEqual(
+    (await store.getProperties()).map(property => property.core.id),
+    ['uuid-property', `${timestamp}abcdefghi`, 'tie-property-z', 'tie-property-a'],
+  );
+  assert.deepEqual(
+    (await store.searchProperties('apartment')).map(property => property.core.id),
+    ['uuid-property', `${timestamp}abcdefghi`, 'tie-property-z', 'tie-property-a'],
+  );
+  assert.deepEqual(
+    (await store.getPeople()).map(person => person.id),
+    ['uuid-person', `person-${timestamp}-abcdefgh`, 'tie-person-z', 'tie-person-a'],
+  );
+  assert.deepEqual(
+    (await store.searchPeople('shared')).map(person => person.id),
+    ['uuid-person', `person-${timestamp}-abcdefgh`, 'tie-person-z', 'tie-person-a'],
+  );
+  assert.deepEqual(
+    new Map([...db.properties].map(([id, row]) => [id, row.data])),
+    propertyRawBefore,
+  );
+  assert.deepEqual(
+    new Map([...db.people].map(([id, row]) => [id, row.data])),
+    personRawBefore,
+  );
+});
+
+test('SQLite Person chronology migration preserves recognized, unknown, and malformed rows', async () => {
+  const timestamp = 1788202178934;
+  const legacyId = `person-${timestamp}-abcdefgh`;
+  const unknownId = 'person-uuid-unknown';
+  const malformedId = 'person-malformed';
+  const malformedRaw = '{"id":"person-malformed"';
+  const db = new SQLitePersistenceHarness([], [
+    { id: legacyId, data: JSON.stringify(fixturePerson(legacyId)) },
+    { id: unknownId, data: JSON.stringify(fixturePerson(unknownId)) },
+    { id: malformedId, data: malformedRaw },
+  ]);
+  const warnings: UnreadableRecord[] = [];
+
+  await initializeHarness(db, warnings);
+
+  assert.equal(db.personChronology.get(legacyId), timestamp);
+  assert.equal(db.personChronology.get(unknownId), UNKNOWN_CREATION_TIMESTAMP);
+  assert.equal(db.personChronology.has(malformedId), false);
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), false);
+  assert.equal(db.rawPerson(malformedId), malformedRaw);
+  assert.deepEqual(warnings, [{ type: 'person', id: malformedId }]);
+  assert.deepEqual(
+    Object.fromEntries([...db.people].map(([id, row]) => [id, row.data])),
+    {
+      [legacyId]: JSON.stringify(fixturePerson(legacyId)),
+      [unknownId]: JSON.stringify(fixturePerson(unknownId)),
+      [malformedId]: malformedRaw,
+    },
+  );
+
+  db.replaceFixturePerson(
+    malformedId,
+    JSON.stringify(fixturePerson(malformedId)),
+  );
+  db.clearWrites();
+  const repairWarnings: UnreadableRecord[] = [];
+  await initializeHarness(db, repairWarnings);
+  assert.deepEqual(repairWarnings, []);
+  assert.equal(db.personChronology.get(malformedId), UNKNOWN_CREATION_TIMESTAMP);
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), true);
+
+  const completedRows = new Map(
+    [...db.people].map(([id, row]) => [id, row.data]),
+  );
+  db.clearWrites();
+  await initializeHarness(db, []);
+  assert.deepEqual(
+    new Map([...db.people].map(([id, row]) => [id, row.data])),
+    completedRows,
+  );
+  assert.equal(db.writes.length, 0);
+});
+
+test('SQLite Person chronology migration leaves its marker unset after partial writes and recovers', async () => {
+  const firstId = 'person-partial-first';
+  const secondId = 'person-partial-second';
+  const db = new SQLitePersistenceHarness([], [
+    { id: firstId, data: JSON.stringify(fixturePerson(firstId)) },
+    { id: secondId, data: JSON.stringify(fixturePerson(secondId)) },
+  ]);
+  const originalRun = db.runAsync.bind(db);
+  let failSecondWrite = true;
+  db.runAsync = async (source, params) => {
+    if (
+      failSecondWrite
+      && source.includes('person_creation_chronology')
+      && Array.isArray(params)
+      && params[0] === secondId
+    ) {
+      failSecondWrite = false;
+      throw new Error('synthetic person chronology write failure');
+    }
+    return originalRun(source, params);
+  };
+
+  await assert.rejects(
+    initializeHarness(db, []),
+    /synthetic person chronology write failure/,
+  );
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), false);
+  assert.deepEqual(
+    [...db.personChronology],
+    [[firstId, UNKNOWN_CREATION_TIMESTAMP]],
+  );
+  assert.deepEqual(db.rawPerson(firstId), JSON.stringify(fixturePerson(firstId)));
+  assert.deepEqual(db.rawPerson(secondId), JSON.stringify(fixturePerson(secondId)));
+
+  await initializeHarness(db, []);
+  assert.equal(db.personChronology.size, 2);
+  assert.equal(db.migrations.has(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID), true);
+  const chronologyAfterRecovery = new Map(db.personChronology);
+  db.clearWrites();
+  await initializeHarness(db, []);
+  assert.deepEqual(db.personChronology, chronologyAfterRecovery);
+  assert.equal(db.writes.length, 0);
+});
+
 test('legacy chronology parsing is exact and unknown IDs use a deterministic fallback', () => {
   const timestamp = 1788202178934;
   assert.equal(
@@ -465,6 +750,140 @@ test('Web chronology migration preserves record arrays byte-for-byte and is idem
   const snapshot = new Map(values);
   await migrateWebStoreChronology({ storage, propertiesKey, peopleKey });
   assert.deepEqual(values, snapshot);
+});
+
+test('WebStore initialization chains migrations and preserves ordered searchable records', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  const timestamp = 1788202178934;
+  const legacyPropertyId = `${timestamp}abcdefghi`;
+  const legacyPersonId = `person-${timestamp}-abcdefgh`;
+  const propertyIds = [
+    'unknown-property-a',
+    legacyPropertyId,
+    'uuid-property',
+    'unknown-property-z',
+  ];
+  const personIds = [
+    'unknown-person-a',
+    legacyPersonId,
+    'uuid-person',
+    'unknown-person-z',
+  ];
+  const propertyRaw = JSON.stringify(propertyIds.map(id => kwdProperty(id)));
+  const peopleRaw = JSON.stringify(personIds.map(id => fixturePerson(id)));
+  const storage = new WebStorageHarness([
+    [WEB_PROPERTIES_KEY, propertyRaw],
+    [WEB_PEOPLE_KEY, peopleRaw],
+    [WEB_PROPERTY_CHRONOLOGY_KEY, JSON.stringify({
+      version: 1,
+      entries: { 'uuid-property': timestamp + 2 },
+    })],
+    [WEB_PERSON_CHRONOLOGY_KEY, JSON.stringify({
+      version: 1,
+      entries: { 'uuid-person': timestamp + 2 },
+    })],
+  ]);
+  const store = new WebStore(storage, synchronousWebLocks);
+
+  await store.init();
+  assert.equal(storage.values.get(WEB_MIGRATION_KEY), 'complete');
+  assert.equal(
+    storage.values.get(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID),
+    'complete',
+  );
+  assert.equal(storage.values.get(WEB_PROPERTIES_KEY), propertyRaw);
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), peopleRaw);
+  assert.deepEqual(
+    (await store.getProperties()).map(property => property.core.id),
+    ['uuid-property', legacyPropertyId, 'unknown-property-z', 'unknown-property-a'],
+  );
+  assert.deepEqual(
+    (await store.searchProperties('apartment')).map(property => property.core.id),
+    ['uuid-property', legacyPropertyId, 'unknown-property-z', 'unknown-property-a'],
+  );
+  assert.deepEqual(
+    (await store.getPeople()).map(person => person.id),
+    ['uuid-person', legacyPersonId, 'unknown-person-z', 'unknown-person-a'],
+  );
+  assert.deepEqual(
+    (await store.searchPeople('shared')).map(person => person.id),
+    ['uuid-person', legacyPersonId, 'unknown-person-z', 'unknown-person-a'],
+  );
+
+  const writesAfterFirstInit = storage.writes.length;
+  await new WebStore(storage, synchronousWebLocks).init();
+  assert.equal(storage.writes.length, writesAfterFirstInit);
+  assert.equal(storage.values.get(WEB_PROPERTIES_KEY), propertyRaw);
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), peopleRaw);
+});
+
+test('WebStore chronology migration preserves malformed input and completes after repair', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  const malformedId = 'person-malformed-web';
+  const malformedRaw = JSON.stringify([{ id: malformedId, name: '' }]);
+  const propertyId = 'valid-web-property';
+  const propertyRaw = JSON.stringify([kwdProperty(propertyId)]);
+  const repairedPeopleRaw = JSON.stringify([fixturePerson(malformedId)]);
+  const storage = new WebStorageHarness([
+    [WEB_PROPERTIES_KEY, propertyRaw],
+    [WEB_PEOPLE_KEY, malformedRaw],
+  ]);
+
+  // Invalid records are kept byte-for-byte and prevent only the chronology
+  // completion marker; property migration remains chainable.
+  await new WebStore(storage, synchronousWebLocks).init();
+  assert.equal(storage.values.get(WEB_MIGRATION_KEY), 'complete');
+  assert.equal(
+    storage.values.get(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID),
+    undefined,
+  );
+  assert.equal(storage.values.get(WEB_PROPERTIES_KEY), propertyRaw);
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), malformedRaw);
+
+  await storage.setItem(WEB_PEOPLE_KEY, repairedPeopleRaw);
+  await new WebStore(storage, synchronousWebLocks).init();
+  assert.equal(
+    storage.values.get(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID),
+    'complete',
+  );
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), repairedPeopleRaw);
+});
+
+test('WebStore chronology migration leaves partial writes recoverable', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  const propertyId = 'partial-web-property';
+  const personId = 'partial-web-person';
+  const propertyRaw = JSON.stringify([kwdProperty(propertyId)]);
+  const peopleRaw = JSON.stringify([fixturePerson(personId)]);
+  const storage = new WebStorageHarness([
+    [WEB_PROPERTIES_KEY, propertyRaw],
+    [WEB_PEOPLE_KEY, peopleRaw],
+  ]);
+  storage.failNext(WEB_PERSON_CHRONOLOGY_KEY);
+
+  await assert.rejects(
+    new WebStore(storage, synchronousWebLocks).init(),
+    /synthetic storage write failure/,
+  );
+  assert.equal(
+    storage.values.get(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID),
+    undefined,
+  );
+  assert.equal(
+    JSON.parse(storage.values.get(WEB_PROPERTY_CHRONOLOGY_KEY)!).entries[propertyId],
+    UNKNOWN_CREATION_TIMESTAMP,
+  );
+  assert.equal(storage.values.get(WEB_PERSON_CHRONOLOGY_KEY), undefined);
+  assert.equal(storage.values.get(WEB_PROPERTIES_KEY), propertyRaw);
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), peopleRaw);
+
+  await new WebStore(storage, synchronousWebLocks).init();
+  assert.equal(
+    storage.values.get(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID),
+    'complete',
+  );
+  assert.equal(storage.values.get(WEB_PROPERTIES_KEY), propertyRaw);
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), peopleRaw);
 });
 
 test('Arabic and English recovery and preservation warnings are present', async () => {

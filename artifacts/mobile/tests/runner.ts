@@ -105,6 +105,7 @@ import {
   buildWhatsAppComposeUrl,
   openWhatsAppComposeWithOpener,
 } from '../services/whatsappCompose.ts';
+import './platformModuleStubs.ts';
 import { optionalClassifiedLiteral } from '../services/literalText.ts';
 import {
   buildContactPhoneChoices,
@@ -148,6 +149,7 @@ test('Bounded People model preserves literal fields and normalized phone search'
 });
 
 test('New domain identity creation is centralized on Expo secure UUID v4', async () => {
+  const { generateDomainId } = await import('../services/identity.ts');
   const sourcePath = (relativePath: string) =>
     decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
   const [identity, capture, person, attachments, persistence, packageJson] = await Promise.all([
@@ -199,6 +201,18 @@ test('New domain identity creation is centralized on Expo secure UUID v4', async
     uuidV4,
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
   );
+
+  const generated = Array.from({ length: 64 }, () => generateDomainId());
+  assert.equal(new Set(generated).size, generated.length);
+  for (const id of generated) {
+    assert.match(
+      id,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  }
+  assert.equal((capture.match(/generateDomainId\(\)/g) ?? []).length, 2);
+  assert.equal((person.match(/generateDomainId\(\)/g) ?? []).length, 1);
+  assert.equal((attachments.match(/generateDomainId\(\)/g) ?? []).length, 1);
 });
 
 test('People source exposes selected contact import, actions, links, and confirmations', async () => {
