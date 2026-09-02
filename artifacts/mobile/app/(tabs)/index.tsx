@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Platform, StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -133,7 +133,10 @@ export default function TabOneScreen() {
         data={properties}
         keyExtractor={item => item.core.id}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 96 },
+        ]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
@@ -143,7 +146,7 @@ export default function TabOneScreen() {
       />
 
       <View style={[styles.fabContainer, {
-        bottom: insets.bottom + (Platform.OS === 'web' ? 104 : 80),
+        bottom: insets.bottom + 16,
       }]}>
         <Button
           title={t('home.new')}
@@ -201,7 +204,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 20,
-    paddingBottom: 100,
   },
   card: {
     borderWidth: 1,

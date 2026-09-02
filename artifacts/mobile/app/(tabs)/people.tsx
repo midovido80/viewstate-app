@@ -56,7 +56,10 @@ export default function PeopleScreen() {
         data={people}
         keyExtractor={item => item.id}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: insets.bottom + 96 },
+        ]}
         ListEmptyComponent={<Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('people.empty')}</Text>}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -74,7 +77,7 @@ export default function PeopleScreen() {
           </TouchableOpacity>
         )}
       />
-      <View style={[styles.add, { bottom: insets.bottom + 76 }]}>
+      <View style={[styles.add, { bottom: insets.bottom + 16 }]}>
         <Button title={t('people.add')} onPress={() => router.push('/person/new' as never)} testID="people-add" />
       </View>
     </View>
@@ -87,7 +90,7 @@ const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 20, paddingVertical: 14, justifyContent: 'center' },
   icon: { position: 'absolute', zIndex: 1 },
   search: { minHeight: 54, borderWidth: 1, borderRadius: 10, paddingHorizontal: 44, fontSize: 16 },
-  list: { padding: 20, paddingBottom: 150 },
+  list: { padding: 20 },
   card: { padding: 16, borderWidth: 1, marginBottom: 12, gap: 5 },
   name: { fontSize: 18 },
   classes: { marginTop: 4, fontSize: 13 },

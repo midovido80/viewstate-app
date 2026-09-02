@@ -6,10 +6,12 @@ import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useI18n } from '@/contexts/I18nContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function ClassicTabLayout() {
   const colors = useColors();
   const { t } = useI18n();
+  const insets = useSafeAreaInsets();
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
 
@@ -20,12 +22,17 @@ function ClassicTabLayout() {
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarStyle: {
-          position: 'absolute',
           backgroundColor: isIOS ? 'transparent' : colors.background,
-          borderTopWidth: isWeb ? 1 : 0,
+          borderTopWidth: 1,
           borderTopColor: colors.border,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          elevation: 12,
+          overflow: 'hidden',
+          zIndex: 100,
+          ...(isWeb ? { height: 84 } : { paddingBottom: insets.bottom }),
+        },
+        tabBarItemStyle: {
+          paddingTop: 6,
+          paddingBottom: isWeb ? 6 : 4,
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -34,14 +41,14 @@ function ClassicTabLayout() {
               tint="light"
               style={StyleSheet.absoluteFill}
             />
-          ) : isWeb ? (
+          ) : (
             <View
               style={[
                 StyleSheet.absoluteFill,
                 { backgroundColor: colors.background },
               ]}
             />
-          ) : null,
+          ),
       }}
     >
       <Tabs.Screen
