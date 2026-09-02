@@ -1,4 +1,4 @@
-export type StoredRecordType = 'property' | 'person';
+export type StoredRecordType = 'property' | 'person' | 'requirement';
 
 export interface UnreadableRecord {
   readonly type: StoredRecordType;

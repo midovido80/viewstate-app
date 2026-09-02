@@ -1,9 +1,14 @@
 import type { Person } from '@/services/people';
 import { assertValidPerson } from '@/services/people';
+import { getAreaById } from '@/constants/kuwait-areas';
 import type { Property } from '@workspace/property-domain';
-import { validateProperty } from '@workspace/property-domain';
+import {
+  validateProperty,
+  validateSeekerRequirement,
+} from '@workspace/property-domain';
+import type { SeekerRequirement } from '@workspace/property-domain';
 
-export type ChronologyRecordType = 'property' | 'person';
+export type ChronologyRecordType = 'property' | 'person' | 'requirement';
 
 export const UNKNOWN_CREATION_TIMESTAMP = 0;
 export const STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID =
@@ -12,6 +17,8 @@ export const WEB_PROPERTY_CHRONOLOGY_KEY =
   '@viewstate_property_creation_chronology_v1';
 export const WEB_PERSON_CHRONOLOGY_KEY =
   '@viewstate_person_creation_chronology_v1';
+export const WEB_REQUIREMENT_CHRONOLOGY_KEY =
+  '@viewstate_requirement_creation_chronology_v1';
 
 export interface ChronologyEntry {
   readonly id: string;
@@ -49,9 +56,9 @@ export function getLegacyCreationTimestamp(
   type: ChronologyRecordType,
   id: string,
 ): number | null {
-  return type === 'property'
-    ? parseLegacyTimestampPrefix(id)
-    : parseLegacyPersonTimestamp(id);
+  if (type === 'property') return parseLegacyTimestampPrefix(id);
+  if (type === 'person') return parseLegacyPersonTimestamp(id);
+  return null;
 }
 
 export function getCreationTimestamp(
@@ -154,6 +161,14 @@ function personId(value: unknown): string | null {
   }
 }
 
+function requirementId(value: unknown): string | null {
+  const result = validateSeekerRequirement(value, {
+    isCanonicalAreaId: id => getAreaById(id) !== undefined,
+  });
+  if (!result.ok) return null;
+  return (value as SeekerRequirement).id;
+}
+
 async function readArray(
   storage: ChronologyStorage,
   key: string,
@@ -174,19 +189,29 @@ export async function migrateWebStoreChronology(options: {
   readonly storage: ChronologyStorage;
   readonly propertiesKey: string;
   readonly peopleKey: string;
+  readonly requirementsKey?: string;
 }): Promise<void> {
-  const { storage, propertiesKey, peopleKey } = options;
+  const {
+    storage,
+    propertiesKey,
+    peopleKey,
+    requirementsKey,
+  } = options;
   if (await storage.getItem(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID)) return;
 
-  const [properties, people, propertyChronology, personChronology] = await Promise.all([
+  const [properties, people, requirements, propertyChronology, personChronology, requirementChronology] =
+    await Promise.all([
     readArray(storage, propertiesKey),
     readArray(storage, peopleKey),
+    requirementsKey ? readArray(storage, requirementsKey) : Promise.resolve([]),
     loadChronologyMap(storage, WEB_PROPERTY_CHRONOLOGY_KEY),
     loadChronologyMap(storage, WEB_PERSON_CHRONOLOGY_KEY),
+    loadChronologyMap(storage, WEB_REQUIREMENT_CHRONOLOGY_KEY),
   ]);
   let allReadable = true;
   let propertyChanged = false;
   let personChanged = false;
+  let requirementChanged = false;
 
   for (const value of properties) {
     const id = propertyId(value);
@@ -210,12 +235,30 @@ export async function migrateWebStoreChronology(options: {
       personChanged = true;
     }
   }
+  for (const value of requirements) {
+    const id = requirementId(value);
+    if (id === null) {
+      allReadable = false;
+      continue;
+    }
+    if (!requirementChronology.has(id)) {
+      requirementChronology.set(id, UNKNOWN_CREATION_TIMESTAMP);
+      requirementChanged = true;
+    }
+  }
 
   if (propertyChanged) {
     await saveChronologyMap(storage, WEB_PROPERTY_CHRONOLOGY_KEY, propertyChronology);
   }
   if (personChanged) {
     await saveChronologyMap(storage, WEB_PERSON_CHRONOLOGY_KEY, personChronology);
+  }
+  if (requirementChanged) {
+    await saveChronologyMap(
+      storage,
+      WEB_REQUIREMENT_CHRONOLOGY_KEY,
+      requirementChronology,
+    );
   }
   if (allReadable) {
     await storage.setItem(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID, 'complete');
@@ -228,7 +271,11 @@ export async function getWebChronology(
 ): Promise<Map<string, number>> {
   return loadChronologyMap(
     storage,
-    type === 'property' ? WEB_PROPERTY_CHRONOLOGY_KEY : WEB_PERSON_CHRONOLOGY_KEY,
+    type === 'property'
+      ? WEB_PROPERTY_CHRONOLOGY_KEY
+      : type === 'person'
+        ? WEB_PERSON_CHRONOLOGY_KEY
+        : WEB_REQUIREMENT_CHRONOLOGY_KEY,
   );
 }
 
@@ -240,7 +287,9 @@ export async function addWebChronology(
 ): Promise<void> {
   const key = type === 'property'
     ? WEB_PROPERTY_CHRONOLOGY_KEY
-    : WEB_PERSON_CHRONOLOGY_KEY;
+    : type === 'person'
+      ? WEB_PERSON_CHRONOLOGY_KEY
+      : WEB_REQUIREMENT_CHRONOLOGY_KEY;
   const entries = await loadChronologyMap(storage, key);
   if (!entries.has(id)) {
     entries.set(id, timestamp);

@@ -32,6 +32,12 @@ import {
   sortByChronology,
   UNKNOWN_CREATION_TIMESTAMP,
 } from '@/services/chronology';
+import {
+  SQLiteRequirementStore,
+  WEB_REQUIREMENTS_KEY,
+  WebRequirementStore,
+  type RequirementStore,
+} from '@/services/requirementPersistence';
 
 export { getPropertySearchText };
 
@@ -82,10 +88,18 @@ interface LockManager {
 
 const nativeMutations = new SerialTaskQueue();
 
-export class SQLiteStore implements PropertyStore, PersonStore {
+export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore {
   private db: SQLite.SQLiteDatabase | null = null;
   private initialization: Promise<void> | null = null;
   private integrityWarnings: UnreadableRecord[] = [];
+  private readonly requirements = new SQLiteRequirementStore(
+    () => {
+      if (!this.db) throw new Error('DB not initialized');
+      return this.db;
+    },
+    this,
+    warning => this.addIntegrityWarning(warning),
+  );
 
   constructor(
     private readonly databaseFactory: () => Promise<SQLite.SQLiteDatabase> =
@@ -546,20 +560,44 @@ export class SQLiteStore implements PropertyStore, PersonStore {
     }
     return sources;
   }
+
+  saveRequirement = (requirement: Parameters<RequirementStore['saveRequirement']>[0]) =>
+    this.requirements.saveRequirement(requirement);
+
+  getRequirement = (id: string) => this.requirements.getRequirement(id);
+
+  getRequirements = () => this.requirements.getRequirements();
+
+  getRequirementsForSeeker = (seekerId: string) =>
+    this.requirements.getRequirementsForSeeker(seekerId);
+
+  updateRequirement = (
+    expected: Parameters<RequirementStore['updateRequirement']>[0],
+    replacement: Parameters<RequirementStore['updateRequirement']>[1],
+  ) => this.requirements.updateRequirement(expected, replacement);
 }
 
-export class WebStore implements PropertyStore, PersonStore {
+export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   private readonly KEY = '@viewstate_properties';
   private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1';
   private readonly PEOPLE_KEY = '@viewstate_people_v1';
   private readonly PERSON_PROPERTY_LINKS_KEY = '@viewstate_person_property_links_v1';
   private readonly PROPERTY_SOURCES_KEY = '@viewstate_property_sources_v1';
   private initialization: Promise<void> | null = null;
+  private integrityWarnings: UnreadableRecord[] = [];
+  private readonly requirements: WebRequirementStore;
 
   constructor(
     private readonly storage: KeyValueStorage = AsyncStorage,
     private readonly suppliedLocks?: LockManager | null,
-  ) {}
+  ) {
+    this.requirements = new WebRequirementStore(
+      storage,
+      () => this.lockManager,
+      this,
+      warning => appendUnreadableRecord(this.integrityWarnings, warning),
+    );
+  }
 
   async init() {
     if (!this.initialization) {
@@ -569,6 +607,7 @@ export class WebStore implements PropertyStore, PersonStore {
             storage: this.storage,
             propertiesKey: this.KEY,
             peopleKey: this.PEOPLE_KEY,
+            requirementsKey: WEB_REQUIREMENTS_KEY,
           })))
         .then(() => undefined);
       this.initialization = attempt;
@@ -580,7 +619,10 @@ export class WebStore implements PropertyStore, PersonStore {
   }
 
   getIntegrityStatus(): LocalStoreIntegrityStatus {
-    return { unreadableRecords: [], hasUnreadableRecords: false };
+    return {
+      unreadableRecords: [...this.integrityWarnings],
+      hasUnreadableRecords: this.integrityWarnings.length > 0,
+    };
   }
 
   /** Raw array access for non-deletion mutations; never call from visible reads. */
@@ -959,9 +1001,24 @@ export class WebStore implements PropertyStore, PersonStore {
   async getPropertySourcesForPerson(personId: string): Promise<PropertySource[]> {
     return (await this.getAllPropertySources()).filter(source => source.personId === personId);
   }
+
+  saveRequirement = (requirement: Parameters<RequirementStore['saveRequirement']>[0]) =>
+    this.requirements.saveRequirement(requirement);
+
+  getRequirement = (id: string) => this.requirements.getRequirement(id);
+
+  getRequirements = () => this.requirements.getRequirements();
+
+  getRequirementsForSeeker = (seekerId: string) =>
+    this.requirements.getRequirementsForSeeker(seekerId);
+
+  updateRequirement = (
+    expected: Parameters<RequirementStore['updateRequirement']>[0],
+    replacement: Parameters<RequirementStore['updateRequirement']>[1],
+  ) => this.requirements.updateRequirement(expected, replacement);
 }
 
-export const store: PropertyStore & PersonStore & {
+export const store: PropertyStore & PersonStore & RequirementStore & {
   getIntegrityStatus(): LocalStoreIntegrityStatus;
 } =
   Platform.OS === 'web' ? new WebStore() : new SQLiteStore();

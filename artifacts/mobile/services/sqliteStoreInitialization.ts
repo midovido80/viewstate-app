@@ -81,6 +81,14 @@ export async function initializeSQLiteStore(options: {
       person_id TEXT NOT NULL,
       role TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS seeker_requirements (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS requirement_creation_chronology (
+      id TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   const completed = await db.getFirstAsync<{ id: string }>(
