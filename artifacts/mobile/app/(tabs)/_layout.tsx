@@ -68,6 +68,15 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen
+        name="matching"
+        options={{
+          title: t('matching.title'),
+          tabBarIcon: ({ color }) => (
+            <Feather name="target" size={22} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
