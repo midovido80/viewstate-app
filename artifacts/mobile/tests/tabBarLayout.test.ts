@@ -9,8 +9,11 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
     readFile('app/(tabs)/people.tsx', 'utf8'),
   ]);
 
+  assert.match(layout, /sceneStyle:\s*\{\s*overflow:\s*['"]hidden['"]/);
+  assert.match(layout, /position:\s*['"]relative['"]/);
   assert.doesNotMatch(layout, /position:\s*['"]absolute['"]/);
-  assert.match(layout, /backgroundColor: isIOS \? ['"]transparent['"] : colors\.background/);
+  assert.match(layout, /backgroundColor: colors\.background/);
+  assert.doesNotMatch(layout, /tabBarBackground/);
   assert.match(layout, /overflow:\s*['"]hidden['"]/);
   assert.match(layout, /zIndex:\s*100/);
   assert.match(layout, /elevation:\s*12/);

@@ -1,8 +1,7 @@
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useI18n } from '@/contexts/I18nContext';
@@ -21,11 +20,15 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
+        sceneStyle: {
+          overflow: 'hidden',
+        },
         tabBarStyle: {
-          backgroundColor: isIOS ? 'transparent' : colors.background,
+          backgroundColor: colors.background,
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 12,
+          position: 'relative',
           overflow: 'hidden',
           zIndex: 100,
           ...(isWeb ? { height: 84 } : { paddingBottom: insets.bottom }),
@@ -34,21 +37,6 @@ function ClassicTabLayout() {
           paddingTop: 6,
           paddingBottom: isWeb ? 6 : 4,
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint="light"
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
-          ),
       }}
     >
       <Tabs.Screen
