@@ -1,4 +1,5 @@
 import {
+  checkMatchEligibility,
   evaluateMatch,
   MATCH_SCORING_WEIGHTS,
   rankMatchResults,
@@ -124,6 +125,29 @@ function explanation(
 ) {
   return result.explanations.find(item => item.criterion === criterion);
 }
+
+test("Eligibility-only and full evaluation share identical hard gates", () => {
+  for (const propertyValue of [
+    property(),
+    property({ amount: 201 }),
+    property({ area: "area-outside" }),
+    property({ currencyCode: "USD" }),
+    property({ transaction: "sale" }),
+  ]) {
+    const matchingCandidate = candidate(propertyValue);
+    const eligibility = checkMatchEligibility(
+      rentRequirement(),
+      matchingCandidate,
+    );
+    const fullResult = evaluateMatch(rentRequirement(), matchingCandidate);
+    assert.equal(eligibility.eligible, fullResult.eligible);
+    assert.equal(eligibility.locationRank, fullResult.locationRank);
+    assert.deepEqual(
+      eligibility.ineligibilityReasons,
+      fullResult.ineligibilityReasons,
+    );
+  }
+});
 
 test("Rent and Buy/Sale use separate transaction contracts and hard eligibility", () => {
   const rent = rentRequirement();

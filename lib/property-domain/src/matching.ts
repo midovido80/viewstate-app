@@ -112,6 +112,12 @@ export interface MatchResult {
   readonly explanations: readonly MatchExplanation[];
 }
 
+export interface MatchEligibilityResult {
+  readonly eligible: boolean;
+  readonly locationRank: number | null;
+  readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
+}
+
 interface CriterionPoints {
   readonly explanation: MatchExplanation;
   readonly awarded: number;
@@ -341,6 +347,43 @@ function priceDistance(
   return Math.abs(price.amount - midpoint);
 }
 
+interface HardEligibilityAssessment extends MatchEligibilityResult {
+  readonly price: {
+    readonly amount: number;
+    readonly currencyCode: string;
+  } | null;
+}
+
+function assessHardEligibility(
+  requirement: SeekerRequirement,
+  candidate: MatchingPropertyCandidate,
+): HardEligibilityAssessment {
+  const price = extractPrice(candidate.property);
+  const eligibility = hardEligibility(requirement, candidate, price);
+  return {
+    eligible: eligibility.reasons.length === 0,
+    locationRank: eligibility.locationRank,
+    ineligibilityReasons: eligibility.reasons,
+    price,
+  };
+}
+
+/**
+ * Checks only the authoritative hard eligibility gates. It deliberately does
+ * not normalize evidence or calculate score, denominator, or qualification.
+ */
+export function checkMatchEligibility(
+  requirement: SeekerRequirement,
+  candidate: MatchingPropertyCandidate,
+): MatchEligibilityResult {
+  const assessment = assessHardEligibility(requirement, candidate);
+  return {
+    eligible: assessment.eligible,
+    locationRank: assessment.locationRank,
+    ineligibilityReasons: assessment.ineligibilityReasons,
+  };
+}
+
 /**
  * Evaluates one Requirement against one source-neutral Property candidate.
  * Property and Requirement are expected to satisfy their existing domain
@@ -352,12 +395,10 @@ export function evaluateMatch(
   candidate: MatchingPropertyCandidate,
 ): MatchResult {
   const property = candidate.property;
-  const price = extractPrice(property);
-  const eligibility = hardEligibility(requirement, candidate, price);
-  const evidence = mergeEvidence(property, candidate.evidence);
-  const midpointDistance = priceDistance(requirement, price);
+  const assessment = assessHardEligibility(requirement, candidate);
+  const midpointDistance = priceDistance(requirement, assessment.price);
 
-  if (eligibility.reasons.length > 0) {
+  if (!assessment.eligible) {
     return {
       requirementId: requirement.id,
       propertyId: property.core.id,
@@ -365,14 +406,15 @@ export function evaluateMatch(
       score: 0,
       qualifies: false,
       includedWeight: 0,
-      locationRank: eligibility.locationRank,
+      locationRank: assessment.locationRank,
       priceDistanceFromBudgetMidpoint: midpointDistance,
       propertyChronology: candidate.propertyChronology,
-      ineligibilityReasons: eligibility.reasons,
-      explanations: [ineligibleExplanation(eligibility.reasons)],
+      ineligibilityReasons: assessment.ineligibilityReasons,
+      explanations: [ineligibleExplanation(assessment.ineligibilityReasons)],
     };
   }
 
+  const evidence = mergeEvidence(property, candidate.evidence);
   const explanations: MatchExplanation[] = [];
   const points: CriterionPoints[] = [];
   const weights = requirement.purpose === "rent"
@@ -388,7 +430,7 @@ export function evaluateMatch(
     "Price is within the explicit Requirement budget.",
   ));
 
-  const rank = eligibility.locationRank!;
+  const rank = assessment.locationRank!;
   const locationPoints = weights.orderedLocation * locationFraction(rank);
   points.push(criterion(
     "ordered_location",
@@ -505,7 +547,7 @@ export function evaluateMatch(
     score,
     qualifies: score >= MATCH_QUALIFICATION_THRESHOLD,
     includedWeight: denominator,
-    locationRank: eligibility.locationRank,
+    locationRank: assessment.locationRank,
     priceDistanceFromBudgetMidpoint: midpointDistance,
     propertyChronology: candidate.propertyChronology,
     ineligibilityReasons: [],

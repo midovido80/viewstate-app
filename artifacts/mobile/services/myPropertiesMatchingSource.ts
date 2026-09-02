@@ -1,5 +1,5 @@
 import {
-  evaluateMatch,
+  checkMatchEligibility,
   validateProperty,
   type MatchingPropertyCandidate,
   type MatchingPropertyEvidence,
@@ -12,6 +12,7 @@ type PropertyEvidenceLike = {
   readonly bedroomCount?: unknown;
   readonly bathroomCount?: unknown;
   readonly hasPool?: unknown;
+  readonly floorUse?: unknown;
 };
 
 export type MyPropertiesStore = Pick<PropertyStore, 'getProperties'>;
@@ -42,7 +43,7 @@ export class MyPropertiesMatchingSource {
 
       // M2 remains the single owner of hard eligibility semantics. This
       // adapter only uses its result as a local source gate.
-      if (!evaluateMatch(requirement, candidate).eligible) continue;
+      if (!checkMatchEligibility(requirement, candidate).eligible) continue;
       candidates.push(candidate);
     }
 
@@ -56,7 +57,7 @@ export function normalizeMyPropertyCandidate(
   if (!isProperty(value)) return null;
 
   return {
-    property: value,
+    property: projectApprovedMatchingProperty(value),
     evidence: normalizeApprovedPropertyEvidence(value),
   };
 }
@@ -77,17 +78,115 @@ function normalizeApprovedPropertyEvidence(
   property: Property,
 ): MatchingPropertyEvidence {
   const details = property.typeDetails as PropertyEvidenceLike | undefined;
+  const propertyType = property.core.propertyType;
+  const supportsBedrooms = propertyType === 'apartment'
+    || propertyType === 'house'
+    || propertyType === 'villa'
+    || propertyType === 'chalet'
+    || (propertyType === 'floor' && details?.floorUse === 'residential');
+  const supportsBathrooms = supportsBedrooms
+    || propertyType === 'office'
+    || propertyType === 'shop'
+    || propertyType === 'warehouse'
+    || (propertyType === 'floor' && details?.floorUse === 'commercial');
+  const supportsPool = propertyType === 'house'
+    || propertyType === 'villa'
+    || propertyType === 'chalet';
+
   return {
-    ...(isFiniteNonNegativeNumber(details?.bedroomCount)
+    ...(supportsBedrooms && isFiniteNonNegativeNumber(details?.bedroomCount)
       ? { bedrooms: details.bedroomCount }
       : {}),
-    ...(isFiniteNonNegativeNumber(details?.bathroomCount)
+    ...(supportsBathrooms && isFiniteNonNegativeNumber(details?.bathroomCount)
       ? { bathrooms: details.bathroomCount }
       : {}),
-    ...(typeof details?.hasPool === 'boolean'
+    ...(supportsPool && typeof details?.hasPool === 'boolean'
       ? { swimmingPool: details.hasPool }
       : {}),
   };
+}
+
+function projectApprovedMatchingProperty(property: Property): Property {
+  const activeOffer = property.activeOffer.transaction === 'rent'
+    ? {
+      id: property.activeOffer.id,
+      propertyCoreId: property.activeOffer.propertyCoreId,
+      transaction: 'rent' as const,
+      rentalPrice: {
+        amount: property.activeOffer.rentalPrice.amount,
+        currencyCode: property.activeOffer.rentalPrice.currencyCode,
+      },
+      // Required by the frozen RentOffer contract; never interpreted by M2.
+      rentalPeriodId: property.activeOffer.rentalPeriodId,
+    }
+    : {
+      id: property.activeOffer.id,
+      propertyCoreId: property.activeOffer.propertyCoreId,
+      transaction: 'sale' as const,
+      salePrice: {
+        amount: property.activeOffer.salePrice.amount,
+        currencyCode: property.activeOffer.salePrice.currencyCode,
+      },
+    };
+
+  return {
+    core: {
+      id: property.core.id,
+      propertyType: property.core.propertyType,
+      locationArea: { id: property.core.locationArea.id },
+    },
+    activeOffer,
+    typeDetails: projectApprovedTypeDetails(property),
+  };
+}
+
+function projectApprovedTypeDetails(property: Property): Property['typeDetails'] {
+  const details = property.typeDetails as PropertyEvidenceLike | undefined;
+  if (!details) return undefined;
+  const evidence = normalizeApprovedPropertyEvidence(property);
+
+  const base = {
+    propertyType: property.core.propertyType,
+    ...(evidence.bedrooms !== undefined
+      ? { bedroomCount: evidence.bedrooms }
+      : {}),
+    ...(evidence.bathrooms !== undefined
+      ? { bathroomCount: evidence.bathrooms }
+      : {}),
+  };
+
+  if (
+    (property.core.propertyType === 'house'
+      || property.core.propertyType === 'villa'
+      || property.core.propertyType === 'chalet')
+    && evidence.swimmingPool !== undefined
+  ) {
+    return {
+      ...base,
+      hasPool: evidence.swimmingPool,
+    } as Property['typeDetails'];
+  }
+
+  if (property.core.propertyType === 'floor') {
+    if (
+      Object.keys(base).length > 1
+      && (details.floorUse === 'residential' || details.floorUse === 'commercial')
+    ) {
+      return {
+        ...base,
+        floorUse: details.floorUse,
+      } as Property['typeDetails'];
+    }
+  }
+
+  if (property.core.propertyType === 'other_built_property') {
+    // Its required clarification is literal text and is not M2 evidence.
+    return undefined;
+  }
+
+  return Object.keys(base).length > 1
+    ? base as Property['typeDetails']
+    : undefined;
 }
 
 function isFiniteNonNegativeNumber(value: unknown): value is number {

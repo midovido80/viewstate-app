@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
+  checkMatchEligibility,
   evaluateMatch,
   type Property,
   type RentSeekerRequirement,
@@ -107,7 +109,45 @@ test('normalizes approved local fields and keeps non-M2 data out of evidence', (
   assert.equal('privateNotes' in evidence, false);
   assert.equal('hasWaterfront' in evidence, false);
   assert.equal('locationEnrichment' in evidence, false);
-  assert.equal(candidate.property, localProperty);
+  assert.notEqual(candidate.property, localProperty);
+  assert.deepEqual(candidate.property.core, {
+    id: localProperty.core.id,
+    propertyType: 'house',
+    locationArea: { id: 'area-1' },
+  });
+  assert.equal('privateNotes' in candidate.property.core, false);
+  assert.equal('attachments' in candidate.property, false);
+  assert.equal('locationEnrichment' in candidate.property, false);
+  assert.equal('notes' in candidate.property, false);
+  assert.equal('furnishing' in (candidate.property.typeDetails ?? {}), false);
+  assert.equal('hasWaterfront' in (candidate.property.typeDetails ?? {}), false);
+});
+
+test('maps supported chalet pool evidence without treating waterfront as sea view', () => {
+  const candidate = normalizeMyPropertyCandidate(property({
+    propertyType: 'chalet',
+    typeDetails: {
+      propertyType: 'chalet',
+      bedroomCount: 4,
+      bathroomCount: 3,
+      hasPool: true,
+      hasWaterfront: true,
+    },
+  }));
+
+  assert.ok(candidate);
+  assert.deepEqual(candidate.evidence, {
+    bedrooms: 4,
+    bathrooms: 3,
+    swimmingPool: true,
+  });
+  assert.equal('seaView' in (candidate.evidence ?? {}), false);
+  assert.deepEqual(candidate.property.typeDetails, {
+    propertyType: 'chalet',
+    bedroomCount: 4,
+    bathroomCount: 3,
+    hasPool: true,
+  });
 });
 
 test('local source filters malformed records, hard-ineligible records, and duplicate IDs', async () => {
@@ -115,7 +155,7 @@ test('local source filters malformed records, hard-ineligible records, and dupli
   const validSecond = property({ id: 'valid-second', area: 'area-2' });
   const duplicate = property({ id: 'valid-first', amount: 700 });
   const malformed = {
-    core: { id: 'malformed', propertyType: 'apartment', locationArea: { id: 'area-1' } },
+    core: { id: 'valid-second', propertyType: 'apartment', locationArea: { id: 'area-1' } },
     activeOffer: null,
   };
   const wrongType = property({ id: 'wrong-type', propertyType: 'villa' });
@@ -158,6 +198,17 @@ test('local source filters malformed records, hard-ineligible records, and dupli
     ),
     true,
   );
+});
+
+test('a first valid duplicate deterministically wins before eligibility filtering', async () => {
+  const firstIneligible = property({ id: 'duplicate', amount: 801 });
+  const laterEligible = property({ id: 'duplicate', amount: 650 });
+  const source = new MyPropertiesMatchingSource(storeWith([
+    firstIneligible,
+    laterEligible,
+  ]));
+
+  assert.deepEqual(await source.getCandidates(requirement()), []);
 });
 
 test('preserves deterministic PropertyStore order after normalization and filtering', async () => {
@@ -215,4 +266,24 @@ test('only valid local Property data is sent to the frozen M2 boundary', async (
   const evidence = candidate.evidence ?? {};
   assert.equal('notes' in evidence, false);
   assert.equal('source' in evidence, false);
+});
+
+test('the source uses eligibility-only M2 logic and never invokes full scoring', async () => {
+  const localProperty = property();
+  const candidate = normalizeMyPropertyCandidate(localProperty);
+  assert.ok(candidate);
+  assert.deepEqual(
+    checkMatchEligibility(requirement(), candidate),
+    {
+      eligible: true,
+      locationRank: 1,
+      ineligibilityReasons: [],
+    },
+  );
+  const sourceText = await readFile(
+    'services/myPropertiesMatchingSource.ts',
+    'utf8',
+  );
+  assert.match(sourceText, /checkMatchEligibility\(requirement, candidate\)/);
+  assert.doesNotMatch(sourceText, /evaluateMatch/);
 });
