@@ -33,9 +33,11 @@ import {
   UNKNOWN_CREATION_TIMESTAMP,
 } from '@/services/chronology';
 import {
+  PERSON_REQUIREMENT_MUTATION_LOCK,
   SQLiteRequirementStore,
   WEB_REQUIREMENTS_KEY,
   WebRequirementStore,
+  type RequirementPersistenceOptions,
   type RequirementStore,
 } from '@/services/requirementPersistence';
 
@@ -92,19 +94,24 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
   private db: SQLite.SQLiteDatabase | null = null;
   private initialization: Promise<void> | null = null;
   private integrityWarnings: UnreadableRecord[] = [];
-  private readonly requirements = new SQLiteRequirementStore(
-    () => {
-      if (!this.db) throw new Error('DB not initialized');
-      return this.db;
-    },
-    this,
-    warning => this.addIntegrityWarning(warning),
-  );
+  private readonly requirements: SQLiteRequirementStore;
 
   constructor(
     private readonly databaseFactory: () => Promise<SQLite.SQLiteDatabase> =
       () => SQLite.openDatabaseAsync('viewstate.db'),
-  ) {}
+    options: RequirementPersistenceOptions = {},
+  ) {
+    this.requirements = new SQLiteRequirementStore(
+      () => {
+        if (!this.db) throw new Error('DB not initialized');
+        return this.db;
+      },
+      this,
+      warning => this.addIntegrityWarning(warning),
+      nativeMutations,
+      options,
+    );
+  }
 
   async init() {
     if (!this.initialization) {
@@ -585,17 +592,21 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   private readonly PROPERTY_SOURCES_KEY = '@viewstate_property_sources_v1';
   private initialization: Promise<void> | null = null;
   private integrityWarnings: UnreadableRecord[] = [];
+  private readonly requirementsEnabled: boolean;
   private readonly requirements: WebRequirementStore;
 
   constructor(
     private readonly storage: KeyValueStorage = AsyncStorage,
     private readonly suppliedLocks?: LockManager | null,
+    options: RequirementPersistenceOptions = {},
   ) {
+    this.requirementsEnabled = options.requirementsEnabled ?? true;
     this.requirements = new WebRequirementStore(
       storage,
       () => this.lockManager,
       this,
       warning => appendUnreadableRecord(this.integrityWarnings, warning),
+      options,
     );
   }
 
@@ -607,7 +618,9 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
             storage: this.storage,
             propertiesKey: this.KEY,
             peopleKey: this.PEOPLE_KEY,
-            requirementsKey: WEB_REQUIREMENTS_KEY,
+            requirementsKey: this.requirementsEnabled
+              ? WEB_REQUIREMENTS_KEY
+              : undefined,
           })))
         .then(() => undefined);
       this.initialization = attempt;
@@ -823,7 +836,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   private async withPeopleMutationLock<T>(work: () => Promise<T>): Promise<T> {
     const locks = this.lockManager;
     if (!locks) throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
-    return locks.request('viewstate-people-mutation', { mode: 'exclusive' }, work);
+    return locks.request(PERSON_REQUIREMENT_MUTATION_LOCK, { mode: 'exclusive' }, work);
   }
 
   async savePerson(person: Person): Promise<void> {

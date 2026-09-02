@@ -21,6 +21,12 @@ export const WEB_REQUIREMENTS_KEY = '@viewstate_seeker_requirements_v1';
 export const NATIVE_REQUIREMENTS_TABLE = 'seeker_requirements';
 export const NATIVE_REQUIREMENT_CHRONOLOGY_TABLE =
   'requirement_creation_chronology';
+export const PERSON_REQUIREMENT_MUTATION_LOCK =
+  'viewstate-person-requirement-mutation';
+
+export interface RequirementPersistenceOptions {
+  readonly requirementsEnabled?: boolean;
+}
 
 export interface RequirementStore {
   saveRequirement(requirement: SeekerRequirement): Promise<void>;
@@ -62,8 +68,6 @@ interface RequirementKeyValueStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 }
-
-const requirementMutations = new SerialTaskQueue();
 
 function canonicalAreaId(id: string): boolean {
   return getAreaById(id) !== undefined;
@@ -123,11 +127,17 @@ function resultChanges(result: unknown): number {
 }
 
 export class SQLiteRequirementStore implements RequirementStore {
+  private readonly requirementsEnabled: boolean;
+
   constructor(
     private readonly database: () => SQLiteRequirementDatabase,
     private readonly personStore: RequirementOwnershipReader,
     private readonly reportUnreadable: (warning: UnreadableRecord) => void = () => undefined,
-  ) {}
+    private readonly mutations: SerialTaskQueue = new SerialTaskQueue(),
+    options: RequirementPersistenceOptions = {},
+  ) {
+    this.requirementsEnabled = options.requirementsEnabled ?? true;
+  }
 
   private parseRow(row: { id: string; data: string }): SeekerRequirement | null {
     try {
@@ -139,10 +149,11 @@ export class SQLiteRequirementStore implements RequirementStore {
   }
 
   async saveRequirement(requirement: SeekerRequirement): Promise<void> {
+    if (!this.requirementsEnabled) throw new Error('REQUIREMENT_FEATURE_DISABLED');
     const normalized = normalizeForStorage(requirement);
-    await assertSeekerOwnership(this.personStore, normalized.seekerId);
     const serialized = JSON.stringify(normalized);
-    await requirementMutations.enqueue(async () => {
+    await this.mutations.enqueue(async () => {
+      await assertSeekerOwnership(this.personStore, normalized.seekerId);
       const db = this.database();
       const existing = await db.getFirstAsync<{ data: string }>(
         `SELECT data FROM ${NATIVE_REQUIREMENTS_TABLE} WHERE id = ?`,
@@ -168,6 +179,7 @@ export class SQLiteRequirementStore implements RequirementStore {
   }
 
   async getRequirement(id: string): Promise<SeekerRequirement | null> {
+    if (!this.requirementsEnabled) return null;
     const row = await this.database().getFirstAsync<{ id: string; data: string }>(
       `SELECT id, data FROM ${NATIVE_REQUIREMENTS_TABLE} WHERE id = ?`,
       [id],
@@ -176,6 +188,7 @@ export class SQLiteRequirementStore implements RequirementStore {
   }
 
   async getRequirements(): Promise<SeekerRequirement[]> {
+    if (!this.requirementsEnabled) return [];
     const db = this.database();
     const [rows, chronology] = await Promise.all([
       db.getAllAsync<{ id: string; data: string }>(
@@ -215,11 +228,12 @@ export class SQLiteRequirementStore implements RequirementStore {
     expected: SeekerRequirement,
     replacement: SeekerRequirement,
   ): Promise<boolean> {
+    if (!this.requirementsEnabled) throw new Error('REQUIREMENT_FEATURE_DISABLED');
     if (expected.id !== replacement.id) return false;
     const normalized = normalizeForStorage(replacement);
-    await assertSeekerOwnership(this.personStore, normalized.seekerId);
     let updated = false;
-    await requirementMutations.enqueue(async () => {
+    await this.mutations.enqueue(async () => {
+      await assertSeekerOwnership(this.personStore, normalized.seekerId);
       const result = await this.database().runAsync(
         `UPDATE ${NATIVE_REQUIREMENTS_TABLE} SET data = ? WHERE id = ? AND data = ?`,
         [JSON.stringify(normalized), normalized.id, JSON.stringify(expected)],
@@ -231,17 +245,22 @@ export class SQLiteRequirementStore implements RequirementStore {
 }
 
 export class WebRequirementStore implements RequirementStore {
+  private readonly requirementsEnabled: boolean;
+
   constructor(
     private readonly storage: RequirementKeyValueStorage,
     private readonly getLocks: () => RequirementLockManager | null,
     private readonly personStore: RequirementOwnershipReader,
     private readonly reportUnreadable: (warning: UnreadableRecord) => void = () => undefined,
-  ) {}
+    options: RequirementPersistenceOptions = {},
+  ) {
+    this.requirementsEnabled = options.requirementsEnabled ?? true;
+  }
 
   private async withMutationLock<T>(work: () => Promise<T>): Promise<T> {
     const locks = this.getLocks();
     if (!locks) throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
-    return locks.request('viewstate-requirements-mutation', { mode: 'exclusive' }, work);
+    return locks.request(PERSON_REQUIREMENT_MUTATION_LOCK, { mode: 'exclusive' }, work);
   }
 
   private async withChronologyMutationLock<T>(work: () => Promise<T>): Promise<T> {
@@ -254,6 +273,7 @@ export class WebRequirementStore implements RequirementStore {
     readonly requirements: SeekerRequirement[];
     readonly hasUnreadable: boolean;
   }> {
+    if (!this.requirementsEnabled) return { requirements: [], hasUnreadable: false };
     const raw = await this.storage.getItem(WEB_REQUIREMENTS_KEY);
     if (raw === null) return { requirements: [], hasUnreadable: false };
     try {
@@ -282,10 +302,11 @@ export class WebRequirementStore implements RequirementStore {
   }
 
   async saveRequirement(requirement: SeekerRequirement): Promise<void> {
+    if (!this.requirementsEnabled) throw new Error('REQUIREMENT_FEATURE_DISABLED');
     const normalized = normalizeForStorage(requirement);
-    await assertSeekerOwnership(this.personStore, normalized.seekerId);
     await this.withChronologyMutationLock(() =>
       this.withMutationLock(async () => {
+        await assertSeekerOwnership(this.personStore, normalized.seekerId);
         const current = await this.getAllRaw();
         if (current.hasUnreadable) throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
         const all = current.requirements;
@@ -315,12 +336,14 @@ export class WebRequirementStore implements RequirementStore {
   }
 
   async getRequirement(id: string): Promise<SeekerRequirement | null> {
+    if (!this.requirementsEnabled) return null;
     const matching = (await this.getAllRaw()).requirements.filter(item => item.id === id);
     if (matching.length > 1) throw new Error('DUPLICATE_REQUIREMENT');
     return matching[0] ?? null;
   }
 
   async getRequirements(): Promise<SeekerRequirement[]> {
+    if (!this.requirementsEnabled) return [];
     const [requirements, chronology] = await Promise.all([
       this.getAllRaw(),
       getWebChronology(this.storage, 'requirement'),
@@ -341,10 +364,11 @@ export class WebRequirementStore implements RequirementStore {
     expected: SeekerRequirement,
     replacement: SeekerRequirement,
   ): Promise<boolean> {
+    if (!this.requirementsEnabled) throw new Error('REQUIREMENT_FEATURE_DISABLED');
     if (expected.id !== replacement.id) return false;
     const normalized = normalizeForStorage(replacement);
-    await assertSeekerOwnership(this.personStore, normalized.seekerId);
     return this.withMutationLock(async () => {
+      await assertSeekerOwnership(this.personStore, normalized.seekerId);
       const current = await this.getAllRaw();
       if (current.hasUnreadable) throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
       const all = current.requirements;

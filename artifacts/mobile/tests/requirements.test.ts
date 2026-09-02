@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { SQLiteBindParams } from 'expo-sqlite';
+import type { SQLiteBindParams, SQLiteDatabase } from 'expo-sqlite';
 
 import './platformModuleStubs.ts';
 import {
@@ -24,12 +24,38 @@ import {
   WEB_REQUIREMENT_CHRONOLOGY_KEY,
   migrateWebStoreChronology,
 } from '../services/chronology.ts';
+import {
+  SQLiteStore,
+  WebStore,
+} from '../services/persistence.ts';
 
 const ids = {
   rent: '11111111-1111-4111-8111-111111111111',
   buy: '22222222-2222-4222-8222-222222222222',
   other: '33333333-3333-4333-8333-333333333333',
 };
+
+interface AsyncGate {
+  readonly started: Promise<void>;
+  readonly waitForRelease: Promise<void>;
+  markStarted(): void;
+  release(): void;
+}
+
+function createGate(): AsyncGate {
+  let markStarted!: () => void;
+  let release!: () => void;
+  return {
+    started: new Promise<void>(resolve => {
+      markStarted = resolve;
+    }),
+    waitForRelease: new Promise<void>(resolve => {
+      release = resolve;
+    }),
+    markStarted,
+    release,
+  };
+}
 
 const seeker = (id: string): Person => createPerson({
   id,
@@ -181,6 +207,51 @@ class MemoryStorage {
   }
 }
 
+class BlockingMemoryStorage extends MemoryStorage {
+  private peopleWriteGate: AsyncGate | null = null;
+
+  blockNextPeopleWrite(): AsyncGate {
+    const gate = createGate();
+    this.peopleWriteGate = gate;
+    return gate;
+  }
+
+  override async setItem(key: string, value: string): Promise<void> {
+    const gate = key === '@viewstate_people_v1'
+      ? this.peopleWriteGate
+      : null;
+    if (gate) {
+      this.peopleWriteGate = null;
+      gate.markStarted();
+      await gate.waitForRelease;
+    }
+    await super.setItem(key, value);
+  }
+}
+
+class SerializedLocks {
+  private readonly tails = new Map<string, Promise<void>>();
+
+  async request<T>(
+    name: string,
+    _options: { mode: 'exclusive' },
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.tails.get(name) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    this.tails.set(name, previous.then(() => current));
+    await previous;
+    try {
+      return await callback();
+    } finally {
+      release();
+    }
+  }
+}
+
 const locks = {
   async request<T>(
     _name: string,
@@ -257,18 +328,55 @@ test('Web Requirement persistence survives recreation and isolates Seekers', asy
 class RequirementDatabase {
   readonly requirements = new Map<string, string>();
   readonly chronology = new Map<string, number>();
+  readonly people = new Map<string, string>();
+  readonly personChronology = new Map<string, number>();
+  readonly migrations = new Set<string>();
+  private personDeleteGate: AsyncGate | null = null;
+  private personUpdateGate: AsyncGate | null = null;
+
+  blockNextPersonDelete(): AsyncGate {
+    const gate = createGate();
+    this.personDeleteGate = gate;
+    return gate;
+  }
+
+  blockNextPersonUpdate(): AsyncGate {
+    const gate = createGate();
+    this.personUpdateGate = gate;
+    return gate;
+  }
+
+  async execAsync(): Promise<void> {}
 
   async getFirstAsync<T>(source: string, params: SQLiteBindParams): Promise<T | null> {
+    assert.ok(Array.isArray(params));
+    const id = String(params[0]);
+    if (source.includes('FROM app_migrations')) {
+      return (this.migrations.has(id) ? { id } : null) as T | null;
+    }
+    if (source.includes('FROM people')) {
+      const data = this.people.get(id);
+      return (data === undefined ? null : { id, data }) as T | null;
+    }
     if (!source.includes(NATIVE_REQUIREMENTS_TABLE)) {
       throw new Error(`Unexpected read: ${source}`);
     }
-    assert.ok(Array.isArray(params));
-    const id = String(params[0]);
     const data = this.requirements.get(id);
     return (data === undefined ? null : { id, data }) as T | null;
   }
 
   async getAllAsync<T>(source: string): Promise<T[]> {
+    if (source.includes('FROM property_creation_chronology')) return [];
+    if (source.includes('FROM person_creation_chronology')) {
+      return [...this.personChronology].map(([id, created_at]) => ({
+        id,
+        created_at,
+      })) as T[];
+    }
+    if (source.includes('FROM properties')) return [];
+    if (source.includes('FROM people')) {
+      return [...this.people].map(([id, data]) => ({ id, data })) as T[];
+    }
     if (source.includes(NATIVE_REQUIREMENT_CHRONOLOGY_TABLE)) {
       return [...this.chronology].map(([id, created_at]) => ({
         id,
@@ -284,6 +392,48 @@ class RequirementDatabase {
   async runAsync(source: string, params: SQLiteBindParams): Promise<unknown> {
     assert.ok(Array.isArray(params));
     const sql = source.replace(/\s+/g, ' ').trim();
+    if (sql.startsWith('INSERT INTO app_migrations')) {
+      this.migrations.add(String(params[0]));
+      return { changes: 1 };
+    }
+    if (sql.startsWith('INSERT INTO people')) {
+      this.people.set(String(params[0]), String(params[1]));
+      return { changes: 1 };
+    }
+    if (sql.startsWith('INSERT OR IGNORE INTO person_creation_chronology')) {
+      const id = String(params[0]);
+      if (!this.personChronology.has(id)) {
+        this.personChronology.set(id, Number(params[1]));
+      }
+      return { changes: 1 };
+    }
+    if (sql.startsWith('UPDATE people SET data')) {
+      const gate = this.personUpdateGate;
+      if (gate) {
+        this.personUpdateGate = null;
+        gate.markStarted();
+        await gate.waitForRelease;
+      }
+      const [replacement, , id, expected] = params.map(String);
+      if (this.people.get(id) !== expected) return { changes: 0 };
+      this.people.set(id, replacement);
+      return { changes: 1 };
+    }
+    if (
+      sql.startsWith('DELETE FROM person_property_links')
+      || sql.startsWith('DELETE FROM property_sources')
+    ) {
+      return { changes: 0 };
+    }
+    if (sql.startsWith('DELETE FROM people')) {
+      const gate = this.personDeleteGate;
+      if (gate) {
+        this.personDeleteGate = null;
+        gate.markStarted();
+        await gate.waitForRelease;
+      }
+      return { changes: this.people.delete(String(params[0])) ? 1 : 0 };
+    }
     if (sql.startsWith(`INSERT INTO ${NATIVE_REQUIREMENTS_TABLE}`)) {
       this.requirements.set(String(params[0]), String(params[1]));
       return { changes: 1 };
@@ -306,6 +456,12 @@ class RequirementDatabase {
     await callback();
   }
 }
+
+const sqliteStoreFor = (db: RequirementDatabase, requirementsEnabled = true) =>
+  new SQLiteStore(
+    async () => db as unknown as SQLiteDatabase,
+    { requirementsEnabled },
+  );
 
 test('Native Requirement persistence survives store recreation without lifecycle cleanup', async () => {
   const db = new RequirementDatabase();
@@ -427,4 +583,177 @@ test('Requirement chronology migration does not complete for invalid canonical A
     false,
   );
   assert.equal(storage.values.has(WEB_REQUIREMENT_CHRONOLOGY_KEY), false);
+});
+
+test('Integrated Native store serializes Requirement ownership against Person mutations', async () => {
+  const db = new RequirementDatabase();
+  const store = sqliteStoreFor(db);
+  await store.init();
+
+  const deletedSeeker = seeker('native-delete-seeker');
+  await store.savePerson(deletedSeeker);
+  const deleteGate = db.blockNextPersonDelete();
+  const deleting = store.deletePerson(deletedSeeker.id);
+  await deleteGate.started;
+  const rejectedSave = assert.rejects(
+    store.saveRequirement(rentRequirement(
+      '77777777-7777-4777-8777-777777777777',
+      deletedSeeker.id,
+    )),
+    /REQUIREMENT_SEEKER_NOT_FOUND/,
+  );
+  deleteGate.release();
+  assert.equal(await deleting, true);
+  await rejectedSave;
+  assert.equal(
+    await store.getRequirement('77777777-7777-4777-8777-777777777777'),
+    null,
+  );
+
+  const reclassifiedSeeker = seeker('native-reclassified-seeker');
+  await store.savePerson(reclassifiedSeeker);
+  const original = rentRequirement(
+    '88888888-8888-4888-8888-888888888888',
+    reclassifiedSeeker.id,
+  );
+  await store.saveRequirement(original);
+  const replacement = {
+    ...original,
+    notes: 'must not persist after seeker removal',
+  };
+  const updateGate = db.blockNextPersonUpdate();
+  const reclassifying = store.updatePerson(
+    reclassifiedSeeker,
+    owner(reclassifiedSeeker.id),
+  );
+  await updateGate.started;
+  const rejectedUpdate = assert.rejects(
+    store.updateRequirement(original, replacement),
+    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
+  );
+  updateGate.release();
+  assert.equal(await reclassifying, true);
+  await rejectedUpdate;
+  assert.deepEqual(await store.getRequirement(original.id), original);
+});
+
+test('Integrated Web store serializes Requirement ownership against Person mutations', async () => {
+  const storage = new BlockingMemoryStorage();
+  const sharedLocks = new SerializedLocks();
+  const store = new WebStore(storage, sharedLocks);
+  await store.init();
+
+  const deletedSeeker = seeker('web-delete-seeker');
+  await store.savePerson(deletedSeeker);
+  const deleteGate = storage.blockNextPeopleWrite();
+  const deleting = store.deletePerson(deletedSeeker.id);
+  await deleteGate.started;
+  const rejectedSave = assert.rejects(
+    store.saveRequirement(rentRequirement(
+      '99999999-9999-4999-8999-999999999999',
+      deletedSeeker.id,
+    )),
+    /REQUIREMENT_SEEKER_NOT_FOUND/,
+  );
+  deleteGate.release();
+  assert.equal(await deleting, true);
+  await rejectedSave;
+  assert.equal(
+    await store.getRequirement('99999999-9999-4999-8999-999999999999'),
+    null,
+  );
+
+  const reclassifiedSeeker = seeker('web-reclassified-seeker');
+  await store.savePerson(reclassifiedSeeker);
+  const original = rentRequirement(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    reclassifiedSeeker.id,
+  );
+  await store.saveRequirement(original);
+  const replacement = {
+    ...original,
+    notes: 'must not persist after seeker removal',
+  };
+  const updateGate = storage.blockNextPeopleWrite();
+  const reclassifying = store.updatePerson(
+    reclassifiedSeeker,
+    owner(reclassifiedSeeker.id),
+  );
+  await updateGate.started;
+  const rejectedUpdate = assert.rejects(
+    store.updateRequirement(original, replacement),
+    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
+  );
+  updateGate.release();
+  assert.equal(await reclassifying, true);
+  await rejectedUpdate;
+  assert.deepEqual(await store.getRequirement(original.id), original);
+});
+
+test('Integrated Native and Web stores preserve Requirement data while disabled and re-enable it', async () => {
+  const nativeDb = new RequirementDatabase();
+  const native = sqliteStoreFor(nativeDb);
+  await native.init();
+  const nativeSeeker = seeker('native-rollback-seeker');
+  const nativeRequirement = rentRequirement(
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    nativeSeeker.id,
+  );
+  await native.savePerson(nativeSeeker);
+  await native.saveRequirement(nativeRequirement);
+  const nativeBytes = nativeDb.requirements.get(nativeRequirement.id);
+
+  const disabledNative = sqliteStoreFor(nativeDb, false);
+  await disabledNative.init();
+  assert.equal(await disabledNative.getRequirement(nativeRequirement.id), null);
+  assert.deepEqual(await disabledNative.getRequirements(), []);
+  await assert.rejects(
+    disabledNative.saveRequirement(nativeRequirement),
+    /REQUIREMENT_FEATURE_DISABLED/,
+  );
+  assert.equal(nativeDb.requirements.get(nativeRequirement.id), nativeBytes);
+
+  const reenabledNative = sqliteStoreFor(nativeDb);
+  await reenabledNative.init();
+  assert.deepEqual(
+    await reenabledNative.getRequirement(nativeRequirement.id),
+    nativeRequirement,
+  );
+
+  const webStorage = new MemoryStorage();
+  const webLocks = new SerializedLocks();
+  const web = new WebStore(webStorage, webLocks);
+  await web.init();
+  const webSeeker = seeker('web-rollback-seeker');
+  const webRequirement = rentRequirement(
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    webSeeker.id,
+  );
+  await web.savePerson(webSeeker);
+  await web.saveRequirement(webRequirement);
+  const webBytes = webStorage.values.get(WEB_REQUIREMENTS_KEY);
+
+  const disabledWeb = new WebStore(
+    webStorage,
+    webLocks,
+    { requirementsEnabled: false },
+  );
+  await disabledWeb.init();
+  assert.equal(await disabledWeb.getRequirement(webRequirement.id), null);
+  assert.deepEqual(await disabledWeb.getRequirements(), []);
+  await assert.rejects(
+    disabledWeb.updateRequirement(webRequirement, {
+      ...webRequirement,
+      notes: 'must not persist while disabled',
+    }),
+    /REQUIREMENT_FEATURE_DISABLED/,
+  );
+  assert.equal(webStorage.values.get(WEB_REQUIREMENTS_KEY), webBytes);
+
+  const reenabledWeb = new WebStore(webStorage, webLocks);
+  await reenabledWeb.init();
+  assert.deepEqual(
+    await reenabledWeb.getRequirement(webRequirement.id),
+    webRequirement,
+  );
 });
