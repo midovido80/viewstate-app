@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -259,6 +259,7 @@ function ResultCard({
 }
 
 export default function MatchingScreen() {
+  const { requirementId: requestedRequirementId } = useLocalSearchParams<{ requirementId?: string }>();
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
   const insets = useSafeAreaInsets();
@@ -306,9 +307,12 @@ export default function MatchingScreen() {
           if (!active) return;
           setRequirements(loadedRequirements);
           setPeople(loadedPeople);
-          setSelectedRequirementId(current =>
-            current ?? loadedRequirements[0]?.id ?? null,
-          );
+          if (requestedRequirementId && loadedRequirements.some(item => item.id === requestedRequirementId)) {
+            setMode('saved');
+            setSelectedRequirementId(requestedRequirementId);
+          } else {
+            setSelectedRequirementId(current => current ?? loadedRequirements[0]?.id ?? null);
+          }
           const firstSeeker = loadedPeople.find(person =>
             person.classifications.includes('seeker'),
           );
@@ -320,7 +324,7 @@ export default function MatchingScreen() {
       return () => {
         active = false;
       };
-    }, [t]),
+    }, [requestedRequirementId, t]),
   );
 
   const clearRun = () => {
