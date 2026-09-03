@@ -199,3 +199,23 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   );
   assert.doesNotMatch(screen, /\.sort\(/);
 });
+
+test('Person entry selects its requested saved Requirement without regressing normal M5 focus state', async () => {
+  const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
+  assert.match(screen, /if \(requestedRequirementId && loadedRequirements\.some/);
+  assert.match(screen, /setMode\('saved'\);\s*setSelectedRequirementId\(requestedRequirementId\)/);
+  assert.match(screen, /else \{\s*setSelectedRequirementId\(current => current \?\? loadedRequirements\[0\]\?\.id \?\? null\)/);
+  assert.doesNotMatch(screen, /else \{\s*setMode\('saved'\)/);
+  assert.doesNotMatch(screen, /setSelectedRequirementId\(\s*requestedRequirementId.*:\s*loadedRequirements\[0\]/s);
+
+  const explicitHandler = screen.indexOf('const runMatching = async () =>');
+  const routeSelection = screen.indexOf('setSelectedRequirementId(requestedRequirementId)');
+  const firstExecution = screen.indexOf('.runForRequirement(');
+  assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
+});
+
+test('non-seeker post-save state does not render a disabled Requirement CTA', async () => {
+  const personScreen = await readFile('app/person/[personId].tsx', 'utf8');
+  assert.match(personScreen, /params\.saved === '1' && person\.classifications\.includes\('seeker'\)/);
+  assert.doesNotMatch(personScreen, /testID="person-saved-add-requirement"[^>]*disabled=/);
+});

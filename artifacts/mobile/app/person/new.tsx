@@ -106,7 +106,7 @@ export default function NewPersonScreen() {
         classifications,
       });
       await store.savePerson(person);
-      router.replace(`/person/${encodeURIComponent(person.id)}` as never);
+      router.replace({ pathname: `/person/${encodeURIComponent(person.id)}`, params: { saved: '1' } } as never);
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : '';
       setError(code.includes('NAME') ? t('people.name_required')
