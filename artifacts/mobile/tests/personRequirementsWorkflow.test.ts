@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { evaluateMatch, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement, parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
 
@@ -104,4 +105,16 @@ test('multiple requirement identities remain distinct while retaining the same o
   const records: SeekerRequirement[] = [one.value, two.value];
   assert.equal(new Set(records.map(item => item.id)).size, 2);
   assert.ok(records.every(item => item.seekerId === SEEKER));
+});
+
+test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {
+  const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  const scrollEnd = source.indexOf('</KeyboardAwareScrollViewCompat>');
+  const footerStart = source.indexOf('<View style={[styles.footer');
+
+  assert.match(source, /paddingTop:\s*insets\.top/);
+  assert.match(source, /<KeyboardAvoidingView behavior="padding" style=\{styles\.body\}>/);
+  assert.ok(scrollEnd >= 0 && footerStart > scrollEnd);
+  assert.match(source, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*16\)/);
+  assert.match(source, /footer:\s*\{[^}]*borderTopWidth:\s*StyleSheet\.hairlineWidth/);
 });
