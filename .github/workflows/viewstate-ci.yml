@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -54,14 +56,17 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+            git fetch --no-tags origin main
+            BASE="$(git merge-base origin/main HEAD)"
+            git diff --check "$BASE..HEAD"
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            git diff --check "${{ github.event.before }}...${{ github.sha }}"
+            git diff --check "${{ github.event.before }}..${{ github.sha }}"
           else
-            git diff --check
+            git diff --check HEAD
           fi
 
       - name: Verify repository remains clean
+        if: always()
         shell: bash
         run: |
           git status --short
