@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { resolveSourcePath } from './sourcePath.ts';
 
 import {
   type Property,
@@ -37,7 +38,7 @@ import {
 import './platformModuleStubs.ts';
 
 const sourcePath = (relativePath: string) =>
-  decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  resolveSourcePath(relativePath, import.meta.url);
 
 const legacyProperty = (id: string): Property => ({
   core: {
