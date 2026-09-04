@@ -9,6 +9,12 @@
 
 React Native + Expo remains approved for one Android/iOS product. Android-first rollout does not permit Android-only architecture; iOS compatibility is maintained continuously. Expo Go is a preview/testing option, not an exclusive dependency gate. Shared business rules, persistence, APIs, privacy, Draft recovery, import/export boundaries, and future Card formats remain platform-neutral; native capabilities use replaceable adapters.
 
+### Persistence Authority Boundary
+
+- **Implemented mobile runtime:** Local SQLite and AsyncStorage persistence, together with the shared mobile domain validation and contracts, are the current authority for the running mobile app's persisted data and runtime data shape.
+- **Future server architecture:** PostgreSQL with Drizzle ORM is reserved for future server-side persistence. The Drizzle schema is not the current mobile runtime schema authority and does not replace the implemented local persistence boundary.
+- **Boundary rule:** Any future synchronization or server-backed persistence must define an approved mapping between the local mobile boundary and the server boundary; this documentation correction does not authorize that work.
+
 
 ## Mandatory Governance Lifecycle
 
@@ -30,11 +36,11 @@ No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval
 |-------|-----------|-------|
 | Mobile client | React Native + Expo (SDK 53+) | Android-first rollout and pilot; continuous iOS architectural compatibility |
 | Routing | Expo Router (file-based) | NativeTabs on iOS 26+, classic Tabs fallback |
-| State (server) | TanStack React Query | All server data goes through generated hooks |
-| State (local) | React Context + AsyncStorage | Auth state, preferences, offline cache |
+| State (server) | TanStack React Query | Future server data goes through generated hooks |
+| State (local) | React Context + SQLite/AsyncStorage | Implemented mobile persistence and local runtime state |
 | Backend | Express 5 + TypeScript | Monorepo: `artifacts/api-server` |
-| Database | PostgreSQL + Drizzle ORM | `lib/db` — schema-as-code |
-| Validation | Zod v4 + drizzle-zod | Shared between server and client |
+| Database | PostgreSQL + Drizzle ORM | Future server-side persistence architecture; not the current mobile runtime schema |
+| Validation | Shared domain validation/contracts; Zod v4 + drizzle-zod for future server use | Mobile and future server boundaries remain distinct |
 | API contract | OpenAPI 3.1 → Orval codegen | `lib/api-spec/openapi.yaml` |
 | Auth | TBD (Founder decision pending) | See DECISIONS.md DEC-005 |
 | Media / Object storage | TBD (Founder decision pending) | See DECISIONS.md DEC-006 |
@@ -81,8 +87,8 @@ Every client–server interaction goes through the OpenAPI spec → Orval-genera
 ### 4. Bilingual from day one
 Application UI and system-authored content are localized in Arabic and English. User-entered and imported names, notes, descriptions, and source text remain literal and must not be automatically translated or duplicated.
 
-### 5. Database schema is law
-The Drizzle schema in `lib/db/src/schema/` is the single source of truth. Types derive from it via drizzle-zod. Never hand-write a type that duplicates a schema type.
+### 5. Persistence authority follows the runtime boundary
+The implemented mobile runtime uses local SQLite/AsyncStorage persistence and shared domain validation/contracts as its current authority. PostgreSQL and the Drizzle schema in `lib/db/src/schema/` are future server-side architecture; they are not the current mobile runtime schema authority. Future server types may derive from Drizzle via drizzle-zod, but they must not be treated as the mobile runtime contract without an approved boundary mapping.
 
 ### 6. Matching is rule-based in V001 (Rule 12)
 No ML, no embeddings, no vector search. Simple field-to-field comparison with scoring. Architecture must allow upgrading in V002 without breaking the API contract.

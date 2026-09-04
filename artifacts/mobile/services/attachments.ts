@@ -12,6 +12,7 @@ import {
   type AttachmentKind,
   type LocalAttachment,
 } from './attachmentOperations';
+import { generateDomainId } from '@/services/identity';
 
 export type { AttachmentFileStore, AttachmentKind, LocalAttachment } from './attachmentOperations';
 export { persistAttachmentsThenDeleteRemoved, reorderAttachments, setAttachmentCover } from './attachmentOperations';
@@ -90,7 +91,7 @@ function assertNative(platform: string = Platform.OS) {
 }
 
 function defaultId(): string {
-  return `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return generateDomainId();
 }
 
 function nameFromUri(uri: string, fallback: string): string {

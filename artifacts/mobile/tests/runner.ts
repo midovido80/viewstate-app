@@ -105,6 +105,7 @@ import {
   buildWhatsAppComposeUrl,
   openWhatsAppComposeWithOpener,
 } from '../services/whatsappCompose.ts';
+import './platformModuleStubs.ts';
 import { optionalClassifiedLiteral } from '../services/literalText.ts';
 import {
   buildContactPhoneChoices,
@@ -145,6 +146,73 @@ test('Bounded People model preserves literal fields and normalized phone search'
     displayPhone: '5000',
     classifications: ['seeker'],
   }), /PERSON_NAME_REQUIRED/);
+});
+
+test('New domain identity creation is centralized on Expo secure UUID v4', async () => {
+  const { generateDomainId } = await import('../services/identity.ts');
+  const sourcePath = (relativePath: string) =>
+    decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const [identity, capture, person, attachments, persistence, packageJson] = await Promise.all([
+    readFile(sourcePath('../services/identity.ts'), 'utf8'),
+    readFile(sourcePath('../contexts/CaptureContext.tsx'), 'utf8'),
+    readFile(sourcePath('../app/person/new.tsx'), 'utf8'),
+    readFile(sourcePath('../services/attachments.ts'), 'utf8'),
+    readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+    readFile(sourcePath('../package.json'), 'utf8'),
+  ]);
+
+  assert.match(identity, /import \* as Crypto from 'expo-crypto'/);
+  assert.match(identity, /return Crypto\.randomUUID\(\)/);
+  assert.match(packageJson, /"expo-crypto": "~15\.0\.9"/);
+  for (const source of [capture, person, attachments]) {
+    assert.match(source, /generateDomainId\(\)/);
+  }
+  for (const source of [identity, capture, person, attachments]) {
+    assert.doesNotMatch(source, /Math\.random\(\)/);
+  }
+  assert.match(
+    persistence,
+    /INSERT OR IGNORE INTO property_creation_chronology \(id, created_at\)/,
+  );
+  assert.match(
+    persistence,
+    /INSERT OR IGNORE INTO person_creation_chronology \(id, created_at\)/,
+  );
+  assert.match(
+    persistence,
+    /async searchProperties[\s\S]*const all = await this\.getProperties\(\)/,
+  );
+  assert.match(
+    persistence,
+    /async searchPeople[\s\S]*await this\.getPeople\(\)/,
+  );
+  assert.match(
+    persistence,
+    /locks\.request\('viewstate-chronology-mutation', \{ mode: 'exclusive' \}/,
+  );
+  assert.match(
+    persistence,
+    /migrateStage01B1WebProperties[\s\S]*withChronologyMutationLock[\s\S]*migrateWebStoreChronology/,
+  );
+  assert.doesNotMatch(persistence, /getCreationTimestamp/);
+
+  const uuidV4 = '9f1c9ee5-ff1f-4cd7-8ab6-a7a445565fa1';
+  assert.match(
+    uuidV4,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+
+  const generated = Array.from({ length: 64 }, () => generateDomainId());
+  assert.equal(new Set(generated).size, generated.length);
+  for (const id of generated) {
+    assert.match(
+      id,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  }
+  assert.equal((capture.match(/generateDomainId\(\)/g) ?? []).length, 2);
+  assert.equal((person.match(/generateDomainId\(\)/g) ?? []).length, 1);
+  assert.equal((attachments.match(/generateDomainId\(\)/g) ?? []).length, 1);
 });
 
 test('People source exposes selected contact import, actions, links, and confirmations', async () => {

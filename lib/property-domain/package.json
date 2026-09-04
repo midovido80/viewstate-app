@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types ./src/property-domain.test.ts",
+    "test": "node --experimental-strip-types ./src/property-domain.test.ts && node --experimental-strip-types ./src/matching.test.ts",
     "typecheck": "tsc --build"
   }
 }

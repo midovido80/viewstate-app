@@ -18,6 +18,7 @@ import {
   PhoneCountryCode,
   phoneDigits,
 } from '@/services/phoneEntry';
+import { generateDomainId } from '@/services/identity';
 
 let sessionContactChoices: ContactPhoneChoice[] | null = null;
 
@@ -97,7 +98,7 @@ export default function NewPersonScreen() {
     setSaving(true);
     try {
       const person = createPerson({
-        id: `person-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        id: generateDomainId(),
         name,
         displayPhone: phone,
         normalizedPhone: normalizePhoneForCountry(phone, phoneCountry),
@@ -105,7 +106,7 @@ export default function NewPersonScreen() {
         classifications,
       });
       await store.savePerson(person);
-      router.replace(`/person/${encodeURIComponent(person.id)}` as never);
+      router.replace({ pathname: `/person/${encodeURIComponent(person.id)}`, params: { saved: '1' } } as never);
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : '';
       setError(code.includes('NAME') ? t('people.name_required')

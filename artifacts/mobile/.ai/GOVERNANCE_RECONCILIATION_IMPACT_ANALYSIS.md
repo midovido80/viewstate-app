@@ -1,5 +1,7 @@
 # ViewState App V001 — Final Governance Reconciliation Impact Analysis
 
+> **Historical runtime-status notice (2026-08-31):** This document records the governance baseline at the time of reconciliation. Its PRE-IMPLEMENTATION, “no implemented dataset,” and conditional dataset-discovery statements are superseded for current persistence operations by `CURRENT_STATE.md` → **Persistence Authority Boundary**. The running mobile app now has a known local SQLite/AsyncStorage dataset that must receive compatibility and migration assessment before any future server schema or synchronization work. This notice does not alter the historical decisions or authorize server work.
+
 ## 1. Document Control
 
 - Repository: https://github.com/midovido80/viewstate-app.git

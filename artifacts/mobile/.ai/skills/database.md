@@ -13,6 +13,10 @@
 - **Migration tool:** `drizzle-kit`
 - **Validation:** `drizzle-zod` (auto-generate Zod schemas from Drizzle tables)
 
+## Persistence Boundary
+
+These rules apply to the future server-side PostgreSQL/Drizzle boundary only. The implemented mobile runtime remains local-first: SQLite/AsyncStorage and shared mobile domain validation/contracts are authoritative for mobile data and runtime shape. Future server schemas and generated types must not be treated as the mobile runtime contract.
+
 ---
 
 ## Schema Writing Rules
@@ -73,7 +77,8 @@ export const properties = pgTable('properties', {
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { properties } from './schema';
 
-// Generated schemas — use these in API validation and client types
+// Generated schemas — use these in future server API validation and future
+// server types; they do not define the implemented mobile runtime contract
 export const insertPropertySchema = createInsertSchema(properties, {
   price: z.coerce.number().positive(),
   bedrooms: z.coerce.number().int().min(0).max(20).optional(),
@@ -180,21 +185,21 @@ pnpm --filter @workspace/db run push
 
 This addendum is authoritative for future implementation after the approved governance reconciliation. Historical Stage 00.1–00.4 wording and prior decisions remain preserved as historical evidence; where a conflict exists, the later append-only reconciliation decisions control.
 
-- Status remains PRE-IMPLEMENTATION.
+- The future server database layer remains PRE-IMPLEMENTATION and separately locked.
 - Stage 00.5 is not defined and must not be fabricated.
 - Stage 01 has not begun.
 - Product implementation remains unauthorized until a bounded Stage 01 Impact Analysis is approved.
 - No database migration is authorized or required by this reconciliation.
 - Any role, price, Draft, or compatibility migration reference is a future schema/compatibility risk only.
-- If an implemented dataset is discovered before future schema work, the relevant stage must stop for a fresh compatibility and migration assessment.
+- The implemented mobile app has a local SQLite/AsyncStorage dataset. Before any future server schema or synchronization work, the relevant stage must stop for a fresh compatibility and migration assessment.
 - ViewState App is one Android/iOS product. Android-first is rollout priority only; iOS architectural compatibility is continuous.
 - Simplicity and Speed, Capture First → Enrich Later, Private by default, Explicit sharing, and No silent loss remain mandatory.
 
 
 ## Governance Reconciliation — Database Stage Gates
 
-No database schema or migration is authorized by the reconciliation. The current app is PRE-IMPLEMENTATION and has no implemented V001 dataset requiring migration now.
+No database schema or migration is authorized by the reconciliation. The current mobile app has an implemented local dataset, but no server database migration is authorized or required by this clarification.
 
 Future database work must assess five Person classifications, separate Requirements and multiple Requirements per Seeker, Requirement Rent/Buy, separate Rental Price/Sale Price, platform-neutral location coordinates, Draft identity and recovery, media retention, backup/restore, and import/export compatibility.
 
-If implemented data is discovered, stop and perform a fresh compatibility and migration assessment. Do not silently map old values or discard data.
+Before future server work, perform a fresh compatibility and migration assessment for the implemented local dataset. Do not silently map old values or discard data.
