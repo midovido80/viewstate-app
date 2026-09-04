@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { URL } from 'node:url';
+import { resolveSourcePath } from './sourcePath.ts';
 
 import {
   buildPropertySharePreview,
@@ -115,7 +117,58 @@ import {
 } from '../services/phoneEntry.ts';
 
 const sharedSourcePath = (relativePath: string) =>
-  decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  resolveSourcePath(relativePath, import.meta.url);
+
+const sourcePathCases = [
+  {
+    name: 'Windows absolute backslash path keeps its own drive',
+    windows: true,
+    input: String.raw`D:\fixtures\app\_layout.tsx`,
+    base: 'file:///Q:/QA%20workspace/tests/runner.ts',
+    expected: String.raw`D:\fixtures\app\_layout.tsx`,
+  },
+  {
+    name: 'Windows absolute forward-slash path keeps its own drive',
+    windows: true,
+    input: 'D:/fixtures/app/_layout.tsx',
+    base: 'file:///Q:/QA%20workspace/tests/runner.ts',
+    expected: String.raw`D:\fixtures\app\_layout.tsx`,
+  },
+  {
+    name: 'Windows relative path resolves from a decoded module URL',
+    windows: true,
+    input: '../app/_layout.tsx',
+    base: 'file:///Q:/QA%20workspace/%E2%9C%93/tests/runner.ts',
+    expected: String.raw`Q:\QA workspace\✓\app\_layout.tsx`,
+  },
+  {
+    name: 'POSIX absolute path is not prefixed with the module directory',
+    windows: false,
+    input: '/fixtures/app/_layout.tsx',
+    base: 'file:///workspace/tests/runner.ts',
+    expected: '/fixtures/app/_layout.tsx',
+  },
+  {
+    name: 'POSIX relative path resolves from a decoded module URL',
+    windows: false,
+    input: '../app/_layout.tsx',
+    base: 'file:///QA%20workspace/%E2%9C%93/tests/runner.ts',
+    expected: '/QA workspace/✓/app/_layout.tsx',
+  },
+];
+
+for (const { name, input, base, windows, expected } of sourcePathCases) {
+  test(`Source path: ${name}`, () => {
+    assert.equal(resolveSourcePath(input, base, windows), expected);
+  });
+}
+
+test('Source path: resolved native path reads the same file as its file URL', async () => {
+  assert.equal(
+    await readFile(sharedSourcePath('../app.json'), 'utf8'),
+    await readFile(new URL('../app.json', import.meta.url), 'utf8'),
+  );
+});
 
 test('Bounded People model preserves literal fields and normalized phone search', () => {
   assert.deepEqual(PERSON_CLASSIFICATIONS, [
@@ -151,7 +204,7 @@ test('Bounded People model preserves literal fields and normalized phone search'
 test('New domain identity creation is centralized on Expo secure UUID v4', async () => {
   const { generateDomainId } = await import('../services/identity.ts');
   const sourcePath = (relativePath: string) =>
-    decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+    resolveSourcePath(relativePath, import.meta.url);
   const [identity, capture, person, attachments, persistence, packageJson] = await Promise.all([
     readFile(sourcePath('../services/identity.ts'), 'utf8'),
     readFile(sourcePath('../contexts/CaptureContext.tsx'), 'utf8'),
@@ -217,7 +270,7 @@ test('New domain identity creation is centralized on Expo secure UUID v4', async
 
 test('People source exposes selected contact import, actions, links, and confirmations', async () => {
   const sourcePath = (relativePath: string) =>
-    decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+    resolveSourcePath(relativePath, import.meta.url);
   const [form, detail, persistence, translations] = await Promise.all([
     readFile(sourcePath('../app/person/new.tsx'), 'utf8'),
     readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
@@ -242,7 +295,7 @@ test('People source exposes selected contact import, actions, links, and confirm
 
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Later action', async () => {
   const sourcePath = (relativePath: string) =>
-    decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+    resolveSourcePath(relativePath, import.meta.url);
   const [successSource, enrichmentSource, fieldSource, detailSource, translations] = await Promise.all([
     readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
@@ -1423,7 +1476,7 @@ test('Single-flight guard prevents rapid duplicate submissions', async () => {
 });
 
 test('Capture reliability UI exposes localized errors and accessible stable controls', async () => {
-  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const [i18n, header, selectCard, location, summary, button, captureContext, draftService] = await Promise.all([
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
     readFile(sourcePath('../components/CaptureHeader.tsx'), 'utf8'),
@@ -1900,7 +1953,7 @@ test('Task 6 executable recovery simulation: unreadable and unresolved operation
 });
 
 test('Task 6 static/source assertions: detail, monthly cadence, accessibility, back/discard and localized RTL-safe editing are wired', async () => {
-  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const [detail, home, i18n, market, price, summary] = await Promise.all([
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../app/(tabs)/index.tsx'), 'utf8'),
@@ -2071,7 +2124,7 @@ test('Synthetic deletion service simulation never reports storage failure as suc
 });
 
 test('Deletion source keeps cancellation inert and safeguards privacy-minimal', async () => {
-  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const detail = await readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8');
   const [persistence, sqliteInitialization] = await Promise.all([
     readFile(sourcePath('../services/persistence.ts'), 'utf8'),
@@ -2102,7 +2155,7 @@ test('Deletion source keeps cancellation inert and safeguards privacy-minimal', 
 });
 
 test('Task 6 static/source assertions: native atomic CAS/shared queue and web exclusive lock/unsupported gate are explicit', async () => {
-  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const persistence = await readFile(sourcePath('../services/persistence.ts'), 'utf8');
   assert.match(persistence, /const nativeMutations = new SerialTaskQueue\(\)/);
   assert.match(persistence, /UPDATE properties SET data = \?, search_text = \? WHERE id = \? AND data = \?/);
@@ -2416,7 +2469,7 @@ test('V001 selective sharing defaults exclude private notes and injected sharing
 });
 
 test('V001 bilingual labels and source wiring remain explicit', async () => {
-  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const [translations, personDetail, enrichment] = await Promise.all([
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
     readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
@@ -2513,7 +2566,7 @@ test('Private Property Source domain stays additive and restricted to approved r
 });
 
 test('Private source persistence, UI, privacy, attachment opening, and archive policy are explicit', async () => {
-  const sourcePath = (relativePath: string) => decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const [
     persistence,
     sqliteInitialization,
