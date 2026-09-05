@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Property, PROPERTY_DETAIL_FIELD_DEFINITIONS, PROPERTY_TYPES, PropertyDetailField, Transaction } from '@workspace/property-domain';
+import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
-import { formatPropertyDetailValue, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
+import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
@@ -552,7 +552,7 @@ export default function PropertyDetailScreen() {
                 <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none')}</Text>
               )}
             </View>
-            {property.typeDetails ? PROPERTY_DETAIL_FIELD_DEFINITIONS
+            {property.typeDetails ? propertyDetailDisplayDefinitions
               .filter(definition => definition.appliesTo.includes(property.core.propertyType))
               .map(definition => {
                 const value = (property.typeDetails as unknown as Record<string, unknown>)[definition.field];
