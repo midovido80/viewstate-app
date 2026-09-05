@@ -242,6 +242,118 @@ test('Native consolidation refuses unrelated requirement row-id mismatch before 
   assert.equal(db.writes.length, 0);
 });
 
+test('Native consolidation preflights every persisted relationship before writes', async () => {
+  const { SQLiteStore } = await import('../services/persistence.ts');
+  const cases: ReadonlyArray<{
+    name: string;
+    error: RegExp;
+    corrupt: (db: SQLitePersistenceHarness, first: Person) => void;
+  }> = [
+    {
+      name: 'unrelated malformed person',
+      error: /UNREADABLE_PERSON_STORAGE/,
+      corrupt: db => db.people.set('unrelated-malformed-person', {
+        id: 'unrelated-malformed-person',
+        data: '{"broken":true}',
+        searchText: 'original:unrelated-malformed-person',
+      }),
+    },
+    {
+      name: 'malformed property',
+      error: /UNREADABLE_PROPERTY_STORAGE/,
+      corrupt: db => db.properties.set('native-malformed-property', {
+        id: 'native-malformed-property',
+        data: '{"broken":true}',
+        searchText: 'original:native-malformed-property',
+      }),
+    },
+    {
+      name: 'malformed link',
+      error: /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/,
+      corrupt: db => db.links.push({ personId: '', propertyCoreId: 'native-preflight-property' }),
+    },
+    {
+      name: 'link with missing person',
+      error: /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/,
+      corrupt: db => db.links.push({
+        personId: 'missing-person',
+        propertyCoreId: 'native-preflight-property',
+      }),
+    },
+    {
+      name: 'link with missing property',
+      error: /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/,
+      corrupt: (_db, first) => _db.links.push({
+        personId: first.id,
+        propertyCoreId: 'missing-property',
+      }),
+    },
+    {
+      name: 'malformed source',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: db => db.sources.push({
+        propertyCoreId: 'native-preflight-property',
+        personId: '',
+        role: 'owner',
+      }),
+    },
+    {
+      name: 'source with missing person',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: db => db.sources.push({
+        propertyCoreId: 'native-preflight-property',
+        personId: 'missing-person',
+        role: 'owner',
+      }),
+    },
+    {
+      name: 'source with missing property',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: (db, first) => db.sources.push({
+        propertyCoreId: 'missing-property',
+        personId: first.id,
+        role: 'owner',
+      }),
+    },
+    {
+      name: 'source role ineligibility',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: (db, first) => db.sources.push({
+        propertyCoreId: 'native-preflight-property',
+        personId: first.id,
+        role: 'broker',
+      }),
+    },
+  ];
+  for (const scenario of cases) {
+    const first = fixturePerson('native-preflight-a');
+    const second = createPerson({
+      ...fixturePerson('native-preflight-b'),
+      classifications: ['seeker'],
+      displayPhone: first.displayPhone,
+    });
+    const property = kwdProperty('native-preflight-property');
+    const db = new SQLitePersistenceHarness(
+      [{ id: property.core.id, data: JSON.stringify(property) }],
+      [
+        { id: first.id, data: JSON.stringify(first) },
+        { id: second.id, data: JSON.stringify(second) },
+      ],
+    );
+    db.migrations.add(STAGE_01B1_PROPERTY_MIGRATION_ID);
+    db.migrations.add(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID);
+    scenario.corrupt(db, first);
+    const before = db.rawSnapshot();
+    db.clearWrites();
+    const store = new SQLiteStore(
+      async () => db as unknown as import('expo-sqlite').SQLiteDatabase,
+    );
+    await assert.rejects(store.init(), scenario.error, scenario.name);
+    assert.deepEqual(db.rawSnapshot(), before, scenario.name);
+    assert.equal(db.writes.length, 0, scenario.name);
+  }
+});
+
 test('Web consolidation refuses dangling or role-ineligible sources without writes', async () => {
   const { WebStore } = await import('../services/persistence.ts');
   for (const source of [
@@ -330,6 +442,8 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
   readonly propertyChronology = new Map<string, number>();
   readonly personChronology = new Map<string, number>();
   readonly requirements = new Map<string, string>();
+  readonly links: Array<{ personId: unknown; propertyCoreId: unknown }> = [];
+  readonly sources: Array<{ propertyCoreId: unknown; personId: unknown; role: unknown }> = [];
   readonly migrations = new Set<string>();
   readonly writes: Array<{ sql: string; params: unknown[] }> = [];
   schemaExecutions = 0;
@@ -382,6 +496,12 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
     }
     if (source.includes('FROM seeker_requirements')) {
       return [...this.requirements].map(([id, data]) => ({ id, data })) as T[];
+    }
+    if (source.includes('FROM person_property_links')) {
+      return this.links.map(link => ({ ...link })) as T[];
+    }
+    if (source.includes('FROM property_sources')) {
+      return this.sources.map(sourceRow => ({ ...sourceRow })) as T[];
     }
     throw new Error(`Unexpected read: ${source}`);
   }
@@ -446,6 +566,20 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
     const row = this.people.get(id);
     assert.ok(row, `Expected person ${id} to exist`);
     return row.data;
+  }
+
+  rawSnapshot(): {
+    people: Map<string, string>;
+    properties: Map<string, string>;
+    links: Array<{ personId: unknown; propertyCoreId: unknown }>;
+    sources: Array<{ propertyCoreId: unknown; personId: unknown; role: unknown }>;
+  } {
+    return {
+      people: new Map([...this.people].map(([id, row]) => [id, row.data])),
+      properties: new Map([...this.properties].map(([id, row]) => [id, row.data])),
+      links: this.links.map(link => ({ ...link })),
+      sources: this.sources.map(sourceRow => ({ ...sourceRow })),
+    };
   }
 
   clearWrites(): void {

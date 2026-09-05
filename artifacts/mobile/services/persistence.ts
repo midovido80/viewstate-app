@@ -468,6 +468,52 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
     }
   }
 
+  private async preflightNativeConsolidationStorage(): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    const [peopleRows, propertyRows, links, sources] = await Promise.all([
+      this.db.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM people'),
+      this.db.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM properties'),
+      this.db.getAllAsync<{ personId: string; propertyCoreId: string }>(
+        `SELECT person_id AS personId, property_core_id AS propertyCoreId
+         FROM person_property_links`,
+      ),
+      this.db.getAllAsync<{ propertyCoreId: string; personId: string; role: PropertySource['role'] }>(
+        `SELECT property_core_id AS propertyCoreId, person_id AS personId, role
+         FROM property_sources`,
+      ),
+    ]);
+    const people = peopleRows.map(row => this.parsePersonRow(row));
+    if (people.some(person => person === null)) throw new Error('UNREADABLE_PERSON_STORAGE');
+    const properties = propertyRows.map(row => this.parsePropertyRow(row));
+    if (properties.some(property => property === null)) throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    const readablePeople = new Map(
+      people.filter((person): person is Person => person !== null).map(person => [person.id, person]),
+    );
+    const readablePropertyIds = new Set(
+      properties.filter((property): property is Property => property !== null)
+        .map(property => property.core.id),
+    );
+    if (links.some(link => !link
+      || typeof link.personId !== 'string' || !link.personId
+      || typeof link.propertyCoreId !== 'string' || !link.propertyCoreId
+      || !readablePeople.has(link.personId) || !readablePropertyIds.has(link.propertyCoreId))) {
+      throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    }
+    if (sources.some(source => {
+      try {
+        if (!source || !validatePropertySource(source).ok) return true;
+        const person = readablePeople.get(source.personId);
+        return !person
+          || !readablePropertyIds.has(source.propertyCoreId)
+          || !personCanBePropertySource(person, source.role);
+      } catch {
+        return true;
+      }
+    })) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    }
+  }
+
   private async consolidateNativePeople(
     candidates: readonly Person[],
     replacement?: Person,
@@ -505,6 +551,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
     if (parsedRequirements.some(item => !item.requirement)) {
       throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
     }
+    await this.preflightNativeConsolidationStorage();
     await this.db.withTransactionAsync(async () => {
       await this.db!.runAsync(
         'UPDATE people SET data = ?, search_text = ? WHERE id = ?',
