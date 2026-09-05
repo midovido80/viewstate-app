@@ -1,5 +1,6 @@
 import {
   validateSeekerRequirement,
+  type MatchResult,
   type RequirementOccupancy,
   type RequirementPurpose,
   type RequirementValidationIssue,
@@ -7,6 +8,8 @@ import {
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import type { PropertyType } from '@workspace/property-domain';
+import type { BrokerMatchingRunResult } from '@/services/brokerInitiatedMatching';
+import type { Person } from '@/services/people';
 
 export interface TransientRequirementInput {
   readonly id: string;
@@ -35,6 +38,72 @@ export type TransientRequirementResult =
       readonly ok: false;
       readonly issues: readonly RequirementValidationIssue[];
     };
+
+export interface MatchAllRequirementGroup {
+  readonly requirement: SeekerRequirement;
+  readonly matches: readonly MatchResult[];
+}
+
+export interface MatchAllPersonGroup {
+  readonly person: Person;
+  readonly requirementGroups: readonly MatchAllRequirementGroup[];
+}
+
+export function validMatchingRequirements(
+  requirements: readonly SeekerRequirement[],
+): SeekerRequirement[] {
+  return requirements.flatMap(requirement => {
+    const validation = validateSeekerRequirement(requirement, {
+      isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
+    });
+    return validation.ok ? [validation.value] : [];
+  });
+}
+
+export async function runMatchingForAllRequirements(
+  requirements: readonly SeekerRequirement[],
+  runForRequirement: (requirementId: string) => Promise<BrokerMatchingRunResult>,
+): Promise<BrokerMatchingRunResult[]> {
+  return Promise.all(
+    requirements.map(requirement => runForRequirement(requirement.id)),
+  );
+}
+
+export function groupMatchAllResultsByPerson(
+  requirements: readonly SeekerRequirement[],
+  people: readonly Person[],
+  runs: readonly BrokerMatchingRunResult[],
+): MatchAllPersonGroup[] {
+  const peopleById = new Map(people.map(person => [person.id, person]));
+  const runsByRequirementId = new Map(
+    runs.map(run => [run.requirementId, run]),
+  );
+  const groups = new Map<string, {
+    person: Person;
+    requirementGroups: MatchAllRequirementGroup[];
+  }>();
+
+  for (const requirement of requirements) {
+    const run = runsByRequirementId.get(requirement.id);
+    const person = peopleById.get(requirement.seekerId);
+    if (!run?.matches.length || !person) continue;
+    const existing = groups.get(person.id);
+    const requirementGroup = {
+      requirement,
+      matches: run.matches,
+    };
+    if (existing) {
+      existing.requirementGroups.push(requirementGroup);
+    } else {
+      groups.set(person.id, {
+        person,
+        requirementGroups: [requirementGroup],
+      });
+    }
+  }
+
+  return [...groups.values()];
+}
 
 /**
  * Builds the exact M1 Requirement contract for a quick, non-persistent match.

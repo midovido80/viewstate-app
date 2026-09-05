@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import {
   type MatchExplanation,
   type MatchResult,
   type MatchCriterion,
+  type Property,
   type PropertyType,
   type RequirementOccupancy,
   type RequirementPurpose,
@@ -34,7 +35,13 @@ import {
   BrokerInitiatedMatching,
   type BrokerMatchingRunResult,
 } from '@/services/brokerInitiatedMatching';
-import { buildTransientRequirement } from '@/services/matchingUi';
+import {
+  buildTransientRequirement,
+  groupMatchAllResultsByPerson,
+  runMatchingForAllRequirements,
+  validMatchingRequirements,
+  type MatchAllPersonGroup,
+} from '@/services/matchingUi';
 import type { Person } from '@/services/people';
 
 type MatchingMode = 'saved' | 'quick';
@@ -181,14 +188,23 @@ function FormInput({
 function ResultCard({
   result,
   rank,
+  property,
+  requirement,
+  onPress,
 }: {
   result: MatchResult;
   rank: number;
+  property: Property | undefined;
+  requirement: SeekerRequirement;
+  onPress: () => void;
 }) {
   const colors = useColors();
   const { t, isRTL, language, fonts } = useI18n();
   return (
-    <View
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
       style={[
         styles.resultCard,
         {
@@ -210,7 +226,33 @@ function ResultCard({
             {t('matching.results.property')}
           </Text>
           <Text style={[styles.propertyId, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {result.propertyId}
+            {property
+              ? `${t(`propertyType.${property.core.propertyType}`)} · ${
+                getAreaById(property.core.locationArea.id)?.[language]
+                  ?? property.core.locationArea.id
+              }`
+              : t(`propertyType.${requirement.propertyType}`)}
+          </Text>
+          {property ? (
+            <Text style={[styles.propertySummary, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {`${property.activeOffer.transaction === 'sale'
+                ? property.activeOffer.salePrice.amount
+                : property.activeOffer.rentalPrice.amount} ${
+                property.activeOffer.transaction === 'sale'
+                  ? property.activeOffer.salePrice.currencyCode
+                  : property.activeOffer.rentalPrice.currencyCode
+              }${
+                property.typeDetails && 'bedroomCount' in property.typeDetails
+                  && typeof property.typeDetails.bedroomCount === 'number'
+                  ? ` · ${property.typeDetails.bedroomCount} ${t('matching.results.bedrooms')}`
+                  : ''
+              }`}
+            </Text>
+          ) : null}
+          <Text style={[styles.requirementContext, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+            {t('matching.results.requirementContext')
+              .replace('{purpose}', t(`matching.purpose.${requirement.purpose}`))
+              .replace('{type}', t(`propertyType.${requirement.propertyType}`))}
           </Text>
         </View>
         <View style={styles.scoreBlock}>
@@ -254,7 +296,7 @@ function ResultCard({
           );
         })}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -262,13 +304,14 @@ export default function MatchingScreen() {
   const { requirementId: requestedRequirementId } = useLocalSearchParams<{ requirementId?: string }>();
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
   const [mode, setMode] = useState<MatchingMode>('saved');
   const [requirements, setRequirements] = useState<SeekerRequirement[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
-  const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [selectedSeekerId, setSelectedSeekerId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<RequirementPurpose>('rent');
   const [propertyType, setPropertyType] = useState<PropertyType>('apartment');
@@ -285,6 +328,8 @@ export default function MatchingScreen() {
   const [centralAC, setCentralAC] = useState<boolean | undefined>();
   const [notes, setNotes] = useState('');
   const [runResult, setRunResult] = useState<BrokerMatchingRunResult | null>(null);
+  const [quickRequirement, setQuickRequirement] = useState<SeekerRequirement | null>(null);
+  const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -302,17 +347,13 @@ export default function MatchingScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([store.getRequirements(), store.getPeople()])
-        .then(([loadedRequirements, loadedPeople]) => {
+      Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
+        .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
           if (!active) return;
-          setRequirements(loadedRequirements);
+          setRequirements(validMatchingRequirements(loadedRequirements));
           setPeople(loadedPeople);
-          if (requestedRequirementId && loadedRequirements.some(item => item.id === requestedRequirementId)) {
-            setMode('saved');
-            setSelectedRequirementId(requestedRequirementId);
-          } else {
-            setSelectedRequirementId(current => current ?? loadedRequirements[0]?.id ?? null);
-          }
+          setProperties(loadedProperties);
+          if (requestedRequirementId) setMode('saved');
           const firstSeeker = loadedPeople.find(person =>
             person.classifications.includes('seeker'),
           );
@@ -329,6 +370,8 @@ export default function MatchingScreen() {
 
   const clearRun = () => {
     setRunResult(null);
+    setQuickRequirement(null);
+    setMatchAllGroups(null);
     setError('');
   };
 
@@ -357,12 +400,12 @@ export default function MatchingScreen() {
       let matching: BrokerInitiatedMatching;
 
       if (mode === 'saved') {
-        if (!selectedRequirementId) {
-          setError(t('matching.validation'));
-          return;
-        }
         matching = new BrokerInitiatedMatching(store, candidateSource);
-        setRunResult(await matching.runForRequirement(selectedRequirementId));
+        const runs = await runMatchingForAllRequirements(
+          requirements,
+          requirementId => matching.runForRequirement(requirementId),
+        );
+        setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
         return;
       }
 
@@ -393,6 +436,7 @@ export default function MatchingScreen() {
           id === transient.value.id ? transient.value : null,
       };
       matching = new BrokerInitiatedMatching(transientStore, candidateSource);
+      setQuickRequirement(transient.value);
       setRunResult(await matching.runForRequirement(transient.value.id));
     } catch (runError) {
       console.error(runError);
@@ -470,31 +514,13 @@ export default function MatchingScreen() {
         {mode === 'saved' ? (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.saved.title')}
+              {t('matching.saved.matchAllTitle')}
             </Text>
             <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-              {requirements.length ? t('matching.saved.select') : t('matching.saved.empty')}
+              {requirements.length
+                ? t('matching.saved.matchAllDescription')
+                : t('matching.saved.empty')}
             </Text>
-            {requirements.map(requirement => {
-              const seeker = people.find(person => person.id === requirement.seekerId);
-              const firstArea = getAreaById(requirement.preferredAreaIds[0] ?? '');
-              const areaName = firstArea
-                ? language === 'ar' ? firstArea.ar : firstArea.en
-                : requirement.preferredAreaIds[0];
-              return (
-                <SelectCard
-                  key={requirement.id}
-                  title={`${seeker?.name ?? requirement.seekerId} · ${t(`propertyType.${requirement.propertyType}`)} · ${areaName}`}
-                  icon="user"
-                  selected={selectedRequirementId === requirement.id}
-                  onSelect={() => {
-                    clearRun();
-                    setSelectedRequirementId(requirement.id);
-                  }}
-                  testID={`matching-requirement-${requirement.id}`}
-                />
-              );
-            })}
           </View>
         ) : (
           <View>
@@ -720,7 +746,9 @@ export default function MatchingScreen() {
         ) : null}
 
         <Button
-          title={loading ? t('matching.running') : t('matching.run')}
+          title={loading
+            ? t('matching.running')
+            : mode === 'saved' ? t('matching.runAll') : t('matching.run')}
           onPress={runMatching}
           loading={loading}
           disabled={loading}
@@ -728,7 +756,73 @@ export default function MatchingScreen() {
           testID="matching-run"
         />
 
-        {runResult ? (
+        {matchAllGroups ? (
+          <View style={styles.resultsSection} testID="matching-results">
+            <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.resultsCopy}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t('matching.results.groupedTitle')}
+                </Text>
+                <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t('matching.results.count').replace(
+                    '{count}',
+                    String(matchAllGroups.reduce(
+                      (count, group) => count + group.requirementGroups.reduce(
+                        (subtotal, item) => subtotal + item.matches.length,
+                        0,
+                      ),
+                      0,
+                    )),
+                  )}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
+                <Text style={[styles.clearText, { color: colors.primary, fontFamily: fonts.semiBold }]}>
+                  {t('matching.clear')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {matchAllGroups.length ? matchAllGroups.map(group => (
+              <View key={group.person.id} style={styles.personGroup} testID={`matching-person-group-${group.person.id}`}>
+                <TouchableOpacity
+                  onPress={() => router.push(`/person/${encodeURIComponent(group.person.id)}`)}
+                  accessibilityRole="button"
+                  testID={`matching-person-${group.person.id}`}
+                  style={[styles.personHeader, { backgroundColor: colors.accent, borderRadius: colors.cardRadius }]}
+                >
+                  <Text style={[styles.personName, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
+                    {group.person.name}
+                  </Text>
+                  <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
+                </TouchableOpacity>
+                {group.requirementGroups.flatMap(requirementGroup =>
+                  requirementGroup.matches.map((result, index) => (
+                    <ResultCard
+                      key={`${requirementGroup.requirement.id}-${result.propertyId}`}
+                      result={result}
+                      rank={index + 1}
+                      requirement={requirementGroup.requirement}
+                      property={properties.find(item => item.core.id === result.propertyId)}
+                      onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
+                    />
+                  )))}
+              </View>
+            )) : (
+              <View style={[styles.zeroState, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-zero-results">
+                <Feather name="search" size={38} color={colors.mutedForeground} />
+                <Text style={[styles.zeroTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: 'center' }]}>
+                  {t('matching.results.emptyTitle')}
+                </Text>
+                <Text style={[styles.zeroBody, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }]}>
+                  {t('matching.results.emptyAllBody')}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('matching.results.transient')}
+            </Text>
+          </View>
+        ) : runResult && quickRequirement ? (
           <View style={styles.resultsSection} testID="matching-results">
             <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <View style={styles.resultsCopy}>
@@ -747,7 +841,14 @@ export default function MatchingScreen() {
             </View>
             {runResult.matches.length ? (
               runResult.matches.map((result, index) => (
-                <ResultCard key={result.propertyId} result={result} rank={index + 1} />
+                <ResultCard
+                  key={result.propertyId}
+                  result={result}
+                  rank={index + 1}
+                  requirement={quickRequirement}
+                  property={properties.find(item => item.core.id === result.propertyId)}
+                  onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
+                />
               ))
             ) : (
               <View style={[styles.zeroState, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-zero-results">
@@ -816,8 +917,13 @@ const styles = StyleSheet.create({
   resultIdentity: { flex: 1 },
   resultLabel: { fontSize: 11, lineHeight: 15 },
   propertyId: { fontSize: 15, lineHeight: 21, marginTop: 1 },
+  propertySummary: { fontSize: 12, lineHeight: 18, marginTop: 2 },
+  requirementContext: { fontSize: 11, lineHeight: 16, marginTop: 3 },
   scoreBlock: { alignItems: 'flex-end' },
   score: { fontSize: 21, lineHeight: 26 },
+  personGroup: { marginBottom: 16 },
+  personHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, padding: 14 },
+  personName: { flex: 1, fontSize: 18, lineHeight: 24 },
   explanationHeader: { alignItems: 'center', borderTopWidth: 1, gap: 7, marginTop: 14, paddingTop: 12 },
   explanationTitle: { fontSize: 13 },
   explanations: { gap: 8, marginTop: 10 },
