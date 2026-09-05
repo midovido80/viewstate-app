@@ -2,11 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import type {
+  MatchResult,
   MatchingPropertyCandidate,
   Property,
+  SeekerRequirement,
 } from '@workspace/property-domain';
-import { buildTransientRequirement } from '../services/matchingUi.ts';
+import {
+  buildTransientRequirement,
+  groupMatchAllResultsByPerson,
+  runMatchingForAllRequirements,
+  validMatchingRequirements,
+} from '../services/matchingUi.ts';
 import { BrokerInitiatedMatching } from '../services/brokerInitiatedMatching.ts';
+import { createPerson } from '../services/people.ts';
 
 const REQUIREMENT_ID = '55555555-5555-4555-8555-555555555555';
 const AREA_ID = 'abdullah_al_salem';
@@ -165,6 +173,138 @@ test('passes a quick transient Requirement through M4 without a Match store', as
   assert.ok(result.matches.every(match => match.score >= 70 && match.qualifies));
 });
 
+test('Match All runs every valid Requirement in deterministic input order', async () => {
+  const first = buildTransientRequirement({
+    id: REQUIREMENT_ID,
+    seekerId: 'person-1',
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: [AREA_ID],
+    minimumBudget: 500,
+    maximumBudget: 800,
+    notes: '',
+  });
+  const second = buildTransientRequirement({
+    id: '66666666-6666-4666-8666-666666666666',
+    seekerId: 'person-2',
+    purpose: 'buy',
+    propertyType: 'villa',
+    preferredAreaIds: [AREA_ID],
+    minimumBudget: 100000,
+    maximumBudget: 200000,
+    notes: '',
+  });
+  assert.ok(first.ok && second.ok);
+  if (!first.ok || !second.ok) return;
+  const called: string[] = [];
+  const runs = await runMatchingForAllRequirements(
+    [first.value, second.value],
+    async requirementId => {
+      called.push(requirementId);
+      return { requirementId, matches: [] };
+    },
+  );
+  assert.deepEqual(called, [first.value.id, second.value.id]);
+  assert.deepEqual(runs.map(run => run.requirementId), called);
+});
+
+test('Match All groups multiple Requirements once per Person and omits empty Persons', () => {
+  const first = buildTransientRequirement({
+    id: REQUIREMENT_ID,
+    seekerId: 'person-1',
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: [AREA_ID],
+    minimumBudget: 500,
+    maximumBudget: 800,
+    notes: '',
+  });
+  const second = buildTransientRequirement({
+    id: '66666666-6666-4666-8666-666666666666',
+    seekerId: 'person-1',
+    purpose: 'buy',
+    propertyType: 'villa',
+    preferredAreaIds: [AREA_ID],
+    minimumBudget: 100000,
+    maximumBudget: 200000,
+    notes: '',
+  });
+  const empty = buildTransientRequirement({
+    id: '77777777-7777-4777-8777-777777777777',
+    seekerId: 'person-2',
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: [AREA_ID],
+    minimumBudget: 500,
+    maximumBudget: 800,
+    notes: '',
+  });
+  assert.ok(first.ok && second.ok && empty.ok);
+  if (!first.ok || !second.ok || !empty.ok) return;
+  const people = [
+    createPerson({
+      id: 'person-1',
+      name: 'Ahmed',
+      displayPhone: '+96550000001',
+      classifications: ['seeker'],
+      notes: '',
+    }),
+    createPerson({
+      id: 'person-2',
+      name: 'No matches',
+      displayPhone: '+96550000002',
+      classifications: ['seeker'],
+      notes: '',
+    }),
+  ];
+  const match = (propertyId: string, score: number): MatchResult => ({
+    requirementId: REQUIREMENT_ID,
+    propertyId,
+    eligible: true,
+    score,
+    qualifies: true,
+    includedWeight: 100,
+    locationRank: 0,
+    priceDistanceFromBudgetMidpoint: 0,
+    ineligibilityReasons: [],
+    explanations: [],
+  });
+  const groups = groupMatchAllResultsByPerson(
+    [first.value, second.value, empty.value],
+    people,
+    [
+      { requirementId: first.value.id, matches: [match('property-a', 92)] },
+      { requirementId: second.value.id, matches: [match('property-b', 83)] },
+      { requirementId: empty.value.id, matches: [] },
+    ],
+  );
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]?.person.id, 'person-1');
+  assert.deepEqual(
+    groups[0]?.requirementGroups.map(group => group.matches[0]?.propertyId),
+    ['property-a', 'property-b'],
+  );
+});
+
+test('Match All filters invalid saved Requirements without changing them', () => {
+  const valid = {
+    id: REQUIREMENT_ID,
+    seekerId: 'person-1',
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: [AREA_ID],
+    budget: { minimum: 500, maximum: 800, currencyCode: 'KWD' },
+    notes: '',
+  } as SeekerRequirement;
+  const invalid = {
+    ...valid,
+    id: '66666666-6666-4666-8666-666666666666',
+    preferredAreaIds: ['not-canonical'],
+  };
+  assert.deepEqual(validMatchingRequirements([valid, invalid]), [valid]);
+  assert.deepEqual(invalid.preferredAreaIds, ['not-canonical']);
+});
+
 test('wires the manual bilingual M5 tab and transient results without automatic matching', async () => {
   const [screen, tabLayout, i18n] = await Promise.all([
     readFile('app/(tabs)/matching.tsx', 'utf8'),
@@ -182,6 +322,8 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /matching\.results\.unknown/);
   assert.match(screen, /MATCH_QUALIFICATION_THRESHOLD/);
   assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
+  assert.match(screen, /runMatchingForAllRequirements/);
+  assert.match(screen, /groupMatchAllResultsByPerson/);
   assert.match(screen, /new BrokerInitiatedMatching\(transientStore, candidateSource\)/);
   assert.match(screen, /Crypto\.randomUUID\(\)/);
   assert.match(screen, /flexDirection: isRTL \? 'row-reverse' : 'row'/);
@@ -189,6 +331,10 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(i18n, /'matching\.title': 'المطابقة'/);
   assert.match(i18n, /'matching\.results\.unknown': 'Unknown'/);
   assert.match(i18n, /'matching\.results\.unknown': 'غير معروف'/);
+  assert.match(i18n, /'matching\.runAll': 'Match all'/);
+  assert.match(i18n, /'matching\.runAll': 'مطابقة الكل'/);
+  assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(group\.person\.id\)\}`\)/);
+  assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(result\.propertyId\)\}`\)/);
 
   const explicitHandler = screen.indexOf('const runMatching = async () =>');
   const firstExecution = screen.indexOf('.runForRequirement(');
@@ -200,16 +346,13 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.doesNotMatch(screen, /\.sort\(/);
 });
 
-test('Person entry selects its requested saved Requirement without regressing normal M5 focus state', async () => {
+test('Person entry opens the saved Match All mode without selecting one Requirement', async () => {
   const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
-  assert.match(screen, /if \(requestedRequirementId && loadedRequirements\.some/);
-  assert.match(screen, /setMode\('saved'\);\s*setSelectedRequirementId\(requestedRequirementId\)/);
-  assert.match(screen, /else \{\s*setSelectedRequirementId\(current => current \?\? loadedRequirements\[0\]\?\.id \?\? null\)/);
-  assert.doesNotMatch(screen, /else \{\s*setMode\('saved'\)/);
-  assert.doesNotMatch(screen, /setSelectedRequirementId\(\s*requestedRequirementId.*:\s*loadedRequirements\[0\]/s);
+  assert.match(screen, /if \(requestedRequirementId\) setMode\('saved'\)/);
+  assert.doesNotMatch(screen, /selectedRequirementId|setSelectedRequirementId/);
 
   const explicitHandler = screen.indexOf('const runMatching = async () =>');
-  const routeSelection = screen.indexOf('setSelectedRequirementId(requestedRequirementId)');
+  const routeSelection = screen.indexOf("if (requestedRequirementId) setMode('saved')");
   const firstExecution = screen.indexOf('.runForRequirement(');
   assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
 });
