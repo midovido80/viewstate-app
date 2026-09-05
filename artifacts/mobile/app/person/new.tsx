@@ -105,8 +105,8 @@ export default function NewPersonScreen() {
         notes,
         classifications,
       });
-      await store.savePerson(person);
-      router.replace({ pathname: `/person/${encodeURIComponent(person.id)}`, params: { saved: '1' } } as never);
+      const resolved = await store.savePerson(person);
+      router.replace({ pathname: `/person/${encodeURIComponent(resolved.id)}`, params: { saved: '1' } } as never);
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : '';
       setError(code.includes('NAME') ? t('people.name_required')
