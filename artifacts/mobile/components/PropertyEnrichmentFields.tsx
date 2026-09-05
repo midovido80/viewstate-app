@@ -6,6 +6,16 @@ import { toEnglishDigits } from '@/constants/market';
 
 export type EnrichmentFieldValues = Partial<Record<PropertyDetailField, string>>;
 
+const coreFieldOrder: readonly PropertyDetailField[] = [
+  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+];
+
+// Presentation only: keep domain applicability and persistence definitions unchanged.
+export const propertyDetailDisplayDefinitions = [
+  ...coreFieldOrder.map(field => PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)!),
+  ...PROPERTY_DETAIL_FIELD_DEFINITIONS.filter(definition => !coreFieldOrder.includes(definition.field)),
+];
+
 export const propertyDetailLabels: Record<PropertyDetailField, [string, string]> = {
   plotAreaSquareMeters: ['Plot area (m²)', 'مساحة الأرض (م²)'],
   builtUpAreaSquareMeters: ['Built-up area (m²)', 'مساحة البناء (م²)'],
@@ -99,7 +109,7 @@ export function PropertyEnrichmentFields({
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
   const floorUse = values.floorUse;
-  const definitions = PROPERTY_DETAIL_FIELD_DEFINITIONS.filter(definition =>
+  const definitions = propertyDetailDisplayDefinitions.filter(definition =>
     definition.appliesTo.includes(propertyType)
     && definition.field !== 'floorUse'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
