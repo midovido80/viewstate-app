@@ -30,9 +30,12 @@ import {
   type SQLiteInitializationDatabase,
   type SQLitePropertyRow,
 } from '../services/sqliteStoreInitialization.ts';
+import { WEB_REQUIREMENTS_KEY } from '../services/requirementPersistence.ts';
 import {
   assertValidPerson,
   createPerson,
+  enrichPersonIdentity,
+  personCanBePropertySource,
   type Person,
 } from '../services/people.ts';
 import './platformModuleStubs.ts';
@@ -77,11 +80,370 @@ const fixturePerson = (id: string, name = `Shared ${id}`): Person =>
     notes: `notes for ${id}`,
   });
 
+test('canonical identity enrichment unions roles without replacing authored fields', () => {
+  const canonical = createPerson({
+    id: 'canonical-person',
+    classifications: ['owner'],
+    name: 'Existing literal name',
+    displayPhone: '+965 5000 0000',
+    normalizedPhone: '+96550000000',
+    notes: 'Existing literal notes',
+  });
+  const incoming = createPerson({
+    id: 'new-person',
+    classifications: ['seeker', 'owner'],
+    name: 'Imported name must not replace',
+    displayPhone: '50000000',
+    normalizedPhone: '+96550000000',
+    notes: 'Imported notes must not replace',
+  });
+  assert.deepEqual(enrichPersonIdentity(canonical, incoming), {
+    ...canonical,
+    classifications: ['owner', 'seeker'],
+  });
+});
+
+test('property source eligibility is based on the selected role', () => {
+  const person = createPerson({
+    id: 'multi-role-source',
+    classifications: ['owner', 'seeker'],
+    name: 'Multi role',
+    displayPhone: '51111111',
+  });
+  assert.equal(personCanBePropertySource(person, 'owner'), true);
+  assert.equal(personCanBePropertySource(person, 'broker'), false);
+});
+
+test('WebStore resolves same-phone creation to the stable identity and unions roles', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  const storage = new WebStorageHarness([]);
+  const store = new WebStore(storage, synchronousWebLocks);
+  await store.init();
+  const canonical = createPerson({
+    id: 'web-canonical',
+    classifications: ['owner'],
+    name: 'Canonical literal',
+    displayPhone: '+965 5000 0000',
+    normalizedPhone: '+96550000000',
+    notes: 'keep',
+  });
+  const imported = createPerson({
+    id: 'web-imported',
+    classifications: ['seeker'],
+    name: 'Do not replace',
+    displayPhone: '50000000',
+    normalizedPhone: '+96550000000',
+    notes: 'do not replace',
+  });
+  assert.equal((await store.savePerson(canonical)).id, canonical.id);
+  const resolved = await store.savePerson(imported);
+  assert.equal(resolved.id, canonical.id);
+  assert.deepEqual((await store.getPeople()).map(person => person.id), [canonical.id]);
+  assert.deepEqual((await store.getPerson(canonical.id))?.classifications, ['owner', 'seeker']);
+  assert.equal((await store.getPerson(canonical.id))?.name, 'Canonical literal');
+});
+
+test('person source picker remains role-first and persistence enforces eligibility', async () => {
+  const [detail, persistence] = await Promise.all([
+    readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+  ]);
+  assert.match(detail, /setSourceRole\(role\)[\s\S]{0,260}setSourcePersonId\(''\)/);
+  assert.match(detail, /sourcePeople\.filter\(person => person\.classifications\.includes\(sourceRole\)\)/);
+  assert.match(persistence, /PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED/);
+});
+
+test('consolidation code preserves dependent relationship semantics and refuses opaque dependents', async () => {
+  const persistence = await readFile(sourcePath('../services/persistence.ts'), 'utf8');
+  assert.match(persistence, /INSERT OR IGNORE INTO person_property_links[\s\S]*SELECT \?/);
+  assert.match(persistence, /UPDATE property_sources SET person_id = \? WHERE person_id = \?/);
+  assert.match(persistence, /UNREADABLE_REQUIREMENT_STORAGE/);
+  assert.match(persistence, /literal: literal as Record<string, unknown>/);
+  assert.match(persistence, /createdAt\.get\(a\.id\)[\s\S]*a\.id\.localeCompare/);
+});
+
+test('Web legacy consolidation preserves every raw array when an opaque person exists', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  const duplicateA = fixturePerson('opaque-safe-a');
+  const duplicateB = createPerson({
+    ...fixturePerson('opaque-safe-b'),
+    displayPhone: duplicateA.displayPhone,
+  });
+  const rawPeople = JSON.stringify([duplicateA, duplicateB, { id: 'opaque', broken: true }]);
+  const storage = new WebStorageHarness([[WEB_PEOPLE_KEY, rawPeople]]);
+  const store = new WebStore(storage, synchronousWebLocks);
+  await store.init();
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), rawPeople);
+  assert.equal((await store.getPeople()).length, 3);
+});
+
+test('Web legacy consolidation refuses malformed requirement without dependent writes', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  const duplicateA = fixturePerson('requirement-safe-a');
+  const duplicateB = createPerson({
+    ...fixturePerson('requirement-safe-b'),
+    displayPhone: duplicateA.displayPhone,
+  });
+  const rawPeople = JSON.stringify([duplicateA, duplicateB]);
+  const rawRequirements = '[{\"id\":\"opaque-requirement\"}]';
+  const rawLinks = '[{\"personId\":\"requirement-safe-b\",\"propertyCoreId\":\"p\"}]';
+  const rawSources = '[{\"propertyCoreId\":\"p\",\"personId\":\"requirement-safe-b\",\"role\":\"owner\"}]';
+  const storage = new WebStorageHarness([
+    [WEB_PEOPLE_KEY, rawPeople],
+    [WEB_REQUIREMENTS_KEY, rawRequirements],
+    ['@viewstate_person_property_links_v1', rawLinks],
+    ['@viewstate_property_sources_v1', rawSources],
+  ]);
+  const store = new WebStore(storage, synchronousWebLocks);
+  await assert.rejects(store.init(), /UNREADABLE_REQUIREMENT_STORAGE/);
+  assert.equal(storage.values.get(WEB_PEOPLE_KEY), rawPeople);
+  assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), rawRequirements);
+  assert.equal(storage.values.get('@viewstate_person_property_links_v1'), rawLinks);
+  assert.equal(storage.values.get('@viewstate_property_sources_v1'), rawSources);
+});
+
+test('Native consolidation refuses unrelated requirement row-id mismatch before writes', async () => {
+  const { SQLiteStore } = await import('../services/persistence.ts');
+  const first = fixturePerson('native-duplicate-a');
+  const second = createPerson({
+    ...fixturePerson('native-duplicate-b'),
+    classifications: ['seeker'],
+    displayPhone: first.displayPhone,
+  });
+  const db = new SQLitePersistenceHarness([], [
+    { id: first.id, data: JSON.stringify(first) },
+    { id: second.id, data: JSON.stringify(second) },
+  ]);
+  db.migrations.add(STAGE_01B1_PROPERTY_MIGRATION_ID);
+  db.migrations.add(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID);
+  const rowId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const embeddedId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const requirementRaw = JSON.stringify({
+    id: embeddedId,
+    seekerId: 'unrelated-seeker',
+    purpose: 'buy',
+    propertyType: 'apartment',
+    preferredAreaIds: ['salmiya'],
+    budget: { minimum: 100, maximum: 200, currencyCode: 'KWD' },
+    notes: '',
+  });
+  db.requirements.set(rowId, requirementRaw);
+  const peopleBefore = new Map([...db.people].map(([id, row]) => [id, row.data]));
+  db.clearWrites();
+  const store = new SQLiteStore(
+    async () => db as unknown as import('expo-sqlite').SQLiteDatabase,
+  );
+  await assert.rejects(store.init(), /UNREADABLE_REQUIREMENT_STORAGE/);
+  assert.deepEqual(
+    new Map([...db.people].map(([id, row]) => [id, row.data])),
+    peopleBefore,
+  );
+  assert.equal(db.requirements.get(rowId), requirementRaw);
+  assert.equal(db.writes.length, 0);
+});
+
+test('Native consolidation preflights every persisted relationship before writes', async () => {
+  const { SQLiteStore } = await import('../services/persistence.ts');
+  const cases: ReadonlyArray<{
+    name: string;
+    error: RegExp;
+    corrupt: (db: SQLitePersistenceHarness, first: Person) => void;
+  }> = [
+    {
+      name: 'unrelated malformed person',
+      error: /UNREADABLE_PERSON_STORAGE/,
+      corrupt: db => db.people.set('unrelated-malformed-person', {
+        id: 'unrelated-malformed-person',
+        data: '{"broken":true}',
+        searchText: 'original:unrelated-malformed-person',
+      }),
+    },
+    {
+      name: 'malformed property',
+      error: /UNREADABLE_PROPERTY_STORAGE/,
+      corrupt: db => db.properties.set('native-malformed-property', {
+        id: 'native-malformed-property',
+        data: '{"broken":true}',
+        searchText: 'original:native-malformed-property',
+      }),
+    },
+    {
+      name: 'malformed link',
+      error: /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/,
+      corrupt: db => db.links.push({ personId: '', propertyCoreId: 'native-preflight-property' }),
+    },
+    {
+      name: 'link with missing person',
+      error: /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/,
+      corrupt: db => db.links.push({
+        personId: 'missing-person',
+        propertyCoreId: 'native-preflight-property',
+      }),
+    },
+    {
+      name: 'link with missing property',
+      error: /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/,
+      corrupt: (_db, first) => _db.links.push({
+        personId: first.id,
+        propertyCoreId: 'missing-property',
+      }),
+    },
+    {
+      name: 'malformed source',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: db => db.sources.push({
+        propertyCoreId: 'native-preflight-property',
+        personId: '',
+        role: 'owner',
+      }),
+    },
+    {
+      name: 'source with missing person',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: db => db.sources.push({
+        propertyCoreId: 'native-preflight-property',
+        personId: 'missing-person',
+        role: 'owner',
+      }),
+    },
+    {
+      name: 'source with missing property',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: (db, first) => db.sources.push({
+        propertyCoreId: 'missing-property',
+        personId: first.id,
+        role: 'owner',
+      }),
+    },
+    {
+      name: 'source role ineligibility',
+      error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+      corrupt: (db, first) => db.sources.push({
+        propertyCoreId: 'native-preflight-property',
+        personId: first.id,
+        role: 'broker',
+      }),
+    },
+  ];
+  for (const scenario of cases) {
+    const first = fixturePerson('native-preflight-a');
+    const second = createPerson({
+      ...fixturePerson('native-preflight-b'),
+      classifications: ['seeker'],
+      displayPhone: first.displayPhone,
+    });
+    const property = kwdProperty('native-preflight-property');
+    const db = new SQLitePersistenceHarness(
+      [{ id: property.core.id, data: JSON.stringify(property) }],
+      [
+        { id: first.id, data: JSON.stringify(first) },
+        { id: second.id, data: JSON.stringify(second) },
+      ],
+    );
+    db.migrations.add(STAGE_01B1_PROPERTY_MIGRATION_ID);
+    db.migrations.add(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID);
+    scenario.corrupt(db, first);
+    const before = db.rawSnapshot();
+    db.clearWrites();
+    const store = new SQLiteStore(
+      async () => db as unknown as import('expo-sqlite').SQLiteDatabase,
+    );
+    await assert.rejects(store.init(), scenario.error, scenario.name);
+    assert.deepEqual(db.rawSnapshot(), before, scenario.name);
+    assert.equal(db.writes.length, 0, scenario.name);
+  }
+});
+
+test('Web consolidation refuses dangling or role-ineligible sources without writes', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  for (const source of [
+    { propertyCoreId: 'p-dangling', personId: 'missing-person', role: 'owner' },
+    { propertyCoreId: 'p-ineligible', personId: 'web-source-a', role: 'broker' },
+  ] as const) {
+    const first = fixturePerson('web-source-a');
+    const second = createPerson({
+      ...fixturePerson('web-source-b'),
+      classifications: ['seeker'],
+      displayPhone: first.displayPhone,
+    });
+    const rawPeople = JSON.stringify([first, second]);
+    const rawSources = JSON.stringify([source]);
+    const storage = new WebStorageHarness([
+      [WEB_PEOPLE_KEY, rawPeople],
+      ['@viewstate_property_sources_v1', rawSources],
+    ]);
+    const store = new WebStore(storage, synchronousWebLocks);
+    await assert.rejects(store.init(), /UNREADABLE_PROPERTY_SOURCE_STORAGE/);
+    assert.equal(storage.values.get(WEB_PEOPLE_KEY), rawPeople);
+    assert.equal(storage.values.get('@viewstate_property_sources_v1'), rawSources);
+    assert.equal(
+      storage.writes.filter(key => [
+        WEB_PEOPLE_KEY,
+        '@viewstate_property_sources_v1',
+        '@viewstate_person_property_links_v1',
+        WEB_REQUIREMENTS_KEY,
+      ].includes(key)).length,
+      0,
+    );
+  }
+});
+
+test('Web consolidation refuses links and sources whose properties are missing', async () => {
+  const { WebStore } = await import('../services/persistence.ts');
+  for (const relationship of ['link', 'source'] as const) {
+    const first = fixturePerson(`web-missing-property-${relationship}-a`);
+    const second = createPerson({
+      ...fixturePerson(`web-missing-property-${relationship}-b`),
+      classifications: ['seeker'],
+      displayPhone: first.displayPhone,
+    });
+    const rawPeople = JSON.stringify([first, second]);
+    const rawLinks = relationship === 'link'
+      ? JSON.stringify([{ personId: first.id, propertyCoreId: 'missing-property' }])
+      : '[]';
+    const rawSources = relationship === 'source'
+      ? JSON.stringify([{
+        propertyCoreId: 'missing-property',
+        personId: first.id,
+        role: 'owner',
+      }])
+      : '[]';
+    const storage = new WebStorageHarness([
+      [WEB_PEOPLE_KEY, rawPeople],
+      [WEB_PROPERTIES_KEY, '[]'],
+      ['@viewstate_person_property_links_v1', rawLinks],
+      ['@viewstate_property_sources_v1', rawSources],
+    ]);
+    const store = new WebStore(storage, synchronousWebLocks);
+    await assert.rejects(
+      store.init(),
+      relationship === 'link'
+        ? /UNREADABLE_PERSON_PROPERTY_LINK_STORAGE/
+        : /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
+    );
+    assert.equal(storage.values.get(WEB_PEOPLE_KEY), rawPeople);
+    assert.equal(storage.values.get('@viewstate_person_property_links_v1'), rawLinks);
+    assert.equal(storage.values.get('@viewstate_property_sources_v1'), rawSources);
+    assert.equal(
+      storage.writes.filter(key => [
+        WEB_PEOPLE_KEY,
+        '@viewstate_person_property_links_v1',
+        '@viewstate_property_sources_v1',
+        WEB_REQUIREMENTS_KEY,
+      ].includes(key)).length,
+      0,
+    );
+  }
+});
+
 class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
   readonly properties = new Map<string, { id: string; data: string; searchText: string }>();
   readonly people = new Map<string, { id: string; data: string; searchText: string }>();
   readonly propertyChronology = new Map<string, number>();
   readonly personChronology = new Map<string, number>();
+  readonly requirements = new Map<string, string>();
+  readonly links: Array<{ personId: unknown; propertyCoreId: unknown }> = [];
+  readonly sources: Array<{ propertyCoreId: unknown; personId: unknown; role: unknown }> = [];
   readonly migrations = new Set<string>();
   readonly writes: Array<{ sql: string; params: unknown[] }> = [];
   schemaExecutions = 0;
@@ -132,6 +494,15 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
     if (source.includes('FROM people')) {
       return [...this.people.values()].map(({ id, data }) => ({ id, data })) as T[];
     }
+    if (source.includes('FROM seeker_requirements')) {
+      return [...this.requirements].map(([id, data]) => ({ id, data })) as T[];
+    }
+    if (source.includes('FROM person_property_links')) {
+      return this.links.map(link => ({ ...link })) as T[];
+    }
+    if (source.includes('FROM property_sources')) {
+      return this.sources.map(sourceRow => ({ ...sourceRow })) as T[];
+    }
     throw new Error(`Unexpected read: ${source}`);
   }
 
@@ -164,6 +535,12 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
       this.migrations.add(String(params[0]));
       return { changes: 1 };
     }
+    if (sql === 'UPDATE seeker_requirements SET data = ? WHERE id = ? AND data = ?') {
+      const [data, id, expected] = params.map(String);
+      if (this.requirements.get(id) !== expected) return { changes: 0 };
+      this.requirements.set(id, data);
+      return { changes: 1 };
+    }
     throw new Error(`Unexpected write: ${sql}`);
   }
 
@@ -189,6 +566,20 @@ class SQLitePersistenceHarness implements SQLiteInitializationDatabase {
     const row = this.people.get(id);
     assert.ok(row, `Expected person ${id} to exist`);
     return row.data;
+  }
+
+  rawSnapshot(): {
+    people: Map<string, string>;
+    properties: Map<string, string>;
+    links: Array<{ personId: unknown; propertyCoreId: unknown }>;
+    sources: Array<{ propertyCoreId: unknown; personId: unknown; role: unknown }>;
+  } {
+    return {
+      people: new Map([...this.people].map(([id, row]) => [id, row.data])),
+      properties: new Map([...this.properties].map(([id, row]) => [id, row.data])),
+      links: this.links.map(link => ({ ...link })),
+      sources: this.sources.map(sourceRow => ({ ...sourceRow })),
+    };
   }
 
   clearWrites(): void {
@@ -513,7 +904,16 @@ test('SQLiteStore orders mixed legacy and UUID properties and people, including 
   ];
   const db = new SQLitePersistenceHarness(
     propertyIds.map(id => ({ id, data: JSON.stringify(kwdProperty(id)) })),
-    personIds.map(id => ({ id, data: JSON.stringify(fixturePerson(id)) })),
+    personIds.map((id, index) => ({
+      id,
+      data: JSON.stringify(createPerson({
+        id,
+        classifications: ['owner'],
+        name: `Shared ${id}`,
+        displayPhone: `5000000${index}`,
+        notes: `notes for ${id}`,
+      })),
+    })),
   );
   db.migrations.add(STAGE_01B1_PROPERTY_MIGRATION_ID);
   db.migrations.add(STAGE_01B_UUID_CHRONOLOGY_MIGRATION_ID);
@@ -771,7 +1171,13 @@ test('WebStore initialization chains migrations and preserves ordered searchable
     'unknown-person-z',
   ];
   const propertyRaw = JSON.stringify(propertyIds.map(id => kwdProperty(id)));
-  const peopleRaw = JSON.stringify(personIds.map(id => fixturePerson(id)));
+  const peopleRaw = JSON.stringify(personIds.map((id, index) => createPerson({
+    id,
+    classifications: ['owner'],
+    name: `Shared ${id}`,
+    displayPhone: `5000000${index}`,
+    notes: `notes for ${id}`,
+  })));
   const storage = new WebStorageHarness([
     [WEB_PROPERTIES_KEY, propertyRaw],
     [WEB_PEOPLE_KEY, peopleRaw],

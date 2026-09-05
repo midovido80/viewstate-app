@@ -118,8 +118,14 @@ export default function PersonDetailScreen() {
         classifications,
       });
       if (!await store.updatePerson(person, replacement)) throw new Error('PERSON_CHANGED');
-      setPerson(replacement);
+      const resolved = (await store.getPeople()).find(candidate =>
+        candidate.normalizedPhone === replacement.normalizedPhone,
+      ) ?? replacement;
+      setPerson(resolved);
       setMode('detail');
+      if (resolved.id !== person.id) {
+        router.replace(`/person/${encodeURIComponent(resolved.id)}` as never);
+      }
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : '';
       setError(code.includes('NAME') ? t('people.name_required')

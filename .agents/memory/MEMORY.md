@@ -1,0 +1,1 @@
+- [Person identity consolidation](person-identity-consolidation.md) — one phone identity can hold multiple roles; consolidate links safely and fail closed on opaque data.

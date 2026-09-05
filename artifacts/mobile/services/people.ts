@@ -125,7 +125,8 @@ export function personMatchesSearch(person: Person, query: string): boolean {
 }
 
 export interface PersonStore {
-  savePerson(person: Person): Promise<void>;
+  /** Saves a new identity or returns the existing canonical phone identity. */
+  savePerson(person: Person): Promise<Person>;
   updatePerson(expected: Person, replacement: Person): Promise<boolean>;
   getPerson(id: string): Promise<Person | null>;
   getPeople(): Promise<Person[]>;
@@ -140,4 +141,24 @@ export interface PersonStore {
   getPropertySource(propertyCoreId: string): Promise<PropertySource | null>;
   removePropertySource(propertyCoreId: string): Promise<boolean>;
   getPropertySourcesForPerson(personId: string): Promise<PropertySource[]>;
+}
+
+/** Source roles are deliberately a subset of the people classifications. */
+export function personCanBePropertySource(
+  person: Person,
+  role: PropertySourceRole,
+): boolean {
+  return person.classifications.includes(role);
+}
+
+/**
+ * Enrichment never replaces authored identity fields.  The sole compatible
+ * optional field is notes: an incoming note may fill an empty existing note.
+ */
+export function enrichPersonIdentity(existing: Person, incoming: Person): Person {
+  return {
+    ...existing,
+    classifications: [...new Set([...existing.classifications, ...incoming.classifications])],
+    notes: existing.notes === '' && incoming.notes !== '' ? incoming.notes : existing.notes,
+  };
 }
