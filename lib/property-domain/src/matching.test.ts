@@ -1,6 +1,7 @@
 import {
   checkMatchEligibility,
   evaluateMatch,
+  MATCH_QUALIFICATION_THRESHOLD,
   MATCH_SCORING_WEIGHTS,
   rankMatchResults,
   type MatchingPropertyCandidate,
@@ -176,10 +177,20 @@ test("Rent and Buy/Sale use separate transaction contracts and hard eligibility"
     evaluateMatch(rent, candidate(property({ amount: 200 }))).eligible,
     true,
   );
-  assert.deepEqual(
-    evaluateMatch(rent, candidate(property({ area: "area-outside" })))
-      .ineligibilityReasons,
-    ["location"],
+  const outsidePreferredAreas = evaluateMatch(
+    rent,
+    candidate(property({ area: "area-outside" })),
+  );
+  assert.equal(outsidePreferredAreas.eligible, true);
+  assert.deepEqual(outsidePreferredAreas.ineligibilityReasons, []);
+  assert.equal(outsidePreferredAreas.locationRank, null);
+  assert.equal(
+    explanation(outsidePreferredAreas, "ordered_location")?.status,
+    "not_met",
+  );
+  assert.equal(
+    explanation(outsidePreferredAreas, "ordered_location")?.awardedPoints,
+    6,
   );
   assert.deepEqual(
     evaluateMatch(rent, candidate(property({ currencyCode: "USD" })))
@@ -250,6 +261,73 @@ test("Ordered Location scoring decays by rank and floors at 20 percent", () => {
   assert.equal(explanation(rankSeven, "ordered_location")?.awardedPoints, 6);
   assert.equal(rankSix.locationRank, 6);
   assert.equal(rankSeven.locationRank, 7);
+});
+
+test("Location mismatch is scored instead of hard-excluded", () => {
+  const requirement = rentRequirement({
+    propertyType: "chalet",
+    bedroomsMinimum: 3,
+    bathroomsMinimum: 2,
+    occupancy: "family",
+    swimmingPool: true,
+  });
+  const result = evaluateMatch(
+    requirement,
+    candidate(
+      property({
+        area: "area-outside",
+        propertyType: "chalet",
+        typeDetails: {
+          propertyType: "chalet",
+          bedroomCount: 4,
+          bathroomCount: 3,
+          hasPool: true,
+        },
+      }),
+      { occupancy: "family" },
+    ),
+  );
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.locationRank, null);
+  assert.equal(result.score, 76);
+  assert.equal(result.qualifies, true);
+  assert.equal(explanation(result, "ordered_location")?.status, "not_met");
+  assert.equal(explanation(result, "ordered_location")?.possiblePoints, 30);
+});
+
+test("Identical evidence produces identical percentages after location scoring change", () => {
+  const requirement = rentRequirement({ bedroomsMinimum: 2 });
+  const first = evaluateMatch(
+    requirement,
+    candidate(property({ area: "area-outside" })),
+  );
+  const second = evaluateMatch(
+    requirement,
+    candidate(property({ area: "another-outside-area" })),
+  );
+
+  assert.equal(first.score, second.score);
+  assert.equal(first.score, 57.5);
+  assert.equal(first.qualifies, false);
+  assert.equal(second.qualifies, false);
+});
+
+test("Buy location mismatch remains eligible but cannot reach the unchanged threshold", () => {
+  const result = evaluateMatch(
+    buyRequirement(),
+    candidate(property({
+      area: "area-outside",
+      propertyType: "villa",
+      transaction: "sale",
+      amount: 150_000,
+    })),
+  );
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.score, 68);
+  assert.equal(result.qualifies, false);
+  assert.equal(MATCH_QUALIFICATION_THRESHOLD, 70);
 });
 
 test("Missing optional Requirement criteria are excluded, while missing Property evidence stays in denominator", () => {

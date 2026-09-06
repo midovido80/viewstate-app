@@ -150,7 +150,7 @@ test('maps supported chalet pool evidence without treating waterfront as sea vie
   });
 });
 
-test('local source filters malformed records, hard-ineligible records, and duplicate IDs', async () => {
+test('local source keeps location mismatches while filtering hard-ineligible records and duplicate IDs', async () => {
   const validFirst = property({ id: 'valid-first' });
   const validSecond = property({ id: 'valid-second', area: 'area-2' });
   const duplicate = property({ id: 'valid-first', amount: 700 });
@@ -190,7 +190,7 @@ test('local source filters malformed records, hard-ineligible records, and dupli
   const candidates = await source.getCandidates(requirement());
   assert.deepEqual(
     candidates.map(candidate => candidate.property.core.id),
-    ['valid-first', 'valid-second'],
+    ['valid-first', 'outside-location', 'valid-second'],
   );
   assert.equal(
     candidates.every(candidate =>

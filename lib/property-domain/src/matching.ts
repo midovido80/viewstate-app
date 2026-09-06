@@ -187,7 +187,8 @@ function roundScore(value: number): number {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
-function locationFraction(rank: number): number {
+function locationFraction(rank: number | null): number {
+  if (rank === null) return 0.2;
   return Math.max(20, 100 - ((rank - 1) * 20)) / 100;
 }
 
@@ -306,8 +307,6 @@ function hardEligibility(
   ) {
     reasons.push("price");
   }
-  if (locationRank < 0) reasons.push("location");
-
   return {
     reasons,
     locationRank: locationRank < 0 ? null : locationRank + 1,
@@ -430,16 +429,28 @@ export function evaluateMatch(
     "Price is within the explicit Requirement budget.",
   ));
 
-  const rank = assessment.locationRank!;
-  const locationPoints = weights.orderedLocation * locationFraction(rank);
-  points.push(criterion(
-    "ordered_location",
-    "matched",
-    locationPoints,
-    weights.orderedLocation,
-    "ordered_location_rank",
-    `Property is the ${rank} preference; location receives ${locationFraction(rank) * 100}% of its points.`,
-  ));
+  const rank = assessment.locationRank;
+  if (rank === null) {
+    const locationPoints = weights.orderedLocation * locationFraction(rank);
+    points.push(criterion(
+      "ordered_location",
+      "not_met",
+      locationPoints,
+      weights.orderedLocation,
+      "ordered_location_rank",
+      "Property is outside the preferred locations; location receives 20% of its points.",
+    ));
+  } else {
+    const locationPoints = weights.orderedLocation * locationFraction(rank);
+    points.push(criterion(
+      "ordered_location",
+      "matched",
+      locationPoints,
+      weights.orderedLocation,
+      "ordered_location_rank",
+      `Property is the ${rank} preference; location receives ${locationFraction(rank) * 100}% of its points.`,
+    ));
+  }
 
   if (requirement.purpose === "rent") {
     const rentWeights = MATCH_SCORING_WEIGHTS.rent;
