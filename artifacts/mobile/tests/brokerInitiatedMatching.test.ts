@@ -34,13 +34,14 @@ function property(options: {
   readonly id: string;
   readonly area?: string;
   readonly amount?: number;
+  readonly propertyType?: Property['core']['propertyType'];
   readonly typeDetails?: Property['typeDetails'];
   readonly extra?: Record<string, unknown>;
 }): Property {
   return {
     core: {
       id: options.id,
-      propertyType: 'apartment',
+      propertyType: options.propertyType ?? 'apartment',
       locationArea: { id: options.area ?? 'area-1' },
       privateNotes: {
         value: 'private note must not reach results',
@@ -200,6 +201,38 @@ test('returns zero matches successfully when no candidate qualifies', async () =
   ).runForRequirement(storedRequirement.id);
 
   assert.deepEqual(result.matches, []);
+});
+
+test('includes an otherwise matching chalet outside preferred locations at the unchanged threshold', async () => {
+  const storedRequirement = requirement({
+    propertyType: 'chalet',
+    swimmingPool: true,
+  });
+  const outsidePreferredAreas = property({
+    id: 'outside-area-chalet',
+    area: 'area-outside',
+    propertyType: 'chalet',
+    typeDetails: {
+      propertyType: 'chalet',
+      bedroomCount: 3,
+      bathroomCount: 2,
+      hasPool: true,
+      hasWaterfront: true,
+    },
+  });
+  const source = new MyPropertiesMatchingSource({
+    getProperties: async () => [outsidePreferredAreas],
+  });
+  const result = await new BrokerInitiatedMatching(
+    storeFor(storedRequirement),
+    source,
+  ).runForRequirement(storedRequirement.id);
+
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0]?.propertyId, 'outside-area-chalet');
+  assert.equal(result.matches[0]?.eligible, true);
+  assert.equal(result.matches[0]?.score, 74.74);
+  assert.equal(result.matches[0]?.qualifies, true);
 });
 
 test('preserves M2 tie ordering and has no persistence or automatic execution path', async () => {
