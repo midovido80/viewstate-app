@@ -85,8 +85,11 @@ import {
 import {
   PERSON_CLASSIFICATIONS,
   createPerson,
+  enrichPersonIdentity,
   normalizePersonPhone,
   personMatchesSearch,
+  type Person,
+  type PersonClassification,
 } from '../services/people.ts';
 import {
   persistAttachmentsThenDeleteRemoved,
@@ -115,6 +118,7 @@ import {
   normalizePhoneForCountry,
   phoneDigits,
 } from '../services/phoneEntry.ts';
+import { importContactBatch } from '../services/contactBatchImport.ts';
 
 const sharedSourcePath = (relativePath: string) =>
   resolveSourcePath(relativePath, import.meta.url);
@@ -291,6 +295,115 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
   assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
+});
+
+test('Contact batch import creates independent people with one classification selection', async () => {
+  const saved: Person[] = [];
+  const classifications: PersonClassification[] = ['seeker', 'broker'];
+  const result = await importContactBatch({
+    contacts: [
+      { key: 'one', name: 'One', phone: '5000 0001', normalizedDigits: '50000001' },
+      { key: 'two', name: 'Two', phone: '5000 0002', normalizedDigits: '50000002' },
+      { key: 'three', name: 'Three', phone: '5000 0003', normalizedDigits: '50000003' },
+    ],
+    classifications,
+    defaultCountry: 'KW',
+    store: {
+      savePerson: async person => {
+        saved.push(person);
+        return person;
+      },
+    },
+  });
+
+  assert.equal(result.importedCount, 3);
+  assert.equal(result.skippedDuplicateCount, 0);
+  assert.equal(new Set(saved.map(person => person.id)).size, 3);
+  assert.deepEqual(saved.map(person => person.classifications), [
+    classifications,
+    classifications,
+    classifications,
+  ]);
+  assert.deepEqual(saved.map(person => person.normalizedPhone), [
+    '+96550000001',
+    '+96550000002',
+    '+96550000003',
+  ]);
+});
+
+test('Contact batch import dedupes normalized phones and preserves existing identity enrichment', async () => {
+  const existing = createPerson({
+    id: 'existing-person',
+    name: 'Existing authored name',
+    displayPhone: '+965 5000 0010',
+    classifications: ['owner'],
+  });
+  const people = new Map([[existing.normalizedPhone, existing]]);
+  const saveInputs: Person[] = [];
+  const result = await importContactBatch({
+    contacts: [
+      { key: 'first', name: 'First incoming name', phone: '+965 5000 0010', normalizedDigits: '96550000010' },
+      { key: 'duplicate', name: 'Duplicate incoming name', phone: '00965 5000 0010', normalizedDigits: '0096550000010' },
+      { key: 'other', name: 'Other', phone: '5000 0011', normalizedDigits: '50000011' },
+    ],
+    classifications: ['broker'],
+    defaultCountry: 'KW',
+    store: {
+      savePerson: async incoming => {
+        saveInputs.push(incoming);
+        const current = people.get(incoming.normalizedPhone);
+        const resolved = current ? enrichPersonIdentity(current, incoming) : incoming;
+        people.set(resolved.normalizedPhone, resolved);
+        return resolved;
+      },
+    },
+  });
+
+  assert.equal(result.importedCount, 2);
+  assert.equal(result.skippedDuplicateCount, 1);
+  assert.equal(saveInputs.length, 2);
+  assert.equal(people.size, 2);
+  assert.deepEqual(people.get(existing.normalizedPhone)?.classifications, ['owner', 'broker']);
+  assert.equal(people.get(existing.normalizedPhone)?.name, 'Existing authored name');
+});
+
+test('Contact batch import validates the one-time classification before any write', async () => {
+  let writes = 0;
+  await assert.rejects(
+    () => importContactBatch({
+      contacts: [
+        { key: 'one', name: 'One', phone: '5000 0020', normalizedDigits: '50000020' },
+      ],
+      classifications: [],
+      defaultCountry: 'KW',
+      store: {
+        savePerson: async person => {
+          writes += 1;
+          return person;
+        },
+      },
+    }),
+    /PERSON_CLASSIFICATION_REQUIRED/,
+  );
+  assert.equal(writes, 0);
+});
+
+test('Multi-select contact source keeps batch import bounded and Requirement-free', async () => {
+  const [form, batch, translations] = await Promise.all([
+    readFile(sharedSourcePath('../app/person/new.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../services/contactBatchImport.ts'), 'utf8'),
+    readFile(sharedSourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+  ]);
+
+  assert.match(form, /selectedContactKeys/);
+  assert.match(form, /contact-selected-count/);
+  assert.match(form, /contact-batch-confirm/);
+  assert.match(form, /importContactBatch/);
+  assert.match(batch, /seenNormalizedPhones/);
+  assert.match(batch, /await store\.savePerson\(person\)/);
+  assert.doesNotMatch(batch, /Requirement|saveRequirement/);
+  assert.match(translations, /'people\.contacts_selected': '\{count\} selected'/);
+  assert.match(translations, /'people\.contacts_selected': 'تم اختيار \{count\}'/);
 });
 
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Later action', async () => {
@@ -2748,7 +2861,9 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   );
   assert.match(peopleNew, /Contacts\.Fields\.FirstName[\s\S]*Contacts\.Fields\.LastName[\s\S]*Contacts\.Fields\.PhoneNumbers/);
   assert.match(peopleNew, /people\.contacts_loading/);
-  assert.match(peopleNew, /setPhone\(item\.phone\)/);
+  assert.match(peopleNew, /toggleContact\(item\.key\)/);
+  assert.match(peopleNew, /contact-batch-confirm/);
+  assert.doesNotMatch(peopleNew, /setPhone\(item\.phone\)/);
 
   // Five callers supply the five-chip capture progression; chip state is
   // explicitly completed/current/future rather than inferred from labels.
