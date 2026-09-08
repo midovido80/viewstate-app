@@ -19,6 +19,17 @@ export interface AttachmentFileStore {
   delete(uri: string): Promise<void>;
 }
 
+export async function attachmentFileExists(
+  uri: string,
+  fileSystem: { fileExists(uri: string): boolean | Promise<boolean> },
+): Promise<boolean> {
+  try {
+    return !!await fileSystem.fileExists(uri);
+  } catch {
+    return false;
+  }
+}
+
 export function reorderAttachments(
   attachments: readonly LocalAttachment[],
   orderedIds: readonly string[],

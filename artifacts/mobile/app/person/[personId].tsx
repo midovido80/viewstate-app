@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { Property, type SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -33,6 +34,7 @@ import {
   PhoneCountryCode,
 } from '@/services/phoneEntry';
 import { store } from '@/services/persistence';
+import { formatRequirementTypeUsage } from '@/services/requirementFormat';
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 
 export default function PersonDetailScreen() {
@@ -46,6 +48,8 @@ export default function PersonDetailScreen() {
   const [requirements, setRequirements] = useState<SeekerRequirement[]>([]);
   const [linked, setLinked] = useState<Property[]>([]);
   const [sourced, setSourced] = useState<{ source: PropertySource; property: Property }[]>([]);
+  const [staleLinkedIds, setStaleLinkedIds] = useState<string[]>([]);
+  const [staleSources, setStaleSources] = useState<PropertySource[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertySearch, setPropertySearch] = useState('');
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
@@ -78,10 +82,12 @@ export default function PersonDetailScreen() {
         Promise.all(sources.map(source => store.getProperty(source.propertyCoreId))),
       ]);
       setLinked(results.filter((value): value is Property => value !== null));
+      setStaleLinkedIds(links.flatMap((link, index) => results[index] ? [] : [link.propertyCoreId]));
       setSourced(sources.flatMap((source, index) => {
         const property = sourceProperties[index];
         return property ? [{ source, property }] : [];
       }));
+      setStaleSources(sources.filter((_, index) => !sourceProperties[index]));
     } catch {
       setError(t('people.load_failed'));
     }
@@ -346,14 +352,22 @@ export default function PersonDetailScreen() {
               </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
-            {params.saved === '1' && person.classifications.includes('seeker') ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('requirements.add_property_requirement')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-saved-add-requirement"/><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
+            {params.saved === '1' ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('requirements.add_property_requirement')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-saved-add-requirement"/><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
-              {person.classifications.includes('seeker') ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement"><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('requirements.add')}</Text></TouchableOpacity> : null}
             </View>
-            {!person.classifications.includes('seeker') ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.seeker_required')}</Text> : requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
-              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}</Text>
+            <Button title={t('requirements.add')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" variant="outline" style={{ marginTop: 12, marginBottom: 4 }} />
+            {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left', marginTop: 8 }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, flex: 1, textAlign: 'left' }]}>
+                  {formatRequirementTypeUsage(requirement, t)}
+                </Text>
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'right', marginLeft: 8 }}>
+                  {t(`requirements.purpose.${requirement.purpose}` as keyof Translations)}
+                </Text>
+              </View>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.preferredAreaIds.map(areaId => { const area = getAreaById(areaId); return area ? (language === 'ar' ? area.ar : area.en) : areaId; }).join(' → ')}</Text>
+
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
@@ -361,17 +375,30 @@ export default function PersonDetailScreen() {
             </View>)}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
-              <TouchableOpacity onPress={() => void openLink()} testID="person-link-property" accessibilityRole="button">
-                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('people.link')}</Text>
-              </TouchableOpacity>
             </View>
+            <Button title={t('people.link')} onPress={() => void openLink()} testID="person-link-property" variant="outline" style={{ marginTop: 12, marginBottom: 4 }} />
             {linked.map(property => (
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)} testID={`linked-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
-                  <Text style={[styles.ltrText, { color: colors.mutedForeground }]}>{toEnglishDigits(property.core.id)}</Text>
+                <TouchableOpacity
+                  onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)}
+                  testID={`linked-property-${property.core.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('people.open_linked_property')}: ${t(`propertyType.${property.core.propertyType}` as keyof Translations)}, ${areaName(property)}`}
+                  activeOpacity={0.72}
+                  style={[styles.linkedEntityRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                >
+                  <Text style={{ flex: 1, color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+                  <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button" accessibilityLabel={`${t('people.unlink')}: ${t(`propertyType.${property.core.propertyType}` as keyof Translations)}`} style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('people.unlink')}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            {staleLinkedIds.map(propertyId => (
+              <View key={propertyId} style={[styles.property, { borderColor: colors.destructive, backgroundColor: colors.card }]} testID={`linked-property-unavailable-${propertyId}`}>
+                <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('resources.linked_property_unavailable')}</Text>
+                <TouchableOpacity onPress={() => confirmUnlink(propertyId)} accessibilityRole="button" accessibilityLabel={t('people.unlink')} style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
                   <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('people.unlink')}</Text>
                 </TouchableOpacity>
               </View>
@@ -385,17 +412,31 @@ export default function PersonDetailScreen() {
                   onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)}
                   testID={`source-property-${property.core.id}`}
                   accessibilityRole="button"
+                  accessibilityLabel={`${t('source.open_property')}: ${t(`propertyType.${property.core.propertyType}` as keyof Translations)}, ${areaName(property)}`}
+                  activeOpacity={0.72}
+                  style={[styles.linkedEntityRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
                 >
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
-                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                  </View>
+                  <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
                   <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
                 </TouchableOpacity>
               </View>
-            )) : (
+            )) : staleSources.length === 0 ? (
               <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none_for_person')}</Text>
-            )}
+            ) : null}
+            {staleSources.map(source => (
+              <View key={source.propertyCoreId} style={[styles.property, { borderColor: colors.destructive, backgroundColor: colors.card }]} testID={`source-property-unavailable-${source.propertyCoreId}`}>
+                <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('resources.sourced_property_unavailable')}</Text>
+                <TouchableOpacity onPress={() => confirmSourceUnlink(source.propertyCoreId)} accessibilityRole="button" accessibilityLabel={t('source.unlink')} style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
             <Button title={t('people.remove')} onPress={() => setDeleteOpen(true)} variant="outline" testID="person-remove" />
           </>
         )}
@@ -406,7 +447,7 @@ export default function PersonDetailScreen() {
           <TextInput value={propertySearch} onChangeText={value => void searchProperties(value)} placeholder={t('home.search')} placeholderTextColor={colors.mutedForeground} style={[inputStyle, styles.modalSearch]} testID="link-property-search" />
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {properties.filter(property => !linked.some(item => item.core.id === property.core.id)).map(property => (
-              <TouchableOpacity key={property.core.id} onPress={() => void link(property)} style={[styles.propertyChoice, { borderBottomColor: colors.border }]} testID={`link-property-choice-${property.core.id}`}>
+              <TouchableOpacity key={property.core.id} onPress={() => void link(property)} accessibilityRole="button" accessibilityLabel={`${t('people.link')}: ${t(`propertyType.${property.core.propertyType}` as keyof Translations)}, ${areaName(property)}`} style={[styles.propertyChoice, { borderBottomColor: colors.border }]} testID={`link-property-choice-${property.core.id}`}>
                 <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
               </TouchableOpacity>
             ))}
@@ -501,6 +542,7 @@ const styles = StyleSheet.create({
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   sectionTitle: { fontSize: 18 },
   property: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
+  linkedEntityRow: { minHeight: 48, alignItems: 'center', gap: 10 },
   unlinkButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   modalSearch: { margin: 20 },
   propertyChoice: { minHeight: 58, justifyContent: 'center', borderBottomWidth: 1 },

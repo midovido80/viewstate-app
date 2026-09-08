@@ -34,7 +34,15 @@ export default function PeopleScreen() {
         {t('people.title')}
       </Text>
       <View style={styles.searchWrap}>
-        <Feather name="search" size={20} color={colors.mutedForeground} style={[styles.icon, isRTL ? { right: 34 } : { left: 34 }]} />
+        <View style={[
+          styles.searchField,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            flexDirection: isRTL ? 'row-reverse' : 'row',
+          },
+        ]}>
+        <Feather name="search" size={20} color={colors.mutedForeground} style={styles.icon} />
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -42,14 +50,13 @@ export default function PeopleScreen() {
           placeholderTextColor={colors.mutedForeground}
           style={[styles.search, {
             color: colors.foreground,
-            backgroundColor: colors.card,
-            borderColor: colors.border,
             textAlign: isRTL ? 'right' : 'left',
             fontFamily: fonts.regular,
           }]}
           testID="people-search"
           accessibilityLabel={t('people.search')}
         />
+        </View>
       </View>
       {error ? <Text style={[styles.error, { color: colors.destructive }]} testID="people-error">{error}</Text> : null}
       <FlatList
@@ -58,7 +65,7 @@ export default function PeopleScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + 96 },
+          { paddingBottom: 96 },
         ]}
         ListEmptyComponent={<Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('people.empty')}</Text>}
         renderItem={({ item }) => (
@@ -77,7 +84,7 @@ export default function PeopleScreen() {
           </TouchableOpacity>
         )}
       />
-      <View style={[styles.add, { bottom: insets.bottom + 16 }]}>
+      <View style={[styles.add, { bottom: 16 }]}>
         <Button title={t('people.add')} onPress={() => router.push('/person/new' as never)} testID="people-add" />
       </View>
     </View>
@@ -87,9 +94,10 @@ export default function PeopleScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   title: { fontSize: 28, paddingHorizontal: 20, paddingTop: 16 },
-  searchWrap: { paddingHorizontal: 20, paddingVertical: 14, justifyContent: 'center' },
-  icon: { position: 'absolute', zIndex: 1 },
-  search: { minHeight: 54, borderWidth: 1, borderRadius: 10, paddingHorizontal: 44, fontSize: 16 },
+  searchWrap: { paddingHorizontal: 20, paddingVertical: 14 },
+  searchField: { minHeight: 54, borderWidth: 1, borderRadius: 10, alignItems: 'center' },
+  icon: { marginHorizontal: 14 },
+  search: { minHeight: 52, flex: 1, paddingHorizontal: 0, paddingVertical: 8, fontSize: 16 },
   list: { padding: 20 },
   card: { padding: 16, borderWidth: 1, marginBottom: 12, gap: 5 },
   name: { fontSize: 18 },

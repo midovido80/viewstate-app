@@ -17,15 +17,18 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
   assert.match(layout, /overflow:\s*['"]hidden['"]/);
   assert.match(layout, /zIndex:\s*100/);
   assert.match(layout, /elevation:\s*12/);
+  assert.match(layout, /nativeTabBarBaseHeight \+ nativeBottomInset/);
+  assert.match(layout, /paddingBottom: isWeb \? 6 : nativeBottomInset/);
   assert.match(layout, /title: t\('home\.title'\)/);
   assert.match(layout, /title: t\('people\.title'\)/);
   assert.match(layout, /title: t\('matching\.title'\)/);
   assert.doesNotMatch(layout, /propertyType|rental|price|areaName/);
 
-  assert.match(properties, /paddingBottom: insets\.bottom \+ 96/);
-  assert.match(properties, /bottom: insets\.bottom \+ 16/);
-  assert.match(people, /paddingBottom: insets\.bottom \+ 96/);
-  assert.match(people, /bottom: insets\.bottom \+ 16/);
-  assert.doesNotMatch(properties, /bottom:\s*insets\.bottom \+ \(Platform\.OS/);
+  assert.match(properties, /paddingBottom: 96/);
+  assert.match(properties, /bottom: 16/);
+  assert.match(people, /paddingBottom: 96/);
+  assert.match(people, /bottom: 16/);
+  assert.doesNotMatch(properties, /bottom:\s*insets\.bottom/);
+  assert.doesNotMatch(people, /bottom:\s*insets\.bottom/);
   assert.doesNotMatch(people, /paddingBottom:\s*150/);
 });

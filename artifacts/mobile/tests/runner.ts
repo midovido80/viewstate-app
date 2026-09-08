@@ -85,8 +85,11 @@ import {
 import {
   PERSON_CLASSIFICATIONS,
   createPerson,
+  enrichPersonIdentity,
   normalizePersonPhone,
   personMatchesSearch,
+  type Person,
+  type PersonClassification,
 } from '../services/people.ts';
 import {
   persistAttachmentsThenDeleteRemoved,
@@ -115,6 +118,7 @@ import {
   normalizePhoneForCountry,
   phoneDigits,
 } from '../services/phoneEntry.ts';
+import { importContactBatch } from '../services/contactBatchImport.ts';
 
 const sharedSourcePath = (relativePath: string) =>
   resolveSourcePath(relativePath, import.meta.url);
@@ -291,6 +295,115 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
   assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
+});
+
+test('Contact batch import creates independent people with one classification selection', async () => {
+  const saved: Person[] = [];
+  const classifications: PersonClassification[] = ['seeker', 'broker'];
+  const result = await importContactBatch({
+    contacts: [
+      { key: 'one', name: 'One', phone: '5000 0001', normalizedDigits: '50000001' },
+      { key: 'two', name: 'Two', phone: '5000 0002', normalizedDigits: '50000002' },
+      { key: 'three', name: 'Three', phone: '5000 0003', normalizedDigits: '50000003' },
+    ],
+    classifications,
+    defaultCountry: 'KW',
+    store: {
+      savePerson: async person => {
+        saved.push(person);
+        return person;
+      },
+    },
+  });
+
+  assert.equal(result.importedCount, 3);
+  assert.equal(result.skippedDuplicateCount, 0);
+  assert.equal(new Set(saved.map(person => person.id)).size, 3);
+  assert.deepEqual(saved.map(person => person.classifications), [
+    classifications,
+    classifications,
+    classifications,
+  ]);
+  assert.deepEqual(saved.map(person => person.normalizedPhone), [
+    '+96550000001',
+    '+96550000002',
+    '+96550000003',
+  ]);
+});
+
+test('Contact batch import dedupes normalized phones and preserves existing identity enrichment', async () => {
+  const existing = createPerson({
+    id: 'existing-person',
+    name: 'Existing authored name',
+    displayPhone: '+965 5000 0010',
+    classifications: ['owner'],
+  });
+  const people = new Map([[existing.normalizedPhone, existing]]);
+  const saveInputs: Person[] = [];
+  const result = await importContactBatch({
+    contacts: [
+      { key: 'first', name: 'First incoming name', phone: '+965 5000 0010', normalizedDigits: '96550000010' },
+      { key: 'duplicate', name: 'Duplicate incoming name', phone: '00965 5000 0010', normalizedDigits: '0096550000010' },
+      { key: 'other', name: 'Other', phone: '5000 0011', normalizedDigits: '50000011' },
+    ],
+    classifications: ['broker'],
+    defaultCountry: 'KW',
+    store: {
+      savePerson: async incoming => {
+        saveInputs.push(incoming);
+        const current = people.get(incoming.normalizedPhone);
+        const resolved = current ? enrichPersonIdentity(current, incoming) : incoming;
+        people.set(resolved.normalizedPhone, resolved);
+        return resolved;
+      },
+    },
+  });
+
+  assert.equal(result.importedCount, 2);
+  assert.equal(result.skippedDuplicateCount, 1);
+  assert.equal(saveInputs.length, 2);
+  assert.equal(people.size, 2);
+  assert.deepEqual(people.get(existing.normalizedPhone)?.classifications, ['owner', 'broker']);
+  assert.equal(people.get(existing.normalizedPhone)?.name, 'Existing authored name');
+});
+
+test('Contact batch import validates the one-time classification before any write', async () => {
+  let writes = 0;
+  await assert.rejects(
+    () => importContactBatch({
+      contacts: [
+        { key: 'one', name: 'One', phone: '5000 0020', normalizedDigits: '50000020' },
+      ],
+      classifications: [],
+      defaultCountry: 'KW',
+      store: {
+        savePerson: async person => {
+          writes += 1;
+          return person;
+        },
+      },
+    }),
+    /PERSON_CLASSIFICATION_REQUIRED/,
+  );
+  assert.equal(writes, 0);
+});
+
+test('Multi-select contact source keeps batch import bounded and Requirement-free', async () => {
+  const [form, batch, translations] = await Promise.all([
+    readFile(sharedSourcePath('../app/person/new.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../services/contactBatchImport.ts'), 'utf8'),
+    readFile(sharedSourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+  ]);
+
+  assert.match(form, /selectedContactKeys/);
+  assert.match(form, /contact-selected-count/);
+  assert.match(form, /contact-batch-confirm/);
+  assert.match(form, /importContactBatch/);
+  assert.match(batch, /seenNormalizedPhones/);
+  assert.match(batch, /await store\.savePerson\(person\)/);
+  assert.doesNotMatch(batch, /Requirement|saveRequirement/);
+  assert.match(translations, /'people\.contacts_selected': '\{count\} selected'/);
+  assert.match(translations, /'people\.contacts_selected': 'تم اختيار \{count\}'/);
 });
 
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Later action', async () => {
@@ -2179,9 +2292,9 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
     villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool'],
     chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool', 'hasWaterfront'],
     floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', 'hasMaidRoom'],
-    floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
+    floor_commercial: ['paciNumbersCount', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
     office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity'],
-    shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
+    shop: ['builtUpAreaSquareMeters', 'floorNumber', 'commercialActivity', 'frontageWidthMeters'],
     whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount'],
     commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount'],
     warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage'],
@@ -2201,6 +2314,13 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   assert.deepEqual(FURNISHING_VALUES, ['unfurnished', 'semi_furnished', 'furnished']);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('constructionYear' as never)), false);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('roomCount' as never)), false);
+  assert.deepEqual(
+    PROPERTY_DETAIL_FIELD_DEFINITIONS
+      .filter(definition => definition.appliesTo.includes('shop'))
+      .map(definition => definition.field),
+    ['builtUpAreaSquareMeters', 'floorNumber', 'commercialActivity', 'frontageWidthMeters'],
+    'Shop enrichment renders only the four agreed Shop-specific fields',
+  );
 
   const normal = (value: string) => createLiteralText(value, createPrivacyMetadata('normal', 'normal'));
   const enrichedByType: Record<string, Property['typeDetails']> = {
@@ -2210,7 +2330,7 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
     chalet: { propertyType: 'chalet', plotAreaSquareMeters: 600, builtUpAreaSquareMeters: 250, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorCount: 2, furnishing: 'furnished', hasMaidRoom: false, parkingSpaceCount: 4, hasPool: true, hasWaterfront: true },
     floor: { propertyType: 'floor', floorUse: 'residential', builtUpAreaSquareMeters: 300, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorNumber: 5, furnishing: 'semi_furnished', hasMaidRoom: false, parkingSpaceCount: 2 },
     office: { propertyType: 'office', builtUpAreaSquareMeters: 120, floorNumber: 8, bathroomCount: 2, intendedUse: normal('  HQ Mixed-Case  '), commercialActivity: normal('Consulting & Design'), parkingSpaceCount: 3 },
-    shop: { propertyType: 'shop', builtUpAreaSquareMeters: 80, floorNumber: 0, bathroomCount: 1, intendedUse: normal('Retail'), commercialActivity: normal('Coffee & Gifts'), parkingSpaceCount: 1, frontageWidthMeters: 8, ceilingHeightMeters: 4 },
+    shop: { propertyType: 'shop', builtUpAreaSquareMeters: 80, floorNumber: 0, commercialActivity: normal('Coffee & Gifts'), frontageWidthMeters: 8 },
     whole_building: { propertyType: 'whole_building', plotAreaSquareMeters: 800, builtUpAreaSquareMeters: 1500, floorCount: 5, unitCount: 20, apartmentCount: 12, shopCount: 4, officeCount: 4, elevatorCount: 2, parkingSpaceCount: 20 },
     commercial_complex: { propertyType: 'commercial_complex', plotAreaSquareMeters: 2000, builtUpAreaSquareMeters: 3500, floorCount: 4, unitCount: 30, apartmentCount: 0, shopCount: 20, officeCount: 10, elevatorCount: 4, parkingSpaceCount: 60 },
     warehouse: { propertyType: 'warehouse', plotAreaSquareMeters: 1500, builtUpAreaSquareMeters: 1200, bathroomCount: 2, intendedUse: normal('Distribution'), commercialActivity: normal('Food logistics'), parkingSpaceCount: 8, ceilingHeightMeters: 9, loadingBayCount: 4, hasColdStorage: true },
@@ -2240,6 +2360,7 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   const commercial = {
     propertyType: 'floor' as const,
     floorUse: 'commercial' as const,
+    paciNumbersCount: 2,
     builtUpAreaSquareMeters: 250,
     bathroomCount: 2,
     floorNumber: 3,
@@ -2250,6 +2371,8 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
     ceilingHeightMeters: 4,
   };
   assert.ok(validateTypeDetails(commercial, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok);
+  assert.equal(validateTypeDetails({ ...commercial, paciNumbersCount: -1 } as never, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok, false);
+  assert.equal(validateTypeDetails({ ...commercial, floorUse: 'residential' } as never, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok, false);
   assert.equal(validateTypeDetails({ ...commercial, bedroomCount: 1 } as never, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok, false);
   assert.equal(validateTypeDetails({ propertyType: 'floor', builtUpAreaSquareMeters: 10 } as never, { id: 'floor', propertyType: 'floor', locationArea: { id: 'salmiya' } }).ok, false);
   assert.equal(validateTypeDetails({ propertyType: 'apartment', builtUpAreaSquareMeters: 0 } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
@@ -2261,6 +2384,123 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   assert.equal(validateTypeDetails({ propertyType: 'whole_building', unitCount: 2, apartmentCount: 1, shopCount: 1, officeCount: 1 }, { id: 'b', propertyType: 'whole_building', locationArea: { id: 'x' } }).ok, false);
   assert.equal(validateTypeDetails({ propertyType: 'other_built_property', builtUpAreaSquareMeters: 10 } as never, { id: 'o', propertyType: 'other_built_property', locationArea: { id: 'x' } }).ok, false);
   assert.equal((enrichedByType.office as { intendedUse: { value: string } }).intendedUse.value, '  HQ Mixed-Case  ');
+});
+
+test('Commercial Floor PACI Numbers Count is taxonomy-driven through edit, detail, and sharing', async () => {
+  const [fieldSource, formSource, detailSource] = await Promise.all([
+    readFile(sharedSourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+  ]);
+  const paciDefinition = PROPERTY_DETAIL_FIELD_DEFINITIONS.find(
+    definition => definition.field === 'paciNumbersCount',
+  );
+  assert.deepEqual(paciDefinition, {
+    field: 'paciNumbersCount',
+    appliesTo: ['floor'],
+    floorUses: ['commercial'],
+  });
+  assert.match(fieldSource, /paciNumbersCount: \['PACI Numbers Count', 'عدد الأرقام الآلية'\]/);
+  assert.match(fieldSource, /'paciNumbersCount',\n\s*'bedroomCount'/);
+  assert.match(formSource, /setFields\(initialFields\(visible\)\)/);
+  assert.match(formSource, /rawDetails\[key\] = Number\(raw\)/);
+  assert.match(detailSource, /definition\.floorUses\.includes\(/);
+
+  const commercialFloor: Property = {
+    core: {
+      id: 'commercial-floor-paci',
+      propertyType: 'floor',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'commercial-floor-paci-offer',
+      propertyCoreId: 'commercial-floor-paci',
+      transaction: 'sale',
+      salePrice: { amount: 100_000, currencyCode: 'KWD' },
+    },
+    typeDetails: {
+      propertyType: 'floor',
+      floorUse: 'commercial',
+      paciNumbersCount: 3,
+    },
+  };
+  assert.equal(validateProperty(commercialFloor).ok, true);
+  const reloaded = JSON.parse(JSON.stringify(commercialFloor)) as Property;
+  assert.equal(
+    (reloaded.typeDetails as { paciNumbersCount: number }).paciNumbersCount,
+    3,
+    'PACI Numbers Count survives save/reload serialization',
+  );
+  const selection = createPropertyShareSelection(reloaded);
+  const preview = buildPropertySharePreview({
+    property: reloaded,
+    selection,
+    availableAttachments: [],
+    detailLabels: { paciNumbersCount: 'PACI Numbers Count' },
+    rentalCadence: '',
+    attribution: '',
+  });
+  assert.match(preview.text, /PACI Numbers Count: \u20683\u2069/);
+});
+
+test('Shop enrichment renderer consumes the canonical four-field Shop matrix', async () => {
+  const [source, formSource, detailSource] = await Promise.all([
+    readFile(sharedSourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
+    readFile(sharedSourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+  ]);
+  assert.match(source, /propertyDetailDisplayDefinitions\.filter/);
+  assert.match(source, /definition\.appliesTo\.includes\(propertyType\)/);
+  assert.deepEqual(
+    PROPERTY_DETAIL_FIELD_DEFINITIONS
+      .filter(definition => definition.appliesTo.includes('shop'))
+      .map(definition => definition.field),
+    ['builtUpAreaSquareMeters', 'floorNumber', 'commercialActivity', 'frontageWidthMeters'],
+  );
+  assert.match(
+    source,
+    /\['builtUpAreaSquareMeters', 'commercialActivity', 'floorNumber', 'frontageWidthMeters'\]/,
+    'Shop form visibly orders actual area, activity, floor, and frontage',
+  );
+  assert.match(source, /'Shop area \/ size \(m²\)'/);
+  assert.match(source, /'مساحة المحل \(م²\)'/);
+  assert.match(source, /testID=\{`enrich-field-\$\{field\}`\}/);
+  assert.match(formSource, /setFields\(initialFields\(visible\)\)/, 'edit initializes the canonical Shop area');
+  assert.match(formSource, /rawDetails\[key\] = Number\(raw\)/, 'save writes the canonical numeric Shop area');
+  assert.match(detailSource, /propertyDetailLabel\(definition\.field, property\.core\.propertyType, language\)/);
+
+  const savedShop: Property = {
+    core: {
+      id: 'shop-area-regression',
+      propertyType: 'shop',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'shop-area-regression-offer',
+      propertyCoreId: 'shop-area-regression',
+      transaction: 'sale',
+      salePrice: { amount: 100_000, currencyCode: 'KWD' },
+    },
+    typeDetails: {
+      propertyType: 'shop',
+      builtUpAreaSquareMeters: 95,
+      commercialActivity: createLiteralText('Retail', createPrivacyMetadata('normal', 'normal')),
+      floorNumber: 0,
+      frontageWidthMeters: 7,
+    },
+  };
+  assert.equal(validateProperty(savedShop).ok, true);
+  const restartedShop = JSON.parse(JSON.stringify(savedShop)) as Property;
+  assert.equal(
+    (restartedShop.typeDetails as { builtUpAreaSquareMeters: number }).builtUpAreaSquareMeters,
+    95,
+    'Shop create/edit/save persistence preserves one factual area value',
+  );
+  assert.deepEqual(
+    Object.keys(restartedShop.typeDetails ?? {}),
+    ['propertyType', 'builtUpAreaSquareMeters', 'commercialActivity', 'floorNumber', 'frontageWidthMeters'],
+    'Shop persistence retains exactly the canonical four detail fields',
+  );
 });
 
 test('V001 synthetic persistence restart preserves enriched edits and safe deletion contract', async () => {
@@ -2748,7 +2988,9 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   );
   assert.match(peopleNew, /Contacts\.Fields\.FirstName[\s\S]*Contacts\.Fields\.LastName[\s\S]*Contacts\.Fields\.PhoneNumbers/);
   assert.match(peopleNew, /people\.contacts_loading/);
-  assert.match(peopleNew, /setPhone\(item\.phone\)/);
+  assert.match(peopleNew, /toggleContact\(item\.key\)/);
+  assert.match(peopleNew, /contact-batch-confirm/);
+  assert.doesNotMatch(peopleNew, /setPhone\(item\.phone\)/);
 
   // Five callers supply the five-chip capture progression; chip state is
   // explicitly completed/current/future rather than inferred from labels.

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import {
   checkMatchEligibility,
   evaluateMatch,
+  validateProperty,
   type Property,
   type RentSeekerRequirement,
 } from '@workspace/property-domain';
@@ -148,6 +149,104 @@ test('maps supported chalet pool evidence without treating waterfront as sea vie
     bathroomCount: 3,
     hasPool: true,
   });
+});
+
+test('maps only approved Shop evidence for property-type-aware matching', () => {
+  const candidate = normalizeMyPropertyCandidate(property({
+    propertyType: 'shop',
+    typeDetails: {
+      propertyType: 'shop',
+      builtUpAreaSquareMeters: 80,
+      commercialActivity: {
+        value: 'Coffee & Gifts',
+        privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+      },
+      floorNumber: 0,
+      frontageWidthMeters: 8,
+    },
+  }));
+
+  assert.ok(candidate);
+  assert.deepEqual(candidate.evidence, {
+    builtUpAreaSquareMeters: 80,
+    commercialActivity: 'Coffee & Gifts',
+    floorNumber: 0,
+    frontageWidthMeters: 8,
+  });
+  assert.deepEqual(candidate.property.typeDetails, {
+    propertyType: 'shop',
+    builtUpAreaSquareMeters: 80,
+    floorNumber: 0,
+    frontageWidthMeters: 8,
+  });
+  assert.equal(validateProperty(candidate.property).ok, true);
+});
+
+test('maps factual area evidence for Office and Commercial Floor', () => {
+  const office = normalizeMyPropertyCandidate(property({
+    propertyType: 'office',
+    typeDetails: {
+      propertyType: 'office',
+      builtUpAreaSquareMeters: 110,
+    },
+  }));
+  const floor = normalizeMyPropertyCandidate(property({
+    propertyType: 'floor',
+    typeDetails: {
+      propertyType: 'floor',
+      floorUse: 'commercial',
+      builtUpAreaSquareMeters: 220,
+    },
+  }));
+
+  assert.ok(office);
+  assert.ok(floor);
+  assert.equal(office.evidence?.builtUpAreaSquareMeters, 110);
+  assert.equal(floor.evidence?.builtUpAreaSquareMeters, 220);
+  assert.equal(validateProperty(office.property).ok, true);
+  assert.equal(validateProperty(floor.property).ok, true);
+});
+
+test('bathroom scoring distinguishes mapped data from an omitted Requirement criterion', () => {
+  const mapped = normalizeMyPropertyCandidate(property({
+    area: 'adailiya',
+    typeDetails: {
+      propertyType: 'apartment',
+      bedroomCount: 2,
+      bathroomCount: 3,
+    },
+  }));
+  assert.ok(mapped);
+  assert.equal(mapped.evidence?.bathrooms, 3);
+  assert.equal(
+    mapped.property.typeDetails && 'bathroomCount' in mapped.property.typeDetails
+      ? mapped.property.typeDetails.bathroomCount
+      : undefined,
+    3,
+  );
+
+  const withCriterion = evaluateMatch(requirement({
+    preferredAreaIds: ['abdullah_al_salem'],
+    bathroomsMinimum: 2,
+  }), mapped);
+  const bathroomMatch = withCriterion.explanations.find(
+    item => item.criterion === 'bathrooms',
+  );
+  const outsideLocation = withCriterion.explanations.find(
+    item => item.criterion === 'ordered_location',
+  );
+  assert.equal(bathroomMatch?.status, 'matched');
+  assert.equal(bathroomMatch?.awardedPoints, 10);
+  assert.equal(outsideLocation?.awardedPoints, 6);
+
+  const withoutCriterion = evaluateMatch(requirement({
+    preferredAreaIds: ['abdullah_al_salem'],
+    bathroomsMinimum: undefined,
+  }), mapped);
+  assert.equal(
+    withoutCriterion.explanations.some(item => item.criterion === 'bathrooms'),
+    false,
+  );
 });
 
 test('local source keeps location mismatches while filtering hard-ineligible records and duplicate IDs', async () => {

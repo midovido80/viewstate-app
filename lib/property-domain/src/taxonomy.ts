@@ -38,6 +38,7 @@ export const FURNISHING_VALUES = [
 ] as const satisfies readonly Furnishing[];
 
 export type PropertyDetailField =
+  | "paciNumbersCount"
   | "plotAreaSquareMeters"
   | "builtUpAreaSquareMeters"
   | "bathroomCount"
@@ -73,10 +74,11 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
+  { field: "paciNumbersCount", appliesTo: ["floor"], floorUses: ["commercial"] },
   { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "other_built_property"] },
   { field: "builtUpAreaSquareMeters", appliesTo: PROPERTY_TYPES },
-  { field: "bathroomCount", appliesTo: ["apartment", "floor", "house", "villa", "office", "shop", "warehouse", "chalet"] },
-  { field: "parkingSpaceCount", appliesTo: PROPERTY_TYPES },
+  { field: "bathroomCount", appliesTo: ["apartment", "floor", "house", "villa", "office", "warehouse", "chalet"] },
+  { field: "parkingSpaceCount", appliesTo: PROPERTY_TYPES.filter(propertyType => propertyType !== "shop") },
   { field: "floorCount", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "chalet"] },
   { field: "unitCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "apartmentCount", appliesTo: ["whole_building", "commercial_complex"] },
@@ -92,10 +94,10 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasMaidRoom", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasPool", appliesTo: ["house", "villa", "chalet"] },
   { field: "hasWaterfront", appliesTo: ["chalet"] },
-  { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
+  { field: "intendedUse", appliesTo: ["floor", "office", "warehouse"], floorUses: ["commercial"] },
   { field: "commercialActivity", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "frontageWidthMeters", appliesTo: ["floor", "shop"], floorUses: ["commercial"] },
-  { field: "ceilingHeightMeters", appliesTo: ["floor", "shop", "warehouse"], floorUses: ["commercial"] },
+  { field: "ceilingHeightMeters", appliesTo: ["floor", "warehouse"], floorUses: ["commercial"] },
   { field: "loadingBayCount", appliesTo: ["warehouse"] },
   { field: "hasColdStorage", appliesTo: ["warehouse"] },
   { field: "clarification", appliesTo: ["other_built_property"] },

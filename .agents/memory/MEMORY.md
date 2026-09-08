@@ -1,1 +1,5 @@
 - [Person identity consolidation](person-identity-consolidation.md) — one phone identity can hold multiple roles; consolidate links safely and fail closed on opaque data.
+- [Brain trust boundary](brain-trust-boundary.md) — AI extracts constrained intent only; local data and deterministic matching remain authoritative.
+- [Visible interaction affordances](visible-interaction-affordances.md) — entities and resources with meaningful destinations must look interactive; scalar facts remain informational.
+- [Form evolution compatibility](form-evolution-compatibility.md) — when a form stops exposing legacy fields, unchanged edits must preserve them unless the user changes the governing discriminator.
+- [Mobile API origin contract](mobile-api-origin-contract.md) — release builds require an explicit valid API origin; invalid primary values must never fall back silently.

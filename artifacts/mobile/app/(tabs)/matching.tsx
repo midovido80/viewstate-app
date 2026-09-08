@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MATCH_QUALIFICATION_THRESHOLD,
   PROPERTY_TYPES,
+  type FloorUse,
   type MatchExplanation,
   type MatchResult,
   type MatchCriterion,
@@ -31,16 +32,21 @@ import { useI18n } from '@/contexts/I18nContext';
 import { KUWAIT_AREAS, getAreaById, searchAreas } from '@/constants/kuwait-areas';
 import { store } from '@/services/persistence';
 import { MyPropertiesMatchingSource } from '@/services/myPropertiesMatchingSource';
+import { parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
 import {
   BrokerInitiatedMatching,
   type BrokerMatchingRunResult,
 } from '@/services/brokerInitiatedMatching';
 import {
+  beginMatchingRun,
   buildTransientRequirement,
-  groupMatchAllResultsByPerson,
-  runMatchingForAllRequirements,
-  validMatchingRequirements,
-  type MatchAllPersonGroup,
+  invalidateMatchingRun,
+  isCurrentMatchingRun,
+  loadMatchingDataSnapshot,
+  runSavedMatchingSnapshot,
+  scopeMatchingSnapshotToRequirement,
+  storesForMatchingSnapshot,
+  type MatchAllPresentation,
 } from '@/services/matchingUi';
 import type { Person } from '@/services/people';
 
@@ -57,11 +63,21 @@ const CRITERION_KEYS: Record<MatchCriterion, string> = {
   gym: 'matching.criteria.gym',
   sea_view: 'matching.criteria.sea_view',
   central_ac: 'matching.criteria.central_ac',
+  built_up_area: 'requirements.commercial_area',
+  commercial_activity: 'requirements.shop_activity',
+  floor_number: 'requirements.shop_floor',
+  frontage: 'requirements.shop_frontage',
 };
 
 function numberFromInput(value: string): number | undefined {
   const trimmed = value.trim();
   if (!trimmed || !/^\d+$/.test(trimmed)) return undefined;
+  return Number(trimmed);
+}
+
+function decimalFromInput(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || !/^\d+(?:\.\d+)?$/.test(trimmed)) return undefined;
   return Number(trimmed);
 }
 
@@ -138,7 +154,7 @@ function FormInput({
   onChangeText: (value: string) => void;
   placeholder?: string;
   testID: string;
-  keyboardType?: 'default' | 'numeric';
+  keyboardType?: 'default' | 'numeric' | 'number-pad' | 'decimal-pad';
   multiline?: boolean;
 }) {
   const colors = useColors();
@@ -203,8 +219,13 @@ function ResultCard({
   return (
     <TouchableOpacity
       onPress={onPress}
+      disabled={!property}
       activeOpacity={0.75}
       accessibilityRole="button"
+      accessibilityLabel={property
+        ? `${t('matching.results.openProperty')}: ${t(`propertyType.${property.core.propertyType}`)}`
+        : t('resources.destination_unavailable')}
+      accessibilityState={{ disabled: !property }}
       style={[
         styles.resultCard,
         {
@@ -225,13 +246,13 @@ function ResultCard({
           <Text style={[styles.resultLabel, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
             {t('matching.results.property')}
           </Text>
-          <Text style={[styles.propertyId, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+          <Text style={[styles.propertyId, { color: property ? colors.foreground : colors.destructive, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
             {property
               ? `${t(`propertyType.${property.core.propertyType}`)} · ${
                 getAreaById(property.core.locationArea.id)?.[language]
                   ?? property.core.locationArea.id
               }`
-              : t(`propertyType.${requirement.propertyType}`)}
+              : t('resources.destination_unavailable')}
           </Text>
           {property ? (
             <Text style={[styles.propertySummary, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
@@ -315,6 +336,7 @@ export default function MatchingScreen() {
   const [selectedSeekerId, setSelectedSeekerId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<RequirementPurpose>('rent');
   const [propertyType, setPropertyType] = useState<PropertyType>('apartment');
+  const [floorUse, setFloorUse] = useState<FloorUse | undefined>();
   const [preferredAreaIds, setPreferredAreaIds] = useState<string[]>([]);
   const [areaSearch, setAreaSearch] = useState('');
   const [minimumBudget, setMinimumBudget] = useState('500');
@@ -326,17 +348,20 @@ export default function MatchingScreen() {
   const [gym, setGym] = useState<boolean | undefined>();
   const [seaView, setSeaView] = useState<boolean | undefined>();
   const [centralAC, setCentralAC] = useState<boolean | undefined>();
+  const [shopArea, setShopArea] = useState('');
+  const [shopAreaMaximum, setShopAreaMaximum] = useState('');
+  const [shopActivity, setShopActivity] = useState('');
+  const [shopFloor, setShopFloor] = useState('');
+  const [shopFrontage, setShopFrontage] = useState('');
   const [notes, setNotes] = useState('');
   const [runResult, setRunResult] = useState<BrokerMatchingRunResult | null>(null);
   const [quickRequirement, setQuickRequirement] = useState<SeekerRequirement | null>(null);
-  const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
+  const [matchAllPresentation, setMatchAllPresentation] = useState<MatchAllPresentation | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const runGeneration = useRef(0);
 
-  const seekerPeople = useMemo(
-    () => people.filter(person => person.classifications.includes('seeker')),
-    [people],
-  );
+  const requirementPeople = useMemo(() => people, [people]);
   const visibleAreas = useMemo(
     () => searchAreas(areaSearch, KUWAIT_AREAS)
       .filter(area => !preferredAreaIds.includes(area.id))
@@ -347,31 +372,53 @@ export default function MatchingScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
-        .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
-          if (!active) return;
-          setRequirements(validMatchingRequirements(loadedRequirements));
-          setPeople(loadedPeople);
-          setProperties(loadedProperties);
-          if (requestedRequirementId) setMode('saved');
-          const firstSeeker = loadedPeople.find(person =>
-            person.classifications.includes('seeker'),
-          );
-          setSelectedSeekerId(current => current ?? firstSeeker?.id ?? null);
+      const generation = beginMatchingRun(runGeneration);
+      setError('');
+      setLoading(false);
+      setRunResult(null);
+      setQuickRequirement(null);
+      setMatchAllPresentation(null);
+      loadMatchingDataSnapshot(store)
+        .then(async snapshot => {
+          if (!active || !isCurrentMatchingRun(runGeneration, generation)) return;
+          setRequirements([...snapshot.requirements]);
+          setPeople([...snapshot.people]);
+          setProperties([...snapshot.properties]);
+          if (requestedRequirementId) {
+            setMode('saved');
+            const scoped = scopeMatchingSnapshotToRequirement(snapshot, requestedRequirementId);
+            if (!scoped) {
+              setError(t('brain.results.unavailable'));
+              return;
+            }
+            setLoading(true);
+            const matched = await runSavedMatchingSnapshot(scoped);
+            if (active && isCurrentMatchingRun(runGeneration, generation)) {
+              setMatchAllPresentation(matched.presentation);
+              setLoading(false);
+            }
+          }
+          setSelectedSeekerId(current => current ?? snapshot.people[0]?.id ?? null);
         })
         .catch(() => {
-          if (active) setError(t('matching.load_failed'));
+          if (active && isCurrentMatchingRun(runGeneration, generation)) {
+            setLoading(false);
+            setError(t('matching.load_failed'));
+          }
         });
       return () => {
         active = false;
+        invalidateMatchingRun(runGeneration, generation);
       };
     }, [requestedRequirementId, t]),
   );
 
   const clearRun = () => {
+    invalidateMatchingRun(runGeneration);
+    setLoading(false);
     setRunResult(null);
     setQuickRequirement(null);
-    setMatchAllGroups(null);
+    setMatchAllPresentation(null);
     setError('');
   };
 
@@ -392,20 +439,45 @@ export default function MatchingScreen() {
   };
 
   const runMatching = async () => {
+    const generation = beginMatchingRun(runGeneration);
     setError('');
     setRunResult(null);
     setLoading(true);
     try {
-      const candidateSource = new MyPropertiesMatchingSource(store);
+      const snapshot = await loadMatchingDataSnapshot(store);
+      if (!isCurrentMatchingRun(runGeneration, generation)) return;
+      const snapshotStores = storesForMatchingSnapshot(snapshot);
+      setRequirements([...snapshot.requirements]);
+      setPeople([...snapshot.people]);
+      setProperties([...snapshot.properties]);
+      const candidateSource = new MyPropertiesMatchingSource(
+        snapshotStores.propertyStore,
+      );
       let matching: BrokerInitiatedMatching;
 
       if (mode === 'saved') {
-        matching = new BrokerInitiatedMatching(store, candidateSource);
-        const runs = await runMatchingForAllRequirements(
-          requirements,
-          requirementId => matching.runForRequirement(requirementId),
-        );
-        setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
+        const targetSnapshot = requestedRequirementId
+          ? scopeMatchingSnapshotToRequirement(snapshot, requestedRequirementId)
+          : snapshot;
+        if (!targetSnapshot) {
+          setError(t('brain.results.unavailable'));
+          return;
+        }
+        const matched = await runSavedMatchingSnapshot(targetSnapshot);
+        if (isCurrentMatchingRun(runGeneration, generation)) {
+          setMatchAllPresentation(matched.presentation);
+        }
+        return;
+      }
+
+      const parsedCommercialAreaMinimum = parseOptionalRequirementNumber(shopArea);
+      const parsedCommercialAreaMaximum = parseOptionalRequirementNumber(shopAreaMaximum);
+      if (!parsedCommercialAreaMinimum.ok || !parsedCommercialAreaMaximum.ok) {
+        setError(t('matching.validation'));
+        return;
+      }
+      if (propertyType === 'floor' && !floorUse) {
+        setError(t('requirements.floor_use_required'));
         return;
       }
 
@@ -414,6 +486,7 @@ export default function MatchingScreen() {
         seekerId: selectedSeekerId ?? 'manual-seeker',
         purpose,
         propertyType,
+        floorUse,
         preferredAreaIds,
         minimumBudget: numberFromInput(minimumBudget),
         maximumBudget: numberFromInput(maximumBudget),
@@ -425,6 +498,11 @@ export default function MatchingScreen() {
         gym,
         seaView,
         centralAC,
+        minimumBuiltUpAreaSquareMeters: parsedCommercialAreaMinimum.value,
+        maximumBuiltUpAreaSquareMeters: parsedCommercialAreaMaximum.value,
+        commercialActivity: shopActivity.trim() || undefined,
+        floorNumber: numberFromInput(shopFloor),
+        minimumFrontageWidthMeters: decimalFromInput(shopFrontage),
       });
       if (!transient.ok) {
         setError(t('matching.validation'));
@@ -436,13 +514,16 @@ export default function MatchingScreen() {
           id === transient.value.id ? transient.value : null,
       };
       matching = new BrokerInitiatedMatching(transientStore, candidateSource);
-      setQuickRequirement(transient.value);
-      setRunResult(await matching.runForRequirement(transient.value.id));
+      const quickResult = await matching.runForRequirement(transient.value.id);
+      if (isCurrentMatchingRun(runGeneration, generation)) {
+        setQuickRequirement(transient.value);
+        setRunResult(quickResult);
+      }
     } catch (runError) {
       console.error(runError);
-      setError(t('matching.run_failed'));
+      if (isCurrentMatchingRun(runGeneration, generation)) setError(t('matching.run_failed'));
     } finally {
-      setLoading(false);
+      if (isCurrentMatchingRun(runGeneration, generation)) setLoading(false);
     }
   };
 
@@ -514,11 +595,15 @@ export default function MatchingScreen() {
         {mode === 'saved' ? (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.saved.matchAllTitle')}
+              {t(requestedRequirementId
+                ? 'matching.saved.exactTitle'
+                : 'matching.saved.matchAllTitle')}
             </Text>
             <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {requirements.length
-                ? t('matching.saved.matchAllDescription')
+                ? t(requestedRequirementId
+                  ? 'matching.saved.exactDescription'
+                  : 'matching.saved.matchAllDescription')
                 : t('matching.saved.empty')}
             </Text>
           </View>
@@ -534,7 +619,7 @@ export default function MatchingScreen() {
             <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.seeker')}
             </Text>
-            {seekerPeople.length ? seekerPeople.map(person => (
+            {requirementPeople.length ? requirementPeople.map(person => (
               <SelectCard
                 key={person.id}
                 title={person.name}
@@ -582,11 +667,30 @@ export default function MatchingScreen() {
                   onPress={() => {
                     clearRun();
                     setPropertyType(value);
+                    if (value !== 'floor') setFloorUse(undefined);
                   }}
                   testID={`matching-property-type-${value}`}
                 />
               ))}
             </View>
+            {propertyType === 'floor' ? (
+              <>
+                <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t('requirements.floor_use')}
+                </Text>
+                <View style={[styles.chipRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  {(['residential', 'commercial'] as const).map(value => (
+                    <ChoiceChip
+                      key={value}
+                      label={t(`requirements.floor_use.${value}`)}
+                      selected={floorUse === value}
+                      onPress={() => { clearRun(); setFloorUse(value); }}
+                      testID={`matching-floor-use-${value}`}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
 
             <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.areas')}
@@ -654,7 +758,32 @@ export default function MatchingScreen() {
               </View>
             </View>
 
-            {purpose === 'rent' ? (
+            {(propertyType === 'shop' || propertyType === 'office' || (propertyType === 'floor' && floorUse === 'commercial')) ? (
+              <View>
+                <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t('requirements.commercial_area')}
+                </Text>
+                <View style={[styles.inputRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <View style={styles.halfField}>
+                    <FormInput label={t('requirements.commercial_area_from')} value={shopArea} onChangeText={value => { clearRun(); setShopArea(value); }} testID="matching-input-commercial-area-min" keyboardType="decimal-pad" />
+                  </View>
+                  <View style={styles.halfField}>
+                    <FormInput label={t('requirements.commercial_area_to')} value={shopAreaMaximum} onChangeText={value => { clearRun(); setShopAreaMaximum(value); }} testID="matching-input-commercial-area-max" keyboardType="decimal-pad" />
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {(propertyType === 'shop' || (propertyType === 'floor' && floorUse === 'commercial')) ? (
+              <View>
+                <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t(propertyType === 'shop' ? 'requirements.shop_details' : 'requirements.commercial_details')}
+                </Text>
+                <FormInput label={t('requirements.shop_activity')} value={shopActivity} onChangeText={value => { clearRun(); setShopActivity(value); }} testID="matching-input-shop-activity" />
+                <FormInput label={t('requirements.shop_floor')} value={shopFloor} onChangeText={value => { clearRun(); setShopFloor(value); }} testID="matching-input-shop-floor" keyboardType="number-pad" />
+                <FormInput label={t('requirements.shop_frontage')} value={shopFrontage} onChangeText={value => { clearRun(); setShopFrontage(value); }} testID="matching-input-shop-frontage" keyboardType="decimal-pad" />
+              </View>
+            ) : purpose === 'rent' ? (
               <View>
                 <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
                   {t('matching.rentDetails')}
@@ -748,7 +877,9 @@ export default function MatchingScreen() {
         <Button
           title={loading
             ? t('matching.running')
-            : mode === 'saved' ? t('matching.runAll') : t('matching.run')}
+            : mode === 'saved'
+              ? t(requestedRequirementId ? 'matching.runExact' : 'matching.runAll')
+              : t('matching.run')}
           onPress={runMatching}
           loading={loading}
           disabled={loading}
@@ -756,7 +887,7 @@ export default function MatchingScreen() {
           testID="matching-run"
         />
 
-        {matchAllGroups ? (
+        {matchAllPresentation ? (
           <View style={styles.resultsSection} testID="matching-results">
             <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <View style={styles.resultsCopy}>
@@ -766,7 +897,7 @@ export default function MatchingScreen() {
                 <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
                   {t('matching.results.count').replace(
                     '{count}',
-                    String(matchAllGroups.reduce(
+                    String(matchAllPresentation.groups.reduce(
                       (count, group) => count + group.requirementGroups.reduce(
                         (subtotal, item) => subtotal + item.matches.length,
                         0,
@@ -776,17 +907,18 @@ export default function MatchingScreen() {
                   )}
                 </Text>
               </View>
-              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
+              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button" style={[styles.clearButton, { borderColor: colors.border }]}>
                 <Text style={[styles.clearText, { color: colors.primary, fontFamily: fonts.semiBold }]}>
                   {t('matching.clear')}
                 </Text>
               </TouchableOpacity>
             </View>
-            {matchAllGroups.length ? matchAllGroups.map(group => (
+            {matchAllPresentation.groups.length ? matchAllPresentation.groups.map(group => (
               <View key={group.person.id} style={styles.personGroup} testID={`matching-person-group-${group.person.id}`}>
                 <TouchableOpacity
                   onPress={() => router.push(`/person/${encodeURIComponent(group.person.id)}`)}
                   accessibilityRole="button"
+                  accessibilityLabel={`${t('matching.results.openPerson')}: ${group.person.name}`}
                   testID={`matching-person-${group.person.id}`}
                   style={[styles.personHeader, { backgroundColor: colors.accent, borderRadius: colors.cardRadius }]}
                 >
@@ -802,7 +934,7 @@ export default function MatchingScreen() {
                       result={result}
                       rank={index + 1}
                       requirement={requirementGroup.requirement}
-                      property={properties.find(item => item.core.id === result.propertyId)}
+                      property={matchAllPresentation.properties.find(item => item.core.id === result.propertyId)}
                       onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
                     />
                   )))}
@@ -833,7 +965,7 @@ export default function MatchingScreen() {
                   {t('matching.results.count').replace('{count}', String(runResult.matches.length))}
                 </Text>
               </View>
-              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
+              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button" style={[styles.clearButton, { borderColor: colors.border }]}>
                 <Text style={[styles.clearText, { color: colors.primary, fontFamily: fonts.semiBold }]}>
                   {t('matching.clear')}
                 </Text>
@@ -909,7 +1041,8 @@ const styles = StyleSheet.create({
   resultsSection: { marginTop: 28 },
   resultsHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
   resultsCopy: { flex: 1 },
-  clearText: { fontSize: 13, paddingTop: 4 },
+  clearText: { fontSize: 13 },
+  clearButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12 },
   resultCard: { borderWidth: 1, marginBottom: 12, padding: 15 },
   resultTop: { alignItems: 'center', gap: 11 },
   rankBadge: { alignItems: 'center', borderRadius: 20, height: 38, justifyContent: 'center', width: 38 },

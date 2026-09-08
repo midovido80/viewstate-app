@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import { Alert, StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations, Language } from '@/contexts/I18nContext';
-import { store } from '@/services/persistence';
+import { store, type LocalStoreIntegrityStatus } from '@/services/persistence';
 import { Property } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { Button } from '@/components/Button';
@@ -18,6 +18,9 @@ export default function TabOneScreen() {
   const insets = useSafeAreaInsets();
 
   const [properties, setProperties] = useState<Property[]>([]);
+  const [integrityStatus, setIntegrityStatus] = useState<LocalStoreIntegrityStatus>(
+    () => store.getIntegrityStatus(),
+  );
   const [search, setSearch] = useState('');
 
   const loadProperties = async (query = '') => {
@@ -35,6 +38,7 @@ export default function TabOneScreen() {
   useFocusEffect(
     useCallback(() => {
       loadProperties(search);
+      setIntegrityStatus(store.getIntegrityStatus());
     }, [search])
   );
 
@@ -103,11 +107,20 @@ export default function TabOneScreen() {
       </View>
 
       <View style={styles.searchContainer}>
+        <View style={[
+          styles.searchField,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            borderRadius: colors.inputRadius,
+            flexDirection: isRTL ? 'row-reverse' : 'row',
+          },
+        ]}>
         <Feather
           name="search"
           size={20}
           color={colors.mutedForeground}
-          style={[styles.searchIcon, isRTL ? styles.searchIconRTL : styles.searchIconLTR]}
+          style={styles.searchIcon}
         />
         <TextInput
           value={search}
@@ -117,17 +130,35 @@ export default function TabOneScreen() {
           style={[
             styles.searchInput,
             {
-              backgroundColor: colors.card,
               color: colors.foreground,
-              borderColor: colors.border,
               textAlign: isRTL ? 'right' : 'left',
               fontFamily: fonts.regular,
-              borderRadius: colors.inputRadius,
             }
           ]}
           testID="input-search"
         />
+        </View>
       </View>
+
+      {integrityStatus.hasUnreadableRecords ? (
+        <TouchableOpacity
+          testID="local-data-integrity-notice"
+          accessibilityRole="button"
+          onPress={() => Alert.alert(
+            t('integrity.title'),
+            `${t('integrity.message')}\n${t('integrity.count')} ${integrityStatus.unreadableRecords.length}`,
+          )}
+          style={[styles.integrityNotice, { borderColor: colors.warning, backgroundColor: colors.card }]}
+        >
+          <Feather name="alert-triangle" size={16} color={colors.warning} />
+          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
+            {t('integrity.compact').replace(
+              '{count}',
+              String(integrityStatus.unreadableRecords.length),
+            )}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
 
       <FlatList
         data={properties}
@@ -135,7 +166,7 @@ export default function TabOneScreen() {
         renderItem={renderItem}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 96 },
+          { paddingBottom: 96 },
         ]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -145,9 +176,7 @@ export default function TabOneScreen() {
         }
       />
 
-      <View style={[styles.fabContainer, {
-        bottom: insets.bottom + 16,
-      }]}>
+      <View style={[styles.fabContainer, { bottom: 16 }]}>
         <Button
           title={t('home.new')}
           onPress={() => router.push('/capture/transaction' as any)}
@@ -183,24 +212,32 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    position: 'relative',
-    justifyContent: 'center',
+  },
+  searchField: {
+    minHeight: 56,
+    borderWidth: 1,
+    alignItems: 'center',
   },
   searchIcon: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-  searchIconLTR: {
-    left: 36,
-  },
-  searchIconRTL: {
-    right: 36,
+    marginHorizontal: 14,
   },
   searchInput: {
-    height: 56,
-    borderWidth: 1,
-    paddingHorizontal: 44,
+    minHeight: 54,
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingVertical: 8,
     fontSize: 16,
+  },
+  integrityNotice: {
+    minHeight: 40,
+    marginHorizontal: 20,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   listContent: {
     padding: 20,

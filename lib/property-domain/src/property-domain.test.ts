@@ -301,6 +301,35 @@ test("uses one canonical detail field applicability definition", () => {
   assertEqual(FLOOR_USES.length, 2, "Floor has exactly the Residential and Commercial uses");
 });
 
+test("PACI Numbers Count is a non-negative integer only for Commercial Floor", () => {
+  const commercial = {
+    propertyType: "floor",
+    floorUse: "commercial",
+    paciNumbersCount: 0,
+  } as const;
+  assert(
+    validateTypeDetails(commercial, core("floor")).ok,
+    "Commercial Floor PACI Numbers Count must accept zero",
+  );
+  for (const invalidValue of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assertEqual(
+      validateTypeDetails({ ...commercial, paciNumbersCount: invalidValue }, core("floor")).ok,
+      false,
+      "PACI Numbers Count must be a safe non-negative integer",
+    );
+  }
+  assertEqual(
+    validateTypeDetails({ ...commercial, floorUse: "residential" } as unknown as TypeDetails, core("floor")).ok,
+    false,
+    "Residential Floor must reject PACI Numbers Count",
+  );
+  assertEqual(
+    validateTypeDetails({ propertyType: "office", paciNumbersCount: 1 } as unknown as TypeDetails, core("office")).ok,
+    false,
+    "Unrelated Property types must reject PACI Numbers Count",
+  );
+});
+
 test("requires a use before nonempty Floor enrichment can finalize", () => {
   const missingUse = {
     propertyType: "floor",

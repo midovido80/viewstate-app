@@ -107,6 +107,146 @@ test('multiple requirement identities remain distinct while retaining the same o
   assert.ok(records.every(item => item.seekerId === SEEKER));
 });
 
+test('Shop requirement preserves only Shop criteria for both Rent and Buy', () => {
+  for (const purpose of ['rent', 'buy'] as const) {
+    const built = buildPersonRequirement(ID, SEEKER, {
+      ...basic,
+      purpose,
+      propertyType: 'shop',
+      minimumBuiltUpAreaSquareMeters: 80,
+      maximumBuiltUpAreaSquareMeters: 120,
+      commercialActivity: 'Coffee & Gifts',
+      floorNumber: 0,
+      minimumFrontageWidthMeters: 8,
+      bedroomsMinimum: 9,
+      bathroomsMinimum: 9,
+      occupancy: 'family',
+      swimmingPool: true,
+    });
+    assert.equal(built.ok, true);
+    if (!built.ok) continue;
+    assert.equal(built.value.minimumBuiltUpAreaSquareMeters, 80);
+    assert.equal(built.value.maximumBuiltUpAreaSquareMeters, 120);
+    assert.equal(built.value.commercialActivity, 'Coffee & Gifts');
+    assert.equal(built.value.floorNumber, 0);
+    assert.equal(built.value.minimumFrontageWidthMeters, 8);
+    for (const field of ['bedroomsMinimum', 'bathroomsMinimum', 'occupancy', 'swimmingPool']) {
+      assert.equal((built.value as unknown as Record<string, unknown>)[field], undefined);
+    }
+  }
+});
+
+test('commercial area range round-trips for Shop, Office, and Floor only', () => {
+  for (const propertyType of ['shop', 'office', 'floor'] as const) {
+    const built = buildPersonRequirement(ID, SEEKER, {
+      ...basic,
+      purpose: 'buy',
+      propertyType,
+      ...(propertyType === 'floor' ? { floorUse: 'commercial' as const } : {}),
+      minimumBuiltUpAreaSquareMeters: 80,
+      maximumBuiltUpAreaSquareMeters: 120,
+    });
+    assert.equal(built.ok, true);
+    if (!built.ok) continue;
+    const form = formValuesFromRequirement(built.value);
+    assert.equal(form.minimumBuiltUpAreaSquareMeters, 80);
+    assert.equal(form.maximumBuiltUpAreaSquareMeters, 120);
+  }
+
+  const residential = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'buy',
+    propertyType: 'apartment',
+    minimumBuiltUpAreaSquareMeters: 80,
+    maximumBuiltUpAreaSquareMeters: 120,
+  });
+  assert.equal(residential.ok, true);
+  if (residential.ok) {
+    assert.equal(residential.value.minimumBuiltUpAreaSquareMeters, undefined);
+    assert.equal(residential.value.maximumBuiltUpAreaSquareMeters, undefined);
+  }
+});
+
+test('Floor Requirement workflow stores only criteria for the selected use', () => {
+  const residential = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'rent',
+    propertyType: 'floor',
+    floorUse: 'residential',
+    bedroomsMinimum: 3,
+    bathroomsMinimum: 2,
+    occupancy: 'family',
+    minimumBuiltUpAreaSquareMeters: 100,
+    commercialActivity: 'Retail',
+  });
+  assert.equal(residential.ok, true);
+  if (residential.ok) {
+    assert.equal(residential.value.floorUse, 'residential');
+    assert.equal((residential.value as unknown as Record<string, unknown>).bedroomsMinimum, 3);
+    assert.equal(residential.value.minimumBuiltUpAreaSquareMeters, undefined);
+    assert.equal(residential.value.commercialActivity, undefined);
+  }
+
+  const commercial = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'rent',
+    propertyType: 'floor',
+    floorUse: 'commercial',
+    bedroomsMinimum: 3,
+    occupancy: 'family',
+    minimumBuiltUpAreaSquareMeters: 100,
+    maximumBuiltUpAreaSquareMeters: 200,
+    commercialActivity: 'Retail',
+    floorNumber: 2,
+    minimumFrontageWidthMeters: 8,
+  });
+  assert.equal(commercial.ok, true);
+  if (commercial.ok) {
+    assert.equal(commercial.value.floorUse, 'commercial');
+    assert.equal(commercial.value.minimumBuiltUpAreaSquareMeters, 100);
+    assert.equal(commercial.value.maximumBuiltUpAreaSquareMeters, 200);
+    assert.equal(commercial.value.commercialActivity, 'Retail');
+    assert.equal(commercial.value.floorNumber, 2);
+    assert.equal(commercial.value.minimumFrontageWidthMeters, 8);
+    assert.equal((commercial.value as unknown as Record<string, unknown>).bedroomsMinimum, undefined);
+    assert.equal((commercial.value as unknown as Record<string, unknown>).occupancy, undefined);
+  }
+});
+
+test('editing infers Commercial only for legacy Floor Requirements with commercial criteria', () => {
+  const legacyFloor = {
+    id: ID,
+    seekerId: SEEKER,
+    purpose: 'buy' as const,
+    propertyType: 'floor' as const,
+    preferredAreaIds: ['salmiya'],
+    budget: { minimum: 100_000, maximum: 500_000, currencyCode: 'KWD' },
+    notes: '',
+  };
+  const legacyCommercial = formValuesFromRequirement({
+    ...legacyFloor,
+    minimumBuiltUpAreaSquareMeters: 100,
+  });
+  assert.equal(legacyCommercial.floorUse, 'commercial');
+
+  const legacyUnclassified = formValuesFromRequirement({
+    ...legacyFloor,
+  });
+  assert.equal(legacyUnclassified.floorUse, undefined);
+});
+
+test('Requirement editor renders commercial area range plus Shop-specific details', async () => {
+  const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  const detailsBranch = source.slice(source.indexOf('{step === 4'), source.indexOf('{step === 5'));
+  assert.match(detailsBranch, /propertyType === 'shop'/);
+  for (const testId of ['requirement-commercial-area-min', 'requirement-commercial-area-max', 'requirement-shop-activity', 'requirement-shop-floor', 'requirement-shop-frontage']) {
+    assert.match(detailsBranch, new RegExp(`testID=\"${testId}\"`));
+  }
+  assert.match(source, /testID=\{`requirement-floor-use-\$\{value\}`\}/);
+  assert.match(detailsBranch, /propertyType === 'floor' && floorUse === 'commercial'/);
+  assert.match(detailsBranch, /purpose === 'rent'/);
+});
+
 test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   const scrollEnd = source.indexOf('</KeyboardAwareScrollViewCompat>');

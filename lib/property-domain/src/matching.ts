@@ -3,6 +3,7 @@ import type {
   RequirementOccupancy,
   SeekerRequirement,
 } from "./requirements.ts";
+import { isCommercialAreaRequirementPropertyType } from "./requirements.ts";
 
 export const MATCH_QUALIFICATION_THRESHOLD = 70;
 
@@ -20,6 +21,17 @@ export const MATCH_SCORING_WEIGHTS = {
     orderedLocation: 40,
   },
 } as const;
+
+export const SHOP_MATCH_SCORING_WEIGHTS = {
+  budget: 40,
+  orderedLocation: 30,
+  builtUpArea: 10,
+  commercialActivity: 10,
+  floorNumber: 5,
+  frontage: 5,
+} as const;
+
+export const COMMERCIAL_AREA_MATCH_WEIGHT = 10;
 
 export type MatchingService =
   | "swimmingPool"
@@ -40,6 +52,10 @@ export interface MatchingPropertyEvidence {
   readonly gym?: boolean;
   readonly seaView?: boolean;
   readonly centralAC?: boolean;
+  readonly builtUpAreaSquareMeters?: number;
+  readonly commercialActivity?: string;
+  readonly floorNumber?: number;
+  readonly frontageWidthMeters?: number;
 }
 
 export interface MatchingPropertyCandidate {
@@ -59,7 +75,11 @@ export type MatchCriterion =
   | "swimming_pool"
   | "gym"
   | "sea_view"
-  | "central_ac";
+  | "central_ac"
+  | "built_up_area"
+  | "commercial_activity"
+  | "floor_number"
+  | "frontage";
 
 export type MatchExplanationStatus =
   | "matched"
@@ -83,6 +103,8 @@ export interface MatchExplanation {
     | "ordered_location_rank"
     | "meets_minimum"
     | "below_minimum"
+     | "within_range"
+     | "outside_range"
     | "exact_or_compatible"
     | "occupancy_not_compatible"
     | "service_present"
@@ -128,6 +150,11 @@ type TypeDetailsLike = {
   readonly bedroomCount?: unknown;
   readonly bathroomCount?: unknown;
   readonly hasPool?: unknown;
+  readonly builtUpAreaSquareMeters?: unknown;
+  readonly commercialActivity?: unknown;
+  readonly floorNumber?: unknown;
+  readonly frontageWidthMeters?: unknown;
+  readonly floorUse?: unknown;
 };
 
 function isFiniteNumber(value: unknown): value is number {
@@ -142,8 +169,23 @@ function isOccupancy(value: unknown): value is RequirementOccupancy {
   return value === "family" || value === "bachelor" || value === "any";
 }
 
+function classifiedLiteralValue(value: unknown): string | undefined {
+  if (
+    typeof value === "object"
+    && value !== null
+    && "value" in value
+    && typeof value.value === "string"
+  ) {
+    return value.value;
+  }
+  return undefined;
+}
+
 function derivePropertyEvidence(property: Property): MatchingPropertyEvidence {
   const details = property.typeDetails as TypeDetailsLike | undefined;
+  const supportsCommercialArea = property.core.propertyType === "shop"
+    || property.core.propertyType === "office"
+    || (property.core.propertyType === "floor" && details?.floorUse === "commercial");
   return {
     bedrooms: isFiniteNumber(details?.bedroomCount)
       ? details.bedroomCount
@@ -153,6 +195,17 @@ function derivePropertyEvidence(property: Property): MatchingPropertyEvidence {
       : undefined,
     swimmingPool: isBoolean(details?.hasPool)
       ? details.hasPool
+      : undefined,
+    builtUpAreaSquareMeters: supportsCommercialArea
+      && isFiniteNumber(details?.builtUpAreaSquareMeters)
+      ? details.builtUpAreaSquareMeters
+      : undefined,
+    commercialActivity: classifiedLiteralValue(details?.commercialActivity),
+    floorNumber: isFiniteNumber(details?.floorNumber)
+      ? details.floorNumber
+      : undefined,
+    frontageWidthMeters: isFiniteNumber(details?.frontageWidthMeters)
+      ? details.frontageWidthMeters
       : undefined,
   };
 }
@@ -179,6 +232,21 @@ function mergeEvidence(
     gym: isBoolean(supplied.gym) ? supplied.gym : undefined,
     seaView: isBoolean(supplied.seaView) ? supplied.seaView : undefined,
     centralAC: isBoolean(supplied.centralAC) ? supplied.centralAC : undefined,
+    builtUpAreaSquareMeters: isFiniteNumber(supplied.builtUpAreaSquareMeters)
+      && supplied.builtUpAreaSquareMeters > 0
+      ? supplied.builtUpAreaSquareMeters
+      : derived.builtUpAreaSquareMeters,
+    commercialActivity: typeof supplied.commercialActivity === "string"
+      && supplied.commercialActivity.length > 0
+      ? supplied.commercialActivity
+      : derived.commercialActivity,
+    floorNumber: isFiniteNumber(supplied.floorNumber) && supplied.floorNumber >= 0
+      ? supplied.floorNumber
+      : derived.floorNumber,
+    frontageWidthMeters: isFiniteNumber(supplied.frontageWidthMeters)
+      && supplied.frontageWidthMeters > 0
+      ? supplied.frontageWidthMeters
+      : derived.frontageWidthMeters,
   };
 }
 
@@ -285,12 +353,26 @@ function hardEligibility(
 } {
   const reasons: MatchIneligibilityReason[] = [];
   const property = candidate.property;
+  const propertyDetails = property.typeDetails as TypeDetailsLike | undefined;
   const expectedTransaction = requirement.purpose === "rent" ? "rent" : "sale";
   const locationRank = requirement.preferredAreaIds.indexOf(
     property.core.locationArea.id,
   );
 
-  if (property.core.propertyType !== requirement.propertyType) {
+  const requiresCommercialFloor = requirement.propertyType === "floor"
+    && (
+      requirement.floorUse === "commercial"
+      ||
+      requirement.minimumBuiltUpAreaSquareMeters !== undefined
+      || requirement.maximumBuiltUpAreaSquareMeters !== undefined
+    );
+  const requiresResidentialFloor = requirement.propertyType === "floor"
+    && requirement.floorUse === "residential";
+  if (
+    property.core.propertyType !== requirement.propertyType
+    || (requiresCommercialFloor && propertyDetails?.floorUse !== "commercial")
+    || (requiresResidentialFloor && propertyDetails?.floorUse !== "residential")
+  ) {
     reasons.push("property_type");
   }
   if (property.activeOffer.transaction !== expectedTransaction) {
@@ -416,9 +498,32 @@ export function evaluateMatch(
   const evidence = mergeEvidence(property, candidate.evidence);
   const explanations: MatchExplanation[] = [];
   const points: CriterionPoints[] = [];
-  const weights = requirement.purpose === "rent"
-    ? MATCH_SCORING_WEIGHTS.rent
-    : MATCH_SCORING_WEIGHTS.buy;
+  const shopCriteriaRequested = requirement.propertyType === "shop"
+    && (
+      requirement.minimumBuiltUpAreaSquareMeters !== undefined
+      || requirement.maximumBuiltUpAreaSquareMeters !== undefined
+      || requirement.commercialActivity !== undefined
+      || requirement.floorNumber !== undefined
+      || requirement.minimumFrontageWidthMeters !== undefined
+    );
+  const commercialFloorCriteriaRequested = requirement.propertyType === "floor"
+    && requirement.floorUse !== "residential"
+    && (
+      requirement.commercialActivity !== undefined
+      || requirement.floorNumber !== undefined
+      || requirement.minimumFrontageWidthMeters !== undefined
+    );
+  const commercialAreaRequested =
+    isCommercialAreaRequirementPropertyType(requirement.propertyType)
+    && (
+      requirement.minimumBuiltUpAreaSquareMeters !== undefined
+      || requirement.maximumBuiltUpAreaSquareMeters !== undefined
+    );
+  const weights = shopCriteriaRequested
+    ? SHOP_MATCH_SCORING_WEIGHTS
+    : requirement.purpose === "rent"
+      ? MATCH_SCORING_WEIGHTS.rent
+      : MATCH_SCORING_WEIGHTS.buy;
 
   points.push(criterion(
     "budget",
@@ -452,7 +557,11 @@ export function evaluateMatch(
     ));
   }
 
-  if (requirement.purpose === "rent") {
+  if (
+    requirement.purpose === "rent"
+    && requirement.propertyType !== "shop"
+    && !(requirement.propertyType === "floor" && requirement.floorUse === "commercial")
+  ) {
     const rentWeights = MATCH_SCORING_WEIGHTS.rent;
     if (requirement.bedroomsMinimum !== undefined) {
       const possible = rentWeights.bedrooms;
@@ -539,6 +648,79 @@ export function evaluateMatch(
       for (const service of requestedServices) {
         points.push(evaluateService(service, evidence, possible));
       }
+    }
+  }
+
+  if (commercialAreaRequested) {
+    const actual = evidence.builtUpAreaSquareMeters;
+    const possible = requirement.propertyType === "shop"
+      ? SHOP_MATCH_SCORING_WEIGHTS.builtUpArea
+      : COMMERCIAL_AREA_MATCH_WEIGHT;
+    const minimum = requirement.minimumBuiltUpAreaSquareMeters;
+    const maximum = requirement.maximumBuiltUpAreaSquareMeters;
+    const withinRange = actual !== undefined
+      && (minimum === undefined || actual >= minimum)
+      && (maximum === undefined || actual <= maximum);
+    points.push(actual === undefined
+      ? criterion("built_up_area", "unknown", 0, possible, "unknown_property_evidence", "Commercial area evidence is Unknown.")
+      : criterion(
+        "built_up_area",
+        withinRange ? "matched" : "not_met",
+        withinRange ? possible : 0,
+        possible,
+        withinRange ? "within_range" : "outside_range",
+        withinRange
+          ? "Property area is within the requested range."
+          : "Property area is outside the requested range.",
+      ));
+  }
+
+  if (shopCriteriaRequested || commercialFloorCriteriaRequested) {
+    if (requirement.commercialActivity !== undefined) {
+      const actual = evidence.commercialActivity;
+      const possible = SHOP_MATCH_SCORING_WEIGHTS.commercialActivity;
+      const matches = actual === requirement.commercialActivity;
+      points.push(actual === undefined
+        ? criterion("commercial_activity", "unknown", 0, possible, "unknown_property_evidence", "Shop activity evidence is Unknown.")
+        : criterion(
+          "commercial_activity",
+          matches ? "matched" : "not_met",
+          matches ? possible : 0,
+          possible,
+          matches ? "exact_or_compatible" : "occupancy_not_compatible",
+          matches ? "Shop activity matches exactly." : "Shop activity does not match.",
+        ));
+    }
+    if (requirement.floorNumber !== undefined) {
+      const actual = evidence.floorNumber;
+      const possible = SHOP_MATCH_SCORING_WEIGHTS.floorNumber;
+      const matches = actual === requirement.floorNumber;
+      points.push(actual === undefined
+        ? criterion("floor_number", "unknown", 0, possible, "unknown_property_evidence", "Shop floor evidence is Unknown.")
+        : criterion(
+          "floor_number",
+          matches ? "matched" : "not_met",
+          matches ? possible : 0,
+          possible,
+          matches ? "exact_or_compatible" : "occupancy_not_compatible",
+          matches ? "Shop floor matches exactly." : "Shop floor does not match.",
+        ));
+    }
+    if (requirement.minimumFrontageWidthMeters !== undefined) {
+      const actual = evidence.frontageWidthMeters;
+      const possible = SHOP_MATCH_SCORING_WEIGHTS.frontage;
+      points.push(actual === undefined
+        ? criterion("frontage", "unknown", 0, possible, "unknown_property_evidence", "Shop frontage evidence is Unknown.")
+        : criterion(
+          "frontage",
+          actual >= requirement.minimumFrontageWidthMeters ? "matched" : "not_met",
+          actual >= requirement.minimumFrontageWidthMeters ? possible : 0,
+          possible,
+          actual >= requirement.minimumFrontageWidthMeters ? "meets_minimum" : "below_minimum",
+          actual >= requirement.minimumFrontageWidthMeters
+            ? "Shop meets the minimum frontage."
+            : "Shop is below the minimum frontage.",
+        ));
     }
   }
 

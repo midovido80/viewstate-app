@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: brain
+    description: ViewState Brain intent and transcription
 paths:
   /healthz:
     get:
@@ -24,6 +26,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /brain/intent:
+    post:
+      operationId: classifyBrainIntent
+      tags: [brain]
+      summary: Convert an Arabic or English request into a constrained Brain intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrainIntentRequest"
+      responses:
+        "200":
+          description: Structured intent; no ViewState records are sent to the model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrainIntentResponse"
+        "400":
+          description: Invalid request
+        "422":
+          description: Request could not be classified
+        "502":
+          description: AI provider unavailable
+  /brain/transcribe:
+    post:
+      operationId: transcribeBrainAudio
+      tags: [brain]
+      summary: Convert one push-to-talk recording into editable text
+      description: Accepts one multipart audio field. Runtime validation permits supported audio MIME types up to 8 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data: {}
+      responses:
+        "200":
+          description: Final transcript
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrainTranscript"
+        "400":
+          description: Invalid audio request
+        "413":
+          description: Audio exceeds 8 MB
+        "422":
+          description: Audio could not be transcribed
+        "502":
+          description: AI provider unavailable
 components:
   schemas:
     HealthStatus:
@@ -33,4 +84,53 @@ components:
           type: string
       required:
         - status
+    BrainIntentRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        locale:
+          type: string
+          enum: [ar, en]
+      required: [text, locale]
+    BrainIntentResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        intent:
+          type: string
+          enum: [property_search, people_requirements_search, find_matches, unknown]
+        originalQuery:
+          type: string
+        propertyType:
+          type: string
+          enum: [apartment, villa, chalet, shop, office, floor]
+        purpose:
+          type: string
+          enum: [rent, buy]
+        areaTerms:
+          type: array
+          items:
+            type: string
+        budgetMin:
+          type: number
+          minimum: 0
+        budgetMax:
+          type: number
+          minimum: 0
+        personTerms:
+          type: array
+          items:
+            type: string
+      required: [intent, originalQuery]
+    BrainTranscript:
+      type: object
+      additionalProperties: false
+      properties:
+        transcript:
+          type: string
+      required: [transcript]
 

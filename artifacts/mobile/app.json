@@ -19,8 +19,12 @@
     },
     "android": {
       "package": "com.viewstate.app",
-      "versionCode": 4,
-      "softwareKeyboardLayoutMode": "resize"
+      "versionCode": 5,
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -58,7 +62,15 @@
           "microphonePermission": false
         }
       ],
-      "expo-web-browser"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow ViewState to record a voice request. / السماح لـ ViewState بتسجيل طلب صوتي.",
+          "recordAudioAndroid": true
+        }
+      ],
+      "expo-web-browser",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

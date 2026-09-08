@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath, URL as NodeURL } from 'node:url';
 import type { SQLiteBindParams, SQLiteDatabase } from 'expo-sqlite';
 
 import './platformModuleStubs.ts';
@@ -10,8 +12,12 @@ import {
   type RentSeekerRequirement,
   type SeekerRequirement,
 } from '@workspace/property-domain';
-import type { Person } from '../services/people.ts';
+import type { Person, PersonClassification } from '../services/people.ts';
 import { createPerson } from '../services/people.ts';
+import {
+  buildPersonRequirement,
+  preserveHiddenLegacyRentFields,
+} from '../services/personRequirementWorkflow.ts';
 import {
   NATIVE_REQUIREMENT_CHRONOLOGY_TABLE,
   NATIVE_REQUIREMENTS_TABLE,
@@ -70,6 +76,17 @@ const owner = (id: string): Person => createPerson({
   classifications: ['owner'],
   name: `Owner ${id}`,
   displayPhone: '51111111',
+  notes: '',
+});
+
+const personWithRole = (
+  id: string,
+  classification: PersonClassification,
+): Person => createPerson({
+  id,
+  classifications: [classification],
+  name: `Person ${id}`,
+  displayPhone: `52${id.padStart(6, '0').slice(-6)}`,
   notes: '',
 });
 
@@ -182,6 +199,20 @@ test('SeekerRequirement validates canonical structure without Matching semantics
     ));
   }
 
+  const shopWithResidentialFields = validateSeekerRequirement({
+    ...rentRequirement(),
+    propertyType: 'shop',
+    bedroomsMinimum: 2,
+    occupancy: 'family',
+    swimmingPool: true,
+  });
+  assert.equal(shopWithResidentialFields.ok, false);
+  if (!shopWithResidentialFields.ok) {
+    assert.ok(shopWithResidentialFields.issues.some(
+      issue => issue.code === 'shop_field_not_allowed',
+    ));
+  }
+
   const rentalPeriod = validateSeekerRequirement({
     ...rent,
     rentalPeriodId: 'monthly',
@@ -192,6 +223,154 @@ test('SeekerRequirement validates canonical structure without Matching semantics
       issue.code === 'invalid_requirement'
       && issue.path.join('.') === 'rentalPeriodId'
     ));
+  }
+});
+
+test('commercial area ranges validate all optional-bound semantics and reject invalid use', () => {
+  for (const propertyType of ['shop', 'office', 'floor'] as const) {
+    for (const bounds of [
+      { minimumBuiltUpAreaSquareMeters: 80, maximumBuiltUpAreaSquareMeters: 120 },
+      { minimumBuiltUpAreaSquareMeters: 80 },
+      { maximumBuiltUpAreaSquareMeters: 120 },
+      {},
+    ]) {
+      const result = validateSeekerRequirement({
+        ...buyRequirement(),
+        propertyType,
+        ...(propertyType === 'floor' ? { floorUse: 'commercial' as const } : {}),
+        ...bounds,
+      });
+      assert.equal(result.ok, true);
+    }
+  }
+
+  const reversed = validateSeekerRequirement({
+    ...buyRequirement(),
+    propertyType: 'office',
+    minimumBuiltUpAreaSquareMeters: 121,
+    maximumBuiltUpAreaSquareMeters: 120,
+  });
+  assert.equal(reversed.ok, false);
+  if (!reversed.ok) {
+    assert.ok(reversed.issues.some(issue => issue.code === 'invalid_commercial_area'));
+  }
+
+  const residential = validateSeekerRequirement({
+    ...buyRequirement(),
+    propertyType: 'apartment',
+    maximumBuiltUpAreaSquareMeters: 120,
+  });
+  assert.equal(residential.ok, false);
+  if (!residential.ok) {
+    assert.ok(residential.issues.some(
+      issue => issue.code === 'commercial_area_field_not_allowed',
+    ));
+  }
+});
+
+test('Requirement detail fields are type-specific, informational, and normalize without migration', () => {
+  const base = buyRequirement();
+  const valid = [
+    { propertyType: 'apartment' as const },
+    { propertyType: 'floor' as const, floorUse: 'residential' as const },
+    { propertyType: 'house' as const },
+    { propertyType: 'villa' as const },
+    { propertyType: 'chalet' as const },
+    { propertyType: 'shop' as const, commercialActivity: 'Cafe', floorNumber: 1, minimumFrontageWidthMeters: 5 },
+    { propertyType: 'office' as const, minimumBuiltUpAreaSquareMeters: 50, floorNumber: 2, intendedUse: 'Consulting', commercialActivity: 'Accounting' },
+    { propertyType: 'floor' as const, floorUse: 'commercial' as const, minimumBuiltUpAreaSquareMeters: 50, intendedUse: 'Retail', paciNumbersCount: 2 },
+    { propertyType: 'commercial_complex' as const, minimumPlotAreaSquareMeters: 200, maximumPlotAreaSquareMeters: 500, floorCount: 3, shopCount: 12 },
+    { propertyType: 'whole_building' as const, minimumPlotAreaSquareMeters: 200, maximumPlotAreaSquareMeters: 500, floorCount: 4, apartmentCount: 8 },
+    { propertyType: 'warehouse' as const },
+    { propertyType: 'other_built_property' as const },
+  ];
+  for (const detail of valid) assert.equal(validateSeekerRequirement({ ...base, ...detail }).ok, true);
+
+  const normalized = normalizeSeekerRequirement({ ...base, ...valid[8] });
+  assert.equal(normalized.ok, true);
+  if (normalized.ok) assert.deepEqual(
+    { minimumPlotAreaSquareMeters: normalized.value.minimumPlotAreaSquareMeters, shopCount: normalized.value.shopCount },
+    { minimumPlotAreaSquareMeters: 200, shopCount: 12 },
+  );
+  // Legacy rows retain the old broad rent-field contract even though the
+  // editor/workflow no longer creates these fields for non-residential types.
+  for (const propertyType of ['office', 'whole_building'] as const) {
+    const legacy = normalizeSeekerRequirement({
+      ...rentRequirement(), propertyType, bedroomsMinimum: 2, bathroomsMinimum: 1,
+    });
+    assert.equal(legacy.ok, true);
+    if (legacy.ok && legacy.value.purpose === 'rent') {
+      assert.equal(legacy.value.bedroomsMinimum, 2);
+      assert.equal(legacy.value.bathroomsMinimum, 1);
+    }
+  }
+  const stale = normalizeSeekerRequirement({ ...buyRequirement(), propertyType: 'floor' });
+  assert.equal(stale.ok, true);
+  const invalidPaci = validateSeekerRequirement({ ...base, propertyType: 'office', paciNumbersCount: 1 });
+  assert.equal(invalidPaci.ok, false);
+});
+
+test('Requirement UI uses the exact approved bilingual PACI labels and a Notes fallback', async () => {
+  const [i18n, editor] = await Promise.all([
+    readFile(fileURLToPath(new NodeURL('../contexts/I18nContext.tsx', import.meta.url)), 'utf8'),
+    readFile(fileURLToPath(new NodeURL('../app/requirement/[requirementId].tsx', import.meta.url)), 'utf8'),
+  ]);
+  assert.match(i18n, /'requirements\.paci_numbers_count': 'PACI Numbers Count'/);
+  assert.match(i18n, /'requirements\.paci_numbers_count': 'عدد الأرقام الآلية'/);
+  assert.match(i18n, /'requirements\.details_in_notes': 'Add any secondary details in Notes\.'/);
+  assert.match(i18n, /'requirements\.details_in_notes': 'أضف أي تفاصيل إضافية في الملاحظات\.'/);
+  assert.match(editor, /testID="requirement-details-in-notes"/);
+});
+
+test('Floor use is optional for legacy rows but separates residential and commercial criteria', () => {
+  const legacy = normalizeSeekerRequirement({
+    ...buyRequirement(),
+    propertyType: 'floor',
+  });
+  assert.equal(legacy.ok, true);
+  if (legacy.ok) assert.equal(legacy.value.floorUse, undefined);
+
+  const residential = validateSeekerRequirement({
+    ...rentRequirement(),
+    propertyType: 'floor',
+    floorUse: 'residential',
+    bedroomsMinimum: 3,
+  });
+  assert.equal(residential.ok, true);
+
+  const residentialWithCommercial = validateSeekerRequirement({
+    ...rentRequirement(),
+    propertyType: 'floor',
+    floorUse: 'residential',
+    minimumBuiltUpAreaSquareMeters: 100,
+  });
+  assert.equal(residentialWithCommercial.ok, false);
+
+  const commercial = validateSeekerRequirement({
+    ...rentRequirement(),
+    propertyType: 'floor',
+    floorUse: 'commercial',
+    bedroomsMinimum: undefined,
+    bathroomsMinimum: undefined,
+    occupancy: undefined,
+    swimmingPool: undefined,
+    gym: undefined,
+    seaView: undefined,
+    centralAC: undefined,
+    minimumBuiltUpAreaSquareMeters: 100,
+    commercialActivity: 'Retail',
+    floorNumber: 2,
+    minimumFrontageWidthMeters: 8,
+  });
+  assert.equal(commercial.ok, true);
+
+  const wrongType = validateSeekerRequirement({
+    ...buyRequirement(),
+    floorUse: 'commercial',
+  });
+  assert.equal(wrongType.ok, false);
+  if (!wrongType.ok) {
+    assert.ok(wrongType.issues.some(issue => issue.code === 'floor_use_field_not_allowed'));
   }
 });
 
@@ -262,7 +441,7 @@ const locks = {
   },
 };
 
-test('Web Requirement persistence survives recreation and isolates Seekers', async () => {
+test('Web Requirement persistence survives recreation and isolates Persons', async () => {
   const people = new Map<string, Person>([
     ['seeker-1', seeker('seeker-1')],
     ['seeker-2', seeker('seeker-2')],
@@ -316,12 +495,140 @@ test('Web Requirement persistence survives recreation and isolates Seekers', asy
     )),
     /REQUIREMENT_SEEKER_NOT_FOUND/,
   );
-  await assert.rejects(
-    first.saveRequirement(rentRequirement(
-      '55555555-5555-4555-8555-555555555555',
-      'owner-1',
-    )),
-    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
+  const validRoles: PersonClassification[] = [
+    'seeker',
+    'owner',
+    'broker',
+    'real_estate_company',
+    'building_guard',
+  ];
+  for (const [index, role] of validRoles.entries()) {
+    const personId = `role-${index}`;
+    people.set(personId, personWithRole(personId, role));
+    const requirementId = `55555555-5555-4555-8555-55555555555${index}`;
+    await first.saveRequirement(rentRequirement(requirementId, personId));
+    assert.deepEqual(
+      (await first.getRequirementsForSeeker(personId)).map(item => item.id),
+      [requirementId],
+    );
+  }
+});
+
+test('hidden legacy rent fields survive compatible Office and Whole Building edits only', async () => {
+  const people = new Map<string, Person>([['seeker-1', seeker('seeker-1')]]);
+  const storage = new MemoryStorage();
+  const store = new WebRequirementStore(storage, () => locks, {
+    getPerson: async id => people.get(id) ?? null,
+  });
+  for (const [id, propertyType] of [
+    ['12121212-1212-4121-8121-121212121212', 'office'],
+    ['13131313-1313-4131-8131-131313131313', 'whole_building'],
+  ] as const) {
+    const legacy: RentSeekerRequirement = {
+      ...rentRequirement(id),
+      propertyType,
+      bedroomsMinimum: 3,
+      bathroomsMinimum: 2,
+      occupancy: 'family',
+      swimmingPool: true,
+      gym: false,
+      seaView: true,
+      centralAC: false,
+    };
+    const candidate = buildPersonRequirement(id, 'seeker-1', {
+      purpose: 'rent', propertyType, preferredAreaIds: legacy.preferredAreaIds,
+      minimumBudget: 500, maximumBudget: 850, currencyCode: 'KWD', notes: 'edited',
+    });
+    assert.equal(candidate.ok, true);
+    if (!candidate.ok) continue;
+    const replacement = preserveHiddenLegacyRentFields(legacy, candidate.value);
+    assert.equal((replacement as RentSeekerRequirement).bedroomsMinimum, 3);
+    assert.equal((replacement as RentSeekerRequirement).occupancy, 'family');
+    await store.saveRequirement(legacy);
+    assert.equal(await store.updateRequirement(legacy, replacement), true);
+    const reloaded = await store.getRequirement(id);
+    assert.equal((reloaded as RentSeekerRequirement | null)?.bedroomsMinimum, 3);
+    assert.equal((reloaded as RentSeekerRequirement | null)?.bathroomsMinimum, 2);
+    assert.equal((reloaded as RentSeekerRequirement | null)?.occupancy, 'family');
+    assert.equal((reloaded as RentSeekerRequirement | null)?.swimmingPool, true);
+    assert.equal((reloaded as RentSeekerRequirement | null)?.gym, false);
+    assert.equal((reloaded as RentSeekerRequirement | null)?.seaView, true);
+    assert.equal((reloaded as RentSeekerRequirement | null)?.centralAC, false);
+
+    const changedType = buildPersonRequirement(id, 'seeker-1', {
+      purpose: 'rent', propertyType: 'apartment', preferredAreaIds: legacy.preferredAreaIds,
+      minimumBudget: 500, maximumBudget: 850, currencyCode: 'KWD', notes: 'changed',
+    });
+    const changedPurpose = buildPersonRequirement(id, 'seeker-1', {
+      purpose: 'buy', propertyType, preferredAreaIds: legacy.preferredAreaIds,
+      minimumBudget: 500, maximumBudget: 850, currencyCode: 'KWD', notes: 'changed',
+    });
+    assert.equal(changedType.ok, true);
+    assert.equal(changedPurpose.ok, true);
+    if (changedType.ok) assert.equal('bedroomsMinimum' in preserveHiddenLegacyRentFields(legacy, changedType.value), false);
+    if (changedPurpose.ok) assert.equal('bedroomsMinimum' in preserveHiddenLegacyRentFields(legacy, changedPurpose.value), false);
+  }
+  const legacyCommercialFloor: RentSeekerRequirement = {
+    ...rentRequirement('14141414-1414-4141-8141-141414141414'),
+    propertyType: 'floor',
+    floorUse: 'commercial',
+  };
+  const changedFloorUse = buildPersonRequirement(legacyCommercialFloor.id, 'seeker-1', {
+    purpose: 'rent', propertyType: 'floor', floorUse: 'residential',
+    preferredAreaIds: legacyCommercialFloor.preferredAreaIds,
+    minimumBudget: 500, maximumBudget: 850, currencyCode: 'KWD', notes: 'changed',
+  });
+  assert.equal(changedFloorUse.ok, true);
+  if (changedFloorUse.ok) {
+    assert.equal(
+      'bedroomsMinimum' in preserveHiddenLegacyRentFields(legacyCommercialFloor, changedFloorUse.value),
+      false,
+    );
+  }
+});
+
+test('Requirement edit-save-reload removes hidden preferred areas in Native and Web stores', async () => {
+  const requirementId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const seekerId = 'saved-area-seeker';
+  const original: RentSeekerRequirement = {
+    id: requirementId,
+    seekerId,
+    purpose: 'rent',
+    propertyType: 'shop',
+    preferredAreaIds: ['bayan', 'daiya'],
+    budget: { minimum: 500, maximum: 800, currencyCode: 'KWD' },
+    notes: '',
+  };
+  const edited: RentSeekerRequirement = {
+    ...original,
+    preferredAreaIds: ['bayan'],
+  };
+
+  const nativeDb = new RequirementDatabase();
+  const native = sqliteStoreFor(nativeDb);
+  await native.init();
+  await native.savePerson(seeker(seekerId));
+  await native.saveRequirement(original);
+  assert.equal(await native.updateRequirement(original, edited), true);
+  const restartedNative = sqliteStoreFor(nativeDb);
+  await restartedNative.init();
+  assert.deepEqual(
+    (await restartedNative.getRequirement(requirementId))?.preferredAreaIds,
+    ['bayan'],
+  );
+
+  const webStorage = new MemoryStorage();
+  const webLocks = new SerializedLocks();
+  const web = new WebStore(webStorage, webLocks);
+  await web.init();
+  await web.savePerson(seeker(seekerId));
+  await web.saveRequirement(original);
+  assert.equal(await web.updateRequirement(original, edited), true);
+  const restartedWeb = new WebStore(webStorage, webLocks);
+  await restartedWeb.init();
+  assert.deepEqual(
+    (await restartedWeb.getRequirement(requirementId))?.preferredAreaIds,
+    ['bayan'],
   );
 });
 
@@ -627,14 +934,11 @@ test('Integrated Native store serializes Requirement ownership against Person mu
     owner(reclassifiedSeeker.id),
   );
   await updateGate.started;
-  const rejectedUpdate = assert.rejects(
-    store.updateRequirement(original, replacement),
-    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
-  );
+  const allowedUpdate = store.updateRequirement(original, replacement);
   updateGate.release();
   assert.equal(await reclassifying, true);
-  await rejectedUpdate;
-  assert.deepEqual(await store.getRequirement(original.id), original);
+  assert.equal(await allowedUpdate, true);
+  assert.deepEqual(await store.getRequirement(original.id), replacement);
 });
 
 test('Integrated Web store serializes Requirement ownership against Person mutations', async () => {
@@ -680,14 +984,11 @@ test('Integrated Web store serializes Requirement ownership against Person mutat
     owner(reclassifiedSeeker.id),
   );
   await updateGate.started;
-  const rejectedUpdate = assert.rejects(
-    store.updateRequirement(original, replacement),
-    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
-  );
+  const allowedUpdate = store.updateRequirement(original, replacement);
   updateGate.release();
   assert.equal(await reclassifying, true);
-  await rejectedUpdate;
-  assert.deepEqual(await store.getRequirement(original.id), original);
+  assert.equal(await allowedUpdate, true);
+  assert.deepEqual(await store.getRequirement(original.id), replacement);
 });
 
 test('Integrated Native and Web stores preserve Requirement data while disabled and re-enable it', async () => {

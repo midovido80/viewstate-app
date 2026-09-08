@@ -211,6 +211,7 @@ export function validateTypeDetails(
   }
 
   const countFields = [
+    "paciNumbersCount",
     "bathroomCount",
     "parkingSpaceCount",
     "floorCount",

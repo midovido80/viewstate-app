@@ -13,6 +13,8 @@ function ClassicTabLayout() {
   const insets = useSafeAreaInsets();
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
+  const nativeTabBarBaseHeight = isIOS ? 49 : 56;
+  const nativeBottomInset = Math.max(insets.bottom, 0);
 
   return (
     <Tabs
@@ -31,11 +33,12 @@ function ClassicTabLayout() {
           position: 'relative',
           overflow: 'hidden',
           zIndex: 100,
-          ...(isWeb ? { height: 84 } : { paddingBottom: insets.bottom }),
+          height: isWeb ? 84 : nativeTabBarBaseHeight + nativeBottomInset,
+          paddingBottom: isWeb ? 6 : nativeBottomInset,
         },
         tabBarItemStyle: {
           paddingTop: 6,
-          paddingBottom: isWeb ? 6 : 4,
+          paddingBottom: isWeb ? 6 : 0,
         },
       }}
     >
@@ -69,6 +72,15 @@ function ClassicTabLayout() {
           title: t('matching.title'),
           tabBarIcon: ({ color }) => (
             <Feather name="target" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="brain"
+        options={{
+          title: t('brain.title'),
+          tabBarIcon: ({ color }) => (
+            <Feather name="message-circle" size={22} color={color} />
           ),
         }}
       />

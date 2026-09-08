@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import {
+  attachmentFileExists as attachmentFileExistsWithStore,
   persistAttachmentsThenDeleteRemoved,
   reorderAttachments,
   setAttachmentCover,
@@ -271,6 +272,15 @@ export interface LinkOpener {
 export interface AttachmentOpenFileSystem {
   fileExists(uri: string): boolean | Promise<boolean>;
   getContentUriAsync(uri: string): Promise<string>;
+}
+
+export function attachmentFileExists(
+  uri: string,
+  fileSystem: Pick<AttachmentOpenFileSystem, 'fileExists'> = {
+    fileExists: value => new FileSystem.File(value).exists,
+  },
+): Promise<boolean> {
+  return attachmentFileExistsWithStore(uri, fileSystem);
 }
 
 export interface AndroidIntentLauncher {

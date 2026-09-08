@@ -1307,13 +1307,45 @@ test('Arabic and English recovery and preservation warnings are present', async 
   assert.match(translations, /السجلات غير المقروءة محفوظة محلياً/);
 });
 
-test('Expo permissions remain foreground-only with no camera or microphone', async () => {
+test('unreadable-record safeguards stay preserved without a global blocking banner', async () => {
+  const [root, properties, translations, persistence] = await Promise.all([
+    readFile(sourcePath('../app/_layout.tsx'), 'utf8'),
+    readFile(sourcePath('../app/(tabs)/index.tsx'), 'utf8'),
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+    readFile(sourcePath('../services/persistence.ts'), 'utf8'),
+  ]);
+  assert.doesNotMatch(root, /local-data-integrity-warning|integrityWarning/);
+  assert.match(properties, /testID="local-data-integrity-notice"/);
+  assert.match(properties, /store\.getIntegrityStatus\(\)/);
+  assert.match(properties, /Alert\.alert\(/);
+  assert.match(translations, /'integrity\.compact': 'Local data notice \(\{count\}\)'/);
+  assert.match(translations, /'integrity\.compact': 'تنبيه بيانات محلية \(\{count\}\)'/);
+  assert.match(persistence, /unreadableRecords/);
+  assert.match(translations, /Unreadable records are still preserved locally/);
+});
+
+test('Requirement route hides raw path headers and relies on its localized screen title', async () => {
+  const [root, editor, translations] = await Promise.all([
+    readFile(sourcePath('../app/_layout.tsx'), 'utf8'),
+    readFile(sourcePath('../app/requirement/[requirementId].tsx'), 'utf8'),
+    readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+  ]);
+  assert.match(root, /name="requirement\/\[requirementId\]" options=\{\{ headerShown: false \}\}/);
+  assert.match(editor, /editing \? t\('requirements\.edit'\) : t\('requirements\.add'\)/);
+  assert.match(translations, /'requirements\.edit': 'Edit Requirement'/);
+  assert.match(translations, /'requirements\.edit': 'تعديل المتطلب'/);
+});
+
+test('Expo permissions remain foreground-only with camera denied and Brain-only microphone access', async () => {
   const plugins = appConfig.expo.plugins;
   const location = plugins.find(
     plugin => Array.isArray(plugin) && plugin[0] === 'expo-location',
   );
   const imagePicker = plugins.find(
     plugin => Array.isArray(plugin) && plugin[0] === 'expo-image-picker',
+  );
+  const audio = plugins.find(
+    plugin => Array.isArray(plugin) && plugin[0] === 'expo-audio',
   );
   assert.deepEqual(location, [
     'expo-location',
@@ -1334,4 +1366,13 @@ test('Expo permissions remain foreground-only with no camera or microphone', asy
       microphonePermission: false,
     },
   ]);
+  assert.deepEqual(audio, [
+    'expo-audio',
+    {
+      microphonePermission: 'Allow ViewState to record a voice request. / السماح لـ ViewState بتسجيل طلب صوتي.',
+      recordAudioAndroid: true,
+    },
+  ]);
+  assert.ok(appConfig.expo.android.permissions.includes('android.permission.RECORD_AUDIO'));
+  assert.ok(appConfig.expo.android.permissions.includes('android.permission.MODIFY_AUDIO_SETTINGS'));
 });

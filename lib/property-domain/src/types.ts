@@ -120,6 +120,7 @@ export interface ResidentialFloorTypeDetails {
 export interface CommercialFloorTypeDetails {
   readonly propertyType: "floor";
   readonly floorUse: "commercial";
+  readonly paciNumbersCount?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly bathroomCount?: number;
   readonly floorNumber?: number;
@@ -163,10 +164,12 @@ export interface OfficeTypeDetails {
   readonly parkingSpaceCount?: number;
 }
 
-export interface ShopTypeDetails extends Omit<OfficeTypeDetails, "propertyType"> {
+export interface ShopTypeDetails {
   readonly propertyType: "shop";
+  readonly builtUpAreaSquareMeters?: number;
+  readonly commercialActivity?: ClassifiedLiteralText;
+  readonly floorNumber?: number;
   readonly frontageWidthMeters?: number;
-  readonly ceilingHeightMeters?: number;
 }
 
 export interface WarehouseTypeDetails {

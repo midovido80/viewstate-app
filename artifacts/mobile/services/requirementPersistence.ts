@@ -90,15 +90,12 @@ function normalizeForStorage(value: unknown): SeekerRequirement {
   return result.value;
 }
 
-async function assertSeekerOwnership(
+async function assertPersonOwnership(
   personStore: RequirementOwnershipReader,
-  seekerId: string,
+  personId: string,
 ): Promise<void> {
-  const person = await personStore.getPerson(seekerId);
+  const person = await personStore.getPerson(personId);
   if (!person) throw new Error('REQUIREMENT_SEEKER_NOT_FOUND');
-  if (!person.classifications.includes('seeker')) {
-    throw new Error('REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED');
-  }
 }
 
 function parseRequirement(raw: string): SeekerRequirement {
@@ -153,7 +150,7 @@ export class SQLiteRequirementStore implements RequirementStore {
     const normalized = normalizeForStorage(requirement);
     const serialized = JSON.stringify(normalized);
     await this.mutations.enqueue(async () => {
-      await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      await assertPersonOwnership(this.personStore, normalized.seekerId);
       const db = this.database();
       const existing = await db.getFirstAsync<{ data: string }>(
         `SELECT data FROM ${NATIVE_REQUIREMENTS_TABLE} WHERE id = ?`,
@@ -233,7 +230,7 @@ export class SQLiteRequirementStore implements RequirementStore {
     const normalized = normalizeForStorage(replacement);
     let updated = false;
     await this.mutations.enqueue(async () => {
-      await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      await assertPersonOwnership(this.personStore, normalized.seekerId);
       const result = await this.database().runAsync(
         `UPDATE ${NATIVE_REQUIREMENTS_TABLE} SET data = ? WHERE id = ? AND data = ?`,
         [JSON.stringify(normalized), normalized.id, JSON.stringify(expected)],
@@ -306,7 +303,7 @@ export class WebRequirementStore implements RequirementStore {
     const normalized = normalizeForStorage(requirement);
     await this.withChronologyMutationLock(() =>
       this.withMutationLock(async () => {
-        await assertSeekerOwnership(this.personStore, normalized.seekerId);
+        await assertPersonOwnership(this.personStore, normalized.seekerId);
         const current = await this.getAllRaw();
         if (current.hasUnreadable) throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
         const all = current.requirements;
@@ -368,7 +365,7 @@ export class WebRequirementStore implements RequirementStore {
     if (expected.id !== replacement.id) return false;
     const normalized = normalizeForStorage(replacement);
     return this.withMutationLock(async () => {
-      await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      await assertPersonOwnership(this.personStore, normalized.seekerId);
       const current = await this.getAllRaw();
       if (current.hasUnreadable) throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
       const all = current.requirements;

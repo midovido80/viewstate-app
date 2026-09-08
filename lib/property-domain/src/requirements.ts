@@ -1,4 +1,4 @@
-import type { LocationAreaId, PropertyType } from "./types.ts";
+import type { FloorUse, LocationAreaId, PropertyType } from "./types.ts";
 import { isPropertyType } from "./taxonomy.ts";
 
 export const REQUIREMENT_PURPOSES = ["rent", "buy"] as const;
@@ -20,6 +20,20 @@ export interface SeekerRequirementBase {
   readonly preferredAreaIds: readonly LocationAreaId[];
   readonly budget: SeekerRequirementBudget;
   readonly notes: string;
+  readonly floorUse?: FloorUse;
+  readonly minimumBuiltUpAreaSquareMeters?: number;
+  readonly maximumBuiltUpAreaSquareMeters?: number;
+  readonly commercialActivity?: string;
+  readonly floorNumber?: number;
+  readonly minimumFrontageWidthMeters?: number;
+  /** Informational Property-backed details; Matching deliberately ignores these. */
+  readonly minimumPlotAreaSquareMeters?: number;
+  readonly maximumPlotAreaSquareMeters?: number;
+  readonly floorCount?: number;
+  readonly apartmentCount?: number;
+  readonly shopCount?: number;
+  readonly intendedUse?: string;
+  readonly paciNumbersCount?: number;
 }
 
 export interface RentSeekerRequirement extends SeekerRequirementBase {
@@ -55,7 +69,15 @@ export interface RequirementValidationIssue {
     | "invalid_currency"
     | "invalid_rent_field"
     | "invalid_occupancy"
-    | "buy_rent_field_not_allowed";
+    | "buy_rent_field_not_allowed"
+    | "invalid_shop_field"
+    | "shop_field_not_allowed"
+    | "invalid_commercial_area"
+    | "commercial_area_field_not_allowed"
+    | "invalid_property_detail"
+    | "property_detail_field_not_allowed"
+    | "invalid_floor_use"
+    | "floor_use_field_not_allowed";
   readonly path: readonly string[];
   readonly message: string;
 }
@@ -89,10 +111,54 @@ const REQUIREMENT_FIELDS = new Set([
   "preferredAreaIds",
   "budget",
   "notes",
+  "floorUse",
   ...RENT_FIELDS,
+  "minimumBuiltUpAreaSquareMeters",
+  "maximumBuiltUpAreaSquareMeters",
+  "commercialActivity",
+  "floorNumber",
+  "minimumFrontageWidthMeters",
+  "minimumPlotAreaSquareMeters",
+  "maximumPlotAreaSquareMeters",
+  "floorCount",
+  "apartmentCount",
+  "shopCount",
+  "intendedUse",
+  "paciNumbersCount",
 ]);
+const COMMERCIAL_AREA_FIELDS = [
+  "minimumBuiltUpAreaSquareMeters",
+  "maximumBuiltUpAreaSquareMeters",
+] as const;
+const SHOP_FIELDS = [
+  "commercialActivity",
+  "floorNumber",
+  "minimumFrontageWidthMeters",
+] as const;
+const PLOT_AREA_FIELDS = [
+  "minimumPlotAreaSquareMeters",
+  "maximumPlotAreaSquareMeters",
+] as const;
+const BUILDING_DETAIL_FIELDS = ["floorCount", "apartmentCount", "shopCount"] as const;
+const INFORMATIONAL_TEXT_FIELDS = ["intendedUse"] as const;
+const INFORMATIONAL_COUNT_FIELDS = ["paciNumbersCount"] as const;
 
 const BUDGET_FIELDS = new Set(["minimum", "maximum", "currencyCode"]);
+const FLOOR_USES = ["residential", "commercial"] as const;
+
+export const COMMERCIAL_AREA_REQUIREMENT_PROPERTY_TYPES = [
+  "shop",
+  "office",
+  "floor",
+] as const;
+
+export function isCommercialAreaRequirementPropertyType(
+  value: PropertyType,
+): boolean {
+  return COMMERCIAL_AREA_REQUIREMENT_PROPERTY_TYPES.includes(
+    value as typeof COMMERCIAL_AREA_REQUIREMENT_PROPERTY_TYPES[number],
+  );
+}
 
 function issue(
   code: RequirementValidationIssue["code"],
@@ -196,6 +262,166 @@ export function validateSeekerRequirement(
   }
   if (typeof value.notes !== "string") {
     issues.push(issue("required", ["notes"], "Broker-readable Notes must be a string."));
+  }
+  if (value.propertyType === "floor") {
+    if (
+      value.floorUse !== undefined
+      && !FLOOR_USES.includes(value.floorUse as FloorUse)
+    ) {
+      issues.push(issue(
+        "invalid_floor_use",
+        ["floorUse"],
+        "Floor use must be residential or commercial when provided.",
+      ));
+    }
+  } else if (hasDefinedProperty(value, "floorUse")) {
+    issues.push(issue(
+      "floor_use_field_not_allowed",
+      ["floorUse"],
+      "Floor use is only allowed on Floor Requirements.",
+    ));
+  }
+
+  if (
+    isPropertyType(value.propertyType)
+    && isCommercialAreaRequirementPropertyType(value.propertyType)
+    && !(value.propertyType === "floor" && value.floorUse === "residential")
+  ) {
+    for (const field of COMMERCIAL_AREA_FIELDS) {
+      if (
+        value[field] !== undefined
+        && (typeof value[field] !== "number" || !Number.isFinite(value[field]) || value[field] <= 0)
+      ) {
+        issues.push(issue(
+          "invalid_commercial_area",
+          [field],
+          `${field} must be a positive finite number when provided.`,
+        ));
+      }
+    }
+    if (
+      typeof value.minimumBuiltUpAreaSquareMeters === "number"
+      && Number.isFinite(value.minimumBuiltUpAreaSquareMeters)
+      && typeof value.maximumBuiltUpAreaSquareMeters === "number"
+      && Number.isFinite(value.maximumBuiltUpAreaSquareMeters)
+      && value.minimumBuiltUpAreaSquareMeters > value.maximumBuiltUpAreaSquareMeters
+    ) {
+      issues.push(issue(
+        "invalid_commercial_area",
+        [...COMMERCIAL_AREA_FIELDS],
+        "Commercial area minimum must not exceed maximum.",
+      ));
+    }
+  } else {
+    for (const field of COMMERCIAL_AREA_FIELDS) {
+      if (hasDefinedProperty(value, field)) {
+        issues.push(issue(
+          "commercial_area_field_not_allowed",
+          [field],
+          "Commercial area criteria are only allowed for Shop, Office, and Floor Requirements.",
+        ));
+      }
+    }
+  }
+
+  const commercialFloor = value.propertyType === "floor"
+    && value.floorUse === "commercial";
+  const commercialFloorOrLegacy = value.propertyType === "floor"
+    && value.floorUse !== "residential";
+  if (value.propertyType === "shop" || commercialFloor) {
+    for (const field of RENT_FIELDS) {
+      if (hasDefinedProperty(value, field)) {
+        issues.push(issue(
+          "shop_field_not_allowed",
+          [field],
+          "Residential Rent criteria are not allowed on commercial Requirements.",
+        ));
+      }
+    }
+    for (const field of ["minimumFrontageWidthMeters"] as const) {
+      if (
+        value[field] !== undefined
+        && (typeof value[field] !== "number" || !Number.isFinite(value[field]) || value[field] <= 0)
+      ) {
+        issues.push(issue(
+          "invalid_shop_field",
+          [field],
+          `${field} must be a positive finite number when provided.`,
+        ));
+      }
+    }
+    if (value.floorNumber !== undefined && !isNonNegativeInteger(value.floorNumber)) {
+      issues.push(issue(
+        "invalid_shop_field",
+        ["floorNumber"],
+        "floorNumber must be a non-negative integer when provided.",
+      ));
+    }
+    if (
+      value.commercialActivity !== undefined
+      && (typeof value.commercialActivity !== "string" || value.commercialActivity.trim().length === 0)
+    ) {
+      issues.push(issue(
+        "invalid_shop_field",
+        ["commercialActivity"],
+        "commercialActivity must be a non-empty literal string when provided.",
+      ));
+    }
+  } else if (value.propertyType === "office") {
+    for (const field of ["minimumFrontageWidthMeters"] as const) {
+      if (hasDefinedProperty(value, field)) {
+        issues.push(issue("shop_field_not_allowed", [field], "Frontage is only allowed on Shop or Commercial Floor Requirements."));
+      }
+    }
+    for (const field of ["floorNumber"] as const) {
+      if (value[field] !== undefined && !isNonNegativeInteger(value[field])) {
+        issues.push(issue("invalid_shop_field", [field], `${field} must be a non-negative integer when provided.`));
+      }
+    }
+    for (const field of ["commercialActivity"] as const) {
+      if (value[field] !== undefined && (typeof value[field] !== "string" || value[field].trim().length === 0)) {
+        issues.push(issue("invalid_shop_field", [field], `${field} must be a non-empty literal string when provided.`));
+      }
+    }
+  } else if (!commercialFloorOrLegacy) {
+    for (const field of SHOP_FIELDS) {
+      if (hasDefinedProperty(value, field)) {
+        issues.push(issue(
+          "shop_field_not_allowed",
+          [field],
+          "Commercial criteria are only allowed on Shop or Commercial Floor Requirements.",
+        ));
+      }
+    }
+  }
+
+  const allowsPlotArea = value.propertyType === "commercial_complex" || value.propertyType === "whole_building";
+  for (const field of PLOT_AREA_FIELDS) {
+    if (value[field] !== undefined && (!allowsPlotArea || typeof value[field] !== "number" || !Number.isFinite(value[field]) || value[field] <= 0)) {
+      issues.push(issue(allowsPlotArea ? "invalid_property_detail" : "property_detail_field_not_allowed", [field], allowsPlotArea ? `${field} must be a positive finite number when provided.` : `${field} is not compatible with this Property Type.`));
+    }
+  }
+  if (typeof value.minimumPlotAreaSquareMeters === "number" && typeof value.maximumPlotAreaSquareMeters === "number" && value.minimumPlotAreaSquareMeters > value.maximumPlotAreaSquareMeters) {
+    issues.push(issue("invalid_property_detail", [...PLOT_AREA_FIELDS], "Plot area minimum must not exceed maximum."));
+  }
+  const detailTypes: Record<string, readonly PropertyType[]> = {
+    floorCount: ["commercial_complex", "whole_building"],
+    apartmentCount: ["whole_building"],
+    shopCount: ["commercial_complex"],
+    intendedUse: ["office", "floor"],
+    paciNumbersCount: ["floor"],
+  };
+  for (const field of [...BUILDING_DETAIL_FIELDS, ...INFORMATIONAL_TEXT_FIELDS, ...INFORMATIONAL_COUNT_FIELDS]) {
+    const allowed = detailTypes[field].includes(value.propertyType as PropertyType)
+      && (field !== "intendedUse" && field !== "paciNumbersCount" || value.propertyType !== "floor" || value.floorUse === "commercial");
+    if (value[field] === undefined) continue;
+    if (!allowed) {
+      issues.push(issue("property_detail_field_not_allowed", [field], `${field} is not compatible with this Property Type.`));
+    } else if (field === "intendedUse" && (typeof value[field] !== "string" || value[field].trim().length === 0)) {
+      issues.push(issue("invalid_property_detail", [field], "intendedUse must be a non-empty literal string when provided."));
+    } else if (field !== "intendedUse" && !isNonNegativeInteger(value[field])) {
+      issues.push(issue("invalid_property_detail", [field], `${field} must be a non-negative integer when provided.`));
+    }
   }
 
   if (!Array.isArray(value.preferredAreaIds) || value.preferredAreaIds.length === 0) {
@@ -341,6 +567,13 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...copyOptional<Record<string, unknown>>(source, ["floorUse"] as const),
+    ...copyOptional<Record<string, unknown>>(source, COMMERCIAL_AREA_FIELDS),
+    ...copyOptional<Record<string, unknown>>(source, SHOP_FIELDS),
+    ...copyOptional<Record<string, unknown>>(source, PLOT_AREA_FIELDS),
+    ...copyOptional<Record<string, unknown>>(source, BUILDING_DETAIL_FIELDS),
+    ...copyOptional<Record<string, unknown>>(source, INFORMATIONAL_TEXT_FIELDS),
+    ...copyOptional<Record<string, unknown>>(source, INFORMATIONAL_COUNT_FIELDS),
   };
 
   if (validation.value.purpose === "buy") {

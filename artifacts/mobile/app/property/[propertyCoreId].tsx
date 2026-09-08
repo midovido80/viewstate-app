@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import {
+  Image,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,11 +11,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction } from '@workspace/property-domain';
+import { Property, PROPERTY_TYPES, PropertyAttachmentMetadata, PropertyDetailField, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
-import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
+import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabel } from '@/components/PropertyEnrichmentFields';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
@@ -27,6 +31,16 @@ import {
 } from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
 import { loadPropertyEnrichmentDraft } from '@/services/propertyEnrichmentRecovery';
+import {
+  attachmentFileExists,
+  openAttachment,
+  type LocalAttachment,
+} from '@/services/attachments';
+import {
+  openGoogleMaps,
+  openPastedLocationLink,
+  pastedMapLocation,
+} from '@/services/location';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -76,6 +90,7 @@ export default function PropertyDetailScreen() {
   const [sourceRole, setSourceRole] = useState<PropertySourceRole>('owner');
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
+  const [previewImage, setPreviewImage] = useState<PropertyAttachmentMetadata | null>(null);
   const canPermanentlyDelete = store.canPermanentlyDelete();
 
   const load = useCallback(async () => {
@@ -142,6 +157,57 @@ export default function PropertyDetailScreen() {
   const areaName = (areaId: string) => {
     const area = getAreaById(areaId);
     return area ? (language === 'ar' ? area.ar : area.en) : areaId;
+  };
+
+  const localAttachment = (attachment: PropertyAttachmentMetadata): LocalAttachment => ({
+    id: attachment.id,
+    kind: attachment.kind,
+    originalName: attachment.originalName,
+    mimeType: attachment.mimeType,
+    uri: attachment.managedUri,
+    order: attachment.order,
+    ...(attachment.isCover ? { isCover: true as const } : {}),
+  });
+
+  const openPropertyAttachment = async (
+    attachment: PropertyAttachmentMetadata,
+    useSystem = false,
+  ) => {
+    setError('');
+    try {
+      if (attachment.kind === 'image' && !useSystem) {
+        if (!await attachmentFileExists(attachment.managedUri)) {
+          setError(t('enrich.attachment_missing'));
+          return;
+        }
+        setPreviewImage(attachment);
+        return;
+      }
+      await openAttachment(localAttachment(attachment), Sharing);
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message === 'ATTACHMENT_FILE_MISSING'
+        ? t('enrich.attachment_missing')
+        : t('enrich.attachment_failed'));
+    }
+  };
+
+  const openSavedMap = async () => {
+    const location = property?.locationEnrichment;
+    if (!location) return;
+    setError('');
+    try {
+      if (location.mapsLink?.value) {
+        await openPastedLocationLink(pastedMapLocation(location.mapsLink.value));
+      } else if (location.coordinates) {
+        await openGoogleMaps({
+          latitude: location.coordinates.latitude,
+          longitude: location.coordinates.longitude,
+          accuracy: null,
+        });
+      }
+    } catch {
+      setError(t('enrich.maps_unavailable'));
+    }
   };
 
   const openSource = async () => {
@@ -530,7 +596,7 @@ export default function PropertyDetailScreen() {
                   <Text style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
                   <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.private')}</Text>
                 </View>
-                <TouchableOpacity onPress={() => void openSource()} testID="property-source-change" accessibilityRole="button">
+                <TouchableOpacity onPress={() => void openSource()} testID="property-source-change" accessibilityRole="button" style={[styles.compactAction, { borderColor: colors.border }]}>
                   <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t(source ? 'source.change' : 'source.choose')}</Text>
                 </TouchableOpacity>
               </View>
@@ -540,11 +606,24 @@ export default function PropertyDetailScreen() {
                     onPress={() => router.push(`/person/${encodeURIComponent(sourcePerson.id)}` as never)}
                     testID="property-source-person"
                     accessibilityRole="button"
+                     accessibilityLabel={`${t('source.open_person')}: ${sourcePerson.name}`}
+                     activeOpacity={0.72}
+                     style={[styles.relationshipRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
                   >
-                    <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
-                    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                     <View style={{ flex: 1 }}>
+                       <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
+                       <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source.role}`)}</Text>
+                     </View>
+                     <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={confirmRemoveSource} testID="property-source-unlink" accessibilityRole="button" style={[styles.relationshipUnlink, { borderColor: colors.destructive }]}>
+                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : source ? (
+                <>
+                  <Text testID="property-source-unavailable" style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('resources.destination_unavailable')}</Text>
+                  <TouchableOpacity onPress={confirmRemoveSource} testID="property-source-stale-unlink" accessibilityRole="button" style={[styles.relationshipUnlink, { borderColor: colors.destructive }]}>
                     <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
                   </TouchableOpacity>
                 </>
@@ -553,13 +632,22 @@ export default function PropertyDetailScreen() {
               )}
             </View>
             {property.typeDetails ? propertyDetailDisplayDefinitions
-              .filter(definition => definition.appliesTo.includes(property.core.propertyType))
+              .filter(definition =>
+                definition.appliesTo.includes(property.core.propertyType)
+                && (
+                  property.core.propertyType !== 'floor'
+                  || !definition.floorUses
+                  || definition.floorUses.includes(
+                    (property.typeDetails as { floorUse?: 'residential' | 'commercial' }).floorUse!,
+                  )
+                )
+              )
               .map(definition => {
                 const value = (property.typeDetails as unknown as Record<string, unknown>)[definition.field];
                 return value === undefined ? null : (
                   <DetailRow
                     key={definition.field}
-                    label={propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
+                    label={propertyDetailLabel(definition.field, property.core.propertyType, language)}
                     value={formatPropertyDetailValue(definition.field as PropertyDetailField, value, language)}
                   />
                 );
@@ -567,7 +655,27 @@ export default function PropertyDetailScreen() {
             {property.core.description ? <DetailRow label={t('enrich.description')} value={property.core.description.value} /> : null}
             {property.core.privateNotes ? <DetailRow label={t('enrich.private_notes')} value={property.core.privateNotes.value} /> : null}
             {property.locationEnrichment?.manualLocationText ? <DetailRow label={t('enrich.manual_location')} value={property.locationEnrichment.manualLocationText.value} /> : null}
-            {property.attachments?.map(attachment => <DetailRow key={attachment.id} label={attachment.isCover ? `★ ${attachment.kind}` : attachment.kind} value={attachment.originalName} />)}
+            {property.locationEnrichment?.mapsLink?.value || property.locationEnrichment?.coordinates ? (
+              <ResourceRow
+                icon="map-pin"
+                title={t('enrich.open_maps')}
+                subtitle={t('resources.maps_saved')}
+                accessibilityLabel={t('resources.open_maps_label')}
+                onPress={() => void openSavedMap()}
+                testID="property-open-maps"
+              />
+            ) : null}
+            {property.attachments?.map(attachment => (
+              <ResourceRow
+                key={attachment.id}
+                icon={attachment.kind === 'image' ? 'image' : attachment.kind === 'video' ? 'play-circle' : 'file-text'}
+                title={`${attachment.isCover ? '★ ' : ''}${t(`resources.${attachment.kind}` as keyof Translations)}`}
+                subtitle={attachment.originalName}
+                accessibilityLabel={`${t('enrich.open')}: ${attachment.originalName}`}
+                onPress={() => void openPropertyAttachment(attachment)}
+                testID={`property-attachment-${attachment.id}`}
+              />
+            ))}
           </>
         ) : choices ? (
           <>
@@ -608,6 +716,35 @@ export default function PropertyDetailScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={previewImage !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.previewOverlay}>
+          {previewImage ? (
+            <>
+              <Image
+                source={{ uri: previewImage.managedUri }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+                accessibilityLabel={`${t('resources.image')}: ${previewImage.originalName}`}
+                onError={() => {
+                  const failedPreview = previewImage;
+                  setPreviewImage(null);
+                  if (failedPreview) void openPropertyAttachment(failedPreview, true);
+                }}
+              />
+              <View style={[styles.previewActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <Button title={t('resources.close_preview')} onPress={() => setPreviewImage(null)} variant="outline" testID="property-image-preview-close" style={{ flex: 1 }} />
+                <Button title={t('resources.open_system')} onPress={() => void openPropertyAttachment(previewImage, true)} testID="property-image-preview-system" style={{ flex: 1 }} />
+              </View>
+            </>
+          ) : null}
+        </View>
+      </Modal>
 
       <Modal visible={areaOpen} animationType="slide" onRequestClose={() => setAreaOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) }]}>
@@ -828,6 +965,46 @@ export default function PropertyDetailScreen() {
     );
   }
 
+  function ResourceRow({
+    icon,
+    title,
+    subtitle,
+    accessibilityLabel,
+    onPress,
+    testID,
+  }: {
+    icon: keyof typeof Feather.glyphMap;
+    title: string;
+    subtitle: string;
+    accessibilityLabel: string;
+    onPress: () => void;
+    testID: string;
+  }) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={onPress}
+        testID={testID}
+        style={({ pressed }) => [
+          styles.resourceRow,
+          {
+            borderColor: pressed ? colors.primary : colors.border,
+            backgroundColor: pressed ? colors.accent : colors.card,
+            flexDirection: isRTL ? 'row-reverse' : 'row',
+          },
+        ]}
+      >
+        <Feather name={icon} size={24} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
+          <Text numberOfLines={2} style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left', writingDirection: 'ltr' }}>{subtitle}</Text>
+        </View>
+        <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
+      </Pressable>
+    );
+  }
+
   function Choice({ selected, onPress, title, testID }: { selected: boolean; onPress: () => void; title: string; testID: string }) {
     return (
       <TouchableOpacity
@@ -862,6 +1039,12 @@ const styles = StyleSheet.create({
   sourceHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   sourceTitle: { flex: 1, gap: 3 },
   relationshipUnlink: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
+  compactAction: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12 },
+  relationshipRow: { minHeight: 52, alignItems: 'center', gap: 12, padding: 10, borderRadius: 10 },
+  resourceRow: { minHeight: 68, borderWidth: 1, borderRadius: 12, alignItems: 'center', gap: 12, padding: 12 },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', padding: 16 },
+  fullscreenImage: { flex: 1, width: '100%' },
+  previewActions: { gap: 12, paddingTop: 16, paddingBottom: 12 },
   sourcePickerHeader: { minHeight: 60, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   label: { fontSize: 16, marginTop: 8 },
   options: { gap: 8 },

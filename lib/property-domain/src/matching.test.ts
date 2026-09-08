@@ -228,6 +228,234 @@ test("Rent and Buy/Sale use separate transaction contracts and hard eligibility"
   });
 });
 
+test("Shop matching scores aligned Shop criteria and keeps cross-area candidates eligible", () => {
+  const requirement: BuySeekerRequirement = {
+    ...buyRequirement(),
+    propertyType: "shop",
+    preferredAreaIds: ["area-1"],
+    minimumBuiltUpAreaSquareMeters: 80,
+    maximumBuiltUpAreaSquareMeters: 100,
+    commercialActivity: "Coffee & Gifts",
+    floorNumber: 0,
+    minimumFrontageWidthMeters: 8,
+  };
+  const shopDetails = {
+    propertyType: "shop" as const,
+    builtUpAreaSquareMeters: 80,
+    commercialActivity: {
+      value: "Coffee & Gifts",
+      privacy: { classification: "normal" as const, disclosurePolicy: "normal" as const },
+    },
+    floorNumber: 0,
+    frontageWidthMeters: 8,
+  };
+  const sameArea = evaluateMatch(requirement, candidate(property({
+    propertyType: "shop",
+    transaction: "sale",
+    amount: 150_000,
+    area: "area-1",
+    typeDetails: shopDetails,
+  })));
+  const crossArea = evaluateMatch(requirement, candidate(property({
+    propertyType: "shop",
+    transaction: "sale",
+    amount: 150_000,
+    area: "area-outside",
+    typeDetails: shopDetails,
+  })));
+
+  assert.equal(sameArea.eligible, true);
+  assert.equal(sameArea.score, 100);
+  assert.equal(sameArea.qualifies, true);
+  assert.equal(sameArea.includedWeight, 100);
+  assert.equal(crossArea.eligible, true);
+  assert.deepEqual(crossArea.ineligibilityReasons, []);
+  assert.equal(crossArea.locationRank, null);
+  assert.equal(crossArea.score, 76);
+  assert.equal(crossArea.qualifies, true);
+  assert.equal(crossArea.includedWeight, 100);
+  assert.equal(explanation(crossArea, "budget")?.awardedPoints, 40);
+  assert.equal(explanation(crossArea, "ordered_location")?.awardedPoints, 6);
+  assert.equal(explanation(crossArea, "built_up_area")?.awardedPoints, 10);
+  assert.equal(explanation(crossArea, "commercial_activity")?.awardedPoints, 10);
+  assert.equal(explanation(crossArea, "floor_number")?.awardedPoints, 5);
+  assert.equal(explanation(crossArea, "frontage")?.awardedPoints, 5);
+});
+
+test("Commercial area matching supports bounded, minimum-only, maximum-only, and omitted ranges", () => {
+  const commercialTypes = ["shop", "office", "floor"] as const;
+  for (const propertyType of commercialTypes) {
+    const typeDetails: Property["typeDetails"] = propertyType === "floor"
+      ? {
+          propertyType: "floor" as const,
+          floorUse: "commercial" as const,
+          builtUpAreaSquareMeters: 100,
+        }
+      : propertyType === "shop"
+        ? {
+            propertyType: "shop",
+            builtUpAreaSquareMeters: 100,
+          }
+        : {
+            propertyType: "office",
+            builtUpAreaSquareMeters: 100,
+          };
+    const commercialProperty = property({
+      propertyType,
+      transaction: "sale",
+      amount: 150_000,
+      typeDetails,
+    });
+    const ranges = [
+      { minimumBuiltUpAreaSquareMeters: 80, maximumBuiltUpAreaSquareMeters: 120 },
+      { minimumBuiltUpAreaSquareMeters: 80 },
+      { maximumBuiltUpAreaSquareMeters: 120 },
+    ] as const;
+    for (const range of ranges) {
+      const result = evaluateMatch({
+        ...buyRequirement(),
+        propertyType,
+        ...range,
+      }, candidate(commercialProperty));
+      assert.equal(explanation(result, "built_up_area")?.status, "matched");
+      assert.equal(explanation(result, "built_up_area")?.code, "within_range");
+    }
+
+    const belowMinimum = evaluateMatch({
+      ...buyRequirement(),
+      propertyType,
+      minimumBuiltUpAreaSquareMeters: 101,
+    }, candidate(commercialProperty));
+    assert.equal(explanation(belowMinimum, "built_up_area")?.status, "not_met");
+    assert.equal(explanation(belowMinimum, "built_up_area")?.code, "outside_range");
+
+    const aboveMaximum = evaluateMatch({
+      ...buyRequirement(),
+      propertyType,
+      maximumBuiltUpAreaSquareMeters: 99,
+    }, candidate(commercialProperty));
+    assert.equal(explanation(aboveMaximum, "built_up_area")?.status, "not_met");
+
+    const omitted = evaluateMatch({
+      ...buyRequirement(),
+      propertyType,
+    }, candidate(commercialProperty));
+    assert.equal(explanation(omitted, "built_up_area"), undefined);
+    assert.equal(omitted.score, 100);
+  }
+
+  const residentialFloor = evaluateMatch({
+    ...buyRequirement(),
+    propertyType: "floor",
+    minimumBuiltUpAreaSquareMeters: 80,
+    maximumBuiltUpAreaSquareMeters: 120,
+  }, candidate(property({
+    propertyType: "floor",
+    transaction: "sale",
+    amount: 150_000,
+    typeDetails: {
+      propertyType: "floor",
+      floorUse: "residential",
+      builtUpAreaSquareMeters: 100,
+    },
+  })));
+  assert.equal(residentialFloor.eligible, false);
+  assert.equal(residentialFloor.qualifies, false);
+  assert.deepEqual(residentialFloor.ineligibilityReasons, ["property_type"]);
+});
+
+test("Floor Requirements match only the selected residential or commercial use", () => {
+  const residentialRequirement: RentSeekerRequirement = {
+    ...rentRequirement(),
+    propertyType: "floor",
+    floorUse: "residential",
+    bedroomsMinimum: 3,
+  };
+  const residentialProperty = property({
+    propertyType: "floor",
+    typeDetails: {
+      propertyType: "floor",
+      floorUse: "residential",
+      builtUpAreaSquareMeters: 180,
+      bedroomCount: 3,
+    },
+  });
+  const commercialProperty = property({
+    propertyType: "floor",
+    typeDetails: {
+      propertyType: "floor",
+      floorUse: "commercial",
+      builtUpAreaSquareMeters: 180,
+      commercialActivity: {
+        value: "Retail",
+        privacy: { classification: "normal", disclosurePolicy: "normal" },
+      },
+      floorNumber: 2,
+      frontageWidthMeters: 9,
+    },
+  });
+  assert.equal(evaluateMatch(residentialRequirement, candidate(residentialProperty)).eligible, true);
+  assert.equal(evaluateMatch(residentialRequirement, candidate(commercialProperty)).eligible, false);
+
+  const commercialRequirement: RentSeekerRequirement = {
+    ...rentRequirement(),
+    propertyType: "floor",
+    floorUse: "commercial",
+    bedroomsMinimum: undefined,
+    bathroomsMinimum: undefined,
+    occupancy: undefined,
+    minimumBuiltUpAreaSquareMeters: 150,
+    maximumBuiltUpAreaSquareMeters: 200,
+    commercialActivity: "Retail",
+    floorNumber: 2,
+    minimumFrontageWidthMeters: 8,
+  };
+  const commercialResult = evaluateMatch(
+    commercialRequirement,
+    candidate(commercialProperty),
+  );
+  assert.equal(commercialResult.eligible, true);
+  assert.equal(explanation(commercialResult, "built_up_area")?.status, "matched");
+  assert.equal(explanation(commercialResult, "commercial_activity")?.status, "matched");
+  assert.equal(explanation(commercialResult, "floor_number")?.status, "matched");
+  assert.equal(explanation(commercialResult, "frontage")?.status, "matched");
+  assert.equal(evaluateMatch(commercialRequirement, candidate(residentialProperty)).eligible, false);
+});
+
+test("Shop score breakdown proves a mismatched Shop criterion can remain below threshold", () => {
+  const requirement: RentSeekerRequirement = {
+    ...rentRequirement(),
+    propertyType: "shop",
+    preferredAreaIds: ["area-1"],
+    minimumBuiltUpAreaSquareMeters: 80,
+    commercialActivity: "Coffee & Gifts",
+    floorNumber: 0,
+    minimumFrontageWidthMeters: 8,
+  };
+  const result = evaluateMatch(requirement, candidate(property({
+    propertyType: "shop",
+    transaction: "rent",
+    amount: 150,
+    area: "area-outside",
+    typeDetails: {
+      propertyType: "shop",
+      builtUpAreaSquareMeters: 80,
+      commercialActivity: {
+        value: "Different activity",
+        privacy: { classification: "normal", disclosurePolicy: "normal" },
+      },
+      floorNumber: 0,
+      frontageWidthMeters: 8,
+    },
+  })));
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.score, 66);
+  assert.equal(result.qualifies, false);
+  assert.equal(explanation(result, "commercial_activity")?.status, "not_met");
+  assert.equal(explanation(result, "commercial_activity")?.awardedPoints, 0);
+});
+
 test("Rental Period and Notes are outside Matching semantics", () => {
   const requirement = rentRequirement({ notes: "first literal note" });
   const first = evaluateMatch(
@@ -261,6 +489,61 @@ test("Ordered Location scoring decays by rank and floors at 20 percent", () => {
   assert.equal(explanation(rankSeven, "ordered_location")?.awardedPoints, 6);
   assert.equal(rankSix.locationRank, 6);
   assert.equal(rankSeven.locationRank, 7);
+});
+
+test("Saved Bayān-only Requirements score Daiya as cross-area and Bayān normally", () => {
+  const rent = rentRequirement({
+    propertyType: "shop",
+    preferredAreaIds: ["bayan"],
+  });
+  const rentOutside = evaluateMatch(
+    rent,
+    candidate(property({
+      propertyType: "shop",
+      area: "daiya",
+    })),
+  );
+  const rentSameArea = evaluateMatch(
+    rent,
+    candidate(property({
+      propertyType: "shop",
+      area: "bayan",
+    })),
+  );
+  assert.equal(rentOutside.locationRank, null);
+  assert.equal(explanation(rentOutside, "ordered_location")?.status, "not_met");
+  assert.equal(explanation(rentOutside, "ordered_location")?.awardedPoints, 6);
+  assert.equal(explanation(rentOutside, "ordered_location")?.possiblePoints, 30);
+  assert.equal(rentSameArea.locationRank, 1);
+  assert.equal(explanation(rentSameArea, "ordered_location")?.status, "matched");
+  assert.equal(explanation(rentSameArea, "ordered_location")?.awardedPoints, 30);
+
+  const buy = buyRequirement({ preferredAreaIds: ["bayan"] });
+  const buyOutside = evaluateMatch(
+    buy,
+    candidate(property({
+      propertyType: "villa",
+      area: "daiya",
+      transaction: "sale",
+      amount: 150_000,
+    })),
+  );
+  const buySameArea = evaluateMatch(
+    buy,
+    candidate(property({
+      propertyType: "villa",
+      area: "bayan",
+      transaction: "sale",
+      amount: 150_000,
+    })),
+  );
+  assert.equal(buyOutside.locationRank, null);
+  assert.equal(explanation(buyOutside, "ordered_location")?.status, "not_met");
+  assert.equal(explanation(buyOutside, "ordered_location")?.awardedPoints, 8);
+  assert.equal(explanation(buyOutside, "ordered_location")?.possiblePoints, 40);
+  assert.equal(buySameArea.locationRank, 1);
+  assert.equal(explanation(buySameArea, "ordered_location")?.status, "matched");
+  assert.equal(explanation(buySameArea, "ordered_location")?.awardedPoints, 40);
 });
 
 test("Location mismatch is scored instead of hard-excluded", () => {

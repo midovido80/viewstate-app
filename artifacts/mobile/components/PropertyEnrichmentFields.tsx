@@ -17,6 +17,7 @@ export const propertyDetailDisplayDefinitions = [
 ];
 
 export const propertyDetailLabels: Record<PropertyDetailField, [string, string]> = {
+  paciNumbersCount: ['PACI Numbers Count', 'عدد الأرقام الآلية'],
   plotAreaSquareMeters: ['Plot area (m²)', 'مساحة الأرض (م²)'],
   builtUpAreaSquareMeters: ['Built-up area (m²)', 'مساحة البناء (م²)'],
   bathroomCount: ['Bathrooms', 'الحمامات'],
@@ -45,6 +46,17 @@ export const propertyDetailLabels: Record<PropertyDetailField, [string, string]>
   clarification: ['Clarification (required with details)', 'التوضيح (مطلوب عند إضافة تفاصيل)'],
 };
 
+export function propertyDetailLabel(
+  field: PropertyDetailField,
+  propertyType: PropertyType,
+  language: 'en' | 'ar',
+): string {
+  if (propertyType === 'shop' && field === 'builtUpAreaSquareMeters') {
+    return language === 'ar' ? 'مساحة المحل (م²)' : 'Shop area / size (m²)';
+  }
+  return propertyDetailLabels[field][language === 'ar' ? 1 : 0];
+}
+
 export function formatPropertyDetailValue(field: PropertyDetailField, value: unknown, language: 'en' | 'ar'): string {
   if (typeof value === 'object' && value && 'value' in value) {
     return toEnglishDigits(String((value as { value: unknown }).value));
@@ -69,6 +81,7 @@ export function formatPropertyDetailValue(field: PropertyDetailField, value: unk
 const booleanFields = new Set<PropertyDetailField>(['hasMaidRoom', 'hasPool', 'hasWaterfront', 'hasColdStorage']);
 const literalFields = new Set<PropertyDetailField>(['intendedUse', 'commercialActivity', 'clarification']);
 const countFields = new Set<PropertyDetailField>([
+  'paciNumbersCount',
   'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount',
   'unitCount', 'elevatorCount', 'floorNumber', 'loadingBayCount'
@@ -116,7 +129,10 @@ export function PropertyEnrichmentFields({
   );
   const ordered = propertyType === 'floor'
     ? [PROPERTY_DETAIL_FIELD_DEFINITIONS.find(item => item.field === 'floorUse')!, ...definitions]
-    : definitions;
+    : propertyType === 'shop'
+      ? (['builtUpAreaSquareMeters', 'commercialActivity', 'floorNumber', 'frontageWidthMeters'] as const)
+        .map(field => definitions.find(definition => definition.field === field)!)
+      : definitions;
 
   function renderFieldContent(definition: typeof PROPERTY_DETAIL_FIELD_DEFINITIONS[number]) {
     const field = definition.field;
@@ -220,7 +236,7 @@ export function PropertyEnrichmentFields({
             }}
             testID={`enrich-${field}-minus`}
             accessibilityRole="button"
-            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} −`}
+            accessibilityLabel={`${propertyDetailLabel(field, propertyType, language)} −`}
           >
             <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>-</Text>
           </TouchableOpacity>
@@ -234,7 +250,7 @@ export function PropertyEnrichmentFields({
             keyboardType="number-pad"
             style={[styles.stepperInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
             testID={`enrich-field-${field}`}
-            accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
+            accessibilityLabel={propertyDetailLabel(field, propertyType, language)}
           />
 
           <TouchableOpacity
@@ -248,7 +264,7 @@ export function PropertyEnrichmentFields({
             }}
             testID={`enrich-${field}-plus`}
             accessibilityRole="button"
-            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} +`}
+            accessibilityLabel={`${propertyDetailLabel(field, propertyType, language)} +`}
           >
             <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>+</Text>
           </TouchableOpacity>
@@ -270,7 +286,7 @@ export function PropertyEnrichmentFields({
         keyboardType={decimalFields.has(field) ? 'decimal-pad' : 'default'}
         style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
         testID={`enrich-field-${field}`}
-        accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
+        accessibilityLabel={propertyDetailLabel(field, propertyType, language)}
       />
     );
   }
@@ -280,7 +296,7 @@ export function PropertyEnrichmentFields({
       {ordered.map(definition => (
         <View key={definition.field}>
           <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-             {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
+             {propertyDetailLabel(definition.field, propertyType, language)}
           </Text>
           {renderFieldContent(definition)}
         </View>

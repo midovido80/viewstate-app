@@ -12,13 +12,13 @@ import { store } from '@/services/persistence';
 import {
   buildContactPhoneChoices,
   ContactPhoneChoice,
-  inferPhoneCountry,
   normalizePhoneForCountry,
   PHONE_COUNTRIES,
   PhoneCountryCode,
   phoneDigits,
 } from '@/services/phoneEntry';
 import { generateDomainId } from '@/services/identity';
+import { importContactBatch } from '@/services/contactBatchImport';
 
 let sessionContactChoices: ContactPhoneChoice[] | null = null;
 
@@ -36,6 +36,7 @@ export default function NewPersonScreen() {
   const [contactChoices, setContactChoices] = useState<ContactPhoneChoice[]>([]);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
+  const [selectedContactKeys, setSelectedContactKeys] = useState<Set<string>>(new Set());
   const [contactStatus, setContactStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -81,6 +82,7 @@ export default function NewPersonScreen() {
       return;
     }
     setContactSearch('');
+    setSelectedContactKeys(new Set());
     setContactsOpen(true);
     if (sessionContactChoices !== null) {
       setContactChoices(sessionContactChoices);
@@ -90,6 +92,52 @@ export default function NewPersonScreen() {
     setContactChoices([]);
     setContactStatus('loading');
     void loadContacts();
+  };
+
+  const closeContacts = () => {
+    setContactsOpen(false);
+    setSelectedContactKeys(new Set());
+  };
+
+  const toggleContact = (key: string) => {
+    setSelectedContactKeys(current => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const confirmContactBatch = async () => {
+    if (saving) return;
+    setError('');
+    if (classifications.length === 0) {
+      setError(t('people.classification_required'));
+      return;
+    }
+    const selected = contactChoices.filter(choice => selectedContactKeys.has(choice.key));
+    if (selected.length === 0) {
+      setError(t('people.contact_selection_required'));
+      return;
+    }
+    setSaving(true);
+    try {
+      await importContactBatch({
+        contacts: selected,
+        classifications,
+        defaultCountry: phoneCountry,
+        store,
+      });
+      closeContacts();
+      router.replace('/(tabs)/people' as never);
+    } catch (caught) {
+      const code = caught instanceof Error ? caught.message : '';
+      setError(code.includes('CLASSIFICATION')
+        ? t('people.classification_required')
+        : t('people.contact_import_failed'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const save = async () => {
@@ -173,11 +221,11 @@ export default function NewPersonScreen() {
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
       </KeyboardAwareScrollViewCompat>
-      <Modal visible={contactsOpen} animationType="slide" onRequestClose={() => setContactsOpen(false)}>
+      <Modal visible={contactsOpen} animationType="slide" onRequestClose={closeContacts}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
           <View style={[styles.modalHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign }]}>{t('people.choose_contact')}</Text>
-            <TouchableOpacity onPress={() => setContactsOpen(false)} accessibilityRole="button" testID="contact-picker-cancel">
+            <TouchableOpacity onPress={closeContacts} accessibilityRole="button" testID="contact-picker-cancel">
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign }}>{t('capture.cancel')}</Text>
             </TouchableOpacity>
           </View>
@@ -189,6 +237,9 @@ export default function NewPersonScreen() {
             style={[inputStyle, styles.contactSearch]}
             testID="contact-search"
           />
+          <Text style={[styles.selectedCount, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign }]} testID="contact-selected-count">
+            {t('people.contacts_selected').replace('{count}', String(selectedContactKeys.size))}
+          </Text>
           <FlatList
             data={filteredContactChoices}
             keyExtractor={item => item.key}
@@ -206,18 +257,41 @@ export default function NewPersonScreen() {
               </Text>
             )}
             renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => {
-                setName(item.name);
-                setPhone(item.phone);
-                const inferredCountry = inferPhoneCountry(item.phone);
-                if (inferredCountry) setPhoneCountry(inferredCountry);
-                setContactsOpen(false);
-              }} style={[styles.contact, { borderBottomColor: colors.border, alignItems: contactAlignItems }]} testID={`contact-choice-${item.key}`}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign }}>{item.name}</Text>
-                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{item.phone}</Text>
+              <TouchableOpacity
+                onPress={() => toggleContact(item.key)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selectedContactKeys.has(item.key) }}
+                style={[
+                  styles.contact,
+                  {
+                    borderBottomColor: colors.border,
+                    alignItems: contactAlignItems,
+                    backgroundColor: selectedContactKeys.has(item.key) ? colors.card : colors.background,
+                  },
+                ]}
+                testID={`contact-choice-${item.key}`}
+              >
+                <View style={[styles.contactContent, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <View style={[styles.contactText, { alignItems: contactAlignItems }]}>
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign }}>{item.name}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{item.phone}</Text>
+                  </View>
+                  <Text style={{ color: colors.primary, fontFamily: fonts.bold }}>
+                    {selectedContactKeys.has(item.key) ? '✓' : ''}
+                  </Text>
+                </View>
               </TouchableOpacity>
             )}
           />
+          <View style={[styles.contactConfirm, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <Button
+              title={t('people.import_selected_contacts')}
+              onPress={() => void confirmContactBatch()}
+              loading={saving}
+              disabled={selectedContactKeys.size === 0}
+              testID="contact-batch-confirm"
+            />
+          </View>
         </View>
       </Modal>
       <Modal visible={countryOpen} animationType="fade" transparent onRequestClose={() => setCountryOpen(false)}>
@@ -266,9 +340,13 @@ const styles = StyleSheet.create({
   modalHeader: { minHeight: 64, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
   modalTitle: { fontSize: 22 },
   contactSearch: { marginHorizontal: 20, marginBottom: 8 },
+  selectedCount: { paddingHorizontal: 20, paddingBottom: 8 },
   contactList: { paddingHorizontal: 20, paddingBottom: 32 },
   contactEmpty: { paddingVertical: 28, lineHeight: 22 },
   contact: { minHeight: 64, borderBottomWidth: 1, justifyContent: 'center', gap: 4 },
+  contactContent: { width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  contactText: { flex: 1, gap: 4 },
+  contactConfirm: { paddingHorizontal: 20, paddingTop: 12 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
   countryPicker: { borderRadius: 14, padding: 16, gap: 4 },
   countryTitle: { fontSize: 20, marginBottom: 8 },

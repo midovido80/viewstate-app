@@ -121,6 +121,7 @@ function Input({
 
 function Action({
   title,
+  accessibilityLabel,
   id,
   onPress,
   destructive,
@@ -129,6 +130,7 @@ function Action({
   fonts,
 }: {
   title: string;
+  accessibilityLabel?: string;
   id: string;
   onPress: () => void;
   destructive?: boolean;
@@ -139,6 +141,7 @@ function Action({
   return (
     <TouchableOpacity
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       testID={id}
@@ -212,6 +215,7 @@ function AttachmentCard({
               color: colors.foreground,
               fontFamily: fonts.medium,
               textAlign: isRTL ? 'right' : 'left',
+              writingDirection: 'ltr',
             }}
           >
             {attachment.isCover ? '★ ' : ''}{attachment.originalName}
@@ -219,13 +223,13 @@ function AttachmentCard({
         </View>
       </TouchableOpacity>
       <View style={[styles.attachmentActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Action title={labels.open} id={`enrich-open-${attachment.id}`} onPress={onOpen} colors={colors} fonts={fonts} />
+        <Action title={labels.open} accessibilityLabel={`${labels.open}: ${attachment.originalName}`} id={`enrich-open-${attachment.id}`} onPress={onOpen} colors={colors} fonts={fonts} />
         {attachment.kind === 'image' ? (
-          <Action title={labels.cover} id={`enrich-cover-${attachment.id}`} onPress={onCover} colors={colors} fonts={fonts} />
+          <Action title={labels.cover} accessibilityLabel={`${labels.cover}: ${attachment.originalName}`} id={`enrich-cover-${attachment.id}`} onPress={onCover} colors={colors} fonts={fonts} />
         ) : null}
-        <Action title={labels.moveUp} id={`enrich-up-${attachment.id}`} onPress={onMoveUp} disabled={index === 0} colors={colors} fonts={fonts} />
-        <Action title={labels.moveDown} id={`enrich-down-${attachment.id}`} onPress={onMoveDown} disabled={index === count - 1} colors={colors} fonts={fonts} />
-        <Action title={labels.remove} id={`enrich-remove-${attachment.id}`} destructive onPress={onRemove} colors={colors} fonts={fonts} />
+        <Action title={labels.moveUp} accessibilityLabel={`${labels.moveUp}: ${attachment.originalName}`} id={`enrich-up-${attachment.id}`} onPress={onMoveUp} disabled={index === 0} colors={colors} fonts={fonts} />
+        <Action title={labels.moveDown} accessibilityLabel={`${labels.moveDown}: ${attachment.originalName}`} id={`enrich-down-${attachment.id}`} onPress={onMoveDown} disabled={index === count - 1} colors={colors} fonts={fonts} />
+        <Action title={labels.remove} accessibilityLabel={`${labels.remove}: ${attachment.originalName}`} id={`enrich-remove-${attachment.id}`} destructive onPress={onRemove} colors={colors} fonts={fonts} />
       </View>
     </View>
   );

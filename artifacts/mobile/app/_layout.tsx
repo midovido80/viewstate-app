@@ -30,53 +30,16 @@ import {
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
-import { StyleSheet, Text, View } from 'react-native';
+import { View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
 
 const queryClient = new QueryClient();
 
-function RootLayoutNav({
-  integrityStatus,
-}: {
-  integrityStatus: LocalStoreIntegrityStatus;
-}) {
-  const { isRTL, t, fonts } = useI18n();
+function RootLayoutNav() {
+  const { isRTL } = useI18n();
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
-      {integrityStatus.hasUnreadableRecords ? (
-        <View
-          testID="local-data-integrity-warning"
-          accessibilityRole="alert"
-          style={styles.integrityWarning}
-        >
-          <Text
-            style={[
-              styles.integrityTitle,
-              { color: colors.light.foreground, fontFamily: fonts.bold },
-            ]}
-          >
-            {t('integrity.title')}
-          </Text>
-          <Text
-            style={[
-              styles.integrityMessage,
-              { color: colors.light.foreground, fontFamily: fonts.regular },
-            ]}
-          >
-            {t('integrity.message')}
-          </Text>
-          <Text
-            testID="local-data-integrity-count"
-            style={[
-              styles.integrityCount,
-              { color: colors.light.foreground, fontFamily: fonts.medium },
-            ]}
-          >
-            {t('integrity.count')} {integrityStatus.unreadableRecords.length}
-          </Text>
-        </View>
-      ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
@@ -85,11 +48,11 @@ function RootLayoutNav({
         <Stack.Screen name="property/[propertyCoreId]" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/[requirementId]" options={{ headerShown: false }} />
       </Stack>
     </View>
   );
 }
-
 type InitializationState =
   | { status: 'initializing' }
   | { status: 'retrying' }
@@ -183,7 +146,7 @@ export default function RootLayout() {
                 <I18nProvider>
                 <CaptureProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
-                  <RootLayoutNav integrityStatus={initialization.integrityStatus} />
+                  <RootLayoutNav />
                 </CaptureProvider>
                 </I18nProvider>
               </KeyboardProvider>
@@ -194,26 +157,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  integrityWarning: {
-    backgroundColor: colors.light.card,
-    borderBottomColor: colors.light.warning,
-    borderBottomWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 3,
-  },
-  integrityTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  integrityMessage: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  integrityCount: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-});

@@ -13,6 +13,10 @@ type PropertyEvidenceLike = {
   readonly bathroomCount?: unknown;
   readonly hasPool?: unknown;
   readonly floorUse?: unknown;
+  readonly builtUpAreaSquareMeters?: unknown;
+  readonly commercialActivity?: unknown;
+  readonly floorNumber?: unknown;
+  readonly frontageWidthMeters?: unknown;
 };
 
 export type MyPropertiesStore = Pick<PropertyStore, 'getProperties'>;
@@ -92,6 +96,10 @@ function normalizeApprovedPropertyEvidence(
   const supportsPool = propertyType === 'house'
     || propertyType === 'villa'
     || propertyType === 'chalet';
+  const supportsCommercialArea = propertyType === 'shop'
+    || propertyType === 'office'
+    || (propertyType === 'floor' && details?.floorUse === 'commercial');
+  const supportsShopCriteria = propertyType === 'shop';
 
   return {
     ...(supportsBedrooms && isFiniteNonNegativeNumber(details?.bedroomCount)
@@ -102,6 +110,18 @@ function normalizeApprovedPropertyEvidence(
       : {}),
     ...(supportsPool && typeof details?.hasPool === 'boolean'
       ? { swimmingPool: details.hasPool }
+      : {}),
+    ...(supportsCommercialArea && isFinitePositiveNumber(details?.builtUpAreaSquareMeters)
+      ? { builtUpAreaSquareMeters: details.builtUpAreaSquareMeters }
+      : {}),
+    ...(supportsShopCriteria && classifiedLiteralValue(details?.commercialActivity) !== undefined
+      ? { commercialActivity: classifiedLiteralValue(details?.commercialActivity) }
+      : {}),
+    ...(supportsShopCriteria && isFiniteNonNegativeNumber(details?.floorNumber)
+      ? { floorNumber: details.floorNumber }
+      : {}),
+    ...(supportsShopCriteria && isFinitePositiveNumber(details?.frontageWidthMeters)
+      ? { frontageWidthMeters: details.frontageWidthMeters }
       : {}),
   };
 }
@@ -155,6 +175,30 @@ function projectApprovedTypeDetails(property: Property): Property['typeDetails']
       : {}),
   };
 
+  if (property.core.propertyType === 'shop') {
+    return {
+      ...base,
+      ...(evidence.builtUpAreaSquareMeters !== undefined
+        ? { builtUpAreaSquareMeters: evidence.builtUpAreaSquareMeters }
+        : {}),
+      ...(evidence.floorNumber !== undefined
+        ? { floorNumber: evidence.floorNumber }
+        : {}),
+      ...(evidence.frontageWidthMeters !== undefined
+        ? { frontageWidthMeters: evidence.frontageWidthMeters }
+        : {}),
+    } as Property['typeDetails'];
+  }
+
+  if (property.core.propertyType === 'office') {
+    return {
+      ...base,
+      ...(evidence.builtUpAreaSquareMeters !== undefined
+        ? { builtUpAreaSquareMeters: evidence.builtUpAreaSquareMeters }
+        : {}),
+    } as Property['typeDetails'];
+  }
+
   if (
     (property.core.propertyType === 'house'
       || property.core.propertyType === 'villa'
@@ -169,12 +213,15 @@ function projectApprovedTypeDetails(property: Property): Property['typeDetails']
 
   if (property.core.propertyType === 'floor') {
     if (
-      Object.keys(base).length > 1
+      (Object.keys(base).length > 1 || evidence.builtUpAreaSquareMeters !== undefined)
       && (details.floorUse === 'residential' || details.floorUse === 'commercial')
     ) {
       return {
         ...base,
         floorUse: details.floorUse,
+        ...(evidence.builtUpAreaSquareMeters !== undefined
+          ? { builtUpAreaSquareMeters: evidence.builtUpAreaSquareMeters }
+          : {}),
       } as Property['typeDetails'];
     }
   }
@@ -193,4 +240,19 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
   return typeof value === 'number'
     && Number.isFinite(value)
     && value >= 0;
+}
+
+function isFinitePositiveNumber(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && value > 0;
+}
+
+function classifiedLiteralValue(value: unknown): string | undefined {
+  return typeof value === 'object'
+    && value !== null
+    && 'value' in value
+    && typeof value.value === 'string'
+    ? value.value
+    : undefined;
 }
