@@ -7,6 +7,7 @@
     "internal": {
       "distribution": "internal",
       "environment": "development",
+      "pnpm": "10.26.1",
       "android": {
         "buildType": "apk"
       }
