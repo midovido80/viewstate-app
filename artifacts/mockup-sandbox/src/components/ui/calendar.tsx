@@ -129,7 +129,22 @@ function Calendar({
           return (
             <div
               data-slot="calendar"
-              ref={rootRef}
+              ref={(node) => {
+                if (typeof rootRef === "function") {
+                  const cleanup = rootRef(node)
+                  return typeof cleanup === "function"
+                    ? () => {
+                        cleanup()
+                      }
+                    : undefined
+                }
+
+                if (rootRef) {
+                  rootRef.current = node
+                }
+
+                return undefined
+              }}
               className={cn(className)}
               {...props}
             />
