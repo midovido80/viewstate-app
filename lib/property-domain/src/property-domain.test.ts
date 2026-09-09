@@ -290,6 +290,36 @@ test("rejects enrichment counts that cannot be represented safely", () => {
   assertEqual(result.ok, false, "Unsafe integer counts must fail without adding a business maximum");
 });
 
+test("aggregate legacy unitCount does not cap classified counts", () => {
+  for (const propertyType of ["whole_building", "commercial_complex"] as const) {
+    const result = validateTypeDetails({
+      propertyType,
+      unitCount: 1,
+      apartmentCount: 2,
+      shopCount: 2,
+      officeCount: 2,
+    }, core(propertyType));
+    assert(result.ok, `${propertyType} classified counts may exceed legacy unitCount`);
+  }
+});
+
+test("unitCount remains authoritative for non-aggregate details", () => {
+  const result = validateTypeDetails({
+    propertyType: "house",
+    unitCount: 1,
+    apartmentCount: 2,
+  } as TypeDetails, core("house"));
+  assertEqual(result.ok, false, "Other property types must retain unitCount validation");
+  if (!result.ok) {
+    const unitCountIssue = result.issues.find(issue =>
+      issue.code === "invalid_physical_value" &&
+      issue.path.join(".") === "typeDetails.unitCount" &&
+      issue.message === "Known apartment, shop, and office counts cannot exceed unitCount.",
+    );
+    assert(unitCountIssue, "Other property types must retain the exact unitCount rejection");
+  }
+});
+
 test("uses one canonical detail field applicability definition", () => {
   assert(
     PROPERTY_DETAIL_FIELD_DEFINITIONS.some(
@@ -693,6 +723,55 @@ test("share preview fail-closes exact locations and maps while never exposing pr
     false,
     "Private notes must never enter the preview, even with other disclosures",
   );
+});
+
+test("share preview hides legacy aggregate unitCount without erasing it", () => {
+  for (const [propertyType, classifiedField] of [
+    ["whole_building", "apartmentCount"],
+    ["commercial_complex", "shopCount"],
+  ] as const) {
+    const sharedProperty: Property = {
+      core: {
+        id: `property-${propertyType}`,
+        propertyType,
+        locationArea: { id: "area-1" },
+      },
+      typeDetails: {
+        propertyType,
+        unitCount: 99,
+        [classifiedField]: 4,
+      },
+      activeOffer: {
+        id: `offer-${propertyType}`,
+        propertyCoreId: `property-${propertyType}`,
+        transaction: "sale",
+        salePrice: price(),
+      },
+    };
+    const preview = buildPropertySharePreview({
+      property: sharedProperty,
+      selection: {
+        normalFields: ["type_details"],
+        attachmentIds: [],
+        discloseOwnerSource: false,
+        discloseExactLocation: false,
+        disclosePaci: false,
+        discloseManualLocation: false,
+        discloseMapsLink: false,
+        personContactIds: [],
+      },
+      availableAttachments: [],
+      rentalCadence: "monthly",
+      attribution: "",
+    });
+    assertEqual(preview.text.includes("99"), false, `${propertyType} must hide legacy unitCount`);
+    assert(preview.text.includes("4"), `${propertyType} classified counts remain shareable`);
+    assertEqual(
+      (sharedProperty.typeDetails as Extract<TypeDetails, { propertyType: typeof propertyType }>).unitCount,
+      99,
+      `${propertyType} share must not erase persisted unitCount`,
+    );
+  }
 });
 
 const failures: string[] = [];

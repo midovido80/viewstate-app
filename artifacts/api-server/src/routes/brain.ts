@@ -178,7 +178,63 @@ function parseStructuredIntent(value: unknown, originalQuery: string): BrainInte
   if (parsed.budgetMin !== null) result.budgetMin = parsed.budgetMin;
   if (parsed.budgetMax !== null) result.budgetMax = parsed.budgetMax;
   if (parsed.personTerms !== null) result.personTerms = parsed.personTerms;
-  return result;
+  return canonicalizeStructuredIntent(result);
+}
+
+/**
+ * This is the narrow trust boundary for model-created structured fields.
+ * Property class words are not business activities, and explicit Match All
+ * wording must use the local deterministic matching path.
+ */
+function canonicalizeStructuredIntent(result: BrainIntent): BrainIntent {
+  const query = normalizeIntentText(result.originalQuery);
+  const isShopQuery = /(?:^| )(?:shop|shops|محل|محلا|محلات)(?=$| )/.test(query);
+  const isExplicitMatchQuery = isExplicitMatchingPhrase(query);
+  const isPeopleRequirementsQuery = isPeopleRequirementsPhrase(query);
+  const canonical: BrainIntent = {
+    ...result,
+    ...(isExplicitMatchQuery
+      ? { intent: "find_matches" as const }
+      : isShopQuery && isPeopleRequirementsQuery
+        ? { intent: "people_requirements_search" as const }
+        : {}),
+    ...(isShopQuery ? { propertyType: "shop" } : {}),
+  };
+  if (isShopQuery && (!result.commercialActivity
+    || !activityAppearsInQuery(result.commercialActivity, query))) {
+    delete canonical.commercialActivity;
+  }
+  return canonical;
+}
+
+function normalizeIntentText(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[ىی]/g, "ي")
+    .replace(/[\s\p{P}\p{S}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function isExplicitMatchingPhrase(query: string): boolean {
+  return /(?:^| )(?:find matches|find match|match all|matching all)(?=$| )/.test(query)
+    || /(?:^| )(?:طابق|مطابقة|المطابقات|المطابقه)(?=$| )/.test(query);
+}
+
+function isPeopleRequirementsPhrase(query: string): boolean {
+  return /(?:^| )(?:people|clients?) (?:looking for|who need|that need|needing)/.test(query)
+    || /(?:^| )ابحث عن عملاء يطلبون(?=$| )/.test(query);
+}
+
+function activityAppearsInQuery(activity: string, query: string): boolean {
+  const normalizedActivity = normalizeIntentText(activity);
+  if (/^(?:shop|shops|محل|محلا|محلات)$/.test(normalizedActivity)) return false;
+  const activityTokens = normalizedActivity.split(" ").filter(Boolean);
+  const queryTokens = new Set(query.split(" "));
+  return activityTokens.length > 0 && activityTokens.every(token => queryTokens.has(token));
 }
 
 function isClientProviderError(error: unknown): boolean {

@@ -102,7 +102,9 @@ export function validateBrainIntent(value: unknown): BrainIntentValidation {
 }
 
 function validateServerBrainIntent(record: Record<string, unknown>): BrainIntentValidation {
-  const goal = typeof record.intent === 'string' ? goalAliases[record.intent] : undefined;
+  const rawGoal = typeof record.intent === 'string' ? record.intent : undefined;
+  const unknownGoal = rawGoal === 'unknown';
+  const goal = rawGoal ? goalAliases[rawGoal] ?? (unknownGoal ? 'property_search' : undefined) : undefined;
   if (!goal) return { ok: false, issues: [{ code: 'invalid_goal', path: ['intent'] }] };
   const allowed = new Set([
     'intent', 'originalQuery', 'propertyType', 'commercialActivity', 'purpose', 'areaTerms',
@@ -141,8 +143,63 @@ function validateServerBrainIntent(record: Record<string, unknown>): BrainIntent
     ...(typeof record.budgetMax === 'number' ? { budgetMax: record.budgetMax } : {}),
     ...(Array.isArray(record.personTerms) ? { personTerms: record.personTerms } : {}),
   };
-  if (goal === 'find_matches') return { ok: true, value: { goal, serverCriteria: criteria } };
-  return { ok: true, value: { goal, criteria: criteria.originalQuery, serverCriteria: criteria } };
+  const canonical = canonicalizeServerIntent(goal, criteria);
+  if (unknownGoal && canonical.goal === 'property_search') {
+    return { ok: false, issues: [{ code: 'invalid_goal', path: ['intent'] }] };
+  }
+  if (canonical.goal === 'find_matches') {
+    return { ok: true, value: { goal: canonical.goal, serverCriteria: canonical.criteria } };
+  }
+  return {
+    ok: true,
+    value: { goal: canonical.goal, criteria: canonical.criteria.originalQuery, serverCriteria: canonical.criteria },
+  };
+}
+
+function canonicalizeServerIntent(
+  goal: BrainGoal,
+  criteria: BrainServerCriteria,
+): { goal: BrainGoal; criteria: BrainServerCriteria } {
+  const query = normalizeSearch(criteria.originalQuery);
+  const isShopQuery = /(?:^| )(?:shop|shops|محل|محلا|محلات)(?=$| )/.test(query);
+  const isExplicitMatchQuery = isExplicitMatchingPhrase(query);
+  const isPeopleRequirementsQuery = isPeopleRequirementsPhrase(query);
+  const canonicalCriteria: BrainServerCriteria = isShopQuery
+    ? {
+      ...criteria,
+      propertyType: 'shop',
+      ...(criteria.commercialActivity
+        && activityAppearsInQuery(criteria.commercialActivity, query)
+        ? { commercialActivity: criteria.commercialActivity }
+        : { commercialActivity: undefined }),
+    }
+    : criteria;
+  return {
+    goal: isExplicitMatchQuery
+      ? 'find_matches'
+      : isShopQuery && isPeopleRequirementsQuery
+        ? 'people_requirements_search'
+        : goal,
+    criteria: canonicalCriteria,
+  };
+}
+
+function isExplicitMatchingPhrase(query: string): boolean {
+  return /(?:^| )(?:find matches|find match|match all|matching all)(?=$| )/.test(query)
+    || /(?:^| )(?:طابق|مطابقة|المطابقات|المطابقه)(?=$| )/.test(query);
+}
+
+function isPeopleRequirementsPhrase(query: string): boolean {
+  return /(?:^| )(?:people|clients?) (?:looking for|who need|that need|needing)/.test(query)
+    || /(?:^| )ابحث عن عملاء يطلبون(?=$| )/.test(query);
+}
+
+function activityAppearsInQuery(activity: string, query: string): boolean {
+  const normalizedActivity = normalizeSearch(activity);
+  if (/^(?:shop|shops|محل|محلا|محلات)$/.test(normalizedActivity)) return false;
+  const activityTokens = normalizedActivity.split(' ').filter(Boolean);
+  const queryTokens = new Set(query.split(' '));
+  return activityTokens.length > 0 && activityTokens.every(token => queryTokens.has(token));
 }
 
 export interface PeopleRequirementsReference {

@@ -13,7 +13,6 @@ test('Property Details presents saved Maps, Photo, Video, and PDF resources as v
   assert.match(source, /name=\{isRTL \? 'chevron-left' : 'chevron-right'\}/);
   assert.doesNotMatch(source, /<Text[^>]*>\s*\{attachment\.managedUri\}/);
 });
-
 test('Photo preview is in-app, closes on Android back, and retains a device opener fallback', async () => {
   const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
   assert.match(source, /visible=\{previewImage !== null\}/);
@@ -76,4 +75,39 @@ test('attachment edit actions and bilingual resource labels include accessible n
   assert.match(i18n, /'resources\.image': 'صورة'/);
   assert.match(i18n, /'resources\.destination_unavailable': 'Destination unavailable'/);
   assert.match(i18n, /'resources\.destination_unavailable': 'الوجهة غير متاحة'/);
+});
+
+test('aggregate property types suppress unitCount in enrichment and active details only', async () => {
+  const [fields, enrich, details, sharing] = await Promise.all([
+    readFile('components/PropertyEnrichmentFields.tsx', 'utf8'),
+    readFile('app/property/[propertyCoreId]/enrich.tsx', 'utf8'),
+    readFile('app/property/[propertyCoreId].tsx', 'utf8'),
+    readFile('../../lib/property-domain/src/sharing.ts', 'utf8'),
+  ]);
+  assert.match(fields, /definition\.field === 'unitCount' && suppressUnitCountForPropertyType\(propertyType\)/);
+  assert.match(fields, /propertyType === 'whole_building' \|\| propertyType === 'commercial_complex'/);
+  assert.match(details, /definition\.field === 'unitCount' && suppressUnitCountForPropertyType\(property\.core\.propertyType\)/);
+  assert.match(enrich, /if \(definition\.field === 'unitCount' && suppressUnitCount\) return;/);
+  assert.match(enrich, /if \(key === 'unitCount' && suppressUnitCount\) return;/);
+  assert.match(sharing, /definition\.field === "unitCount"/);
+  assert.match(sharing, /property\.core\.propertyType === "whole_building"/);
+});
+
+test('aggregate unitCount preservation skips deletion and newly writing the hidden field', async () => {
+  const source = await readFile('app/property/[propertyCoreId]/enrich.tsx', 'utf8');
+  const deletionGuard = /PROPERTY_DETAIL_FIELD_DEFINITIONS\.forEach\(definition => \{\s*if \(definition\.field === 'unitCount' && suppressUnitCount\) return;\s*delete rawDetails\[definition\.field\];/;
+  const writeGuard = /applicableDefinitions\.forEach\(\(\{ field: key \}\) => \{\s*\/\/ Aggregate types no longer accept unitCount as an enrichment input\.\s*\/\/ Deliberately leave an existing baseline value untouched for legacy\s*\/\/ records, while preventing new writes\.\s*if \(key === 'unitCount' && suppressUnitCount\) return;/;
+  assert.match(source, deletionGuard);
+  assert.match(source, writeGuard);
+});
+
+test('classified enrichment fields remain independent of unitCount suppression', async () => {
+  const [fields, enrich] = await Promise.all([
+    readFile('components/PropertyEnrichmentFields.tsx', 'utf8'),
+    readFile('app/property/[propertyCoreId]/enrich.tsx', 'utf8'),
+  ]);
+  assert.match(fields, /'intendedUse', 'commercialActivity', 'clarification'/);
+  assert.match(enrich, /optionalClassifiedLiteral\(paci, exactPrivacy\)/);
+  assert.match(enrich, /optionalClassifiedLiteral\(manualLocation, exactPrivacy\)/);
+  assert.match(enrich, /optionalClassifiedLiteral\(validatedMapsLink \?\? '', exactPrivacy\)/);
 });

@@ -292,6 +292,13 @@ export function buildPropertySharePreview(
   if (fields.has("type_details") && property.typeDetails !== undefined) {
     const details = property.typeDetails as unknown as Record<string, unknown>;
     for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
+      // Legacy aggregate unit totals remain persisted/readable, but are not
+      // an authoritative or shareable current detail.
+      if (
+        definition.field === "unitCount" &&
+        (property.core.propertyType === "whole_building" ||
+          property.core.propertyType === "commercial_complex")
+      ) continue;
       const value = details[definition.field];
       if (value === undefined) continue;
       const literalValue = typeof value === "object" && value !== null && "value" in value

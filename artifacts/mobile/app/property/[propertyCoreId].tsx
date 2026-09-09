@@ -17,11 +17,11 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Property, PROPERTY_TYPES, PropertyAttachmentMetadata, PropertyDetailField, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
-import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabel } from '@/components/PropertyEnrichmentFields';
+import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabel, suppressUnitCountForPropertyType } from '@/components/PropertyEnrichmentFields';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
-import { getAreaById, searchAreas } from '@/constants/kuwait-areas';
+import { buildKuwaitAreaQuery, getAreaById, searchAreas } from '@/constants/kuwait-areas';
 import { store } from '@/services/persistence';
 import {
   Person,
@@ -37,7 +37,10 @@ import {
   type LocalAttachment,
 } from '@/services/attachments';
 import {
+  isValidCoordinates,
+  normalizeGoogleMapsLink,
   openGoogleMaps,
+  openGoogleMapsQuery,
   openPastedLocationLink,
   pastedMapLocation,
 } from '@/services/location';
@@ -193,17 +196,25 @@ export default function PropertyDetailScreen() {
 
   const openSavedMap = async () => {
     const location = property?.locationEnrichment;
-    if (!location) return;
+    const coordinates = location?.coordinates;
     setError('');
     try {
-      if (location.mapsLink?.value) {
-        await openPastedLocationLink(pastedMapLocation(location.mapsLink.value));
-      } else if (location.coordinates) {
-        await openGoogleMaps({
-          latitude: location.coordinates.latitude,
-          longitude: location.coordinates.longitude,
-          accuracy: null,
-        });
+      if (isValidCoordinates(coordinates)) {
+        await openGoogleMaps(coordinates);
+      } else if (location?.mapsLink?.value) {
+        try {
+          const normalized = normalizeGoogleMapsLink(location.mapsLink.value);
+          await openPastedLocationLink(pastedMapLocation(normalized));
+        } catch (caught) {
+          if (!(caught instanceof Error) || caught.message !== 'INVALID_LOCATION_LINK') throw caught;
+          const area = getAreaById(property?.core.locationArea.id ?? '');
+          if (!area) throw caught;
+          await openGoogleMapsQuery(buildKuwaitAreaQuery(area, language));
+        }
+      } else {
+        const area = getAreaById(property?.core.locationArea.id ?? '');
+        if (!area) throw new Error('LOCATION_AREA_MISSING');
+        await openGoogleMapsQuery(buildKuwaitAreaQuery(area, language));
       }
     } catch {
       setError(t('enrich.maps_unavailable'));
@@ -634,6 +645,7 @@ export default function PropertyDetailScreen() {
             {property.typeDetails ? propertyDetailDisplayDefinitions
               .filter(definition =>
                 definition.appliesTo.includes(property.core.propertyType)
+                && !(definition.field === 'unitCount' && suppressUnitCountForPropertyType(property.core.propertyType))
                 && (
                   property.core.propertyType !== 'floor'
                   || !definition.floorUses
@@ -655,11 +667,13 @@ export default function PropertyDetailScreen() {
             {property.core.description ? <DetailRow label={t('enrich.description')} value={property.core.description.value} /> : null}
             {property.core.privateNotes ? <DetailRow label={t('enrich.private_notes')} value={property.core.privateNotes.value} /> : null}
             {property.locationEnrichment?.manualLocationText ? <DetailRow label={t('enrich.manual_location')} value={property.locationEnrichment.manualLocationText.value} /> : null}
-            {property.locationEnrichment?.mapsLink?.value || property.locationEnrichment?.coordinates ? (
+            {property.locationEnrichment?.mapsLink?.value || property.locationEnrichment?.coordinates || getAreaById(property.core.locationArea.id) ? (
               <ResourceRow
                 icon="map-pin"
                 title={t('enrich.open_maps')}
-                subtitle={t('resources.maps_saved')}
+                subtitle={property.locationEnrichment?.mapsLink?.value || property.locationEnrichment?.coordinates
+                  ? t('resources.maps_saved')
+                  : t('resources.maps_area')}
                 accessibilityLabel={t('resources.open_maps_label')}
                 onPress={() => void openSavedMap()}
                 testID="property-open-maps"

@@ -40,6 +40,33 @@ test('Android release config explicitly packages audio permissions and adaptive 
   assert.equal(appConfig.expo.android.versionCode, 5);
 });
 
+test('Android release plugins cannot remove recording permission', () => {
+  for (const plugin of appConfig.expo.plugins) {
+    if (!Array.isArray(plugin)) continue;
+    const options = plugin[1];
+    const microphonePermission = (
+      typeof options === 'object'
+      && options !== null
+      && 'microphonePermission' in options
+    )
+      ? options.microphonePermission
+      : undefined;
+    assert.notEqual(
+      microphonePermission,
+      false,
+      `${plugin[0]} must not remove android.permission.RECORD_AUDIO`,
+    );
+  }
+
+  const imagePicker = appConfig.expo.plugins.find(
+    plugin => Array.isArray(plugin) && plugin[0] === 'expo-image-picker',
+  );
+  assert.deepEqual(imagePicker?.[1], {
+    photosPermission: 'Allow ViewState to choose photos and videos you select. / السماح لـ ViewState باختيار الصور ومقاطع الفيديو التي تحددها.',
+    cameraPermission: false,
+  });
+});
+
 test('Brain cancels native and network activity when Android backgrounds the app', async () => {
   const screen = await readFile('app/(tabs)/brain.tsx', 'utf8');
   assert.match(screen, /if \(state !== 'active'\) \{/);

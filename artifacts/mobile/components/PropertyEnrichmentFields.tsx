@@ -6,6 +6,13 @@ import { toEnglishDigits } from '@/constants/market';
 
 export type EnrichmentFieldValues = Partial<Record<PropertyDetailField, string>>;
 
+// Unit counts for these aggregate property types are legacy data only. They
+// remain readable by persistence, but are intentionally not part of the
+// current enrichment/details presentation.
+export function suppressUnitCountForPropertyType(propertyType: PropertyType): boolean {
+  return propertyType === 'whole_building' || propertyType === 'commercial_complex';
+}
+
 const coreFieldOrder: readonly PropertyDetailField[] = [
   'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
 ];
@@ -124,6 +131,7 @@ export function PropertyEnrichmentFields({
   const floorUse = values.floorUse;
   const definitions = propertyDetailDisplayDefinitions.filter(definition =>
     definition.appliesTo.includes(propertyType)
+    && !(definition.field === 'unitCount' && suppressUnitCountForPropertyType(propertyType))
     && definition.field !== 'floorUse'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );

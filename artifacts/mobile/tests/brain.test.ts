@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import './platformModuleStubs.ts';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import { createPerson } from '../services/people.ts';
+import { WebStore } from '../services/persistence.ts';
 import {
   buildBrainPresentation,
   ViewStateBrain,
@@ -43,6 +45,28 @@ const reader = {
   getProperties: async () => [property],
 };
 
+class BrainMemoryStorage {
+  private readonly values = new Map<string, string>();
+
+  async getItem(key: string): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+  }
+}
+
+const brainPersistenceLocks = {
+  async request<T>(
+    _name: string,
+    _options: { mode: 'exclusive' },
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    return callback();
+  },
+};
+
 test('validates only the three server intent goals', () => {
   assert.deepEqual(validateBrainIntent({ goal: 'Property Search', query: 'Abdullah' }),
     { ok: true, value: { goal: 'property_search', criteria: 'Abdullah' } });
@@ -69,6 +93,131 @@ test('validates the API structured intent extraction without accepting IDs', () 
   assert.equal(validateBrainIntent({
     intent: 'property_search', originalQuery: 'x', propertyId: 'not-local',
   }).ok, false);
+});
+
+test('canonicalizes Shop words at the structured intent boundary', () => {
+  for (const query of ['محل', 'محلاً', 'محلا', 'محلات', 'shop']) {
+    const parsed = validateBrainIntent({
+      intent: 'people_requirements_search',
+      originalQuery: `${query} for Ahmed`,
+      propertyType: null,
+      commercialActivity: query,
+      purpose: null,
+      areaTerms: null,
+      budgetMin: null,
+      budgetMax: null,
+      personTerms: ['Ahmed'],
+    });
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+      assert.equal(parsed.value.goal, 'people_requirements_search');
+      assert.equal(parsed.value.serverCriteria?.propertyType, 'shop');
+      assert.equal(parsed.value.serverCriteria?.commercialActivity, undefined);
+    }
+  }
+});
+
+test('canonicalizes explicit matching phrases to the deterministic Match All goal', () => {
+  for (const [query, propertyType] of [
+    ['اعمل مطابقة للمتطلبات الحالية', undefined],
+    ['find matches for shop', 'shop'],
+  ] as const) {
+    const parsed = validateBrainIntent({
+      intent: 'people_requirements_search',
+      originalQuery: query,
+      propertyType: null,
+      commercialActivity: null,
+      purpose: null,
+      areaTerms: null,
+      budgetMin: null,
+      budgetMax: null,
+      personTerms: null,
+    });
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+      assert.equal(parsed.value.goal, 'find_matches');
+      assert.equal(parsed.value.serverCriteria?.propertyType, propertyType);
+    }
+  }
+});
+
+test('canonicalizes exact people and Shop phrases despite an incorrect model goal', () => {
+  for (const query of [
+    'ابحث عن عملاء يطلبون محل',
+    'ابحث عن عملاء يطلبون محلاً',
+    'people looking for a shop',
+    'clients who need a shop',
+  ]) {
+    const parsed = validateBrainIntent({
+      intent: 'unknown',
+      originalQuery: query,
+      propertyType: null,
+      commercialActivity: null,
+      purpose: null,
+      areaTerms: null,
+      budgetMin: null,
+      budgetMax: null,
+      personTerms: null,
+    });
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+      assert.equal(parsed.value.goal, 'people_requirements_search');
+      assert.equal(parsed.value.serverCriteria?.propertyType, 'shop');
+    }
+  }
+});
+
+test('rejects an unresolved unknown model intent fail-closed', () => {
+  assert.equal(validateBrainIntent({
+    intent: 'unknown',
+    originalQuery: 'something unrelated',
+    propertyType: null,
+    commercialActivity: null,
+    purpose: null,
+    areaTerms: null,
+    budgetMin: null,
+    budgetMax: null,
+    personTerms: null,
+  }).ok, false);
+});
+
+test('clears invented activities but preserves activities explicitly stated with Shop type', () => {
+  const parsed = validateBrainIntent({
+    intent: 'property_search',
+    originalQuery: 'clients who need a shop',
+    propertyType: null,
+    commercialActivity: 'Retail',
+    purpose: null,
+    areaTerms: null,
+    budgetMin: null,
+    budgetMax: null,
+    personTerms: null,
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.goal, 'people_requirements_search');
+    assert.equal(parsed.value.serverCriteria?.propertyType, 'shop');
+    assert.equal(parsed.value.serverCriteria?.commercialActivity, undefined);
+  }
+
+  for (const [query, activity] of [['coffee shop', 'Coffee'], ['محل مقهى', 'مقهى']] as const) {
+    const explicit = validateBrainIntent({
+      intent: 'property_search',
+      originalQuery: query,
+      propertyType: null,
+      commercialActivity: activity,
+      purpose: null,
+      areaTerms: null,
+      budgetMin: null,
+      budgetMax: null,
+      personTerms: null,
+    });
+    assert.equal(explicit.ok, true);
+    if (explicit.ok) {
+      assert.equal(explicit.value.serverCriteria?.propertyType, 'shop');
+      assert.equal(explicit.value.serverCriteria?.commercialActivity, activity);
+    }
+  }
 });
 
 test('search dispatch returns existing property references for exact safe criteria', async () => {
@@ -325,6 +474,89 @@ test('Find Matches keeps a qualifying cross-area Property in the complete engine
     assert.equal(location?.awardedPoints, 6);
     assert.ok((match?.score ?? 0) >= 70);
     assert.equal(match?.qualifies, true);
+  }
+});
+
+test('persisted Shop records reload into Brain search and deterministic Match All', async () => {
+  const personId = 'a1111111-1111-4111-8111-111111111111';
+  const requirementId = 'b2222222-2222-4222-8222-222222222222';
+  const propertyId = 'c3333333-3333-4333-8333-333333333333';
+  const savedPerson = createPerson({
+    id: personId,
+    name: 'Saved Shop Seeker',
+    displayPhone: '+96550000099',
+    classifications: ['seeker'],
+    notes: '',
+  });
+  const savedRequirement: SeekerRequirement = {
+    id: requirementId,
+    seekerId: personId,
+    purpose: 'rent',
+    propertyType: 'shop',
+    commercialActivity: 'Coffee',
+    preferredAreaIds: ['salmiya'],
+    budget: { minimum: 500, maximum: 800, currencyCode: 'KWD' },
+    notes: '',
+  };
+  const savedProperty: Property = {
+    core: {
+      id: propertyId,
+      propertyType: 'shop',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'd4444444-4444-4444-8444-444444444444',
+      propertyCoreId: propertyId,
+      transaction: 'rent',
+      rentalPrice: { amount: 650, currencyCode: 'KWD' },
+      rentalPeriodId: 'monthly',
+    },
+    typeDetails: {
+      propertyType: 'shop',
+      commercialActivity: {
+        value: 'Coffee',
+        privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+      },
+    },
+  };
+
+  const storage = new BrainMemoryStorage();
+  const first = new WebStore(storage, brainPersistenceLocks);
+  await first.init();
+  await first.savePerson(savedPerson);
+  await first.saveRequirement(savedRequirement);
+  await first.saveProperty(savedProperty);
+
+  const reloaded = new WebStore(storage, brainPersistenceLocks);
+  await reloaded.init();
+  const brain = new ViewStateBrain(reloaded);
+  const search = await brain.dispatch({
+    goal: 'people_requirements_search',
+    criteria: 'clients who need a coffee shop',
+    serverCriteria: {
+      originalQuery: 'clients who need a coffee shop',
+      propertyType: 'shop',
+      commercialActivity: 'Coffee',
+    },
+  });
+  assert.equal(search.goal, 'people_requirements_search');
+  if (search.goal === 'people_requirements_search') {
+    assert.deepEqual(search.people.map(item => item.person.id), [personId]);
+    assert.deepEqual(
+      search.people.flatMap(item => item.requirements.map(requirement => requirement.id)),
+      [requirementId],
+    );
+  }
+
+  const matches = await brain.dispatch({ goal: 'find_matches' });
+  assert.equal(matches.goal, 'find_matches');
+  if (matches.goal === 'find_matches') {
+    assert.deepEqual(matches.snapshot.people.map(item => item.id), [personId]);
+    assert.deepEqual(matches.snapshot.requirements.map(item => item.id), [requirementId]);
+    assert.deepEqual(matches.snapshot.properties.map(item => item.core.id), [propertyId]);
+    assert.equal(matches.runs[0]?.requirementId, requirementId);
+    assert.equal(matches.runs[0]?.matches[0]?.propertyId, propertyId);
+    assert.equal(matches.runs[0]?.matches[0]?.qualifies, true);
   }
 });
 

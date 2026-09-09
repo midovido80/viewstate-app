@@ -105,6 +105,20 @@ export const getAreaById = (
   return areas.find(area => area.id === id);
 };
 
+/**
+ * Builds the only taxonomy-derived Maps query used by the mobile app.
+ * The area and governorate labels must come from the approved dataset; callers
+ * should use saved links or coordinates before falling back to this query.
+ */
+export const buildKuwaitAreaQuery = (
+  area: Area,
+  language: 'ar' | 'en',
+): string => {
+  const areaName = language === 'ar' ? area.ar : area.en;
+  const governorateName = language === 'ar' ? area.governorateAr : area.governorateEn;
+  return `${areaName}, ${governorateName}, ${language === 'ar' ? 'الكويت' : 'Kuwait'}`;
+};
+
 export const searchAreas = (
   query: string,
   areas: readonly Area[] = KUWAIT_AREAS,

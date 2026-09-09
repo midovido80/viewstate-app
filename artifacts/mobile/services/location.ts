@@ -16,6 +16,17 @@ export type { Coordinates } from './coordinateRequest';
 export { requestInjectedCoordinates } from './coordinateRequest';
 export { normalizeGoogleMapsLink } from './mapsLink';
 
+export function isValidCoordinates(value: unknown): value is Coordinates {
+  if (!value || typeof value !== 'object') return false;
+  const coordinates = value as Partial<Coordinates>;
+  return Number.isFinite(coordinates.latitude)
+    && Number.isFinite(coordinates.longitude)
+    && coordinates.latitude! >= -90
+    && coordinates.latitude! <= 90
+    && coordinates.longitude! >= -180
+    && coordinates.longitude! <= 180;
+}
+
 export type PropertyMapLocation =
   | { readonly source: 'coordinates'; readonly coordinates: Coordinates }
   | { readonly source: 'pasted_link'; readonly link: string };

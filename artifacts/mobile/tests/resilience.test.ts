@@ -1363,7 +1363,6 @@ test('Expo permissions remain foreground-only with camera denied and Brain-only 
     {
       photosPermission: 'Allow ViewState to choose photos and videos you select. / السماح لـ ViewState باختيار الصور ومقاطع الفيديو التي تحددها.',
       cameraPermission: false,
-      microphonePermission: false,
     },
   ]);
   assert.deepEqual(audio, [

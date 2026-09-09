@@ -35,6 +35,7 @@ import {
   KUWAIT_AREA_DATASET_STATUS,
   KUWAIT_GOVERNORATES,
   KUWAIT_SEARCH_GROUPS,
+  buildKuwaitAreaQuery,
   getAreaById,
   normalizeAreaSearchText,
   searchAreas,
@@ -434,6 +435,9 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.doesNotMatch(enrichmentSource, /requestCurrentCoordinates|enrich-current-location/);
   assert.match(enrichmentSource, /\.\.\.\(\(baseline\.locationEnrichment \?\? \{\}\)/);
   assert.match(enrichmentSource, /enrich-other-required|OTHER_CLARIFICATION_REQUIRED/);
+  assert.match(enrichmentSource, /await openPastedLocationLink\(pastedMapLocation\(normalized\)\);[\s\S]*openedPastedMapsLink = true/);
+  assert.match(enrichmentSource, /if \(openedPastedMapsLink\) mapsLaunchPending\.current = true/);
+  assert.equal((enrichmentSource.match(/mapsLaunchPending\.current = true/g) ?? []).length, 1);
   assert.match(fieldSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS/);
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
   assert.match(fieldSource, /FURNISHING_VALUES/);
@@ -2381,7 +2385,8 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   assert.equal(validateTypeDetails({ propertyType: 'apartment', bedroomCount: 10_000_000 } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, true);
   assert.equal(validateTypeDetails({ propertyType: 'apartment', furnishing: 'partly' } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
   assert.equal(validateTypeDetails({ propertyType: 'apartment', hasMaidRoom: 'yes' } as never, { id: 'a', propertyType: 'apartment', locationArea: { id: 'x' } }).ok, false);
-  assert.equal(validateTypeDetails({ propertyType: 'whole_building', unitCount: 2, apartmentCount: 1, shopCount: 1, officeCount: 1 }, { id: 'b', propertyType: 'whole_building', locationArea: { id: 'x' } }).ok, false);
+  assert.equal(validateTypeDetails({ propertyType: 'whole_building', unitCount: 2, apartmentCount: 1, shopCount: 1, officeCount: 1 }, { id: 'b', propertyType: 'whole_building', locationArea: { id: 'x' } }).ok, true);
+  assert.equal(validateTypeDetails({ propertyType: 'commercial_complex', unitCount: 2, apartmentCount: 1, shopCount: 1, officeCount: 1 }, { id: 'c', propertyType: 'commercial_complex', locationArea: { id: 'x' } }).ok, true);
   assert.equal(validateTypeDetails({ propertyType: 'other_built_property', builtUpAreaSquareMeters: 10 } as never, { id: 'o', propertyType: 'other_built_property', locationArea: { id: 'x' } }).ok, false);
   assert.equal((enrichedByType.office as { intendedUse: { value: string } }).intendedUse.value, '  HQ Mixed-Case  ');
 });
@@ -2662,6 +2667,40 @@ test('Google Maps capture accepts only safe short/full links and prefers native 
   opened.length = 0;
   await openPastedGoogleMapsLink(short, nativeOpener, 'android');
   assert.deepEqual(opened, [short]);
+});
+
+test('Kuwait taxonomy Maps fallback uses approved Arabic and English area metadata', async () => {
+  const cases = [
+    ['doha', 'en', 'Doha, Capital, Kuwait'],
+    ['doha', 'ar', 'الدوحة, العاصمة, الكويت'],
+    ['salmiya', 'en', 'Salmiya, Hawalli, Kuwait'],
+    ['salmiya', 'ar', 'السالمية, حولي, الكويت'],
+    ['hawalli', 'en', 'Hawalli, Hawalli, Kuwait'],
+    ['hawalli', 'ar', 'حولي, حولي, الكويت'],
+  ] as const;
+
+  for (const [areaId, language, expected] of cases) {
+    const area = getAreaById(areaId);
+    assert.ok(area);
+    assert.equal(buildKuwaitAreaQuery(area, language), expected);
+
+    const opened: string[] = [];
+    await openGoogleMapsQuery(buildKuwaitAreaQuery(area, language), {
+      openURL: async url => { opened.push(url); },
+    }, 'android');
+    assert.match(opened[0], /^geo:0,0\?q=/);
+    assert.ok(decodeURIComponent(opened[0]).includes(expected));
+
+    opened.length = 0;
+    await openGoogleMapsQuery(buildKuwaitAreaQuery(area, language), {
+      openURL: async url => {
+        if (url.startsWith('geo:')) throw new Error('no Maps handler');
+        opened.push(url);
+      },
+    }, 'android');
+    assert.match(opened[0], /^https:\/\/www\.google\.com\/maps\/search/);
+    assert.ok(decodeURIComponent(opened[0]).includes(expected));
+  }
 });
 
 test('V001 selective sharing defaults exclude private notes and injected sharing preserves selected files', async () => {

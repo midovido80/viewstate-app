@@ -33,12 +33,14 @@ import {
   setAttachmentCover,
 } from '@/services/attachments';
 import {
+  isValidCoordinates,
   normalizeGoogleMapsLink,
+  openGoogleMaps,
   openGoogleMapsQuery,
   openPastedLocationLink,
   pastedMapLocation,
 } from '@/services/location';
-import { getAreaById } from '@/constants/kuwait-areas';
+import { buildKuwaitAreaQuery, getAreaById } from '@/constants/kuwait-areas';
 import {
   PropertyEnrichmentDraftV1,
   clearConfirmedPropertyEnrichmentDraft,
@@ -362,11 +364,14 @@ export default function PropertyEnrichmentScreen() {
   }, [id, t]);
 
   const buildCandidate = (baseline: Property, nextAttachments = attachments, strict = true): Property => {
+    const suppressUnitCount = baseline.core.propertyType === 'whole_building'
+      || baseline.core.propertyType === 'commercial_complex';
     const rawDetails: Record<string, unknown> = {
       ...((baseline.typeDetails ?? {}) as unknown as Record<string, unknown>),
       propertyType: baseline.core.propertyType,
     };
     PROPERTY_DETAIL_FIELD_DEFINITIONS.forEach(definition => {
+      if (definition.field === 'unitCount' && suppressUnitCount) return;
       delete rawDetails[definition.field];
     });
     const applicableDefinitions = PROPERTY_DETAIL_FIELD_DEFINITIONS.filter(definition =>
@@ -378,6 +383,10 @@ export default function PropertyEnrichmentScreen() {
       )
     );
     applicableDefinitions.forEach(({ field: key }) => {
+      // Aggregate types no longer accept unitCount as an enrichment input.
+      // Deliberately leave an existing baseline value untouched for legacy
+      // records, while preventing new writes.
+      if (key === 'unitCount' && suppressUnitCount) return;
       const raw = fields[key];
       if (!raw?.trim() || key === 'clarification') return;
       if (key === 'intendedUse' || key === 'commercialActivity') {
@@ -655,15 +664,28 @@ export default function PropertyEnrichmentScreen() {
   const openMaps = async () => {
     setError('');
     try {
-      if (mapsLink.trim()) {
-        const normalized = normalizeGoogleMapsLink(mapsLink);
-        setMapsLink(normalized);
-        await openPastedLocationLink(pastedMapLocation(normalized));
+      let openedPastedMapsLink = false;
+      const coordinates = property?.locationEnrichment?.coordinates;
+      if (isValidCoordinates(coordinates)) {
+        await openGoogleMaps(coordinates);
+      } else if (mapsLink.trim()) {
+        try {
+          const normalized = normalizeGoogleMapsLink(mapsLink);
+          setMapsLink(normalized);
+          await openPastedLocationLink(pastedMapLocation(normalized));
+          openedPastedMapsLink = true;
+        } catch (caught) {
+          if (!(caught instanceof Error) || caught.message !== 'INVALID_LOCATION_LINK') throw caught;
+          const area = getAreaById(property?.core.locationArea.id ?? '');
+          if (!area) throw caught;
+          await openGoogleMapsQuery(buildKuwaitAreaQuery(area, language));
+        }
       } else {
         const area = getAreaById(property?.core.locationArea.id ?? '');
-        await openGoogleMapsQuery(area?.[language] ?? property?.core.locationArea.id ?? '');
+        if (!area) throw new Error('LOCATION_AREA_MISSING');
+        await openGoogleMapsQuery(buildKuwaitAreaQuery(area, language));
       }
-      mapsLaunchPending.current = true;
+      if (openedPastedMapsLink) mapsLaunchPending.current = true;
     } catch (caught) {
       setError(
         caught instanceof Error && caught.message === 'INVALID_LOCATION_LINK'

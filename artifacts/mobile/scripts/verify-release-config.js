@@ -48,4 +48,12 @@ if (!audioPlugin || audioPlugin[1]?.recordAudioAndroid !== true) {
   fail('expo-audio must enable recordAudioAndroid.');
 }
 
+for (const plugin of appConfig.expo?.plugins ?? []) {
+  if (!Array.isArray(plugin)) continue;
+  const [name, options] = plugin;
+  if (options?.microphonePermission === false) {
+    fail(`${name} must not remove android.permission.RECORD_AUDIO.`);
+  }
+}
+
 console.log(`Android release configuration verified for ${apiOrigin}.`);
