@@ -1185,3 +1185,35 @@ Physical facts remain in type details. Description and Private Notes remain in t
 ### Boundaries
 
 Implementation remains local-first, additive, and backward-compatible. It must preserve existing data, identities, pricing and rental-cadence truth, recovery, low-tap capture, bilingual behavior, and tested APK behavior. No Property Condition, Availability, Unit or Parent Building model, Matching, cloud/platform/auth work, Tasks, Follow-ups, commissions, architecture rewrite, real-data operation, GitHub action, commit, publication, or APK build is authorized.
+
+---
+
+## [DEC-045] — Formal FW01.1 Source Freeze
+Date: 2026-09-12
+Status: ACTIVE — SOURCE FREEZE DECISION
+Decided by: Founder
+Category: Governance
+
+### Decision
+
+The Founder formally approved FW01.1 SOURCE FREEZE at exact commit `a52a93daaf89c2d4a4110d0a0aa9ce24fb030e16`, based directly on FW01 baseline `b6c1e6e098ebec99d01f5013886098662283da55`.
+
+### Frozen Source Boundary
+
+The frozen source revision changes only:
+
+- `artifacts/mobile/app/person/[personId].tsx`
+- `artifacts/mobile/tests/personUi.test.ts`
+- `artifacts/mobile/package.json`
+
+The read-only “FW01.1 — Post-Push CTO Verification, Android/iOS Compatibility Impact & Source Freeze Readiness” report concluded “FW01.1 SOURCE FREEZE READY — FOUNDER DECISION REQUIRED.”
+
+### Boundaries and Final State
+
+This decision does not merge FW01.1 source code into `main`. The frozen branch and exact frozen commit remain unchanged. The governance branch and PR document the source freeze only and include no FW01.1 product-source merge.
+
+Android/iOS native runtime acceptance, physical-device acceptance, and full FW01 acceptance remain open and are not completed. This decision authorizes no product-code merge, release, tag, native execution, or FW02 work.
+
+Any change to the frozen revision, source scope, or the three frozen files requires new explicit Founder approval under the mandatory governance lifecycle.
+
+Final state: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.

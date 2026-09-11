@@ -323,3 +323,12 @@ Boundaries: No production code, tests, schema, dependencies, migrations, configu
 Review: Founder/CTO review passed; the approved persistence authority boundary is now frozen.
 Freeze boundary: Current mobile runtime authority remains local SQLite/AsyncStorage plus shared mobile domain validation/contracts. Future server persistence authority remains PostgreSQL/Drizzle in `lib/db`; it is not the current mobile runtime schema authority. Future synchronization requires a separately approved compatibility, mapping, and migration boundary.
 State: FOUNDATION FIX 02 FROZEN / PASS / DOCUMENTATION-ONLY CORRECTION COMPLETE — WAIT.
+
+---
+
+### Session: 2026-09-12 (FW01.1 Source Freeze)
+Authorization: Founder formally approved FW01.1 SOURCE FREEZE on 2026-09-12 at exact commit `a52a93daaf89c2d4a4110d0a0aa9ce24fb030e16`, based directly on FW01 baseline `b6c1e6e098ebec99d01f5013886098662283da55`.
+Scope: The frozen source revision changes only `artifacts/mobile/app/person/[personId].tsx`, `artifacts/mobile/tests/personUi.test.ts`, and `artifacts/mobile/package.json`.
+Review: The read-only “FW01.1 — Post-Push CTO Verification, Android/iOS Compatibility Impact & Source Freeze Readiness” report concluded “FW01.1 SOURCE FREEZE READY — FOUNDER DECISION REQUIRED.”
+Boundaries: This governance documentation does not merge FW01.1 source code into `main`, does not modify the frozen branch or commit, and authorizes no product-source change. Android/iOS native runtime acceptance, physical-device acceptance, and full FW01 acceptance remain open and are not completed. No product-code merge, release, tag, native execution, or FW02 work is authorized. Any change to the frozen revision or scope requires new explicit Founder approval.
+State: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.
