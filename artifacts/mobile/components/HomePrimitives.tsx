@@ -77,6 +77,7 @@ interface HomeQuickActionProps {
   accessibilityLabel: string;
   disabled?: boolean;
   testID?: string;
+  variant?: 'default' | 'primary';
 }
 
 export function HomeQuickAction({
@@ -87,9 +88,11 @@ export function HomeQuickAction({
   accessibilityLabel,
   disabled = false,
   testID,
+  variant = 'default',
 }: HomeQuickActionProps) {
   const colors = useColors();
   const { fonts, isRTL } = useI18n();
+  const isPrimary = variant === 'primary' && !disabled;
 
   return (
     <Pressable
@@ -105,8 +108,10 @@ export function HomeQuickAction({
         {
           backgroundColor: disabled
             ? colors.vapp47.disabledSurface
-            : colors.vapp47.cardSurface,
-          borderColor: colors.vapp47.visualBorder,
+            : isPrimary
+              ? colors.vapp47.brandPrimary
+              : colors.vapp47.cardSurface,
+          borderColor: isPrimary ? colors.vapp47.brandPrimary : colors.vapp47.visualBorder,
           borderRadius: colors.vapp47.homeCardRadius,
           opacity: disabled ? 0.64 : pressed ? 0.84 : 1,
         },
@@ -115,11 +120,23 @@ export function HomeQuickAction({
       <View
         style={[
           styles.actionIcon,
-          { backgroundColor: disabled ? colors.vapp47.visualBorder : colors.vapp47.brandSoft },
+          {
+            backgroundColor: disabled
+              ? colors.vapp47.visualBorder
+              : isPrimary
+                ? 'rgba(255,255,255,0.18)'
+                : colors.vapp47.brandSoft,
+          },
         ]}
       >
         <Feather
-          color={disabled ? colors.vapp47.textMuted : colors.vapp47.brandPrimary}
+          color={
+            disabled
+              ? colors.vapp47.textMuted
+              : isPrimary
+                ? colors.vapp47.cardSurface
+                : colors.vapp47.brandPrimary
+          }
           name={icon}
           size={22}
         />
@@ -128,7 +145,11 @@ export function HomeQuickAction({
         style={[
           styles.actionTitle,
           {
-            color: disabled ? colors.vapp47.textMuted : colors.vapp47.textPrimary,
+            color: disabled
+              ? colors.vapp47.textMuted
+              : isPrimary
+                ? colors.vapp47.cardSurface
+                : colors.vapp47.textPrimary,
             fontFamily: fonts.semiBold,
             textAlign: isRTL ? 'right' : 'left',
           },
@@ -141,7 +162,7 @@ export function HomeQuickAction({
           style={[
             styles.actionCaption,
             {
-              color: colors.vapp47.textMuted,
+              color: isPrimary ? 'rgba(255,255,255,0.78)' : colors.vapp47.textMuted,
               fontFamily: fonts.regular,
               textAlign: isRTL ? 'right' : 'left',
             },
@@ -165,6 +186,7 @@ interface HomeSummaryCardProps {
   tone?: 'brand' | 'data' | 'communication';
   status: HomeSummaryState;
   testID?: string;
+  compact?: boolean;
 }
 
 export function HomeSummaryCard({
@@ -173,6 +195,7 @@ export function HomeSummaryCard({
   tone = 'brand',
   status,
   testID,
+  compact = false,
 }: HomeSummaryCardProps) {
   const colors = useColors();
   const { fonts, isRTL } = useI18n();
@@ -188,6 +211,7 @@ export function HomeSummaryCard({
       accessibilityState={{ busy: status.state === 'loading' }}
       style={[
         styles.summaryCard,
+        compact && styles.summaryCardCompact,
         {
           backgroundColor: colors.vapp47.cardSurface,
           borderColor: colors.vapp47.visualBorder,
@@ -197,7 +221,9 @@ export function HomeSummaryCard({
       testID={testID}
     >
       <View style={[styles.summaryHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Feather color={toneColor} name={icon} size={19} />
+        <View style={[styles.summaryIcon, { backgroundColor: colors.vapp47.brandSoft }]}>
+          <Feather color={toneColor} name={icon} size={compact ? 17 : 19} />
+        </View>
         <Text
           style={[
             styles.summaryLabel,
@@ -215,6 +241,7 @@ export function HomeSummaryCard({
         <Text
           style={[
             styles.summaryValue,
+            compact && styles.summaryValueCompact,
             {
               color: colors.vapp47.textPrimary,
               fontFamily: fonts.bold,
@@ -383,15 +410,19 @@ export function HomePropertyCard({
         </Text>
       ) : null}
       {location ? (
-        <Text
-          style={{
-            color: colors.vapp47.textMuted,
-            fontFamily: fonts.regular,
-            textAlign: isRTL ? 'right' : 'left',
-          }}
-        >
-          {location}
-        </Text>
+        <View style={[styles.locationRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <Feather color={colors.vapp47.textMuted} name="map-pin" size={14} />
+          <Text
+            style={{
+              color: colors.vapp47.textMuted,
+              flex: 1,
+              fontFamily: fonts.regular,
+              textAlign: isRTL ? 'right' : 'left',
+            }}
+          >
+            {location}
+          </Text>
+        </View>
       ) : null}
     </>
   );
@@ -471,8 +502,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     flex: 1,
-    fontSize: 20,
-    lineHeight: 28,
+    fontSize: 18,
+    lineHeight: 24,
   },
   headingAction: {
     minHeight: 44,
@@ -482,50 +513,66 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   actionCard: {
-    minHeight: 132,
+    minHeight: 112,
     borderWidth: 1,
-    padding: 16,
+    padding: 14,
   },
   actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   actionTitle: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 20,
   },
   actionCaption: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
   summaryCard: {
     minHeight: 116,
     borderWidth: 1,
     padding: 16,
   },
+  summaryCardCompact: {
+    minHeight: 92,
+    padding: 13,
+  },
   summaryHeader: {
     alignItems: 'center',
     gap: 8,
   },
+  summaryIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   summaryLabel: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
   },
   summaryValue: {
     fontSize: 28,
     lineHeight: 36,
     marginTop: 12,
   },
+  summaryValueCompact: {
+    fontSize: 23,
+    lineHeight: 29,
+    marginTop: 8,
+  },
   summaryStatus: {
     alignItems: 'center',
     gap: 8,
-    marginTop: 14,
+    marginTop: 10,
   },
   futureCard: {
     minHeight: 88,
@@ -577,7 +624,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 30,
     marginTop: 14,
-    marginBottom: 3,
+    marginBottom: 5,
+  },
+  locationRow: {
+    alignItems: 'center',
+    gap: 6,
   },
   emptyState: {
     alignItems: 'center',

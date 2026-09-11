@@ -13,14 +13,14 @@ function ClassicTabLayout() {
   const insets = useSafeAreaInsets();
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
-  const nativeTabBarBaseHeight = isIOS ? 49 : 56;
+  const nativeTabBarBaseHeight = isIOS ? 52 : 58;
   const nativeBottomInset = Math.max(insets.bottom, 0);
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarActiveTintColor: colors.vapp47.brandPrimary,
+        tabBarInactiveTintColor: colors.vapp47.textMuted,
         headerShown: false,
         sceneStyle: {
           overflow: 'hidden',
@@ -28,17 +28,22 @@ function ClassicTabLayout() {
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopWidth: 1,
-          borderTopColor: colors.border,
+          borderTopColor: colors.vapp47.visualBorder,
           elevation: 12,
           position: 'relative',
           overflow: 'hidden',
           zIndex: 100,
-          height: isWeb ? 84 : nativeTabBarBaseHeight + nativeBottomInset,
+          height: isWeb ? 82 : nativeTabBarBaseHeight + nativeBottomInset,
           paddingBottom: isWeb ? 6 : nativeBottomInset,
         },
         tabBarItemStyle: {
-          paddingTop: 6,
-          paddingBottom: isWeb ? 6 : 0,
+          paddingTop: 7,
+          paddingBottom: isWeb ? 5 : 1,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          marginTop: 2,
         },
       }}
     >

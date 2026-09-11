@@ -13,7 +13,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useI18n, Translations, Language } from '@/contexts/I18nContext';
+import { useI18n, Translations } from '@/contexts/I18nContext';
 import { store, type LocalStoreIntegrityStatus } from '@/services/persistence';
 import { Property } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
@@ -146,67 +146,66 @@ export default function TabOneScreen() {
     <HomeEmptyState
       icon="search"
       testID="home-properties-no-results"
-      title={t('brain.results.empty')}
+      title={t('home.no_results')}
     />
   );
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.vapp47.appSurface, paddingTop: insets.top },
-      ]}
-    >
-      <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <View style={styles.brandCopy}>
-          <Text
-            style={[
-              styles.brand,
-              {
-                color: colors.vapp47.brandPrimary,
-                fontFamily: fonts.bold,
+    <View style={[styles.container, { backgroundColor: colors.vapp47.appSurface }]}>
+      <View
+        style={[
+          styles.hero,
+          {
+            backgroundColor: colors.vapp47.brandPrimary,
+            paddingTop: insets.top + 12,
+          },
+        ]}
+      >
+        <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <View style={styles.brandCopy}>
+            <Text
+              style={[
+                styles.brand,
+                {
+                  color: colors.vapp47.cardSurface,
+                  fontFamily: fonts.bold,
+                  textAlign: isRTL ? 'right' : 'left',
+                },
+              ]}
+            >
+              ViewState
+            </Text>
+            <Text
+              style={{
+                color: 'rgba(255,255,255,0.78)',
+                fontFamily: fonts.medium,
                 textAlign: isRTL ? 'right' : 'left',
-              },
-            ]}
+              }}
+            >
+              {t('home.title')}
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={toggleLanguage}
+            style={styles.langBtn}
+            testID="home-language-toggle"
           >
-            ViewState
-          </Text>
-          <Text
-            style={{
-              color: colors.vapp47.textMuted,
-              fontFamily: fonts.medium,
-              textAlign: isRTL ? 'right' : 'left',
-            }}
-          >
-            {t('home.title')}
-          </Text>
+            <Text style={{ color: colors.vapp47.cardSurface, fontFamily: fonts.semiBold }}>
+              {language === 'en' ? 'عربي' : 'EN'}
+            </Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={toggleLanguage}
-          style={[
-            styles.langBtn,
-            {
-              backgroundColor: colors.vapp47.cardSurface,
-              borderColor: colors.vapp47.visualBorder,
-            },
-          ]}
-          testID="home-language-toggle"
-        >
-          <Text style={{ color: colors.vapp47.textPrimary, fontFamily: fonts.semiBold }}>
-            {language === 'en' ? 'عربي' : 'EN'}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
         <View
           style={[
             styles.searchField,
+            colors.vapp47.homeShadow,
             {
               backgroundColor: colors.vapp47.cardSurface,
               borderColor: colors.vapp47.visualBorder,
-              borderRadius: colors.inputRadius,
               flexDirection: isRTL ? 'row-reverse' : 'row',
             },
           ]}
@@ -214,7 +213,7 @@ export default function TabOneScreen() {
           <Feather
             color={colors.vapp47.textMuted}
             name="search"
-            size={20}
+            size={19}
             style={styles.searchIcon}
           />
           <TextInput
@@ -276,12 +275,12 @@ export default function TabOneScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.homeContent}>
+            <HomeSectionHeading title={t('home.quick_actions')} />
+
             <View
               style={[
                 styles.quickActions,
-                {
-                  flexDirection: isRTL ? 'row-reverse' : 'row',
-                },
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
               ]}
             >
               <View style={styles.gridItem}>
@@ -291,6 +290,7 @@ export default function TabOneScreen() {
                   onPress={() => router.push('/capture/transaction' as any)}
                   testID="home-action-add-property"
                   title={t('home.new')}
+                  variant="primary"
                 />
               </View>
               <View style={styles.gridItem}>
@@ -322,6 +322,8 @@ export default function TabOneScreen() {
               </View>
             </View>
 
+            <HomeSectionHeading title={t('home.workspace_summary')} />
+
             <View
               style={[
                 styles.summaryGrid,
@@ -330,6 +332,7 @@ export default function TabOneScreen() {
             >
               <View style={styles.summaryItem}>
                 <HomeSummaryCard
+                  compact
                   icon="home"
                   label={t('brain.results.properties')}
                   status={summaryStatus(propertyCount)}
@@ -339,6 +342,7 @@ export default function TabOneScreen() {
               </View>
               <View style={styles.summaryItem}>
                 <HomeSummaryCard
+                  compact
                   icon="users"
                   label={t('brain.results.people')}
                   status={summaryStatus(peopleCount)}
@@ -348,6 +352,7 @@ export default function TabOneScreen() {
               </View>
               <View style={styles.summaryItem}>
                 <HomeSummaryCard
+                  compact
                   icon="clipboard"
                   label={t('brain.results.requirements')}
                   status={summaryStatus(requirementCount)}
@@ -358,18 +363,23 @@ export default function TabOneScreen() {
             </View>
 
             <View style={styles.propertiesHeading}>
-              <HomeSectionHeading title={t('home.title')} />
+              <HomeSectionHeading title={t('brain.results.properties')} />
             </View>
           </View>
         }
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: 96 },
-        ]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 96 }]}
         ListEmptyComponent={listEmptyComponent}
       />
 
-      <View style={[styles.fabContainer, { bottom: 16 }]}>
+      <View
+        style={[
+          styles.fabContainer,
+          {
+            bottom: 16,
+            [isRTL ? 'left' : 'right']: 20,
+          },
+        ]}
+      >
         <Pressable
           accessibilityLabel={t('home.new')}
           accessibilityRole="button"
@@ -384,15 +394,7 @@ export default function TabOneScreen() {
             },
           ]}
         >
-          <Feather color={colors.vapp47.cardSurface} name="plus" size={22} />
-          <Text
-            style={{
-              color: colors.vapp47.cardSurface,
-              fontFamily: fonts.semiBold,
-            }}
-          >
-            {t('home.new')}
-          </Text>
+          <Feather color={colors.vapp47.cardSurface} name="plus" size={24} />
         </Pressable>
       </View>
     </View>
@@ -403,11 +405,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  hero: {
+    paddingBottom: 34,
+  },
   header: {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 14,
     paddingBottom: 10,
     gap: 16,
   },
@@ -419,38 +423,42 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   langBtn: {
-    minHeight: 44,
+    minHeight: 42,
     minWidth: 56,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderRadius: 22,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 21,
   },
   searchContainer: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    marginTop: -26,
+    paddingBottom: 14,
+    zIndex: 2,
   },
   searchField: {
-    minHeight: 56,
+    minHeight: 52,
     borderWidth: 1,
+    borderRadius: 18,
     alignItems: 'center',
   },
   searchIcon: {
     marginHorizontal: 14,
   },
   searchInput: {
-    minHeight: 54,
+    minHeight: 50,
     flex: 1,
     paddingHorizontal: 0,
     paddingVertical: 8,
-    fontSize: 16,
+    fontSize: 15,
   },
   integrityNotice: {
-    minHeight: 48,
+    minHeight: 46,
     marginHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: 10,
     borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 12,
@@ -461,13 +469,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   homeContent: {
-    gap: 18,
-    paddingTop: 4,
+    gap: 14,
+    paddingTop: 2,
     paddingBottom: 14,
   },
   quickActions: {
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   gridItem: {
     flexBasis: '46%',
@@ -477,7 +485,7 @@ const styles = StyleSheet.create({
   },
   summaryGrid: {
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   summaryItem: {
     flexBasis: '29%',
@@ -485,10 +493,10 @@ const styles = StyleSheet.create({
     minWidth: 104,
   },
   propertiesHeading: {
-    paddingTop: 2,
+    paddingTop: 4,
   },
   propertyItem: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   loadingState: {
     alignItems: 'center',
@@ -497,16 +505,13 @@ const styles = StyleSheet.create({
   },
   fabContainer: {
     position: 'absolute',
-    right: 20,
     alignItems: 'flex-end',
   },
   fab: {
-    minHeight: 54,
-    borderRadius: 27,
-    paddingHorizontal: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
   },
 });
