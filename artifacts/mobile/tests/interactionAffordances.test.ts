@@ -124,36 +124,68 @@ test('VAPP-47 presentation colors stay scoped without replacing semantic theme t
   assert.match(hookSource, /vapp47:\s*colors\.vapp47/);
 });
 
-test('Phase 1 Home keeps real actions, local data truthfulness, and property identity', async () => {
-  const source = await readFile('app/(tabs)/index.tsx', 'utf8');
+test('Phase 1 Home and Properties separation keeps real actions, local data truthfulness, and property identity', async () => {
+  const [home, properties] = await Promise.all([
+    readFile('app/(tabs)/index.tsx', 'utf8'),
+    readFile('app/(tabs)/properties.tsx', 'utf8'),
+  ]);
 
-  assert.match(source, /testID="home-action-add-property"[\s\S]*?title=\{t\('home\.new'\)\}/);
-  assert.match(source, /onPress=\{\(\) => router\.push\('\/capture\/transaction'/);
-  assert.match(source, /onPress=\{\(\) => router\.push\('\/person\/new'[\s\S]*?testID="home-action-add-person"/);
-  assert.match(source, /onPress=\{\(\) => router\.push\('\/person\/new'[\s\S]*?testID="home-action-contact-entry"/);
-  assert.match(source, /onPress=\{\(\) => router\.push\('\/matching'[\s\S]*?testID="home-action-matches"/);
-  assert.doesNotMatch(source, /router\.push\(['"`]\/requirement\/new/);
+  assert.match(home, /testID="home-action-add-property"[\s\S]*?title=\{t\('home\.new'\)\}/);
+  assert.match(home, /onPress=\{\(\) => router\.push\('\/capture\/transaction'/);
+  assert.match(home, /onPress=\{\(\) => router\.push\('\/person\/new'[\s\S]*?testID="home-action-add-person"/);
+  assert.match(home, /onPress=\{\(\) => router\.push\('\/person\/new'[\s\S]*?testID="home-action-contact-entry"/);
+  assert.match(home, /onPress=\{\(\) => router\.push\('\/matching'[\s\S]*?testID="home-action-matches"/);
+  assert.doesNotMatch(home, /router\.push\(['"`]\/requirement\/new/);
 
-  assert.match(source, /router\.push\(`\/property\/\$\{encodeURIComponent\(item\.core\.id\)\}`/);
-  assert.match(source, /propertyId=\{item\.core\.id\}/);
-  assert.match(source, /keyExtractor=\{item => item\.core\.id\}/);
+  assert.doesNotMatch(home, /testID="input-search"/);
+  assert.doesNotMatch(home, /property-card-\$\{item\.core\.id\}/);
+  assert.doesNotMatch(home, /testID="btn-capture"/);
+  assert.doesNotMatch(home, /<FlatList/);
 
-  assert.match(source, /const allProperties = await store\.getProperties\(\)/);
-  assert.match(source, /setPropertyCount\(allProperties\.length\)/);
-  assert.match(source, /await store\.searchProperties\(query\)/);
-  assert.match(source, /store\.getPeople\(\)/);
-  assert.match(source, /store\.getRequirements\(\)/);
-  assert.match(source, /peopleResult\.status === 'fulfilled' \? peopleResult\.value\.length : null/);
-  assert.match(source, /requirementsResult\.status === 'fulfilled' \? requirementsResult\.value\.length : null/);
+  assert.match(home, /store\.getProperties\(\)/);
+  assert.match(home, /store\.getPeople\(\)/);
+  assert.match(home, /store\.getRequirements\(\)/);
+  assert.match(home, /propertiesResult\.status === 'fulfilled' \? propertiesResult\.value\.length : null/);
+  assert.match(home, /peopleResult\.status === 'fulfilled' \? peopleResult\.value\.length : null/);
+  assert.match(home, /requirementsResult\.status === 'fulfilled' \? requirementsResult\.value\.length : null/);
+  assert.match(home, /testID="local-data-integrity-notice"/);
+  assert.doesNotMatch(home, /store\.searchProperties/);
+  assert.doesNotMatch(home, /router\.push\([^)]*trust[_/-]?circle/i);
 
-  assert.match(source, /propertyCount === 0[\s\S]*?testID="home-properties-empty"/);
-  assert.match(source, /testID="home-properties-no-results"/);
-  assert.doesNotMatch(source, /router\.push\([^)]*trust[_/-]?circle/i);
+  assert.match(properties, /const allProperties = await store\.getProperties\(\)/);
+  assert.match(properties, /setPropertyCount\(allProperties\.length\)/);
+  assert.match(properties, /await store\.searchProperties\(query\)/);
+  assert.match(properties, /router\.push\(`\/property\/\$\{encodeURIComponent\(item\.core\.id\)\}`/);
+  assert.match(properties, /propertyId=\{item\.core\.id\}/);
+  assert.match(properties, /keyExtractor=\{item => item\.core\.id\}/);
+  assert.match(properties, /propertyCount === 0[\s\S]*?testID="properties-empty"/);
+  assert.match(properties, /testID="properties-no-results"/);
+  assert.match(properties, /testID="properties-unavailable"/);
+  assert.match(properties, /testID="btn-capture"/);
+});
+
+test('Properties refresh and list-return routes preserve normal, linked-person, deletion, and missing-record semantics', async () => {
+  const [properties, success, detail] = await Promise.all([
+    readFile('app/(tabs)/properties.tsx', 'utf8'),
+    readFile('app/capture/success.tsx', 'utf8'),
+    readFile('app/property/[propertyCoreId].tsx', 'utf8'),
+  ]);
+
+  assert.match(properties, /useFocusEffect\([\s\S]*?loadProperties\(search\)/);
+  assert.match(properties, /router\.push\('\/capture\/transaction'/);
+  assert.match(success, /linkPersonId \? `\/person\/\$\{encodeURIComponent\(linkPersonId\)\}` : '\/properties'/);
+  assert.match(success, /`\/property\/\$\{encodeURIComponent\(propertyCoreId\)\}\/enrich`/);
+  assert.equal((detail.match(/router\.replace\('\/properties' as never\)/g) ?? []).length, 2);
+  assert.match(detail, /result\.status !== 'deleted'[\s\S]*?return;[\s\S]*?router\.replace\('\/properties'/);
+  assert.match(detail, /status === 'missing' \? t\('edit\.not_found'\) : t\('edit\.unreadable'\)/);
+  assert.match(detail, /mode === 'edit' \? leaveEditor : \(\) => router\.back\(\)/);
 });
 
 test('Phase 1 Home translations remain bilingual in the canonical namespace', async () => {
   const source = await readFile('contexts/I18nContext.tsx', 'utf8');
   const expectedEntries = [
+    ["home.title", "Home", "الرئيسية"],
+    ["properties.title", "Properties", "العقارات"],
     ["home.quick_actions", "Quick Actions", "إجراءات سريعة"],
     ["home.workspace_summary", "Workspace Summary", "ملخص مساحة العمل"],
     ["home.loading", "Loading…", "جارٍ التحميل…"],

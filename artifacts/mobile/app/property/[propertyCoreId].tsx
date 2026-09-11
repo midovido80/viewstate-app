@@ -482,7 +482,7 @@ export default function PropertyDetailScreen() {
         return;
       }
       setDeleteVisible(false);
-      router.replace('/' as never);
+      router.replace('/properties' as never);
     } catch {
       setDeleteVisible(false);
       setError(t('delete.failed'));
@@ -500,7 +500,7 @@ export default function PropertyDetailScreen() {
         <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: 'center' }}>{message}</Text>
         <Button
           title={t('capture.back')}
-          onPress={() => router.replace('/' as never)}
+          onPress={() => router.replace('/properties' as never)}
           variant="outline"
           testID="property-detail-back"
         />

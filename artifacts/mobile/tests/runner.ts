@@ -2071,15 +2071,16 @@ test('Task 6 executable recovery simulation: unreadable and unresolved operation
 
 test('Task 6 static/source assertions: detail, monthly cadence, accessibility, back/discard and localized RTL-safe editing are wired', async () => {
   const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
-  const [detail, home, i18n, market, price, summary] = await Promise.all([
+  const [detail, home, properties, i18n, market, price, summary] = await Promise.all([
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../app/(tabs)/index.tsx'), 'utf8'),
+    readFile(sourcePath('../app/(tabs)/properties.tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
     readFile(sourcePath('../constants/market.ts'), 'utf8'),
     readFile(sourcePath('../app/capture/price.tsx'), 'utf8'),
     readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
   ]);
-  assert.match(home, /property-card-\$\{item\.core\.id\}/);
+  assert.match(properties, /property-card-\$\{item\.core\.id\}/);
   assert.match(home, /accessibilityRole="button"/);
   assert.match(detail, /status === 'missing'/);
   assert.match(detail, /property-edit-action/);
@@ -2096,7 +2097,7 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.doesNotMatch(detail, /rentalPeriodId:\s*'yearly'/);
   assert.match(detail, /MARKET_CONFIG\.defaultRentalPeriodId/);
   assert.match(detail, /formatRentalPrice/);
-  assert.match(home, /formatRentalPrice/);
+  assert.match(properties, /formatRentalPrice/);
   assert.match(summary, /formatRentalPrice/);
   assert.doesNotMatch(price, /confirm-monthly-cadence|needsCadenceConfirmation|draftOrigin/);
   assert.match(price, /draft\.transaction === 'rent' \? MARKET_CONFIG\.defaultRentalPeriodId/);

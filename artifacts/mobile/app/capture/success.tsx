@@ -61,7 +61,7 @@ export default function SuccessScreen() {
       ) : null}
       <Button
         title={t('summary.later')}
-        onPress={() => replaceOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/')}
+        onPress={() => replaceOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/properties')}
         variant={propertyCoreId ? 'outline' : undefined}
         size="large"
         testID="btn-later"

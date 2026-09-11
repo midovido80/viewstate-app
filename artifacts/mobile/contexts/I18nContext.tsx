@@ -9,7 +9,8 @@ export interface Translations {
 }
 
 const en: Translations = {
-  'home.title': 'Properties',
+  'home.title': 'Home',
+  'properties.title': 'Properties',
   'home.search': 'Search properties...',
   'home.empty': 'No properties captured yet.',
   'home.new': 'Capture Property',
@@ -498,7 +499,8 @@ const en: Translations = {
 };
 
 const ar: Translations = {
-  'home.title': 'العقارات',
+  'home.title': 'الرئيسية',
+  'properties.title': 'العقارات',
   'home.search': 'البحث عن عقارات...',
   'home.empty': 'لم يتم تسجيل أي عقارات بعد.',
   'home.new': 'تسجيل عقار',

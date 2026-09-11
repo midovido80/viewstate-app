@@ -1,27 +1,19 @@
 import { useState, useCallback } from 'react';
 import {
-  ActivityIndicator,
   Alert,
-  FlatList,
-  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useI18n, Translations } from '@/contexts/I18nContext';
+import { useI18n } from '@/contexts/I18nContext';
 import { store, type LocalStoreIntegrityStatus } from '@/services/persistence';
-import { Property } from '@workspace/property-domain';
-import { getAreaById } from '@/constants/kuwait-areas';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatPrice, formatRentalPrice } from '@/constants/market';
 import {
-  HomeEmptyState,
-  HomePropertyCard,
   HomeQuickAction,
   HomeSectionHeading,
   HomeSummaryCard,
@@ -33,40 +25,22 @@ export default function TabOneScreen() {
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
   const insets = useSafeAreaInsets();
 
-  const [properties, setProperties] = useState<Property[]>([]);
   const [integrityStatus, setIntegrityStatus] = useState<LocalStoreIntegrityStatus>(
     () => store.getIntegrityStatus(),
   );
-  const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [peopleCount, setPeopleCount] = useState<number | null>(null);
   const [requirementCount, setRequirementCount] = useState<number | null>(null);
 
-  const loadProperties = async (query = '') => {
-    setIsLoading(true);
-    setLoadFailed(false);
-
-    try {
-      const allProperties = await store.getProperties();
-      setPropertyCount(allProperties.length);
-      setProperties(
-        query.trim().length > 0
-          ? await store.searchProperties(query)
-          : allProperties,
-      );
-    } catch (e) {
-      console.error(e);
-      setLoadFailed(true);
-    } finally {
-      setIsLoading(false);
-    }
-
-    const [peopleResult, requirementsResult] = await Promise.allSettled([
+  const loadDashboardCounts = async () => {
+    const [propertiesResult, peopleResult, requirementsResult] = await Promise.allSettled([
+      store.getProperties(),
       store.getPeople(),
       store.getRequirements(),
     ]);
+    setPropertyCount(
+      propertiesResult.status === 'fulfilled' ? propertiesResult.value.length : null,
+    );
     setPeopleCount(peopleResult.status === 'fulfilled' ? peopleResult.value.length : null);
     setRequirementCount(
       requirementsResult.status === 'fulfilled' ? requirementsResult.value.length : null,
@@ -75,80 +49,19 @@ export default function TabOneScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadProperties(search);
+      void loadDashboardCounts();
       setIntegrityStatus(store.getIntegrityStatus());
-    }, [search])
+    }, [])
   );
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ar' : 'en');
   };
 
-  const renderItem = ({ item }: { item: Property }) => {
-    const price = item.activeOffer.transaction === 'sale'
-      ? item.activeOffer.salePrice
-      : item.activeOffer.rentalPrice;
-
-    const area = getAreaById(item.core.locationArea.id);
-    const areaName = area ? (language === 'ar' ? area.ar : area.en) : item.core.locationArea.id;
-
-    const propertyType = t(`propertyType.${item.core.propertyType}` as keyof Translations);
-    const formattedPrice = price
-      ? item.activeOffer.transaction === 'rent'
-        ? formatRentalPrice(
-            price.amount,
-            price.currencyCode,
-            item.activeOffer.rentalPeriodId,
-            language,
-            t,
-          )
-        : formatPrice(price.amount, price.currencyCode, language)
-      : undefined;
-
-    return (
-      <View style={styles.propertyItem}>
-        <HomePropertyCard
-          accessibilityLabel={`${propertyType}, ${areaName}`}
-          badge={t(`transaction.${item.activeOffer.transaction}` as keyof Translations)}
-          location={areaName}
-          onPress={() => router.push(`/property/${encodeURIComponent(item.core.id)}` as any)}
-          price={formattedPrice}
-          propertyId={item.core.id}
-          testID={`property-card-${item.core.id}`}
-          title={propertyType}
-        />
-      </View>
-    );
-  };
-
   const summaryStatus = (value: number | null) =>
     value === null
       ? { state: 'unavailable' as const, stateLabel: t('brain.results.unavailable') }
       : { state: 'ready' as const, value };
-
-  const listEmptyComponent = isLoading ? (
-    <View
-      accessibilityState={{ busy: true }}
-      style={styles.loadingState}
-      testID="home-properties-loading"
-    >
-      <ActivityIndicator color={colors.vapp47.brandPrimary} size="large" />
-    </View>
-  ) : loadFailed || propertyCount === null ? (
-    <HomeEmptyState
-      icon="alert-circle"
-      testID="home-properties-unavailable"
-      title={t('brain.results.unavailable')}
-    />
-  ) : propertyCount === 0 ? (
-    <HomeEmptyState icon="home" testID="home-properties-empty" title={t('home.empty')} />
-  ) : (
-    <HomeEmptyState
-      icon="search"
-      testID="home-properties-no-results"
-      title={t('home.no_results')}
-    />
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.vapp47.appSurface }]}>
@@ -198,42 +111,6 @@ export default function TabOneScreen() {
         </View>
       </View>
 
-      <View style={styles.searchContainer}>
-        <View
-          style={[
-            styles.searchField,
-            colors.vapp47.homeShadow,
-            {
-              backgroundColor: colors.vapp47.cardSurface,
-              borderColor: colors.vapp47.visualBorder,
-              flexDirection: isRTL ? 'row-reverse' : 'row',
-            },
-          ]}
-        >
-          <Feather
-            color={colors.vapp47.textMuted}
-            name="search"
-            size={19}
-            style={styles.searchIcon}
-          />
-          <TextInput
-            onChangeText={setSearch}
-            placeholder={t('home.search')}
-            placeholderTextColor={colors.vapp47.textMuted}
-            style={[
-              styles.searchInput,
-              {
-                color: colors.vapp47.textPrimary,
-                fontFamily: fonts.regular,
-                textAlign: isRTL ? 'right' : 'left',
-              },
-            ]}
-            testID="input-search"
-            value={search}
-          />
-        </View>
-      </View>
-
       {integrityStatus.hasUnreadableRecords ? (
         <TouchableOpacity
           testID="local-data-integrity-notice"
@@ -268,12 +145,7 @@ export default function TabOneScreen() {
         </TouchableOpacity>
       ) : null}
 
-      <FlatList
-        data={properties}
-        keyExtractor={item => item.core.id}
-        renderItem={renderItem}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={
+      <ScrollView contentContainerStyle={styles.dashboardContent}>
           <View style={styles.homeContent}>
             <HomeSectionHeading title={t('home.quick_actions')} />
 
@@ -362,41 +234,8 @@ export default function TabOneScreen() {
               </View>
             </View>
 
-            <View style={styles.propertiesHeading}>
-              <HomeSectionHeading title={t('brain.results.properties')} />
-            </View>
           </View>
-        }
-        contentContainerStyle={[styles.listContent, { paddingBottom: 96 }]}
-        ListEmptyComponent={listEmptyComponent}
-      />
-
-      <View
-        style={[
-          styles.fabContainer,
-          {
-            bottom: 16,
-            [isRTL ? 'left' : 'right']: 20,
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityLabel={t('home.new')}
-          accessibilityRole="button"
-          onPress={() => router.push('/capture/transaction' as any)}
-          testID="btn-capture"
-          style={({ pressed }) => [
-            styles.fab,
-            colors.vapp47.homeShadow,
-            {
-              backgroundColor: colors.vapp47.brandPrimary,
-              opacity: pressed ? 0.84 : 1,
-            },
-          ]}
-        >
-          <Feather color={colors.vapp47.cardSurface} name="plus" size={24} />
-        </Pressable>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -433,28 +272,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: 21,
   },
-  searchContainer: {
-    paddingHorizontal: 20,
-    marginTop: -26,
-    paddingBottom: 14,
-    zIndex: 2,
-  },
-  searchField: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderRadius: 18,
-    alignItems: 'center',
-  },
-  searchIcon: {
-    marginHorizontal: 14,
-  },
-  searchInput: {
-    minHeight: 50,
-    flex: 1,
-    paddingHorizontal: 0,
-    paddingVertical: 8,
-    fontSize: 15,
-  },
   integrityNotice: {
     minHeight: 46,
     marginHorizontal: 20,
@@ -465,8 +282,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  listContent: {
+  dashboardContent: {
     paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 96,
   },
   homeContent: {
     gap: 14,
@@ -491,27 +310,5 @@ const styles = StyleSheet.create({
     flexBasis: '29%',
     flexGrow: 1,
     minWidth: 104,
-  },
-  propertiesHeading: {
-    paddingTop: 4,
-  },
-  propertyItem: {
-    marginBottom: 12,
-  },
-  loadingState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-  },
-  fabContainer: {
-    position: 'absolute',
-    alignItems: 'flex-end',
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

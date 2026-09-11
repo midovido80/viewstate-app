@@ -60,6 +60,15 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="properties"
+        options={{
+          title: t('properties.title'),
+          tabBarIcon: ({ color }) => (
+            <Feather name="grid" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="people"
         options={{
           title: t('people.title'),

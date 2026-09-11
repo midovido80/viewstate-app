@@ -77,9 +77,10 @@ test('Brain cancels native and network activity when Android backgrounds the app
 });
 
 test('tab and primary-list geometry use one safe-area owner and flexible search rows', async () => {
-  const [tabs, home, people] = await Promise.all([
+  const [tabs, home, properties, people] = await Promise.all([
     readFile('app/(tabs)/_layout.tsx', 'utf8'),
     readFile('app/(tabs)/index.tsx', 'utf8'),
+    readFile('app/(tabs)/properties.tsx', 'utf8'),
     readFile('app/(tabs)/people.tsx', 'utf8'),
   ]);
   assert.match(tabs, /nativeTabBarBaseHeight \+ nativeBottomInset/);
@@ -87,9 +88,11 @@ test('tab and primary-list geometry use one safe-area owner and flexible search 
   assert.doesNotMatch(home, /bottom: insets\.bottom \+ 16/);
   assert.doesNotMatch(people, /bottom: insets\.bottom \+ 16/);
   assert.doesNotMatch(home, /paddingBottom: insets\.bottom \+ 96/);
+  assert.doesNotMatch(properties, /paddingBottom: insets\.bottom \+ 96/);
   assert.doesNotMatch(people, /paddingBottom: insets\.bottom \+ 96/);
-  assert.match(home, /searchField:[\s\S]*alignItems: 'center'/);
+  assert.doesNotMatch(home, /searchField:/);
+  assert.match(properties, /searchField:[\s\S]*alignItems: 'center'/);
   assert.match(people, /searchField:[\s\S]*alignItems: 'center'/);
-  assert.doesNotMatch(home, /searchIconLTR|searchIconRTL/);
+  assert.doesNotMatch(properties, /searchIconLTR|searchIconRTL/);
   assert.doesNotMatch(people, /icon: \{ position: 'absolute'/);
 });

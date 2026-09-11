@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 test('keeps the tab bar in layout and isolates it from dynamic screen content', async () => {
-  const [layout, properties, people] = await Promise.all([
+  const [layout, home, properties, people] = await Promise.all([
     readFile('app/(tabs)/_layout.tsx', 'utf8'),
     readFile('app/(tabs)/index.tsx', 'utf8'),
+    readFile('app/(tabs)/properties.tsx', 'utf8'),
     readFile('app/(tabs)/people.tsx', 'utf8'),
   ]);
 
@@ -20,10 +21,14 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
   assert.match(layout, /nativeTabBarBaseHeight \+ nativeBottomInset/);
   assert.match(layout, /paddingBottom: isWeb \? 6 : nativeBottomInset/);
   assert.match(layout, /title: t\('home\.title'\)/);
+  assert.match(layout, /title: t\('properties\.title'\)/);
   assert.match(layout, /title: t\('people\.title'\)/);
   assert.match(layout, /title: t\('matching\.title'\)/);
+  assert.match(layout, /title: t\('brain\.title'\)/);
+  assert.match(layout, /name="index"[\s\S]*name="properties"[\s\S]*name="people"[\s\S]*name="matching"[\s\S]*name="brain"/);
   assert.doesNotMatch(layout, /propertyType|rental|price|areaName/);
 
+  assert.doesNotMatch(home, /testID="input-search"|testID="btn-capture"|property-card-/);
   assert.match(properties, /paddingBottom: 96/);
   assert.match(properties, /bottom: 16/);
   assert.match(people, /paddingBottom: 96/);
