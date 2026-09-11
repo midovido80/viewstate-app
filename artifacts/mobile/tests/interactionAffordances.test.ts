@@ -111,3 +111,80 @@ test('classified enrichment fields remain independent of unitCount suppression',
   assert.match(enrich, /optionalClassifiedLiteral\(manualLocation, exactPrivacy\)/);
   assert.match(enrich, /optionalClassifiedLiteral\(validatedMapsLink \?\? '', exactPrivacy\)/);
 });
+
+test('VAPP-47 presentation colors stay scoped without replacing semantic theme tokens', async () => {
+  const [colorSource, hookSource] = await Promise.all([
+    readFile('constants/colors.ts', 'utf8'),
+    readFile('hooks/useColors.ts', 'utf8'),
+  ]);
+
+  assert.match(colorSource, /light:\s*\{[\s\S]*?background:[\s\S]*?foreground:/);
+  assert.match(colorSource, /vapp47:\s*\{[\s\S]*?brandPrimary:[\s\S]*?homeCardRadius:[\s\S]*?homeShadow:/);
+  assert.match(hookSource, /\.\.\.colors\.light/);
+  assert.match(hookSource, /vapp47:\s*colors\.vapp47/);
+});
+
+test('Phase 1 Home keeps real actions, local data truthfulness, and property identity', async () => {
+  const source = await readFile('app/(tabs)/index.tsx', 'utf8');
+
+  assert.match(source, /testID="home-action-add-property"[\s\S]*?title=\{t\('home\.new'\)\}/);
+  assert.match(source, /onPress=\{\(\) => router\.push\('\/capture\/transaction'/);
+  assert.match(source, /onPress=\{\(\) => router\.push\('\/person\/new'[\s\S]*?testID="home-action-add-person"/);
+  assert.match(source, /onPress=\{\(\) => router\.push\('\/person\/new'[\s\S]*?testID="home-action-contact-entry"/);
+  assert.match(source, /onPress=\{\(\) => router\.push\('\/matching'[\s\S]*?testID="home-action-matches"/);
+  assert.doesNotMatch(source, /router\.push\(['"`]\/requirement\/new/);
+
+  assert.match(source, /router\.push\(`\/property\/\$\{encodeURIComponent\(item\.core\.id\)\}`/);
+  assert.match(source, /propertyId=\{item\.core\.id\}/);
+  assert.match(source, /keyExtractor=\{item => item\.core\.id\}/);
+
+  assert.match(source, /const allProperties = await store\.getProperties\(\)/);
+  assert.match(source, /setPropertyCount\(allProperties\.length\)/);
+  assert.match(source, /await store\.searchProperties\(query\)/);
+  assert.match(source, /store\.getPeople\(\)/);
+  assert.match(source, /store\.getRequirements\(\)/);
+  assert.match(source, /peopleResult\.status === 'fulfilled' \? peopleResult\.value\.length : null/);
+  assert.match(source, /requirementsResult\.status === 'fulfilled' \? requirementsResult\.value\.length : null/);
+
+  assert.match(source, /propertyCount === 0[\s\S]*?testID="home-properties-empty"/);
+  assert.match(source, /testID="home-properties-no-results"/);
+  assert.doesNotMatch(source, /router\.push\([^)]*trust[_/-]?circle/i);
+});
+
+test('Phase 1 Home translations remain bilingual in the canonical namespace', async () => {
+  const source = await readFile('contexts/I18nContext.tsx', 'utf8');
+  const expectedEntries = [
+    ["home.quick_actions", "Quick Actions", "إجراءات سريعة"],
+    ["home.workspace_summary", "Workspace Summary", "ملخص مساحة العمل"],
+    ["home.loading", "Loading…", "جارٍ التحميل…"],
+    ["home.no_results", "No matching properties found", "لا توجد عقارات مطابقة لبحثك"],
+    ["home.trust_circle", "Trust Circle", "دائرة الثقة"],
+    ["home.trust_circle_unavailable", "Not available yet", "غير متاح حاليًا"],
+  ];
+
+  for (const [key, english, arabic] of expectedEntries) {
+    assert.match(source, new RegExp(`'${key}': '${english}'`));
+    assert.match(source, new RegExp(`'${key}': '${arabic}'`));
+  }
+
+  assert.doesNotMatch(source, /['"]home\.phase1\./);
+  assert.match(source, /AsyncStorage\.getItem\('@viewstate_language'\)/);
+  assert.match(source, /AsyncStorage\.setItem\('@viewstate_language', lang\)/);
+  assert.match(source, /const isRTL = language === 'ar'/);
+});
+
+test('Phase 1 informational and future presentation primitives remain non-actionable', async () => {
+  const source = await readFile('components/HomePrimitives.tsx', 'utf8');
+  const summaryContract = source.match(
+    /interface HomeSummaryCardProps[\s\S]*?interface HomeFutureCardProps/,
+  )?.[0];
+  const futureContract = source.match(
+    /interface HomeFutureCardProps[\s\S]*?interface HomePropertyCardProps/,
+  )?.[0];
+
+  assert.ok(summaryContract);
+  assert.doesNotMatch(summaryContract, /onPress/);
+  assert.ok(futureContract);
+  assert.match(futureContract, /accessibilityState=\{\{ disabled: true \}\}/);
+  assert.doesNotMatch(futureContract, /<Pressable|onPress/);
+});

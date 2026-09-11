@@ -1,5 +1,15 @@
 import { useState, useCallback } from 'react';
-import { Alert, StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -7,9 +17,15 @@ import { useI18n, Translations, Language } from '@/contexts/I18nContext';
 import { store, type LocalStoreIntegrityStatus } from '@/services/persistence';
 import { Property } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
-import { Button } from '@/components/Button';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
+import {
+  HomeEmptyState,
+  HomePropertyCard,
+  HomeQuickAction,
+  HomeSectionHeading,
+  HomeSummaryCard,
+} from '@/components/HomePrimitives';
 
 export default function TabOneScreen() {
   const router = useRouter();
@@ -22,17 +38,39 @@ export default function TabOneScreen() {
     () => store.getIntegrityStatus(),
   );
   const [search, setSearch] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [propertyCount, setPropertyCount] = useState<number | null>(null);
+  const [peopleCount, setPeopleCount] = useState<number | null>(null);
+  const [requirementCount, setRequirementCount] = useState<number | null>(null);
 
   const loadProperties = async (query = '') => {
+    setIsLoading(true);
+    setLoadFailed(false);
+
     try {
-      if (query.trim().length > 0) {
-        setProperties(await store.searchProperties(query));
-      } else {
-        setProperties(await store.getProperties());
-      }
+      const allProperties = await store.getProperties();
+      setPropertyCount(allProperties.length);
+      setProperties(
+        query.trim().length > 0
+          ? await store.searchProperties(query)
+          : allProperties,
+      );
     } catch (e) {
       console.error(e);
+      setLoadFailed(true);
+    } finally {
+      setIsLoading(false);
     }
+
+    const [peopleResult, requirementsResult] = await Promise.allSettled([
+      store.getPeople(),
+      store.getRequirements(),
+    ]);
+    setPeopleCount(peopleResult.status === 'fulfilled' ? peopleResult.value.length : null);
+    setRequirementCount(
+      requirementsResult.status === 'fulfilled' ? requirementsResult.value.length : null,
+    );
   };
 
   useFocusEffect(
@@ -54,89 +92,146 @@ export default function TabOneScreen() {
     const area = getAreaById(item.core.locationArea.id);
     const areaName = area ? (language === 'ar' ? area.ar : area.en) : item.core.locationArea.id;
 
-    return (
-      <TouchableOpacity
-        onPress={() => router.push(`/property/${encodeURIComponent(item.core.id)}` as any)}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}
-        testID={`property-card-${item.core.id}`}
-        accessibilityRole="button"
-        accessibilityLabel={`${t(`propertyType.${item.core.propertyType}` as keyof Translations)}, ${areaName}`}
-      >
-        <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-            {t(`propertyType.${item.core.propertyType}` as keyof Translations)}
-          </Text>
-          <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.badgeText, { color: colors.accentForeground, fontFamily: fonts.medium }]}>
-              {t(`transaction.${item.activeOffer.transaction}` as keyof Translations)}
-            </Text>
-          </View>
-        </View>
+    const propertyType = t(`propertyType.${item.core.propertyType}` as keyof Translations);
+    const formattedPrice = price
+      ? item.activeOffer.transaction === 'rent'
+        ? formatRentalPrice(
+            price.amount,
+            price.currencyCode,
+            item.activeOffer.rentalPeriodId,
+            language,
+            t,
+          )
+        : formatPrice(price.amount, price.currencyCode, language)
+      : undefined;
 
-        <View style={styles.cardBody}>
-          <Text style={[styles.price, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {price
-              ? item.activeOffer.transaction === 'rent'
-                ? formatRentalPrice(
-                    price.amount,
-                    price.currencyCode,
-                    item.activeOffer.rentalPeriodId,
-                    language,
-                    t,
-                  )
-                : formatPrice(price.amount, price.currencyCode, language)
-              : ''}
-          </Text>
-          <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-            {areaName}
-          </Text>
-        </View>
-      </TouchableOpacity>
+    return (
+      <View style={styles.propertyItem}>
+        <HomePropertyCard
+          accessibilityLabel={`${propertyType}, ${areaName}`}
+          badge={t(`transaction.${item.activeOffer.transaction}` as keyof Translations)}
+          location={areaName}
+          onPress={() => router.push(`/property/${encodeURIComponent(item.core.id)}` as any)}
+          price={formattedPrice}
+          propertyId={item.core.id}
+          testID={`property-card-${item.core.id}`}
+          title={propertyType}
+        />
+      </View>
     );
   };
 
+  const summaryStatus = (value: number | null) =>
+    value === null
+      ? { state: 'unavailable' as const, stateLabel: t('brain.results.unavailable') }
+      : { state: 'ready' as const, value };
+
+  const listEmptyComponent = isLoading ? (
+    <View
+      accessibilityState={{ busy: true }}
+      style={styles.loadingState}
+      testID="home-properties-loading"
+    >
+      <ActivityIndicator color={colors.vapp47.brandPrimary} size="large" />
+    </View>
+  ) : loadFailed || propertyCount === null ? (
+    <HomeEmptyState
+      icon="alert-circle"
+      testID="home-properties-unavailable"
+      title={t('brain.results.unavailable')}
+    />
+  ) : propertyCount === 0 ? (
+    <HomeEmptyState icon="home" testID="home-properties-empty" title={t('home.empty')} />
+  ) : (
+    <HomeEmptyState
+      icon="search"
+      testID="home-properties-no-results"
+      title={t('brain.results.empty')}
+    />
+  );
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.vapp47.appSurface, paddingTop: insets.top },
+      ]}
+    >
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('home.title')}</Text>
-        <TouchableOpacity onPress={toggleLanguage} style={[styles.langBtn, { borderColor: colors.border }]}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
+        <View style={styles.brandCopy}>
+          <Text
+            style={[
+              styles.brand,
+              {
+                color: colors.vapp47.brandPrimary,
+                fontFamily: fonts.bold,
+                textAlign: isRTL ? 'right' : 'left',
+              },
+            ]}
+          >
+            ViewState
+          </Text>
+          <Text
+            style={{
+              color: colors.vapp47.textMuted,
+              fontFamily: fonts.medium,
+              textAlign: isRTL ? 'right' : 'left',
+            }}
+          >
+            {t('home.title')}
+          </Text>
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={toggleLanguage}
+          style={[
+            styles.langBtn,
+            {
+              backgroundColor: colors.vapp47.cardSurface,
+              borderColor: colors.vapp47.visualBorder,
+            },
+          ]}
+          testID="home-language-toggle"
+        >
+          <Text style={{ color: colors.vapp47.textPrimary, fontFamily: fonts.semiBold }}>
             {language === 'en' ? 'عربي' : 'EN'}
           </Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
-        <View style={[
-          styles.searchField,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            borderRadius: colors.inputRadius,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-          },
-        ]}>
-        <Feather
-          name="search"
-          size={20}
-          color={colors.mutedForeground}
-          style={styles.searchIcon}
-        />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder={t('home.search')}
-          placeholderTextColor={colors.mutedForeground}
+        <View
           style={[
-            styles.searchInput,
+            styles.searchField,
             {
-              color: colors.foreground,
-              textAlign: isRTL ? 'right' : 'left',
-              fontFamily: fonts.regular,
-            }
+              backgroundColor: colors.vapp47.cardSurface,
+              borderColor: colors.vapp47.visualBorder,
+              borderRadius: colors.inputRadius,
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+            },
           ]}
-          testID="input-search"
-        />
+        >
+          <Feather
+            color={colors.vapp47.textMuted}
+            name="search"
+            size={20}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            onChangeText={setSearch}
+            placeholder={t('home.search')}
+            placeholderTextColor={colors.vapp47.textMuted}
+            style={[
+              styles.searchInput,
+              {
+                color: colors.vapp47.textPrimary,
+                fontFamily: fonts.regular,
+                textAlign: isRTL ? 'right' : 'left',
+              },
+            ]}
+            testID="input-search"
+            value={search}
+          />
         </View>
       </View>
 
@@ -148,10 +243,24 @@ export default function TabOneScreen() {
             t('integrity.title'),
             `${t('integrity.message')}\n${t('integrity.count')} ${integrityStatus.unreadableRecords.length}`,
           )}
-          style={[styles.integrityNotice, { borderColor: colors.warning, backgroundColor: colors.card }]}
+          style={[
+            styles.integrityNotice,
+            {
+              backgroundColor: colors.vapp47.cardSurface,
+              borderColor: colors.vapp47.warning,
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+            },
+          ]}
         >
-          <Feather name="alert-triangle" size={16} color={colors.warning} />
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
+          <Feather color={colors.vapp47.warning} name="alert-triangle" size={16} />
+          <Text
+            style={{
+              color: colors.vapp47.textPrimary,
+              flex: 1,
+              fontFamily: fonts.medium,
+              textAlign: isRTL ? 'right' : 'left',
+            }}
+          >
             {t('integrity.compact').replace(
               '{count}',
               String(integrityStatus.unreadableRecords.length),
@@ -164,25 +273,127 @@ export default function TabOneScreen() {
         data={properties}
         keyExtractor={item => item.core.id}
         renderItem={renderItem}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View style={styles.homeContent}>
+            <View
+              style={[
+                styles.quickActions,
+                {
+                  flexDirection: isRTL ? 'row-reverse' : 'row',
+                },
+              ]}
+            >
+              <View style={styles.gridItem}>
+                <HomeQuickAction
+                  accessibilityLabel={t('home.new')}
+                  icon="plus-square"
+                  onPress={() => router.push('/capture/transaction' as any)}
+                  testID="home-action-add-property"
+                  title={t('home.new')}
+                />
+              </View>
+              <View style={styles.gridItem}>
+                <HomeQuickAction
+                  accessibilityLabel={t('people.add')}
+                  icon="user-plus"
+                  onPress={() => router.push('/person/new' as never)}
+                  testID="home-action-add-person"
+                  title={t('people.add')}
+                />
+              </View>
+              <View style={styles.gridItem}>
+                <HomeQuickAction
+                  accessibilityLabel={t('people.import_contact')}
+                  icon="book-open"
+                  onPress={() => router.push('/person/new' as never)}
+                  testID="home-action-contact-entry"
+                  title={t('people.import_contact')}
+                />
+              </View>
+              <View style={styles.gridItem}>
+                <HomeQuickAction
+                  accessibilityLabel={t('matching.title')}
+                  icon="git-merge"
+                  onPress={() => router.push('/matching' as never)}
+                  testID="home-action-matches"
+                  title={t('matching.title')}
+                />
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.summaryGrid,
+                { flexDirection: isRTL ? 'row-reverse' : 'row' },
+              ]}
+            >
+              <View style={styles.summaryItem}>
+                <HomeSummaryCard
+                  icon="home"
+                  label={t('brain.results.properties')}
+                  status={summaryStatus(propertyCount)}
+                  testID="home-summary-properties"
+                  tone="brand"
+                />
+              </View>
+              <View style={styles.summaryItem}>
+                <HomeSummaryCard
+                  icon="users"
+                  label={t('brain.results.people')}
+                  status={summaryStatus(peopleCount)}
+                  testID="home-summary-people"
+                  tone="communication"
+                />
+              </View>
+              <View style={styles.summaryItem}>
+                <HomeSummaryCard
+                  icon="clipboard"
+                  label={t('brain.results.requirements')}
+                  status={summaryStatus(requirementCount)}
+                  testID="home-summary-requirements"
+                  tone="data"
+                />
+              </View>
+            </View>
+
+            <View style={styles.propertiesHeading}>
+              <HomeSectionHeading title={t('home.title')} />
+            </View>
+          </View>
+        }
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: 96 },
         ]}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('home.empty')}</Text>
-          </View>
-        }
+        ListEmptyComponent={listEmptyComponent}
       />
 
       <View style={[styles.fabContainer, { bottom: 16 }]}>
-        <Button
-          title={t('home.new')}
+        <Pressable
+          accessibilityLabel={t('home.new')}
+          accessibilityRole="button"
           onPress={() => router.push('/capture/transaction' as any)}
-          style={styles.fab}
           testID="btn-capture"
-        />
+          style={({ pressed }) => [
+            styles.fab,
+            colors.vapp47.homeShadow,
+            {
+              backgroundColor: colors.vapp47.brandPrimary,
+              opacity: pressed ? 0.84 : 1,
+            },
+          ]}
+        >
+          <Feather color={colors.vapp47.cardSurface} name="plus" size={22} />
+          <Text
+            style={{
+              color: colors.vapp47.cardSurface,
+              fontFamily: fonts.semiBold,
+            }}
+          >
+            {t('home.new')}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -193,25 +404,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 14,
+    paddingBottom: 10,
+    gap: 16,
   },
-  title: {
-    fontSize: 28,
+  brandCopy: {
+    flex: 1,
+  },
+  brand: {
+    fontSize: 27,
+    lineHeight: 34,
   },
   langBtn: {
+    minHeight: 44,
+    minWidth: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 22,
   },
   searchContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   searchField: {
     minHeight: 56,
@@ -229,68 +448,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   integrityNotice: {
-    minHeight: 40,
+    minHeight: 48,
     marginHorizontal: 20,
-    marginBottom: 4,
+    marginBottom: 8,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   listContent: {
-    padding: 20,
+    paddingHorizontal: 20,
   },
-  card: {
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
+  homeContent: {
+    gap: 18,
+    paddingTop: 4,
+    paddingBottom: 14,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  quickActions: {
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  propertyType: {
-    fontSize: 16,
+  gridItem: {
+    flexBasis: '46%',
+    flexGrow: 1,
+    minWidth: 138,
+    maxWidth: '50%',
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+  summaryGrid: {
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  badgeText: {
-    fontSize: 12,
+  summaryItem: {
+    flexBasis: '29%',
+    flexGrow: 1,
+    minWidth: 104,
   },
-  cardBody: {
-    gap: 4,
+  propertiesHeading: {
+    paddingTop: 2,
   },
-  price: {
-    fontSize: 20,
+  propertyItem: {
+    marginBottom: 14,
   },
-  location: {
-    fontSize: 14,
-  },
-  emptyState: {
+  loadingState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 64,
-  },
-  emptyText: {
-    fontSize: 16,
+    paddingVertical: 48,
   },
   fabContainer: {
     position: 'absolute',
     right: 20,
-    left: 20,
+    alignItems: 'flex-end',
   },
   fab: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  }
+    minHeight: 54,
+    borderRadius: 27,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
 });

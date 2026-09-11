@@ -41,6 +41,31 @@ const colors = {
     input: '#FFFFFF',
   },
 
+  vapp47: {
+    brandPrimary: '#1A56FF',
+    dataEmphasis: '#E11D48',
+    communication: '#16A34A',
+    appSurface: '#F7F8FB',
+    cardSurface: '#FFFFFF',
+    visualBorder: '#EEF0F4',
+    brandSoft: '#EEF3FF',
+    disabledSurface: '#EEF0F4',
+    textPrimary: '#0F172A',
+    textMuted: '#64748B',
+    warning: '#B45309',
+    homeCardRadius: 18,
+    homeShadow: {
+      shadowColor: '#0F172A',
+      shadowOffset: {
+        width: 0,
+        height: 6,
+      },
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
+      elevation: 3,
+    },
+  },
+
   inputRadius: 14,
   cardRadius: 16,
   modalRadius: 20,

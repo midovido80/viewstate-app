@@ -7,6 +7,7 @@ import colors from '@/constants/colors';
 export function useColors() {
   return {
     ...colors.light,
+    vapp47: colors.vapp47,
     inputRadius: colors.inputRadius,
     cardRadius: colors.cardRadius,
     modalRadius: colors.modalRadius,
