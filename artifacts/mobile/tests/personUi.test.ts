@@ -12,6 +12,30 @@ test('Person details renders Add Property Requirement and Link Property actions 
   assert.doesNotMatch(source, /<TouchableOpacity[^>]*testID="person-link-property"/);
 });
 
+test('Person Quick Add closes its own Link Property modal before preserving linked capture navigation', async () => {
+  const source = await readFile('app/person/[personId].tsx', 'utf8');
+  const quickAddButton = source.match(
+    /<Button\s+title=\{t\('people\.quick_add_property'\)\}.*?testID="person-quick-add-property"\s*\/>/s,
+  )?.[0];
+
+  assert.ok(quickAddButton, 'Quick Add button must remain identifiable by its own title and testID');
+  assert.match(
+    quickAddButton,
+    /onPress=\{\(\) => \{\s*setLinkOpen\(false\);\s*router\.push\(\{ pathname: '\/capture\/transaction', params: \{ linkPersonId: person\.id \} \} as never\);\s*\}\}/s,
+  );
+  assert.doesNotMatch(quickAddButton, /store\.|saveProperty|linkPersonToProperty/);
+
+  assert.match(
+    source,
+    /await store\.linkPersonToProperty\(\{ personId: person\.id, propertyCoreId: property\.core\.id \}\);\s*setLinkOpen\(false\);\s*await load\(\);/s,
+  );
+  assert.match(source, /<Modal visible=\{linkOpen\} animationType="slide" onRequestClose=\{\(\) => setLinkOpen\(false\)\}>/);
+  assert.match(
+    source,
+    /<Button title=\{t\('capture\.cancel'\)\} onPress=\{\(\) => setLinkOpen\(false\)\} variant="outline" testID="link-property-cancel" \/>/,
+  );
+});
+
 test('Person details requirement card visually separates Type/Usage and Purpose in consistent visual layout', async () => {
   const source = await readFile('app/person/[personId].tsx', 'utf8');
   

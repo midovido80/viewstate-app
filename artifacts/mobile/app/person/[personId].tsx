@@ -451,7 +451,14 @@ export default function PersonDetailScreen() {
                 <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
               </TouchableOpacity>
             ))}
-            <Button title={t('people.quick_add_property')} onPress={() => router.push({ pathname: '/capture/transaction', params: { linkPersonId: person.id } } as never)} testID="person-quick-add-property" />
+            <Button
+              title={t('people.quick_add_property')}
+              onPress={() => {
+                setLinkOpen(false);
+                router.push({ pathname: '/capture/transaction', params: { linkPersonId: person.id } } as never);
+              }}
+              testID="person-quick-add-property"
+            />
             <Button title={t('capture.cancel')} onPress={() => setLinkOpen(false)} variant="outline" testID="link-property-cancel" />
           </ScrollView>
         </View>

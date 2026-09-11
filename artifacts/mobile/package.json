@@ -11,7 +11,7 @@
     "eas-build-pre-install": "node scripts/verify-release-config.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/runner.ts tests/resilience.test.ts tests/requirements.test.ts tests/myPropertiesMatchingSource.test.ts tests/brokerInitiatedMatching.test.ts tests/matchingUi.test.ts tests/brain.test.ts tests/interactionAffordances.test.ts tests/tabBarLayout.test.ts tests/releaseReliability.test.ts tests/personRequirementsWorkflow.test.ts",
+    "test": "tsx --test tests/runner.ts tests/resilience.test.ts tests/requirements.test.ts tests/myPropertiesMatchingSource.test.ts tests/brokerInitiatedMatching.test.ts tests/matchingUi.test.ts tests/brain.test.ts tests/interactionAffordances.test.ts tests/tabBarLayout.test.ts tests/releaseReliability.test.ts tests/personRequirementsWorkflow.test.ts tests/personUi.test.ts",
     "test:resilience": "tsx --test tests/resilience.test.ts",
     "android": "expo run:android",
     "ios": "expo run:ios"
