@@ -14,6 +14,7 @@ import {
 } from '../services/brain.ts';
 import {
   createPushToTalkLifecycle,
+  requestAndStartPermittedRecording,
   startPermittedRecording,
   VoiceRequestError,
 } from '../services/brainVoice.ts';
@@ -618,6 +619,167 @@ test('Android recording requests permission, enables recording mode, then starts
     { async start() { throw new Error('native recorder failed'); } },
   ), /native recorder failed/);
   assert.deepEqual(failureCalls, ['mode:true', 'mode:false']);
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+test('Android permission dialog AppState transition does not invalidate the first recording', async () => {
+  const permission = deferred<{ granted: boolean }>();
+  const calls: string[] = [];
+  let active = true;
+  let generation = 0;
+  const starting = requestAndStartPermittedRecording({
+    requestPermission: async () => {
+      calls.push('permission');
+      return permission.promise;
+    },
+    setAudioMode: async mode => { calls.push(`mode:${mode.allowsRecording}`); },
+    lifecycle: {
+      async start() { calls.push('start'); },
+      async cancel() { calls.push('cancel'); },
+    },
+    isAppActive: () => active,
+    beginOperation: () => ++generation,
+    isOperationCurrent: value => value === generation,
+  });
+
+  active = false;
+  generation += 1;
+  active = true;
+  permission.resolve({ granted: true });
+
+  assert.deepEqual(await starting, { status: 'started' });
+  assert.deepEqual(calls, ['permission', 'mode:true', 'start']);
+});
+
+test('Android already-granted microphone permission starts exactly once', async () => {
+  const calls: string[] = [];
+  let generation = 4;
+  const result = await requestAndStartPermittedRecording({
+    requestPermission: async () => {
+      calls.push('permission');
+      return { granted: true };
+    },
+    setAudioMode: async mode => { calls.push(`mode:${mode.allowsRecording}`); },
+    lifecycle: {
+      async start() { calls.push('start'); },
+      async cancel() { calls.push('cancel'); },
+    },
+    isAppActive: () => true,
+    beginOperation: () => ++generation,
+    isOperationCurrent: value => value === generation,
+  });
+  assert.deepEqual(result, { status: 'started' });
+  assert.deepEqual(calls, ['permission', 'mode:true', 'start']);
+  assert.equal(generation, 5);
+});
+
+test('Android requestable microphone denial does not initialize the recorder', async () => {
+  const calls: string[] = [];
+  const result = await requestAndStartPermittedRecording({
+    requestPermission: async () => ({ granted: false, canAskAgain: true }),
+    setAudioMode: async () => { calls.push('mode'); },
+    lifecycle: {
+      async start() { calls.push('start'); },
+      async cancel() { calls.push('cancel'); },
+    },
+    isAppActive: () => true,
+    beginOperation: () => 1,
+    isOperationCurrent: () => true,
+  });
+  assert.deepEqual(result, {
+    status: 'denied',
+    permission: { granted: false, canAskAgain: true },
+  });
+  assert.deepEqual(calls, []);
+});
+
+test('Android permanent microphone denial remains distinguishable for Settings recovery', async () => {
+  const result = await requestAndStartPermittedRecording({
+    requestPermission: async () => ({ granted: false, canAskAgain: false }),
+    setAudioMode: async () => {},
+    lifecycle: { async start() {}, async cancel() {} },
+    isAppActive: () => true,
+    beginOperation: () => 1,
+    isOperationCurrent: () => true,
+  });
+  assert.deepEqual(result, {
+    status: 'denied',
+    permission: { granted: false, canAskAgain: false },
+  });
+});
+
+test('Android genuine background while microphone permission is pending does not start', async () => {
+  const permission = deferred<{ granted: boolean }>();
+  const calls: string[] = [];
+  let active = true;
+  const starting = requestAndStartPermittedRecording({
+    requestPermission: () => permission.promise,
+    setAudioMode: async () => { calls.push('mode'); },
+    lifecycle: {
+      async start() { calls.push('start'); },
+      async cancel() { calls.push('cancel'); },
+    },
+    isAppActive: () => active,
+    beginOperation: () => 1,
+    isOperationCurrent: () => true,
+  });
+  active = false;
+  permission.resolve({ granted: true });
+  assert.deepEqual(await starting, { status: 'interrupted' });
+  assert.deepEqual(calls, []);
+});
+
+test('Android background during recorder prepare/start cancels the completed start', async () => {
+  const prepared = deferred<void>();
+  const calls: string[] = [];
+  let active = true;
+  let generation = 0;
+  const starting = requestAndStartPermittedRecording({
+    requestPermission: async () => ({ granted: true }),
+    setAudioMode: async mode => { calls.push(`mode:${mode.allowsRecording}`); },
+    lifecycle: {
+      async start() {
+        calls.push('start');
+        await prepared.promise;
+      },
+      async cancel() { calls.push('cancel'); },
+    },
+    isAppActive: () => active,
+    beginOperation: () => ++generation,
+    isOperationCurrent: value => value === generation,
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  active = false;
+  generation += 1;
+  prepared.resolve();
+  assert.deepEqual(await starting, { status: 'interrupted' });
+  assert.deepEqual(calls, ['mode:true', 'start', 'cancel', 'mode:false']);
+});
+
+test('Android recorder initialization failure resets audio mode and remains typed', async () => {
+  const calls: string[] = [];
+  await assert.rejects(requestAndStartPermittedRecording({
+    requestPermission: async () => ({ granted: true }),
+    setAudioMode: async mode => { calls.push(`mode:${mode.allowsRecording}`); },
+    lifecycle: {
+      async start() { throw new VoiceRequestError('RECORDER_INIT'); },
+      async cancel() { calls.push('cancel'); },
+    },
+    isAppActive: () => true,
+    beginOperation: () => 1,
+    isOperationCurrent: () => true,
+  }), (error: unknown) =>
+    error instanceof VoiceRequestError && error.code === 'RECORDER_INIT');
+  assert.deepEqual(calls, ['mode:true', 'mode:false']);
 });
 
 test('push-to-talk fails closed when recording or transcription has no text', async () => {

@@ -31,7 +31,7 @@ import {
 } from '@/services/brain';
 import {
   createPushToTalkLifecycle,
-  startPermittedRecording,
+  requestAndStartPermittedRecording,
   transcribeRecording,
   VoiceRequestError,
   type VoiceLifecycle,
@@ -167,28 +167,26 @@ export default function BrainScreen() {
     }
     setError('');
     starting.current = true;
-    const generation = ++requestGeneration.current;
     try {
-      const started = await startPermittedRecording(
-        requestRecordingPermissionsAsync,
-        setAudioModeAsync,
-        lifecycle.current!,
-      );
-      if (!started) {
-        if (!mounted.current || generation !== requestGeneration.current) return;
+      const result = await requestAndStartPermittedRecording({
+        requestPermission: requestRecordingPermissionsAsync,
+        setAudioMode: setAudioModeAsync,
+        lifecycle: lifecycle.current!,
+        isAppActive: () => mounted.current && AppState.currentState === 'active',
+        beginOperation: () => ++requestGeneration.current,
+        isOperationCurrent: generation =>
+          mounted.current && generation === requestGeneration.current,
+      });
+      if (result.status === 'denied') {
+        if (!mounted.current) return;
         setVoiceStatus('permission');
-        const permission = await getRecordingPermissionsAsync().catch(() => null);
-        setPermissionBlocked(permission?.canAskAgain === false);
-        setError(t(permission?.canAskAgain === false
+        setPermissionBlocked(result.permission.canAskAgain === false);
+        setError(t(result.permission.canAskAgain === false
           ? 'brain.voice.permission.permanent'
           : 'brain.voice.permission'));
         return;
       }
-      if (!mounted.current || generation !== requestGeneration.current) {
-        await lifecycle.current?.cancel().catch(() => undefined);
-        await setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
-        return;
-      }
+      if (result.status === 'interrupted') return;
       recordingActive.current = true;
       setVoiceStatus('recording');
       // Stop ourselves just before the native duration cutoff so that the
@@ -197,7 +195,7 @@ export default function BrainScreen() {
         void stopAndTranscribe();
       }, 29_800);
     } catch (caught) {
-      if (mounted.current && generation === requestGeneration.current) {
+      if (mounted.current && AppState.currentState === 'active') {
         setVoiceStatus('error');
         setError(t(voiceErrorKey(caught)));
       }

@@ -39,6 +39,20 @@ export type SetRecordingAudioMode = (
   mode: { readonly allowsRecording: boolean; readonly playsInSilentMode?: boolean },
 ) => Promise<void>;
 
+export type PermissionAwareRecordingStart =
+  | { readonly status: 'started' }
+  | { readonly status: 'denied'; readonly permission: RecordingPermission }
+  | { readonly status: 'interrupted' };
+
+export type PermissionAwareRecordingOptions = {
+  readonly requestPermission: RequestRecordingPermission;
+  readonly setAudioMode: SetRecordingAudioMode;
+  readonly lifecycle: Pick<VoiceLifecycle, 'start' | 'cancel'>;
+  readonly isAppActive: () => boolean;
+  readonly beginOperation: () => number;
+  readonly isOperationCurrent: (generation: number) => boolean;
+};
+
 export async function startPermittedRecording(
   requestPermission: RequestRecordingPermission,
   setAudioMode: SetRecordingAudioMode,
@@ -54,6 +68,33 @@ export async function startPermittedRecording(
     throw error;
   }
   return true;
+}
+
+export async function requestAndStartPermittedRecording(
+  options: PermissionAwareRecordingOptions,
+): Promise<PermissionAwareRecordingStart> {
+  const permission = await options.requestPermission();
+  if (!permission.granted) return { status: 'denied', permission };
+
+  // Android permission dialogs can temporarily move AppState away from active.
+  // Start a new guarded operation only after that dialog has resolved.
+  if (!options.isAppActive()) return { status: 'interrupted' };
+  const generation = options.beginOperation();
+
+  await options.setAudioMode({ allowsRecording: true, playsInSilentMode: true });
+  try {
+    await options.lifecycle.start();
+  } catch (error) {
+    await options.setAudioMode({ allowsRecording: false }).catch(() => undefined);
+    throw error;
+  }
+
+  if (!options.isAppActive() || !options.isOperationCurrent(generation)) {
+    await options.lifecycle.cancel().catch(() => undefined);
+    await options.setAudioMode({ allowsRecording: false }).catch(() => undefined);
+    return { status: 'interrupted' };
+  }
+  return { status: 'started' };
 }
 
 export function createPushToTalkLifecycle(
