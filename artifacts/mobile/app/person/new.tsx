@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { ChoiceChip } from '@/components/ChoiceChip';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/services/people';
@@ -138,6 +139,19 @@ export default function NewPersonScreen() {
         <View style={{ width: 45 }} />
       </View>
       <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={60}>
+        <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
+        <View style={styles.choicesWrap}>
+          {PERSON_CLASSIFICATIONS.map(value => (
+            <ChoiceChip
+              key={value}
+              label={t(`people.classification.${value}` as keyof Translations)}
+              selected={classifications.includes(value)}
+              onPress={() => toggle(value)}
+              testID={`person-classification-${value}`}
+              role="checkbox"
+            />
+          ))}
+        </View>
         <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} placeholderTextColor={colors.mutedForeground} style={inputStyle} testID="person-name" />
         <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <TouchableOpacity
@@ -154,21 +168,6 @@ export default function NewPersonScreen() {
           <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
         </View>
         <Button title={t('people.import_contact')} onPress={importContact} variant="outline" testID="person-import-contact" />
-        <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
-        <View style={styles.choices}>
-          {PERSON_CLASSIFICATIONS.map(value => (
-            <TouchableOpacity
-              key={value}
-              onPress={() => toggle(value)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: classifications.includes(value) }}
-              testID={`person-classification-${value}`}
-              style={[styles.choice, { borderColor: classifications.includes(value) ? colors.primary : colors.border, backgroundColor: colors.card }]}
-            >
-              <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`people.classification.${value}` as keyof Translations)}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
@@ -261,8 +260,7 @@ const styles = StyleSheet.create({
   countryButton: { minHeight: 54, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 10 },
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   label: { fontSize: 16 },
-  choices: { gap: 8 },
-  choice: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderRadius: 10 },
+  choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   modalHeader: { minHeight: 64, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
   modalTitle: { fontSize: 22 },
   contactSearch: { marginHorizontal: 20, marginBottom: 8 },

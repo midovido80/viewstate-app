@@ -280,6 +280,9 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(form, /requestPermissionsAsync/);
   assert.match(form, /getContactsAsync/);
   assert.match(form, /contact-choice-/);
+  assert.ok(form.indexOf('people.classifications') < form.indexOf('person-name'), 'Classifications must appear before name/phone in creation flow');
+  assert.match(form, /ChoiceChip/);
+  assert.match(detail, /ChoiceChip/);
   assert.match(detail, /person-call/);
   assert.match(detail, /person-whatsapp/);
   assert.doesNotMatch(detail, /person-whatsapp-business/);
@@ -290,10 +293,10 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(detail, /linkPersonToProperty/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
-  assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
+  assert.match(translations, /'people\.classification\.broker': 'دلال'/);
 });
 
-test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Later action', async () => {
+test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Done action', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
   const [successSource, enrichmentSource, fieldSource, detailSource, translations] = await Promise.all([
@@ -305,7 +308,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   ]);
   assert.match(successSource, /btn-add-details-now/);
   assert.match(successSource, /btn-later/);
-  assert.match(successSource, /summary\.later/);
+  assert.match(successSource, /summary\.done/);
   assert.match(successSource, /navigationStartedRef/);
   assert.match(successSource, /replaceOnce/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
@@ -313,8 +316,8 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(detailSource, /loadPropertyEnrichmentDraft\(id\)\.catch\(\(\) => null\)/);
   assert.doesNotMatch(detailSource, /loadPropertyEnrichmentDraft\(id\)\.catch\(\(\) => ['"]unreadable['"]/);
   assert.match(detailSource, /hasEnrichmentDraft \? 'detail\.continue_details' : 'detail\.add_details'/);
-  assert.match(translations, /'summary\.later': 'Later'/);
-  assert.match(translations, /'summary\.later': 'لاحقًا'/);
+  assert.match(translations, /'summary\.done': 'Done'/);
+  assert.match(translations, /'summary\.done': 'تم'/);
   assert.match(translations, /'detail\.continue_details': 'Continue details'/);
   assert.match(translations, /'detail\.continue_details': 'متابعة التفاصيل'/);
   assert.match(enrichmentSource, /persistAttachmentsThenDeleteRemoved/);
@@ -634,6 +637,21 @@ test('Draft Projection: Rent Path Validation (KWD)', () => {
     assert.equal(result.value.activeOffer.rentalPrice?.amount, 500);
     assert.equal(result.value.activeOffer.rentalPeriodId, 'monthly');
   }
+});
+
+test('Rental price capture screen presents compact choice for monthly and yearly', async () => {
+  const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
+  const [source, choiceChip] = await Promise.all([
+    readFile(sourcePath('../app/capture/price.tsx'), 'utf8'),
+    readFile(sourcePath('../components/ChoiceChip.tsx'), 'utf8'),
+  ]);
+  assert.match(source, /ChoiceChip/);
+  assert.match(source, /\['monthly', 'yearly'\]/);
+  assert.match(source, /updateDraft\(\{ rentalPeriodId: period \}\)/);
+  assert.match(source, /formatRentalCadence\(workingRentalPeriodId, t\)/);
+  assert.match(source, /keyboardShouldPersistTaps="handled"/);
+  assert.match(choiceChip, /accessibilityState=\{role === 'button' \? \{\} : \{ checked: selected \}\}/);
+  assert.match(choiceChip, /minHeight: 44/);
 });
 
 test('Rental price cadence displays monthly bilingually and preserves recorded legacy cadence', () => {
@@ -1956,7 +1974,7 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   const sourcePath = (relativePath: string) => resolveSourcePath(relativePath, import.meta.url);
   const [detail, home, i18n, market, price, summary] = await Promise.all([
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
-    readFile(sourcePath('../app/(tabs)/index.tsx'), 'utf8'),
+    readFile(sourcePath('../app/(tabs)/properties.tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
     readFile(sourcePath('../constants/market.ts'), 'utf8'),
     readFile(sourcePath('../app/capture/price.tsx'), 'utf8'),
@@ -1994,6 +2012,8 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.match(i18n, /'edit\.not_found': 'تعذر العثور/);
   assert.match(i18n, /'price\.cadence\.monthly': 'per month'/);
   assert.match(i18n, /'price\.cadence\.monthly': 'شهريا'/);
+  assert.match(i18n, /'people\.classification\.broker': 'دلال'/);
+  assert.match(i18n, /'people\.classification\.building_guard': 'حارس'/);
   assert.match(i18n, /'edit\.rental_period_missing': 'This rental record has no stored cadence/);
   assert.match(detail, /message\.includes\('MISSING_RENTAL_PERIOD'\) \? t\('edit\.rental_period_missing'\)/);
   assert.match(i18n, /'edit\.retry_update': 'إعادة محاولة تحديث العقار'/);

@@ -107,6 +107,13 @@ test('multiple requirement identities remain distinct while retaining the same o
   assert.ok(records.every(item => item.seekerId === SEEKER));
 });
 
+test('Requirement wizard uses wrapped compact choice chips for bounded controls', async () => {
+  const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  assert.match(source, /<ChoiceChip/);
+  assert.match(source, /choicesWrap/);
+  assert.match(source, /flexWrap: 'wrap'/);
+});
+
 test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   const scrollEnd = source.indexOf('</KeyboardAwareScrollViewCompat>');

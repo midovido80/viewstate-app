@@ -14,6 +14,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Property, type SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
+import { ChoiceChip } from '@/components/ChoiceChip';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, toEnglishDigits } from '@/constants/market';
@@ -324,11 +325,18 @@ export default function PersonDetailScreen() {
                 testID="person-edit-phone"
               />
             </View>
-            {PERSON_CLASSIFICATIONS.map(value => (
-              <TouchableOpacity key={value} onPress={() => toggle(value)} accessibilityRole="checkbox" accessibilityState={{ checked: classifications.includes(value) }} testID={`person-edit-classification-${value}`} style={[styles.choice, { borderColor: classifications.includes(value) ? colors.primary : colors.border }]}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t(`people.classification.${value}` as keyof Translations)}</Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.choicesWrap}>
+              {PERSON_CLASSIFICATIONS.map(value => (
+                <ChoiceChip
+                  key={value}
+                  label={t(`people.classification.${value}` as keyof Translations)}
+                  selected={classifications.includes(value)}
+                  onPress={() => toggle(value)}
+                  testID={`person-edit-classification-${value}`}
+                  role="checkbox"
+                />
+              ))}
+            </View>
             <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} multiline style={[inputStyle, styles.notes]} testID="person-edit-notes" />
             <Button title={t('people.save')} onPress={() => void save()} loading={busy} testID="person-edit-save" />
           </>
@@ -489,7 +497,7 @@ const styles = StyleSheet.create({
   phoneInput: { flex: 1 },
   countryButton: { minHeight: 54, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 10 },
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
-  choice: { minHeight: 48, justifyContent: 'center', padding: 12, borderWidth: 1, borderRadius: 10 },
+  choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   actions: { gap: 10 },
   secondaryActions: { gap: 10 },
   flex: { flex: 1 },

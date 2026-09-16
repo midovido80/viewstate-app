@@ -5,9 +5,10 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
+import { ChoiceChip } from '@/components/ChoiceChip';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
-import { MARKET_CONFIG } from '@/constants/market';
+import { formatRentalCadence, MARKET_CONFIG } from '@/constants/market';
 
 export default function PriceScreen() {
   const router = useRouter();
@@ -74,6 +75,7 @@ export default function PriceScreen() {
         style={styles.container}
         contentContainerStyle={styles.content}
         bottomOffset={100}
+        keyboardShouldPersistTaps="handled"
       >
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {isSale ? t('price.sale.title') : t('price.rent.title')}
@@ -82,7 +84,7 @@ export default function PriceScreen() {
         <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
           {isSale
             ? t('price.amount')
-            : `${t('price.amount')} · ${t('price.cadence.monthly')}`}
+            : `${t('price.amount')} · ${formatRentalCadence(workingRentalPeriodId, t)}`}
         </Text>
         <TextInput
           value={amount}
@@ -99,10 +101,26 @@ export default function PriceScreen() {
               textAlign: isRTL ? 'right' : 'left',
               fontFamily: fonts.semiBold,
               borderRadius: colors.inputRadius,
+              marginBottom: 16,
             }
           ]}
           testID="input-price"
         />
+
+        {!isSale ? (
+          <View style={styles.choicesWrap}>
+            {(['monthly', 'yearly'] as const).map(period => (
+              <ChoiceChip
+                key={period}
+                label={t(`price.cadence.choice.${period}`)}
+                selected={workingRentalPeriodId === period}
+                onPress={() => updateDraft({ rentalPeriodId: period })}
+                testID={`price-period-${period}`}
+                role="radio"
+              />
+            ))}
+          </View>
+        ) : null}
       </KeyboardAwareScrollViewCompat>
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>
@@ -147,6 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 12,
   },
+  choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   footer: {
     paddingHorizontal: 20,
     paddingTop: 16,
