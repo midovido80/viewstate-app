@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,13 +11,10 @@ interface PrimaryTabHeaderProps {
 }
 
 export function PrimaryTabHeader({ title }: PrimaryTabHeaderProps) {
+  const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
-
-  const handleSearch = () => {
-    Alert.alert(t('common.comingLater'), t('common.searchComingLater'));
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.primary, paddingTop: insets.top }]}>
@@ -28,15 +26,15 @@ export function PrimaryTabHeader({ title }: PrimaryTabHeaderProps) {
       <View style={[styles.searchContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <TouchableOpacity 
           style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.2)', flexDirection: isRTL ? 'row-reverse' : 'row' }]} 
-          onPress={handleSearch}
+          onPress={() => router.push('/search' as never)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('search.open')}
+          testID="global-search-open"
         >
           <Feather name="search" size={18} color={colors.primaryForeground} />
           <Text style={[styles.searchText, { color: colors.primaryForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
             {t('common.search')}
-          </Text>
-          <Text style={[styles.comingLater, { color: colors.primaryForeground, fontFamily: fonts.regular }]}>
-            {t('common.comingLater')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -77,8 +75,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     flex: 1,
   },
-  comingLater: {
-    fontSize: 12,
-    opacity: 0.8,
-  }
 });

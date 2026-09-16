@@ -324,6 +324,12 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
   assert.match(screen, /runMatchingForAllRequirements/);
   assert.match(screen, /groupMatchAllResultsByPerson/);
+  assert.match(screen, /runGenerationRef/);
+  assert.match(screen, /store\.getProperty\(propertyId\)/);
+  assert.match(
+    screen,
+    /return \(\) => \{\s*active = false;\s*runGenerationRef\.current \+= 1;/,
+  );
   assert.match(screen, /new BrokerInitiatedMatching\(transientStore, candidateSource\)/);
   assert.match(screen, /Crypto\.randomUUID\(\)/);
   assert.match(screen, /flexDirection: isRTL \? 'row-reverse' : 'row'/);
@@ -334,7 +340,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(i18n, /'matching\.runAll': 'Match all'/);
   assert.match(i18n, /'matching\.runAll': 'مطابقة الكل'/);
   assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(group\.person\.id\)\}`\)/);
-  assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(result\.propertyId\)\}`\)/);
+  assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(propertyId\)\}`/);
 
   const explicitHandler = screen.indexOf('const runMatching = async () =>');
   const firstExecution = screen.indexOf('.runForRequirement(');

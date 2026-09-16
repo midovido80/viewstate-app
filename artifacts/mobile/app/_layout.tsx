@@ -79,6 +79,7 @@ function RootLayoutNav({
       ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
         <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />

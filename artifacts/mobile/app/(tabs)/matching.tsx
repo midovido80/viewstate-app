@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -333,6 +333,7 @@ export default function MatchingScreen() {
   const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const runGenerationRef = useRef(0);
 
   const seekerPeople = useMemo(
     () => people.filter(person => person.classifications.includes('seeker')),
@@ -348,6 +349,12 @@ export default function MatchingScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      runGenerationRef.current += 1;
+      setLoading(false);
+      setRunResult(null);
+      setQuickRequirement(null);
+      setMatchAllGroups(null);
+      setError('');
       Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
         .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
           if (!active) return;
@@ -365,11 +372,14 @@ export default function MatchingScreen() {
         });
       return () => {
         active = false;
+        runGenerationRef.current += 1;
       };
     }, [requestedRequirementId, t]),
   );
 
   const clearRun = () => {
+    runGenerationRef.current += 1;
+    setLoading(false);
     setRunResult(null);
     setQuickRequirement(null);
     setMatchAllGroups(null);
@@ -393,6 +403,7 @@ export default function MatchingScreen() {
   };
 
   const runMatching = async () => {
+    const generation = ++runGenerationRef.current;
     setError('');
     setRunResult(null);
     setLoading(true);
@@ -406,7 +417,9 @@ export default function MatchingScreen() {
           requirements,
           requirementId => matching.runForRequirement(requirementId),
         );
-        setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
+        if (runGenerationRef.current === generation) {
+          setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
+        }
         return;
       }
 
@@ -437,13 +450,31 @@ export default function MatchingScreen() {
           id === transient.value.id ? transient.value : null,
       };
       matching = new BrokerInitiatedMatching(transientStore, candidateSource);
-      setQuickRequirement(transient.value);
-      setRunResult(await matching.runForRequirement(transient.value.id));
+      const result = await matching.runForRequirement(transient.value.id);
+      if (runGenerationRef.current === generation) {
+        setQuickRequirement(transient.value);
+        setRunResult(result);
+      }
     } catch (runError) {
       console.error(runError);
-      setError(t('matching.run_failed'));
+      if (runGenerationRef.current === generation) setError(t('matching.run_failed'));
     } finally {
-      setLoading(false);
+      if (runGenerationRef.current === generation) setLoading(false);
+    }
+  };
+
+  const openMatchedProperty = async (propertyId: string) => {
+    try {
+      if (!await store.getProperty(propertyId)) {
+        setError(t('matching.property_missing'));
+        setRunResult(null);
+        setQuickRequirement(null);
+        setMatchAllGroups(null);
+        return;
+      }
+      router.push(`/property/${encodeURIComponent(propertyId)}` as never);
+    } catch {
+      setError(t('matching.load_failed'));
     }
   };
 
@@ -791,7 +822,7 @@ export default function MatchingScreen() {
                       rank={index + 1}
                       requirement={requirementGroup.requirement}
                       property={properties.find(item => item.core.id === result.propertyId)}
-                      onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
+                      onPress={() => void openMatchedProperty(result.propertyId)}
                     />
                   )))}
               </View>
@@ -835,7 +866,7 @@ export default function MatchingScreen() {
                   rank={index + 1}
                   requirement={quickRequirement}
                   property={properties.find(item => item.core.id === result.propertyId)}
-                  onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
+                  onPress={() => void openMatchedProperty(result.propertyId)}
                 />
               ))
             ) : (

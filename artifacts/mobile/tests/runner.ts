@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import { resolveSourcePath } from './sourcePath.ts';
+import './globalSearch.test.ts';
 
 import {
   buildPropertySharePreview,
