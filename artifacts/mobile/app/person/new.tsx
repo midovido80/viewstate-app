@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import { FlatList, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Contacts from 'expo-contacts';
 import { Button } from '@/components/Button';
+import { BatchContactImportModal } from '@/components/BatchContactImportModal';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { useColors } from '@/hooks/useColors';
@@ -11,17 +11,11 @@ import { useI18n, Translations } from '@/contexts/I18nContext';
 import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/services/people';
 import { store } from '@/services/persistence';
 import {
-  buildContactPhoneChoices,
-  ContactPhoneChoice,
-  inferPhoneCountry,
   normalizePhoneForCountry,
   PHONE_COUNTRIES,
   PhoneCountryCode,
-  phoneDigits,
 } from '@/services/phoneEntry';
 import { generateDomainId } from '@/services/identity';
-
-let sessionContactChoices: ContactPhoneChoice[] | null = null;
 
 export default function NewPersonScreen() {
   const router = useRouter();
@@ -34,63 +28,23 @@ export default function NewPersonScreen() {
   const [countryOpen, setCountryOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [classifications, setClassifications] = useState<PersonClassification[]>([]);
-  const [contactChoices, setContactChoices] = useState<ContactPhoneChoice[]>([]);
-  const [contactsOpen, setContactsOpen] = useState(false);
-  const [contactSearch, setContactSearch] = useState('');
-  const [contactStatus, setContactStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const toggle = (value: PersonClassification) => setClassifications(current =>
     current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
 
-  const filteredContactChoices = useMemo(() => {
-    const literalQuery = contactSearch.trim().toLocaleLowerCase();
-    const digitQuery = phoneDigits(contactSearch);
-    if (!literalQuery) return contactChoices;
-    return contactChoices.filter(choice =>
-      choice.name.toLocaleLowerCase().includes(literalQuery)
-      || (!!digitQuery && choice.normalizedDigits.includes(digitQuery)));
-  }, [contactChoices, contactSearch]);
   const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
     ?? PHONE_COUNTRIES[0];
 
-  const loadContacts = async () => {
-    try {
-      const permission = await Contacts.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setContactStatus('error');
-        return;
-      }
-      const result = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.FirstName, Contacts.Fields.LastName, Contacts.Fields.PhoneNumbers],
-        sort: Contacts.SortTypes.FirstName,
-      });
-      const normalized = buildContactPhoneChoices(result.data);
-      sessionContactChoices = normalized;
-      setContactChoices(normalized);
-      setContactStatus('ready');
-    } catch {
-      setContactStatus('error');
-    }
-  };
-
   const importContact = () => {
     setError('');
-    if (Platform.OS === 'web') {
-      setError(t('people.contacts_unavailable'));
+    if (classifications.length !== 1) {
+      setError(t('people.import_one_classification'));
       return;
     }
-    setContactSearch('');
-    setContactsOpen(true);
-    if (sessionContactChoices !== null) {
-      setContactChoices(sessionContactChoices);
-      setContactStatus('ready');
-      return;
-    }
-    setContactChoices([]);
-    setContactStatus('loading');
-    void loadContacts();
+    setBatchImportOpen(true);
   };
 
   const save = async () => {
@@ -127,8 +81,6 @@ export default function NewPersonScreen() {
     fontFamily: fonts.regular,
   }];
   const textAlign = isRTL ? 'right' as const : 'left' as const;
-  const contactAlignItems = isRTL ? 'flex-end' as const : 'flex-start' as const;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -172,53 +124,17 @@ export default function NewPersonScreen() {
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
       </KeyboardAwareScrollViewCompat>
-      <Modal visible={contactsOpen} animationType="slide" onRequestClose={() => setContactsOpen(false)}>
-        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-          <View style={[styles.modalHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign }]}>{t('people.choose_contact')}</Text>
-            <TouchableOpacity onPress={() => setContactsOpen(false)} accessibilityRole="button" testID="contact-picker-cancel">
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign }}>{t('capture.cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            value={contactSearch}
-            onChangeText={setContactSearch}
-            placeholder={t('people.contact_search')}
-            placeholderTextColor={colors.mutedForeground}
-            style={[inputStyle, styles.contactSearch]}
-            testID="contact-search"
-          />
-          <FlatList
-            data={filteredContactChoices}
-            keyExtractor={item => item.key}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            scrollEnabled={filteredContactChoices.length > 0}
-            contentContainerStyle={styles.contactList}
-            ListEmptyComponent={(
-              <Text style={[styles.contactEmpty, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }]}>
-                {contactStatus === 'loading'
-                  ? t('people.contacts_loading')
-                  : contactStatus === 'error'
-                    ? t('people.contacts_load_failed')
-                    : t('people.contacts_empty')}
-              </Text>
-            )}
-            renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => {
-                setName(item.name);
-                setPhone(item.phone);
-                const inferredCountry = inferPhoneCountry(item.phone);
-                if (inferredCountry) setPhoneCountry(inferredCountry);
-                setContactsOpen(false);
-              }} style={[styles.contact, { borderBottomColor: colors.border, alignItems: contactAlignItems }]} testID={`contact-choice-${item.key}`}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign }}>{item.name}</Text>
-                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{item.phone}</Text>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      </Modal>
+      {classifications.length === 1 ? (
+        <BatchContactImportModal
+          visible={batchImportOpen}
+          classification={classifications[0]}
+          onClose={() => setBatchImportOpen(false)}
+          onImported={() => {
+            setBatchImportOpen(false);
+            router.replace('/people' as never);
+          }}
+        />
+      ) : null}
       <Modal visible={countryOpen} animationType="fade" transparent onRequestClose={() => setCountryOpen(false)}>
         <View style={[styles.modalBackdrop, { backgroundColor: `${colors.foreground}59` }]}>
           <View style={[styles.countryPicker, { backgroundColor: colors.card }]}>
@@ -261,12 +177,6 @@ const styles = StyleSheet.create({
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   label: { fontSize: 16 },
   choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  modalHeader: { minHeight: 64, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
-  modalTitle: { fontSize: 22 },
-  contactSearch: { marginHorizontal: 20, marginBottom: 8 },
-  contactList: { paddingHorizontal: 20, paddingBottom: 32 },
-  contactEmpty: { paddingVertical: 28, lineHeight: 22 },
-  contact: { minHeight: 64, borderBottomWidth: 1, justifyContent: 'center', gap: 4 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
   countryPicker: { borderRadius: 14, padding: 16, gap: 4 },
   countryTitle: { fontSize: 20, marginBottom: 8 },

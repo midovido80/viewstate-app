@@ -111,11 +111,16 @@ import {
 import './platformModuleStubs.ts';
 import { optionalClassifiedLiteral } from '../services/literalText.ts';
 import {
+  buildContactImportCandidates,
   buildContactPhoneChoices,
   inferPhoneCountry,
   normalizePhoneForCountry,
   phoneDigits,
 } from '../services/phoneEntry.ts';
+import {
+  importReviewedContactBatch,
+  summarizeContactImportResults,
+} from '../services/contactBatchImport.ts';
 
 const sharedSourcePath = (relativePath: string) =>
   resolveSourcePath(relativePath, import.meta.url);
@@ -272,15 +277,20 @@ test('New domain identity creation is centralized on Expo secure UUID v4', async
 test('People source exposes selected contact import, actions, links, and confirmations', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
-  const [form, detail, persistence, translations] = await Promise.all([
+  const [form, batchImport, detail, persistence, translations] = await Promise.all([
     readFile(sourcePath('../app/person/new.tsx'), 'utf8'),
+    readFile(sourcePath('../components/BatchContactImportModal.tsx'), 'utf8'),
     readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
     readFile(sourcePath('../services/persistence.ts'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
-  assert.match(form, /requestPermissionsAsync/);
-  assert.match(form, /getContactsAsync/);
-  assert.match(form, /contact-choice-/);
+  assert.match(batchImport, /requestPermissionsAsync/);
+  assert.match(batchImport, /getContactsAsync/);
+  assert.match(batchImport, /contact-import-choice-/);
+  assert.match(batchImport, /contact-import-confirm/);
+  assert.match(batchImport, /reviewDispositions/);
+  assert.match(batchImport, /existingPhones/);
+  assert.match(batchImport, /contact-import-retry-access/);
   assert.ok(form.indexOf('people.classifications') < form.indexOf('person-name'), 'Classifications must appear before name/phone in creation flow');
   assert.match(form, /ChoiceChip/);
   assert.match(detail, /ChoiceChip/);
@@ -294,7 +304,7 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(detail, /linkPersonToProperty/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
-  assert.match(translations, /'people\.classification\.broker': 'دلال'/);
+  assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
 });
 
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Done action', async () => {
@@ -2013,7 +2023,7 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
   assert.match(i18n, /'edit\.not_found': 'تعذر العثور/);
   assert.match(i18n, /'price\.cadence\.monthly': 'per month'/);
   assert.match(i18n, /'price\.cadence\.monthly': 'شهريا'/);
-  assert.match(i18n, /'people\.classification\.broker': 'دلال'/);
+  assert.match(i18n, /'people\.classification\.broker': 'وسيط'/);
   assert.match(i18n, /'people\.classification\.building_guard': 'حارس'/);
   assert.match(i18n, /'edit\.rental_period_missing': 'This rental record has no stored cadence/);
   assert.match(detail, /message\.includes\('MISSING_RENTAL_PERIOD'\) \? t\('edit\.rental_period_missing'\)/);
@@ -2584,6 +2594,87 @@ test('Phone entry helpers keep selected contact display text while choosing one 
   assert.equal(normalizePhoneForCountry('sms:00966 501 234 567', 'KW'), '+966501234567');
 });
 
+test('WP4B contact candidates preserve multiple phones for explicit batch review', () => {
+  const candidates = buildContactImportCandidates([
+    {
+      id: 'multi',
+      name: 'Multiple phones',
+      phoneNumbers: [
+        { number: '5000 1001' },
+        { number: '+966 5000 1002', isPrimary: true },
+        { number: '00966 5000 1002' },
+      ],
+    },
+    { id: 'empty', name: 'No phone', phoneNumbers: [] },
+  ]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].name, 'Multiple phones');
+  assert.deepEqual(candidates[0].phones.map(phone => phone.phone), [
+    '+966 5000 1002',
+    '5000 1001',
+  ]);
+});
+
+test('WP4B reviewed batch imports one classification, skips duplicates, preserves partial success, and retries safely', async () => {
+  const existing = createPerson({
+    id: 'existing-person',
+    name: 'Existing owner',
+    displayPhone: '+965 5000 2000',
+    classifications: ['owner'],
+  });
+  const stored = [existing];
+  let failOnce = true;
+  let id = 0;
+  const fakeStore = {
+    getPeople: async () => [...stored],
+    savePerson: async (person: ReturnType<typeof createPerson>) => {
+      if (person.normalizedPhone === '+96550002002' && failOnce) {
+        failOnce = false;
+        throw new Error('SYNTHETIC_SAVE_FAILURE');
+      }
+      stored.push(person);
+      return person;
+    },
+  };
+  const entries = [
+    { key: 'duplicate-existing', name: 'Do not overwrite', displayPhone: '+965 5000 2000', normalizedPhone: '+96550002000' },
+    { key: 'valid-one', name: 'First new', displayPhone: '5000 2001', normalizedPhone: '+96550002001' },
+    { key: 'duplicate-batch', name: 'Same batch phone', displayPhone: '5000 2001', normalizedPhone: '+96550002001' },
+    { key: 'fails-once', name: 'Retry person', displayPhone: '5000 2002', normalizedPhone: '+96550002002' },
+    { key: 'invalid', name: '', displayPhone: '5000 2003', normalizedPhone: '+96550002003' },
+  ];
+  const first = await importReviewedContactBatch({
+    classification: 'broker',
+    entries,
+    store: fakeStore,
+    generateId: () => `batch-${++id}`,
+  });
+  assert.deepEqual(
+    first.results.map(result => result.disposition),
+    ['duplicate', 'imported', 'duplicate', 'failed', 'invalid'],
+  );
+  assert.deepEqual([first.imported, first.skipped, first.failed], [1, 3, 1]);
+  assert.deepEqual(existing.classifications, ['owner'], 'existing duplicate must not be reclassified');
+  assert.deepEqual(stored.find(person => person.name === 'First new')?.classifications, ['broker']);
+
+  const retried = await importReviewedContactBatch({
+    classification: 'broker',
+    entries: first.results.filter(result => result.disposition === 'failed').map(result => result.entry),
+    store: fakeStore,
+    generateId: () => `batch-${++id}`,
+  });
+  const merged = summarizeContactImportResults(first.results.map(result =>
+    result.disposition === 'failed'
+      ? retried.results.find(candidate => candidate.entry.key === result.entry.key) ?? result
+      : result));
+  assert.deepEqual([merged.imported, merged.skipped, merged.failed], [2, 3, 0]);
+  assert.equal(stored.filter(person => person.normalizedPhone === '+96550002002').length, 1);
+  assert.deepEqual(stored.filter(person => person.id !== existing.id).map(person => person.classifications), [
+    ['broker'],
+    ['broker'],
+  ]);
+});
+
 test('Private Property Source domain stays additive and restricted to approved roles', () => {
   assert.deepEqual(PROPERTY_SOURCE_ROLES, [
     'owner',
@@ -2718,6 +2809,7 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
     enrichmentFields,
     keyboardScroll,
     peopleNew,
+    batchImport,
     captureHeader,
     transaction,
     propertyType,
@@ -2734,6 +2826,7 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
     readFile(source('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
     readFile(source('../components/KeyboardAwareScrollViewCompat.tsx'), 'utf8'),
     readFile(source('../app/person/new.tsx'), 'utf8'),
+    readFile(source('../components/BatchContactImportModal.tsx'), 'utf8'),
     readFile(source('../components/CaptureHeader.tsx'), 'utf8'),
     readFile(source('../app/capture/transaction.tsx'), 'utf8'),
     readFile(source('../app/capture/property-type.tsx'), 'utf8'),
@@ -2774,19 +2867,21 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(keyboardScroll, /keyboardShouldPersistTaps/);
   assert.match(keyboardScroll, /nestedScrollEnabled = true/);
 
-  // Contact imports are searchable, virtualized, and choose a single row.
-  assert.match(peopleNew, /<FlatList/);
-  assert.match(peopleNew, /data=\{filteredContactChoices\}/);
-  assert.match(peopleNew, /testID="contact-search"/);
-  assert.match(peopleNew, /phoneDigits\(contactSearch\)/);
-  assert.match(peopleNew, /sessionContactChoices = normalized/);
-  assert.ok(
-    peopleNew.indexOf('setContactsOpen(true)') < peopleNew.indexOf('void loadContacts()'),
-    'picker must open before native contact loading begins',
-  );
-  assert.match(peopleNew, /Contacts\.Fields\.FirstName[\s\S]*Contacts\.Fields\.LastName[\s\S]*Contacts\.Fields\.PhoneNumbers/);
-  assert.match(peopleNew, /people\.contacts_loading/);
-  assert.match(peopleNew, /setPhone\(item\.phone\)/);
+  // Contact import remains role-first while the native list supports a reviewed
+  // multi-contact batch and explicit phone selection.
+  assert.match(peopleNew, /classifications\.length !== 1/);
+  assert.match(peopleNew, /<BatchContactImportModal/);
+  assert.match(batchImport, /<FlatList/);
+  assert.match(batchImport, /data=\{filtered\}/);
+  assert.match(batchImport, /testID="contact-import-search"/);
+  assert.match(batchImport, /buildContactImportCandidates/);
+  assert.match(batchImport, /Contacts\.Fields\.FirstName[\s\S]*Contacts\.Fields\.LastName[\s\S]*Contacts\.Fields\.PhoneNumbers/);
+  assert.match(batchImport, /contact-import-phone-/);
+  assert.match(batchImport, /contact-import-review/);
+  assert.match(batchImport, /contact-import-confirm/);
+  assert.match(batchImport, /if \(saving \|\| entries\.length === 0\) return/);
+  assert.match(batchImport, /people\.import_choose_country/);
+  assert.match(batchImport, /people\.import_excluded/);
 
   // Five callers supply the five-chip capture progression; chip state is
   // explicitly completed/current/future rather than inferred from labels.
