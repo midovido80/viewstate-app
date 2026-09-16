@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Contacts from 'expo-contacts';
 import { Button } from '@/components/Button';
@@ -23,6 +23,7 @@ import {
   type ContactBatchImportSummary,
   type ReviewedContactImportEntry,
 } from '@/services/contactBatchImport';
+import { createContactBatchSubmissionGuard } from '@/services/contactBatchSubmissionGuard';
 
 type Stage = 'select' | 'review' | 'result';
 type PermissionState = 'idle' | 'loading' | 'ready' | 'limited' | 'denied' | 'blocked' | 'unavailable' | 'error';
@@ -54,9 +55,10 @@ export function BatchContactImportModal({
   const [summary, setSummary] = useState<ContactBatchImportSummary | null>(null);
   const [excludedCount, setExcludedCount] = useState(0);
   const [existingPhones, setExistingPhones] = useState<Set<string>>(new Set());
+  const submissionGuard = useRef(createContactBatchSubmissionGuard()).current;
 
   const resetAndClose = () => {
-    if (saving) return;
+    if (submissionGuard.isRunning() || saving) return;
     setStage('select');
     setSelected({});
     setSearch('');
@@ -171,40 +173,44 @@ export function BatchContactImportModal({
   }, [reviewedEntries, existingPhones]);
 
   const confirm = async (entries: readonly ReviewedContactImportEntry[] = reviewedEntries) => {
-    if (saving || entries.length === 0) return;
-    setSaving(true);
-    try {
-      setSummary(await importReviewedContactBatch({
-        classification,
-        entries,
-        store,
-        generateId: generateDomainId,
-      }));
-      setStage('result');
-    } finally {
-      setSaving(false);
-    }
+    if (entries.length === 0) return;
+    await submissionGuard.run(async () => {
+      setSaving(true);
+      try {
+        setSummary(await importReviewedContactBatch({
+          classification,
+          entries,
+          store,
+          generateId: generateDomainId,
+        }));
+        setStage('result');
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   const retryFailures = async () => {
     const failures = summary?.results
       .filter(result => result.disposition === 'failed')
       .map(result => result.entry) ?? [];
-    if (saving || failures.length === 0 || !summary) return;
-    setSaving(true);
-    try {
-      const retried = await importReviewedContactBatch({
-        classification,
-        entries: failures,
-        store,
-        generateId: generateDomainId,
-      });
-      const retriedByKey = new Map(retried.results.map(result => [result.entry.key, result]));
-      setSummary(summarizeContactImportResults(summary.results.map(result =>
-        result.disposition === 'failed' ? retriedByKey.get(result.entry.key) ?? result : result)));
-    } finally {
-      setSaving(false);
-    }
+    if (failures.length === 0 || !summary) return;
+    await submissionGuard.run(async () => {
+      setSaving(true);
+      try {
+        const retried = await importReviewedContactBatch({
+          classification,
+          entries: failures,
+          store,
+          generateId: generateDomainId,
+        });
+        const retriedByKey = new Map(retried.results.map(result => [result.entry.key, result]));
+        setSummary(summarizeContactImportResults(summary.results.map(result =>
+          result.disposition === 'failed' ? retriedByKey.get(result.entry.key) ?? result : result)));
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   const permissionMessage = permissionState === 'unavailable'

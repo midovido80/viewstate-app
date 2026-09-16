@@ -121,6 +121,7 @@ import {
   importReviewedContactBatch,
   summarizeContactImportResults,
 } from '../services/contactBatchImport.ts';
+import { createContactBatchSubmissionGuard } from '../services/contactBatchSubmissionGuard.ts';
 
 const sharedSourcePath = (relativePath: string) =>
   resolveSourcePath(relativePath, import.meta.url);
@@ -2675,6 +2676,71 @@ test('WP4B reviewed batch imports one classification, skips duplicates, preserve
   ]);
 });
 
+test('WP4B Confirm and Retry share immediate mutual exclusion for the full pending operation', async () => {
+  const guard = createContactBatchSubmissionGuard();
+  let releaseFirst!: () => void;
+  const firstPending = new Promise<void>(resolve => {
+    releaseFirst = resolve;
+  });
+  const started: string[] = [];
+  const confirm = () => guard.run(async () => {
+    started.push('confirm');
+    await firstPending;
+  });
+  const retry = () => guard.run(async () => {
+    started.push('retry');
+  });
+
+  const firstConfirm = confirm();
+  const secondConfirm = confirm();
+  const overlappingRetry = retry();
+  assert.equal(guard.isRunning(), true);
+  assert.deepEqual(started, ['confirm']);
+  assert.equal(await secondConfirm, undefined);
+  assert.equal(await overlappingRetry, undefined);
+  assert.equal(guard.isRunning(), true, 'guard must remain held while Confirm is pending');
+
+  releaseFirst();
+  await firstConfirm;
+  assert.equal(guard.isRunning(), false);
+  await retry();
+  assert.deepEqual(started, ['confirm', 'retry'], 'a later Retry may proceed after Confirm completes');
+});
+
+test('WP4B immediate guard excludes duplicate Retry and releases after failure', async () => {
+  const guard = createContactBatchSubmissionGuard();
+  let releaseRetry!: () => void;
+  const retryPending = new Promise<void>(resolve => {
+    releaseRetry = resolve;
+  });
+  let retryStarts = 0;
+  const retry = () => guard.run(async () => {
+    retryStarts += 1;
+    await retryPending;
+  });
+
+  const firstRetry = retry();
+  const secondRetry = retry();
+  assert.equal(retryStarts, 1);
+  assert.equal(guard.isRunning(), true);
+  assert.equal(await secondRetry, undefined);
+  releaseRetry();
+  await firstRetry;
+  assert.equal(guard.isRunning(), false);
+
+  await assert.rejects(
+    guard.run(async () => {
+      throw new Error('SYNTHETIC_SUBMISSION_FAILURE');
+    }),
+    /SYNTHETIC_SUBMISSION_FAILURE/,
+  );
+  assert.equal(guard.isRunning(), false, 'failure must release the shared guard');
+  await guard.run(async () => {
+    retryStarts += 1;
+  });
+  assert.equal(retryStarts, 2, 'an authorized retry may proceed after failure');
+});
+
 test('Private Property Source domain stays additive and restricted to approved roles', () => {
   assert.deepEqual(PROPERTY_SOURCE_ROLES, [
     'owner',
@@ -2879,7 +2945,12 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(batchImport, /contact-import-phone-/);
   assert.match(batchImport, /contact-import-review/);
   assert.match(batchImport, /contact-import-confirm/);
-  assert.match(batchImport, /if \(saving \|\| entries\.length === 0\) return/);
+  assert.equal(
+    (batchImport.match(/submissionGuard\.run/g) ?? []).length,
+    2,
+    'Confirm and Retry must use the same immediate submission guard',
+  );
+  assert.match(batchImport, /if \(submissionGuard\.isRunning\(\) \|\| saving\) return/);
   assert.match(batchImport, /people\.import_choose_country/);
   assert.match(batchImport, /people\.import_excluded/);
 
