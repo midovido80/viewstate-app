@@ -2487,6 +2487,23 @@ test('V001 selective sharing defaults exclude private notes and injected sharing
     shareSelectedLocalFiles: async input => { sent.push(`${input.text}|${input.files[0].attachmentId}`); },
   }, async () => { throw new Error('text share should not run with selected files'); });
   assert.equal(sent.length, 1);
+
+  const deselected = buildPropertySharePreview({
+    property,
+    selection: {
+      ...defaults,
+      normalFields: [],
+      attachmentIds: [],
+      discloseOwnerSource: false,
+      discloseExactLocation: false,
+    },
+    availableAttachments: [{ id: 'v001-share-image', propertyCoreId: property.core.id }],
+    rentalCadence: 'monthly',
+    attribution: 'Shared via ViewState',
+  });
+  assert.equal(deselected.text, '');
+  assert.deepEqual(deselected.attachmentIds, []);
+  assert.doesNotMatch(JSON.stringify(deselected), /never share|synthetic owner|synthetic exact/);
 });
 
 test('V001 bilingual labels and source wiring remain explicit', async () => {
@@ -2806,6 +2823,13 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(share, /preview\.text/);
   assert.match(share, /preview\.attachmentIds\.length.*attachments_system_only/);
   assert.match(share, /testID="share-send"/);
+  assert.match(share, /const \[sharing, setSharing\] = useState\(false\)/);
+  assert.match(share, /disabled=\{!hasShareableContent \|\| sharing\}/);
+  assert.match(share, /if \(!preview \|\| !hasShareableContent \|\| sharing\) return/);
+  assert.match(share, /share\.select_content/);
+  assert.match(share, /selectedAttachments\.map/);
+  assert.match(detail, /property-attachment-open-/);
+  assert.match(detail, /openPropertyAttachment/);
   assert.match(share, /function CheckRow/);
   assert.match(share, /styles\.checkIndicator/);
   assert.match(share, /share\.whatsapp_unavailable/);

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Sharing from 'expo-sharing';
 import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
@@ -27,6 +28,7 @@ import {
 } from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
 import { loadPropertyEnrichmentDraft } from '@/services/propertyEnrichmentRecovery';
+import { openAttachment } from '@/services/attachments';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -76,7 +78,33 @@ export default function PropertyDetailScreen() {
   const [sourceRole, setSourceRole] = useState<PropertySourceRole>('owner');
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
   const canPermanentlyDelete = store.canPermanentlyDelete();
+
+  const openPropertyAttachment = async (attachment: NonNullable<Property['attachments']>[number]) => {
+    if (openingAttachmentId) return;
+    setOpeningAttachmentId(attachment.id);
+    setError('');
+    try {
+      await openAttachment({
+        id: attachment.id,
+        kind: attachment.kind,
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        uri: attachment.managedUri,
+        order: attachment.order,
+        isCover: attachment.isCover ? true : undefined,
+      }, Sharing);
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message === 'ATTACHMENT_FILE_MISSING'
+        ? t('enrich.attachment_missing')
+        : cause instanceof Error && cause.message === 'ATTACHMENT_OPEN_UNAVAILABLE'
+          ? t('enrich.attachment_unavailable')
+          : t('enrich.attachment_failed'));
+    } finally {
+      setOpeningAttachmentId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!id) {
@@ -567,7 +595,21 @@ export default function PropertyDetailScreen() {
             {property.core.description ? <DetailRow label={t('enrich.description')} value={property.core.description.value} /> : null}
             {property.core.privateNotes ? <DetailRow label={t('enrich.private_notes')} value={property.core.privateNotes.value} /> : null}
             {property.locationEnrichment?.manualLocationText ? <DetailRow label={t('enrich.manual_location')} value={property.locationEnrichment.manualLocationText.value} /> : null}
-            {property.attachments?.map(attachment => <DetailRow key={attachment.id} label={attachment.isCover ? `★ ${attachment.kind}` : attachment.kind} value={attachment.originalName} />)}
+            {property.attachments?.map(attachment => (
+              <TouchableOpacity
+                key={attachment.id}
+                onPress={() => void openPropertyAttachment(attachment)}
+                disabled={openingAttachmentId !== null}
+                accessibilityRole="button"
+                accessibilityLabel={`${t(`enrich.attachment_kind.${attachment.kind}`)}, ${attachment.originalName}`}
+                testID={`property-attachment-open-${attachment.id}`}
+              >
+                <DetailRow
+                  label={`${attachment.isCover ? '★ ' : ''}${t(`enrich.attachment_kind.${attachment.kind}`)}`}
+                  value={attachment.originalName}
+                />
+              </TouchableOpacity>
+            ))}
           </>
         ) : choices ? (
           <>
