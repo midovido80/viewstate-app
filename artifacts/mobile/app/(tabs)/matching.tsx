@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { SelectCard } from '@/components/SelectCard';
+import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { KUWAIT_AREAS, getAreaById, searchAreas } from '@/constants/kuwait-areas';
@@ -453,10 +454,11 @@ export default function MatchingScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <PrimaryTabHeader title={t('matching.title')} />
       <KeyboardAwareScrollViewCompat
         style={styles.scroll}
         contentContainerStyle={{
-          paddingTop: topInset + 16,
+          paddingTop: 16,
           paddingBottom: insets.bottom + 112,
           paddingHorizontal: 20,
         }}
@@ -466,24 +468,10 @@ export default function MatchingScreen() {
       >
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.title')}
-            </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.subtitle')}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={toggleLanguage}
-            style={[styles.langButton, { borderColor: colors.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={language === 'en' ? 'عربي' : 'EN'}
-            testID="matching-language-toggle"
-          >
-            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
-              {language === 'en' ? 'عربي' : 'EN'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>

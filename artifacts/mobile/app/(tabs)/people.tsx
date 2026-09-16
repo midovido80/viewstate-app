@@ -10,6 +10,8 @@ import { Person } from '@/services/people';
 import { store } from '@/services/persistence';
 import { toEnglishDigits } from '@/constants/market';
 
+import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
+
 export default function PeopleScreen() {
   const router = useRouter();
   const colors = useColors();
@@ -29,10 +31,8 @@ export default function PeopleScreen() {
   }, [search, t]));
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-        {t('people.title')}
-      </Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <PrimaryTabHeader title={t('people.title')} />
       <View style={styles.searchWrap}>
         <Feather name="search" size={20} color={colors.mutedForeground} style={[styles.icon, isRTL ? { right: 34 } : { left: 34 }]} />
         <TextInput
