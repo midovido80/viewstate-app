@@ -62,6 +62,18 @@ export default function PersonDetailScreen() {
   const [busy, setBusy] = useState(false);
   const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
 
+  const navigateBack = () => {
+    if (mode === 'edit') {
+      setMode('detail');
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/people' as never);
+  };
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -273,7 +285,7 @@ export default function PersonDetailScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <TouchableOpacity
-          onPress={() => mode === 'edit' ? setMode('detail') : router.back()}
+          onPress={navigateBack}
           testID="person-detail-back"
           accessibilityRole="button"
           style={[styles.headerSide, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}
@@ -365,7 +377,7 @@ export default function PersonDetailScreen() {
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
-              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.flex} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push(`/requirement/${requirement.id}` as never)} variant="outline" style={styles.flex} testID={`requirement-edit-${requirement.id}`}/></View>
+              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.flex} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.flex} testID={`requirement-edit-${requirement.id}`}/></View>
             </View>)}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>

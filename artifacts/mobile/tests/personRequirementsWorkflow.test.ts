@@ -125,3 +125,18 @@ test('Requirement wizard keeps navigation outside scroll content and inside the 
   assert.match(source, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*16\)/);
   assert.match(source, /footer:\s*\{[^}]*borderTopWidth:\s*StyleSheet\.hairlineWidth/);
 });
+
+test('Person and Requirement navigation keep normal history and provide bounded no-history fallbacks', async () => {
+  const [person, requirement] = await Promise.all([
+    readFile('app/person/[personId].tsx', 'utf8'),
+    readFile('app/requirement/[requirementId].tsx', 'utf8'),
+  ]);
+
+  assert.match(person, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\)/);
+  assert.match(person, /router\.replace\('\/people' as never\)/);
+  assert.match(person, /pathname: '\/requirement\/\[requirementId\]'[\s\S]*seekerId: person\.id/);
+  assert.match(requirement, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\)/);
+  assert.match(requirement, /baseline\?\.seekerId \?\? seekerId/);
+  assert.match(requirement, /ownerId \? `\/person\/\$\{encodeURIComponent\(ownerId\)\}` : '\/people'/);
+  assert.match(requirement, /<TouchableOpacity onPress=\{cancel\}>/);
+});
