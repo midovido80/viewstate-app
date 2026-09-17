@@ -24,13 +24,13 @@ export function ChoiceChip({ label, selected, onPress, testID, style, role = 'ch
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.accent : colors.card,
+          backgroundColor: selected ? colors.primary : colors.card,
           borderColor: selected ? colors.primary : colors.border,
         },
         style,
       ]}
     >
-      <Text style={[styles.label, { color: selected ? colors.primary : colors.foreground, fontFamily: fonts.medium }]}>
+      <Text style={[styles.label, { color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium }]}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -47,5 +47,8 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
+    lineHeight: 20,
+    textAlign: 'center',
+    flexShrink: 1,
   },
 });

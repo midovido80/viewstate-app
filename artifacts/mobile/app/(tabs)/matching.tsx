@@ -105,8 +105,8 @@ function ChoiceChip({
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.accent : colors.card,
-          borderColor: selected ? colors.turquoise : colors.border,
+          backgroundColor: selected ? colors.primary : colors.card,
+          borderColor: selected ? colors.primary : colors.border,
         },
       ]}
     >
@@ -114,7 +114,7 @@ function ChoiceChip({
         style={[
           styles.chipText,
           {
-            color: selected ? colors.primary : colors.foreground,
+            color: selected ? colors.primaryForeground : colors.foreground,
             fontFamily: fonts.medium,
           },
         ]}
@@ -291,7 +291,9 @@ function ResultCard({
                 {criterion}: {status}
               </Text>
               <Text style={[styles.points, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
-                {explanation.awardedPoints}/{explanation.possiblePoints}
+                {explanation.criterion === 'eligibility' && explanation.possiblePoints === 0
+                  ? status
+                  : `${explanation.awardedPoints}/${explanation.possiblePoints}`}
               </Text>
             </View>
           );

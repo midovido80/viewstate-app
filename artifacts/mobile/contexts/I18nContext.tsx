@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocales } from 'expo-localization';
 
@@ -39,6 +39,8 @@ const en: Translations = {
   'search.properties': 'Properties',
   'search.requirements': 'Requirements',
   'search.requirement_owner_unknown': 'Seeker unavailable',
+  'search.property_description_unknown': 'Property details unavailable',
+  'search.area_unknown': 'Area unavailable',
   'people.title': 'People',
   'people.search': 'Search name or phone…',
   'people.empty': 'No people added yet.',
@@ -50,7 +52,7 @@ const en: Translations = {
   'matching.saved.select': 'Select a Requirement to start.',
   'matching.saved.empty': 'No saved Requirements yet. Use Quick match to try approved inputs.',
   'matching.saved.matchAllTitle': 'Match all saved Requirements',
-  'matching.saved.matchAllDescription': 'Run every valid saved Requirement against all eligible My Properties.',
+  'matching.saved.matchAllDescription': 'Run every valid saved Requirement for saved seeker People against My Properties, grouped by Person and Requirement.',
   'matching.quick.title': 'Build a quick Requirement',
   'matching.quick.description': 'These inputs are used for this run only. Nothing is saved.',
   'matching.seeker': 'Seeker context',
@@ -484,6 +486,8 @@ const ar: Translations = {
   'search.properties': 'العقارات',
   'search.requirements': 'المتطلبات',
   'search.requirement_owner_unknown': 'الباحث غير متاح',
+  'search.property_description_unknown': 'تفاصيل العقار غير متاحة',
+  'search.area_unknown': 'المنطقة غير متاحة',
   'people.title': 'الأشخاص',
   'people.search': 'البحث بالاسم أو الهاتف…',
   'people.empty': 'لم تتم إضافة أشخاص بعد.',
@@ -495,7 +499,7 @@ const ar: Translations = {
   'matching.saved.select': 'اختر طلباً لبدء المطابقة.',
   'matching.saved.empty': 'لا توجد طلبات محفوظة بعد. استخدم المطابقة السريعة لتجربة المدخلات المعتمدة.',
   'matching.saved.matchAllTitle': 'مطابقة جميع الطلبات المحفوظة',
-  'matching.saved.matchAllDescription': 'شغّل كل طلب محفوظ صالح مقابل جميع عقاراتي المؤهلة.',
+  'matching.saved.matchAllDescription': 'شغّل كل طلب محفوظ صالح للأشخاص الباحثين المحفوظين مقابل عقاراتي، مع تجميع النتائج حسب الشخص والطلب.',
   'matching.quick.title': 'أنشئ طلباً سريعاً',
   'matching.quick.description': 'تُستخدم هذه المدخلات لهذه العملية فقط ولن يتم حفظها.',
   'matching.seeker': 'سياق الباحث',
@@ -918,16 +922,27 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 export function I18nProvider({ children }: { children: ReactNode }) {
   const deviceLanguage = getLocales()[0]?.languageCode === 'ar' ? 'ar' : 'en';
   const [language, setLanguageState] = useState<Language>(deviceLanguage);
+  const userSelectionVersion = useRef(0);
 
   useEffect(() => {
+    let active = true;
+    const selectionVersionAtStart = userSelectionVersion.current;
     AsyncStorage.getItem('@viewstate_language').then(lang => {
-      if (lang === 'ar' || lang === 'en') {
+      if (
+        active
+        && userSelectionVersion.current === selectionVersionAtStart
+        && (lang === 'ar' || lang === 'en')
+      ) {
         setLanguageState(lang);
       }
-    });
+    }).catch(console.error);
+    return () => {
+      active = false;
+    };
   }, []);
 
   const setLanguage = useCallback((lang: Language) => {
+    userSelectionVersion.current += 1;
     setLanguageState(lang);
     AsyncStorage.setItem('@viewstate_language', lang).catch(console.error);
   }, []);

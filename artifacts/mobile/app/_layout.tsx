@@ -83,6 +83,7 @@ function RootLayoutNav({
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
         <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/[requirementId]" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />

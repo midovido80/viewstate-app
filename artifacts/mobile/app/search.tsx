@@ -81,9 +81,13 @@ function ResultCard({ icon, title, subtitle, testID, onPress }: ResultCardProps)
   );
 }
 
-function propertyAreaLabel(property: Property, language: 'en' | 'ar') {
+function propertyAreaLabel(
+  property: Property,
+  language: 'en' | 'ar',
+  t: (key: keyof Translations) => string,
+) {
   const area = getAreaById(property.core.locationArea.id);
-  return area ? (language === 'ar' ? area.ar : area.en) : property.core.locationArea.id;
+  return area ? (language === 'ar' ? area.ar : area.en) : t('search.area_unknown');
 }
 
 function requirementSubtitle(
@@ -93,7 +97,7 @@ function requirementSubtitle(
 ) {
   const areaLabels = requirement.preferredAreaIds.map(areaId => {
     const area = getAreaById(areaId);
-    return area ? (language === 'ar' ? area.ar : area.en) : areaId;
+    return area ? (language === 'ar' ? area.ar : area.en) : t('search.area_unknown');
   });
   return [
     t(`requirements.purpose.${requirement.purpose}` as keyof Translations),
@@ -317,8 +321,8 @@ export default function GlobalSearchScreen() {
                   <ResultCard
                     key={property.core.id}
                     icon="home"
-                    title={`${t(`propertyType.${property.core.propertyType}` as keyof Translations)} · ${propertyAreaLabel(property, language)}`}
-                    subtitle={property.core.description?.value ?? property.core.id}
+                    title={`${t(`propertyType.${property.core.propertyType}` as keyof Translations)} · ${propertyAreaLabel(property, language, t)}`}
+                    subtitle={property.core.description?.value?.trim() || t('search.property_description_unknown')}
                     onPress={() => void openProperty(property)}
                     testID={`search-property-${property.core.id}`}
                   />

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import { resolveSourcePath } from './sourcePath.ts';
 import './globalSearch.test.ts';
+import './vapp50DeviceUi.test.ts';
 
 import {
   buildPropertySharePreview,

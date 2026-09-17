@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Contacts from 'expo-contacts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, type Translations } from '@/contexts/I18nContext';
@@ -45,6 +46,7 @@ export function BatchContactImportModal({
   onImported: () => void;
 }) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
   const [stage, setStage] = useState<Stage>('select');
   const [permissionState, setPermissionState] = useState<PermissionState>('idle');
@@ -225,7 +227,7 @@ export function BatchContactImportModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={resetAndClose}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>
             {t(`people.classification.${classification}` as keyof Translations)}
@@ -256,6 +258,7 @@ export function BatchContactImportModal({
                 {excludedCount > 0 ? <Text style={[styles.message, { color: colors.mutedForeground }]}>{t('people.import_excluded').replace('{count}', String(excludedCount))}</Text> : null}
                 <TextInput value={search} onChangeText={setSearch} placeholder={t('people.contact_search')} placeholderTextColor={colors.mutedForeground} style={[styles.search, { color: colors.foreground, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left' }]} testID="contact-import-search" />
                 <FlatList
+                  style={styles.flexList}
                   data={filtered}
                   keyExtractor={item => item.key}
                   contentContainerStyle={styles.list}
@@ -276,18 +279,25 @@ export function BatchContactImportModal({
                     );
                   }}
                 />
-                <Button title={t('people.import_review_count').replace('{count}', String(selectedCount))} onPress={() => setStage('review')} disabled={selectedCount === 0 || unresolvedPhoneCount > 0} testID="contact-import-review" />
-                {unresolvedPhoneCount > 0 ? <Text style={{ color: colors.destructive }}>{t('people.import_choose_phone')}</Text> : null}
+                <View style={styles.footer}>
+                  <Button title={t('people.import_review_count').replace('{count}', String(selectedCount))} onPress={() => setStage('review')} disabled={selectedCount === 0 || unresolvedPhoneCount > 0} testID="contact-import-review" />
+                  {unresolvedPhoneCount > 0 ? <Text style={{ color: colors.destructive, textAlign: isRTL ? 'right' : 'left' }}>{t('people.import_choose_phone')}</Text> : null}
+                </View>
               </>
             )}
           </>
         ) : stage === 'review' ? (
-          <View style={styles.review}>
-            <Text style={{ color: colors.foreground, fontFamily: fonts.bold }}>{t('people.import_review')}</Text>
-            {Object.values(selected).map(item => {
+          <FlatList
+            style={styles.flexList}
+            data={Object.values(selected)}
+            keyExtractor={item => item.candidate.key}
+            contentContainerStyle={styles.review}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={<Text style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('people.import_review')}</Text>}
+            renderItem={({ item }) => {
               const phone = item.candidate.phones.find(candidate => candidate.key === item.phoneKey);
               return <View key={item.candidate.key} style={[styles.reviewRow, { borderColor: colors.border }]}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{item.candidate.name}</Text>
+                <Text style={[styles.wrappingText, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>{item.candidate.name}</Text>
                 <Text style={{ color: colors.mutedForeground, writingDirection: 'ltr' }}>{phone?.phone}</Text>
                 {phone && !isExplicitInternationalPhone(phone.phone) ? (
                   <View style={styles.countries}>{PHONE_COUNTRIES.map(country => (
@@ -304,21 +314,31 @@ export function BatchContactImportModal({
                   <Text style={{ color: colors.destructive }}>{t('people.import_remove')}</Text>
                 </TouchableOpacity>
               </View>;
-            })}
-            <Button title={t('people.import_confirm')} onPress={() => void confirm()} loading={saving} disabled={saving || reviewedEntries.length === 0 || unresolvedCount > 0} testID="contact-import-confirm" />
-            <Button title={t('capture.back')} onPress={() => setStage('select')} variant="outline" disabled={saving} testID="contact-import-back" />
-          </View>
+            }}
+            ListFooterComponent={<View style={styles.reviewActions}>
+              <Button title={t('people.import_confirm')} onPress={() => void confirm()} loading={saving} disabled={saving || reviewedEntries.length === 0 || unresolvedCount > 0} testID="contact-import-confirm" />
+              <Button title={t('capture.back')} onPress={() => setStage('select')} variant="outline" disabled={saving} testID="contact-import-back" />
+            </View>}
+          />
         ) : (
-          <View style={styles.center}>
-            <Text style={{ color: colors.foreground, fontFamily: fonts.bold }}>{t('people.import_result')}</Text>
-            <Text style={{ color: colors.foreground }}>{t('people.import_counts')
-              .replace('{imported}', String(summary?.imported ?? 0))
-              .replace('{skipped}', String(summary?.skipped ?? 0))
-              .replace('{failed}', String(summary?.failed ?? 0))}</Text>
-            {summary?.results.map(result => <Text key={result.entry.key} style={{ color: result.disposition === 'imported' ? colors.primary : colors.mutedForeground }}>{result.entry.name}: {t(`people.import_status.${result.disposition}` as keyof Translations)}</Text>)}
-            {(summary?.failed ?? 0) > 0 ? <Button title={t('people.import_retry_failed')} onPress={() => void retryFailures()} loading={saving} testID="contact-import-retry" /> : null}
-            <Button title={t('people.import_done')} onPress={onImported} disabled={saving} testID="contact-import-done" />
-          </View>
+          <FlatList
+            style={styles.flexList}
+            data={summary?.results ?? []}
+            keyExtractor={result => result.entry.key}
+            contentContainerStyle={styles.center}
+            ListHeaderComponent={<>
+              <Text style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('people.import_result')}</Text>
+              <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{t('people.import_counts')
+                .replace('{imported}', String(summary?.imported ?? 0))
+                .replace('{skipped}', String(summary?.skipped ?? 0))
+                .replace('{failed}', String(summary?.failed ?? 0))}</Text>
+            </>}
+            renderItem={({ item: result }) => <Text style={[styles.wrappingText, { color: result.disposition === 'imported' ? colors.primary : colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }]}>{result.entry.name}: {t(`people.import_status.${result.disposition}` as keyof Translations)}</Text>}
+            ListFooterComponent={<View style={styles.reviewActions}>
+              {(summary?.failed ?? 0) > 0 ? <Button title={t('people.import_retry_failed')} onPress={() => void retryFailures()} loading={saving} testID="contact-import-retry" /> : null}
+              <Button title={t('people.import_done')} onPress={onImported} disabled={saving} testID="contact-import-done" />
+            </View>}
+          />
         )}
       </View>
     </Modal>
@@ -326,15 +346,19 @@ export function BatchContactImportModal({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 24 },
+  container: { flex: 1 },
   header: { minHeight: 56, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 20 },
   center: { padding: 24, gap: 16 },
   message: { paddingHorizontal: 20, paddingVertical: 8 },
   search: { minHeight: 50, marginHorizontal: 20, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 },
   list: { padding: 20, gap: 10 },
+  flexList: { flex: 1 },
+  footer: { paddingHorizontal: 20, paddingTop: 10, gap: 8 },
   contact: { padding: 12, borderWidth: 1, borderRadius: 10, gap: 8 },
   review: { padding: 20, gap: 12 },
+  reviewActions: { gap: 12, paddingTop: 8 },
   reviewRow: { borderWidth: 1, borderRadius: 10, padding: 12, gap: 5 },
+  wrappingText: { flexShrink: 1, lineHeight: 22 },
   countries: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
 });
