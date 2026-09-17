@@ -1,8 +1,12 @@
 import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocales } from 'expo-localization';
+import {
+  hydrateLanguagePreference,
+  type SupportedLanguage,
+} from '@/services/languageHydration';
 
-export type Language = 'en' | 'ar';
+export type Language = SupportedLanguage;
 
 export interface Translations {
   [key: string]: string;
@@ -927,15 +931,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const selectionVersionAtStart = userSelectionVersion.current;
-    AsyncStorage.getItem('@viewstate_language').then(lang => {
-      if (
-        active
-        && userSelectionVersion.current === selectionVersionAtStart
-        && (lang === 'ar' || lang === 'en')
-      ) {
-        setLanguageState(lang);
-      }
-    }).catch(console.error);
+    void hydrateLanguagePreference({
+      readStoredLanguage: () => AsyncStorage.getItem('@viewstate_language'),
+      selectionVersionAtStart,
+      getSelectionVersion: () => userSelectionVersion.current,
+      isActive: () => active,
+      applyLanguage: setLanguageState,
+      onReadError: console.error,
+    });
     return () => {
       active = false;
     };
