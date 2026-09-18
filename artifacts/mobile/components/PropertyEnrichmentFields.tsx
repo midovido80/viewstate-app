@@ -1,5 +1,6 @@
-import { APARTMENT_SUBTYPES, FURNISHING_VALUES, PROPERTY_DETAIL_FIELD_DEFINITIONS, PropertyDetailField, PropertyType } from '@workspace/property-domain';
+import { APARTMENT_SUBTYPES, FURNISHING_VALUES, PROPERTY_DETAIL_FIELD_DEFINITIONS, PropertyDetailField, PropertyType, RESIDENTIAL_AMENITIES } from '@workspace/property-domain';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { toEnglishDigits } from '@/constants/market';
@@ -36,6 +37,15 @@ export const propertyDetailLabels: Record<PropertyDetailField, [string, string]>
   floorUse: ['Floor use', 'استخدام الدور'],
   furnishing: ['Furnishing', 'التأثيث'],
   hasMaidRoom: ['Maid room', 'غرفة خادمة'],
+  hasHeating: ['Heating', 'تدفئة'],
+  hasBalcony: ['Balcony', 'بلكونة'],
+  hasLaundryRoom: ['Laundry room', 'غرفة غسيل'],
+  hasSolarHeater: ['Solar heater', 'سخان شمسي'],
+  hasElevator: ['Elevator', 'مصعد'],
+  hasGarden: ['Garden', 'حديقة'],
+  hasSecurityGuard: ['Security / Guard', 'أمن / حارس'],
+  hasBBQArea: ['BBQ area', 'منطقة شواء'],
+
   hasPool: ['Pool', 'مسبح'],
   hasWaterfront: ['Waterfront', 'واجهة بحرية'],
   intendedUse: ['Intended use', 'الاستخدام المقصود'],
@@ -68,7 +78,19 @@ export function formatPropertyDetailValue(field: PropertyDetailField, value: unk
   return toEnglishDigits(String(value));
 }
 
-const booleanFields = new Set<PropertyDetailField>(['hasMaidRoom', 'hasPool', 'hasWaterfront', 'hasColdStorage']);
+const booleanFields = new Set<PropertyDetailField>(['hasPool', 'hasWaterfront', 'hasColdStorage']);
+export const RESIDENTIAL_AMENITY_PROPERTY_FIELDS = [
+  'hasHeating',
+  'hasBalcony',
+  'hasMaidRoom',
+  'hasLaundryRoom',
+  'hasSolarHeater',
+  'hasElevator',
+  'hasGarden',
+  'hasSecurityGuard',
+  'hasBBQArea',
+] as const satisfies readonly PropertyDetailField[];
+const AMENITY_FIELDS = new Set<PropertyDetailField>(RESIDENTIAL_AMENITY_PROPERTY_FIELDS);
 const literalFields = new Set<PropertyDetailField>(['intendedUse', 'commercialActivity', 'clarification']);
 const countFields = new Set<PropertyDetailField>([
   'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
@@ -118,6 +140,7 @@ export function PropertyEnrichmentFields({
   const definitions = propertyDetailDisplayDefinitions.filter(definition =>
     definition.appliesTo.includes(propertyType)
     && definition.field !== 'floorUse'
+    && !AMENITY_FIELDS.has(definition.field)
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
   const ordered = propertyType === 'floor'
@@ -310,6 +333,42 @@ export function PropertyEnrichmentFields({
           {renderFieldContent(definition)}
         </View>
       ))}
+      {(['apartment', 'house', 'villa', 'chalet'].includes(propertyType) || (propertyType === 'floor' && floorUse === 'residential')) && (
+        <View>
+          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+            {language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'}
+          </Text>
+          <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            {Array.from(AMENITY_FIELDS).map(field => {
+              const value = values[field];
+              const isTrue = value === 'true';
+              const isFalse = value === 'false';
+              const baseLabel = propertyDetailLabels[field][language === 'ar' ? 1 : 0];
+              const label = isFalse ? (language === 'ar' ? 'بدون ' + baseLabel : 'No ' + baseLabel.toLowerCase()) : baseLabel;
+              return (
+                <TouchableOpacity
+                  key={field}
+                  onPress={() => onChange(field, isTrue ? 'false' : 'true')}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isTrue }}
+                  style={[styles.chip, {
+                    borderColor: isTrue ? colors.primary : isFalse ? colors.border : colors.border,
+                    backgroundColor: isTrue ? colors.primary + '11' : colors.card,
+                    paddingLeft: isTrue || isFalse ? 12 : 16,
+                    paddingRight: isTrue || isFalse ? 12 : 16,
+                  }]}
+                >
+                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                    {isTrue && <Feather name="check" size={14} color={colors.primary} />}
+                    {isFalse && <Feather name="x" size={14} color={colors.mutedForeground} />}
+                    <Text style={[styles.chipText, { color: isTrue ? colors.primary : isFalse ? colors.mutedForeground : colors.foreground, fontFamily: isTrue ? fonts.semiBold : fonts.medium }]}>{label}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
     </View>
   );
 }

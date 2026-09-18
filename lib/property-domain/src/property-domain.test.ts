@@ -282,6 +282,30 @@ test("supports discriminated enrichment details for all eleven Property Types", 
   }
 });
 
+test("residential amenity facts preserve unknown, false, and true without deriving elevator availability", () => {
+  const missing: TypeDetails = { propertyType: "apartment" };
+  const explicit: TypeDetails = {
+    propertyType: "apartment",
+    hasHeating: true,
+    hasBalcony: false,
+    hasMaidRoom: true,
+    hasLaundryRoom: false,
+    hasSolarHeater: true,
+    hasElevator: false,
+    hasGarden: true,
+    hasSecurityGuard: false,
+    hasBBQArea: true,
+  };
+  assert(validateTypeDetails(missing, core("apartment")).ok, "Missing amenity facts remain valid unknowns");
+  assert(validateTypeDetails(explicit, core("apartment")).ok, "Explicit amenity booleans remain valid");
+  assertEqual("hasHeating" in missing, false, "Unknown must remain missing");
+  assertEqual(explicit.hasBalcony, false, "Explicit false must survive");
+  assertEqual(explicit.hasHeating, true, "Explicit true must survive");
+  assertEqual("elevatorCount" in explicit, false, "Elevator availability must not derive a count");
+  assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasElevator: true } as TypeDetails, core("floor")).ok, false, "Commercial Floor must reject residential amenities");
+  assertEqual(validateTypeDetails({ propertyType: "office", hasHeating: true } as unknown as TypeDetails, core("office")).ok, false, "Commercial types must reject residential amenities");
+});
+
 test("rejects enrichment counts that cannot be represented safely", () => {
   const result = validateTypeDetails({
     propertyType: "apartment",
@@ -588,6 +612,57 @@ test("share preview uses supplied localized BASIC labels and monthly rent wordin
     "🏠 Tipo: \u2068Apartamento\u2069\n↔ Operación: \u2068Alquiler\u2069\n💰 Precio: \u20681.250 KWD al mes\u2069\n📍 Zona: \u2068Salmiya\u2069\n\nPublicado por Casa",
     "Localized preview text must be exact and must not expose stored enum values",
   );
+});
+
+test("share preview includes residential amenity facts only through selected type_details", () => {
+  const sharedProperty: Property = {
+    core: core("apartment"),
+    activeOffer: {
+      id: "offer-1",
+      propertyCoreId: "property-1",
+      transaction: "sale",
+      salePrice: price(),
+    },
+    typeDetails: {
+      propertyType: "apartment",
+      hasHeating: true,
+      hasBalcony: false,
+      hasBBQArea: true,
+    },
+  };
+  const selection = {
+    normalFields: [] as readonly "type_details"[],
+    attachmentIds: [],
+    discloseOwnerSource: false,
+    discloseExactLocation: false,
+    disclosePaci: false,
+    discloseManualLocation: false,
+    discloseMapsLink: false,
+    personContactIds: [],
+  };
+  const hidden = buildPropertySharePreview({
+    property: sharedProperty,
+    selection,
+    availableAttachments: [],
+    rentalCadence: "",
+    attribution: "",
+  });
+  assertEqual(hidden.text, "", "Amenity facts must be omitted when type_details is not selected");
+  const visible = buildPropertySharePreview({
+    property: sharedProperty,
+    selection: { ...selection, normalFields: ["type_details"] },
+    availableAttachments: [],
+    detailLabels: {
+      hasHeating: "Heating",
+      hasBalcony: "Balcony",
+      hasBBQArea: "BBQ area",
+    },
+    rentalCadence: "",
+    attribution: "",
+  });
+  assert(visible.text.includes("Heating: \u2068Yes\u2069"), "True amenity facts must be shared accurately");
+  assert(visible.text.includes("Balcony: \u2068No\u2069"), "Explicit false amenity facts must be shared accurately");
+  assert(visible.text.includes("BBQ area: \u2068Yes\u2069"), "BBQ capitalization must use the canonical field");
 });
 
 test("share preview fail-closes exact locations and maps while never exposing private notes", () => {

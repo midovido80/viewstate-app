@@ -1,6 +1,7 @@
 import {
-  validateSeekerRequirement,
+  normalizeSeekerRequirement,
   type PropertyType,
+  type ResidentialAmenity,
   type RequirementOccupancy,
   type RequirementPurpose,
   type RequirementValidationIssue,
@@ -23,6 +24,7 @@ export interface RequirementFormValues {
   readonly gym?: boolean;
   readonly seaView?: boolean;
   readonly centralAC?: boolean;
+  readonly preferredAmenities?: readonly ResidentialAmenity[];
 }
 
 export type RequirementFormResult =
@@ -66,6 +68,9 @@ export function buildPersonRequirement(
       currencyCode: values.currencyCode,
     },
     notes: values.notes,
+    ...(values.preferredAmenities !== undefined
+      ? { preferredAmenities: [...values.preferredAmenities] }
+      : {}),
   };
   const candidate = values.purpose === 'rent' ? {
     ...base,
@@ -77,7 +82,7 @@ export function buildPersonRequirement(
     ...(values.seaView === true ? { seaView: true } : {}),
     ...(values.centralAC === true ? { centralAC: true } : {}),
   } : base;
-  const result = validateSeekerRequirement(candidate, {
+  const result = normalizeSeekerRequirement(candidate, {
     isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
   });
   return result.ok ? { ok: true, value: result.value } : result;
@@ -92,6 +97,9 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     maximumBudget: requirement.budget.maximum,
     currencyCode: requirement.budget.currencyCode,
     notes: requirement.notes,
+    ...(requirement.preferredAmenities !== undefined
+      ? { preferredAmenities: [...requirement.preferredAmenities] }
+      : {}),
     ...(requirement.purpose === 'rent' ? {
       ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
       ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),

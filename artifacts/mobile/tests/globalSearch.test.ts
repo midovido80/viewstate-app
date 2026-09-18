@@ -106,6 +106,21 @@ test('does not index private notes or exact location fields', () => {
   ]);
 });
 
+test('does not add Property facts or Requirement preferred amenities to Global Search', () => {
+  const amenityProperty = {
+    ...property('property-amenity', 'apartment', 'salmiya'),
+    typeDetails: { propertyType: 'apartment' as const, hasSolarHeater: true },
+  };
+  const amenityRequirement: SeekerRequirement = {
+    ...rentRequirement,
+    id: 'requirement-amenity',
+    preferredAmenities: ['security_guard'],
+  };
+  const amenityData = { ...data, properties: [amenityProperty], requirements: [amenityRequirement] };
+  assert.deepEqual(searchGlobalData(amenityData, 'solar heater').properties, []);
+  assert.deepEqual(searchGlobalData(amenityData, 'security guard').requirements, []);
+});
+
 test('returns distinct empty groups for an empty query', () => {
   assert.deepEqual(searchGlobalData(data, '   '), {
     people: [],

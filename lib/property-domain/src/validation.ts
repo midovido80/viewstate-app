@@ -234,7 +234,20 @@ export function validateTypeDetails(
     }
   }
 
-  for (const field of ["hasMaidRoom", "hasPool", "hasWaterfront", "hasColdStorage"] as const) {
+  for (const field of [
+    "hasMaidRoom",
+    "hasHeating",
+    "hasBalcony",
+    "hasLaundryRoom",
+    "hasSolarHeater",
+    "hasElevator",
+    "hasGarden",
+    "hasSecurityGuard",
+    "hasBBQArea",
+    "hasPool",
+    "hasWaterfront",
+    "hasColdStorage",
+  ] as const) {
     const value = candidate[field];
     if (value !== undefined && typeof value !== "boolean") {
       issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be boolean.`));

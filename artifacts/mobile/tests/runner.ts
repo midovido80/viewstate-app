@@ -342,7 +342,8 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
   assert.match(fieldSource, /FURNISHING_VALUES/);
   assert.match(fieldSource, /enrich\.furnishing\./);
-  assert.match(fieldSource, /hasMaidRoom.*hasPool.*hasWaterfront.*hasColdStorage/);
+  assert.match(fieldSource, /hasHeating[\s\S]*hasBBQArea/);
+  assert.match(fieldSource, /hasPool.*hasWaterfront.*hasColdStorage/);
   assert.doesNotMatch(fieldSource, /value \|\| 'clear'|enrich\.clear/);
   assert.match(fieldSource, /\['true', 'false'\]/);
   assert.match(fieldSource, /Math\.max\(0, current - 1\)/);
@@ -2207,12 +2208,13 @@ test('Task 6 static/source assertions: native atomic CAS/shared queue and web ex
 
 test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, and sale/rent compatibility', () => {
   assert.equal(PROPERTY_TYPES.length, 11);
+  const residentialAmenities = ['hasMaidRoom', 'hasHeating', 'hasBalcony', 'hasLaundryRoom', 'hasSolarHeater', 'hasElevator', 'hasGarden', 'hasSecurityGuard', 'hasBBQArea'] as const;
   const exactFields = {
-    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount'],
-    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool'],
-    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool'],
-    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', 'hasMaidRoom', 'parkingSpaceCount', 'hasPool', 'hasWaterfront'],
-    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', 'hasMaidRoom'],
+    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount'],
+    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool'],
+    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool'],
+    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront'],
+    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', ...residentialAmenities],
     floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
     office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity'],
     shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],

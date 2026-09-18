@@ -395,7 +395,7 @@ export default function PropertyEnrichmentScreen() {
         rawDetails[key] = { value: raw, privacy: normalPrivacy };
       } else if (key === 'floorUse' || key === 'apartmentSubtype' || key === 'furnishing') {
         rawDetails[key] = raw;
-      } else if (key === 'hasMaidRoom' || key === 'hasPool' || key === 'hasWaterfront' || key === 'hasColdStorage') {
+      } else if (key.startsWith('has')) {
         rawDetails[key] = raw === 'true';
       } else {
         rawDetails[key] = Number(raw);

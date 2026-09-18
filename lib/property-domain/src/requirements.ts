@@ -1,5 +1,6 @@
 import type { LocationAreaId, PropertyType } from "./types.ts";
-import { isPropertyType } from "./taxonomy.ts";
+import type { ResidentialAmenity } from "./types.ts";
+import { RESIDENTIAL_AMENITIES, isResidentialAmenity, isPropertyType } from "./taxonomy.ts";
 
 export const REQUIREMENT_PURPOSES = ["rent", "buy"] as const;
 export type RequirementPurpose = typeof REQUIREMENT_PURPOSES[number];
@@ -20,6 +21,7 @@ export interface SeekerRequirementBase {
   readonly preferredAreaIds: readonly LocationAreaId[];
   readonly budget: SeekerRequirementBudget;
   readonly notes: string;
+  readonly preferredAmenities?: readonly ResidentialAmenity[];
 }
 
 export interface RentSeekerRequirement extends SeekerRequirementBase {
@@ -55,7 +57,10 @@ export interface RequirementValidationIssue {
     | "invalid_currency"
     | "invalid_rent_field"
     | "invalid_occupancy"
-    | "buy_rent_field_not_allowed";
+    | "buy_rent_field_not_allowed"
+    | "invalid_amenity"
+    | "duplicate_amenity"
+    | "amenities_not_allowed";
   readonly path: readonly string[];
   readonly message: string;
 }
@@ -89,6 +94,7 @@ const REQUIREMENT_FIELDS = new Set([
   "preferredAreaIds",
   "budget",
   "notes",
+  "preferredAmenities",
   ...RENT_FIELDS,
 ]);
 
@@ -222,6 +228,35 @@ export function validateSeekerRequirement(
     });
   }
 
+  if (value.preferredAmenities !== undefined) {
+    if (!Array.isArray(value.preferredAmenities)) {
+      issues.push(issue("invalid_amenity", ["preferredAmenities"], "Preferred amenities must be a list."));
+    } else {
+      const seen = new Set<string>();
+      value.preferredAmenities.forEach((amenity, index) => {
+        const path = ["preferredAmenities", String(index)];
+        if (!isResidentialAmenity(amenity)) {
+          issues.push(issue("invalid_amenity", path, "Preferred amenity is not approved."));
+          return;
+        }
+        if (seen.has(amenity)) {
+          issues.push(issue("duplicate_amenity", path, "Preferred amenities must not be duplicated."));
+        }
+        seen.add(amenity);
+      });
+      if (
+        isPropertyType(value.propertyType) &&
+        !["apartment", "house", "villa", "chalet"].includes(value.propertyType)
+      ) {
+        issues.push(issue(
+          "amenities_not_allowed",
+          ["preferredAmenities"],
+          "Preferred amenities are supported only for apartment, house, villa, or chalet Requirements.",
+        ));
+      }
+    }
+  }
+
   const budget = value.budget;
   if (!isRecord(budget)) {
     issues.push(issue("invalid_budget", ["budget"], "Budget is required."));
@@ -341,6 +376,11 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(Object.prototype.hasOwnProperty.call(source, "preferredAmenities")
+      ? { preferredAmenities: RESIDENTIAL_AMENITIES.filter((amenity) =>
+        (validation.value.preferredAmenities ?? []).includes(amenity),
+      ) }
+      : {}),
   };
 
   if (validation.value.purpose === "buy") {

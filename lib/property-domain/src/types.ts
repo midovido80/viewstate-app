@@ -21,6 +21,17 @@ export type Furnishing = "unfurnished" | "semi_furnished" | "furnished";
 
 export type Transaction = "sale" | "rent";
 
+export type ResidentialAmenity =
+  | "heating"
+  | "balcony"
+  | "maid_room"
+  | "laundry_room"
+  | "solar_heater"
+  | "elevator"
+  | "garden"
+  | "security_guard"
+  | "bbq_area";
+
 export type PropertyCoreId = string;
 export type OfferId = string;
 export type LocationAreaId = string;
@@ -96,6 +107,14 @@ export interface ApartmentTypeDetails {
   readonly floorNumber?: number;
   readonly furnishing?: Furnishing;
   readonly hasMaidRoom?: boolean;
+  readonly hasHeating?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+  readonly hasSolarHeater?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasGarden?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
 }
 
@@ -114,6 +133,14 @@ export interface ResidentialFloorTypeDetails {
   readonly floorNumber?: number;
   readonly furnishing?: Furnishing;
   readonly hasMaidRoom?: boolean;
+  readonly hasHeating?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+  readonly hasSolarHeater?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasGarden?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
 }
 
@@ -145,6 +172,14 @@ export interface HouseTypeDetails {
   readonly floorCount?: number;
   readonly furnishing?: Furnishing;
   readonly hasMaidRoom?: boolean;
+  readonly hasHeating?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+  readonly hasSolarHeater?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasGarden?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
   readonly hasPool?: boolean;
 }

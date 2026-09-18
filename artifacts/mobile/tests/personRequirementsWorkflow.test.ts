@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { evaluateMatch, type SeekerRequirement } from '@workspace/property-domain';
+import { evaluateMatch, normalizeSeekerRequirement, validateSeekerRequirement, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement, parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -95,6 +95,47 @@ test('notes do not change frozen M2 matching output', () => {
   if (!first.ok || !second.ok) return;
   const candidate: Parameters<typeof evaluateMatch>[1] = { property: { core: { id: 'p1', propertyType: 'apartment', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'o1', propertyCoreId: 'p1', transaction: 'rent', rentalPrice: { amount: 400, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' } } };
   assert.deepEqual(evaluateMatch(first.value, candidate), evaluateMatch(second.value, candidate));
+});
+
+test('residential amenities preserve missing, explicit empty, canonical order, and scored services', () => {
+  const missing = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', swimmingPool: true, centralAC: true });
+  const empty = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'buy', preferredAmenities: [] });
+  const populated = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'rent',
+    swimmingPool: true,
+    centralAC: true,
+    preferredAmenities: ['bbq_area', 'heating', 'maid_room'],
+  });
+  assert.equal(missing.ok && 'preferredAmenities' in missing.value, false);
+  assert.equal(empty.ok, true);
+  assert.deepEqual(empty.ok ? empty.value.preferredAmenities : null, []);
+  assert.deepEqual(populated.ok ? populated.value.preferredAmenities : null, ['heating', 'maid_room', 'bbq_area']);
+  assert.equal(populated.ok && populated.value.purpose === 'rent' ? populated.value.swimmingPool : false, true);
+  assert.equal(populated.ok && populated.value.purpose === 'rent' ? populated.value.centralAC : false, true);
+  if (!populated.ok) return;
+  const edited = buildPersonRequirement(populated.value.id, populated.value.seekerId, {
+    ...formValuesFromRequirement(populated.value),
+    notes: 'unrelated edit',
+  });
+  assert.deepEqual(edited.ok ? edited.value.preferredAmenities : null, populated.value.preferredAmenities);
+});
+
+test('residential amenities validate IDs, duplicates, applicability, and remain informational to Matching', () => {
+  const source = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', preferredAmenities: ['garden'] });
+  const without = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent' });
+  assert.equal(source.ok && without.ok, true);
+  if (!source.ok || !without.ok) return;
+  const candidate: Parameters<typeof evaluateMatch>[1] = { property: { core: { id: 'p1', propertyType: 'apartment', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'o1', propertyCoreId: 'p1', transaction: 'rent', rentalPrice: { amount: 400, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' }, typeDetails: { propertyType: 'apartment', hasGarden: true } } };
+  assert.deepEqual(evaluateMatch(source.value, candidate), evaluateMatch(without.value, candidate));
+  const duplicate = validateSeekerRequirement({ ...source.value, preferredAmenities: ['garden', 'garden'] });
+  const invalid = validateSeekerRequirement({ ...source.value, preferredAmenities: ['private_pool'] });
+  const floor = validateSeekerRequirement({ ...source.value, propertyType: 'floor', preferredAmenities: [] });
+  assert.equal(duplicate.ok, false);
+  assert.equal(invalid.ok, false);
+  assert.equal(floor.ok, false);
+  const normalized = normalizeSeekerRequirement({ ...source.value, preferredAmenities: ['bbq_area', 'balcony'] });
+  assert.deepEqual(normalized.ok ? normalized.value.preferredAmenities : null, ['balcony', 'bbq_area']);
 });
 
 test('multiple requirement identities remain distinct while retaining the same owner', () => {

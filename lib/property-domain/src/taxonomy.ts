@@ -4,7 +4,20 @@ import type {
   Furnishing,
   PropertyType,
   Transaction,
+  ResidentialAmenity,
 } from "./types.ts";
+
+export const RESIDENTIAL_AMENITIES = [
+  "heating",
+  "balcony",
+  "maid_room",
+  "laundry_room",
+  "solar_heater",
+  "elevator",
+  "garden",
+  "security_guard",
+  "bbq_area",
+] as const satisfies readonly ResidentialAmenity[];
 
 export const PROPERTY_TYPES = [
   "whole_building",
@@ -55,6 +68,14 @@ export type PropertyDetailField =
   | "floorUse"
   | "furnishing"
   | "hasMaidRoom"
+  | "hasHeating"
+  | "hasBalcony"
+  | "hasLaundryRoom"
+  | "hasSolarHeater"
+  | "hasElevator"
+  | "hasGarden"
+  | "hasSecurityGuard"
+  | "hasBBQArea"
   | "hasPool"
   | "hasWaterfront"
   | "intendedUse"
@@ -90,6 +111,14 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "floorUse", appliesTo: ["floor"] },
   { field: "furnishing", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasMaidRoom", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasHeating", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasBalcony", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasLaundryRoom", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasSolarHeater", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasElevator", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasGarden", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasSecurityGuard", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasBBQArea", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasPool", appliesTo: ["house", "villa", "chalet"] },
   { field: "hasWaterfront", appliesTo: ["chalet"] },
   { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
@@ -139,4 +168,9 @@ export function isTransaction(value: unknown): value is Transaction {
     typeof value === "string" &&
     (TRANSACTIONS as readonly string[]).includes(value)
   );
+}
+
+export function isResidentialAmenity(value: unknown): value is ResidentialAmenity {
+  return typeof value === "string" &&
+    (RESIDENTIAL_AMENITIES as readonly string[]).includes(value);
 }
