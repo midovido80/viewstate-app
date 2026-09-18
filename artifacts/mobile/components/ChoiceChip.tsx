@@ -7,11 +7,12 @@ export interface ChoiceChipProps {
   selected: boolean;
   onPress: () => void;
   testID?: string;
+  accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
   role?: 'button' | 'checkbox' | 'radio';
 }
 
-export function ChoiceChip({ label, selected, onPress, testID, style, role = 'checkbox' }: ChoiceChipProps) {
+export function ChoiceChip({ label, selected, onPress, testID, accessibilityLabel, style, role = 'checkbox' }: ChoiceChipProps) {
   const colors = useColors();
   const { fonts } = useI18n();
 
@@ -20,6 +21,7 @@ export function ChoiceChip({ label, selected, onPress, testID, style, role = 'ch
       onPress={onPress}
       accessibilityRole={role}
       accessibilityState={role === 'button' ? {} : { checked: selected }}
+      accessibilityLabel={accessibilityLabel}
       testID={testID}
       style={[
         styles.chip,

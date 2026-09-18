@@ -3,6 +3,8 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { toEnglishDigits } from '@/constants/market';
+import { NumericQuickPick } from '@/components/NumericQuickPick';
+import { isPropertyNumericQuickPickSurface } from '@/services/numericQuickPick';
 
 export type EnrichmentFieldValues = Partial<Record<PropertyDetailField, string>>;
 
@@ -101,10 +103,12 @@ export function PropertyEnrichmentFields({
   propertyType,
   values,
   onChange,
+  onInvalidQuickPickChange,
 }: {
   propertyType: PropertyType;
   values: EnrichmentFieldValues;
   onChange: (field: PropertyDetailField, value: string) => void;
+  onInvalidQuickPickChange?: (field: PropertyDetailField, invalid: boolean) => void;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -121,6 +125,23 @@ export function PropertyEnrichmentFields({
   function renderFieldContent(definition: typeof PROPERTY_DETAIL_FIELD_DEFINITIONS[number]) {
     const field = definition.field;
     const testIdField = field === 'floorUse' ? 'floor-use' : field === 'apartmentSubtype' ? 'apartment-subtype' : field;
+    const usesResidentialQuickPick = (
+      field === 'bedroomCount'
+      || field === 'bathroomCount'
+      || field === 'parkingSpaceCount'
+    ) && isPropertyNumericQuickPickSurface(propertyType, floorUse);
+
+    if (usesResidentialQuickPick) {
+      return (
+        <NumericQuickPick
+          label={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
+          value={values[field] ?? ''}
+          onChangeText={value => onChange(field, value)}
+          onPendingValidityChange={invalid => onInvalidQuickPickChange?.(field, invalid)}
+          testID={`enrich-${field}-quick-pick`}
+        />
+      );
+    }
 
     if (choiceFields.has(field)) {
       const options = field === 'floorUse' ? ['residential', 'commercial']

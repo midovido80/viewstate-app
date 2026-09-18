@@ -1,0 +1,186 @@
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ChoiceChip } from '@/components/ChoiceChip';
+import { useColors } from '@/hooks/useColors';
+import { useI18n } from '@/contexts/I18nContext';
+import {
+  NUMERIC_QUICK_PICK_VALUES,
+  openNumericExactEntry,
+  parseExactIntegerInput,
+  resolveExactIntegerInput,
+  selectNumericQuickPick,
+  shouldOpenExactEntry,
+} from '@/services/numericQuickPick';
+
+export interface NumericQuickPickProps {
+  readonly label: string;
+  readonly value: string;
+  readonly onChangeText: (value: string) => void;
+  readonly onPendingValidityChange?: (invalid: boolean) => void;
+  readonly testID: string;
+}
+
+export function NumericQuickPick({
+  label,
+  value,
+  onChangeText,
+  onPendingValidityChange,
+  testID,
+}: NumericQuickPickProps) {
+  const colors = useColors();
+  const { language, isRTL, fonts } = useI18n();
+  const [expanded, setExpanded] = useState(() => shouldOpenExactEntry(value));
+  const [pending, setPending] = useState(value);
+  const [invalid, setInvalid] = useState(false);
+  const validityCallbackRef = useRef(onPendingValidityChange);
+
+  validityCallbackRef.current = onPendingValidityChange;
+
+  useEffect(() => {
+    if (!invalid) setPending(value);
+    if (shouldOpenExactEntry(value)) setExpanded(true);
+  }, [invalid, value]);
+
+  useEffect(() => () => validityCallbackRef.current?.(false), []);
+
+  const parsedValue = parseExactIntegerInput(value);
+  const exactActionLabel = language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
+  const exactInputLabel = language === 'ar' ? `${label}: قيمة دقيقة` : `${label}: exact value`;
+  const invalidLabel = language === 'ar'
+    ? 'أدخل عددًا صحيحًا غير سالب'
+    : 'Enter a non-negative whole number';
+
+  const setValidity = (nextInvalid: boolean) => {
+    setInvalid(nextInvalid);
+    validityCallbackRef.current?.(nextInvalid);
+  };
+
+  return (
+    <View style={styles.container} testID={testID}>
+      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+        {label}
+      </Text>
+      <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        {NUMERIC_QUICK_PICK_VALUES.map(option => (
+          <ChoiceChip
+            key={option}
+            label={String(option)}
+            selected={parsedValue.kind === 'valid' && parsedValue.value === option}
+            onPress={() => {
+              const next = selectNumericQuickPick(option);
+              setPending(next);
+              setExpanded(false);
+              setValidity(false);
+              onChangeText(next);
+            }}
+            testID={`${testID}-${option}`}
+            role="radio"
+            style={styles.choice}
+          />
+        ))}
+        <ChoiceChip
+          label="+6"
+          accessibilityLabel={language === 'ar' ? 'إدخال قيمة دقيقة ستة أو أكثر' : 'Enter an exact value of six or more'}
+          selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
+          onPress={() => {
+            const transition = openNumericExactEntry(value);
+            setPending(transition.value);
+            setExpanded(transition.expanded);
+            setValidity(false);
+          }}
+          testID={`${testID}-6-plus`}
+          role="button"
+          style={styles.choice}
+        />
+      </View>
+      {!expanded ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={exactActionLabel}
+          style={styles.exactActionButton}
+          onPress={() => {
+            const transition = openNumericExactEntry(value);
+            setPending(transition.value);
+            setExpanded(transition.expanded);
+            setValidity(false);
+          }}
+          testID={`${testID}-exact-open`}
+        >
+          <Text style={[styles.exactAction, { color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+            {exactActionLabel}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <>
+          <TextInput
+            value={pending}
+            onChangeText={input => {
+              const transition = resolveExactIntegerInput(input, value);
+              setPending(transition.pending);
+              setValidity(transition.invalid);
+              if (!transition.invalid) onChangeText(transition.committedValue);
+            }}
+            keyboardType="number-pad"
+            accessibilityLabel={exactInputLabel}
+            accessibilityHint={invalid ? invalidLabel : undefined}
+            style={[
+              styles.input,
+              {
+                color: colors.foreground,
+                borderColor: invalid ? colors.destructive : colors.border,
+                backgroundColor: colors.card,
+                textAlign: isRTL ? 'right' : 'left',
+              },
+            ]}
+            testID={`${testID}-exact-input`}
+          />
+          {invalid ? (
+            <Text
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}
+            >
+              {invalidLabel}
+            </Text>
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  choices: {
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  choice: {
+    minWidth: 46,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  exactActionButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  exactAction: {
+    paddingVertical: 4,
+    fontSize: 14,
+  },
+  input: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+  },
+  error: {
+    fontSize: 13,
+  },
+});

@@ -18,6 +18,7 @@ import {
   EnrichmentFieldValues,
   PropertyEnrichmentFields,
 } from '@/components/PropertyEnrichmentFields';
+import { hasPendingInvalidQuickPick, updateInvalidQuickPickFields } from '@/services/numericQuickPick';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -289,6 +290,7 @@ export default function PropertyEnrichmentScreen() {
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(() => new Set());
   const [enrichmentDraft, setEnrichmentDraft] = useState<PropertyEnrichmentDraftV1 | null>(null);
   const generation = useRef(0);
   const mounted = useRef(true);
@@ -358,6 +360,9 @@ export default function PropertyEnrichmentScreen() {
   }, [id, t]);
 
   const buildCandidate = (baseline: Property, nextAttachments = attachments, strict = true): Property => {
+    if (strict && hasPendingInvalidQuickPick(invalidQuickPickFields)) {
+      throw new Error('INVALID_ENRICHMENT_NUMBER');
+    }
     const rawDetails: Record<string, unknown> = {
       ...((baseline.typeDetails ?? {}) as unknown as Record<string, unknown>),
       propertyType: baseline.core.propertyType,
@@ -771,6 +776,9 @@ export default function PropertyEnrichmentScreen() {
             propertyType={property.core.propertyType}
             values={fields}
             onChange={(field, value) => setFields(current => ({ ...current, [field]: value }))}
+            onInvalidQuickPickChange={(field, invalid) => setInvalidQuickPickFields(
+              current => updateInvalidQuickPickFields(current, field, invalid),
+            )}
           />
         </Section>
          <Section title={t('enrich.notes')} colors={colors} fonts={fonts} isRTL={isRTL}>
