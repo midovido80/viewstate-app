@@ -14,6 +14,18 @@ export interface ExactIntegerTransition {
   readonly invalid: boolean;
 }
 
+export interface NumericQuickPickLocalState {
+  readonly scopeKey: string;
+  readonly pending: string;
+  readonly invalid: boolean;
+  readonly expanded: boolean;
+}
+
+export interface QuickPickValidationScope<T> {
+  readonly scopeKey: string;
+  readonly invalidFields: ReadonlySet<T>;
+}
+
 const UNAMBIGUOUS_RESIDENTIAL_TYPES = new Set<PropertyType>([
   'apartment',
   'house',
@@ -34,6 +46,42 @@ export function shouldOpenExactEntry(value: string): boolean {
   const parsed = parseExactIntegerInput(value);
   return parsed.kind === 'invalid'
     || parsed.kind === 'valid' && (parsed.value === 0 || parsed.value >= 6);
+}
+
+export function createNumericQuickPickLocalState(
+  scopeKey: string,
+  value: string,
+): NumericQuickPickLocalState {
+  return {
+    scopeKey,
+    pending: value,
+    invalid: false,
+    expanded: shouldOpenExactEntry(value),
+  };
+}
+
+export function reconcileNumericQuickPickScope(
+  current: NumericQuickPickLocalState,
+  scopeKey: string,
+  value: string,
+): NumericQuickPickLocalState {
+  return current.scopeKey === scopeKey
+    ? current
+    : createNumericQuickPickLocalState(scopeKey, value);
+}
+
+export function synchronizeNumericQuickPickValue(
+  current: NumericQuickPickLocalState,
+  scopeKey: string,
+  value: string,
+): NumericQuickPickLocalState {
+  const scoped = reconcileNumericQuickPickScope(current, scopeKey, value);
+  if (scoped.scopeKey !== current.scopeKey || scoped.invalid) return scoped;
+  return {
+    ...scoped,
+    pending: value,
+    expanded: scoped.expanded || shouldOpenExactEntry(value),
+  };
 }
 
 export function openNumericExactEntry(value: string): {
@@ -71,6 +119,37 @@ export function updateInvalidQuickPickFields<T>(
   if (invalid) next.add(field);
   else next.delete(field);
   return next;
+}
+
+export function createQuickPickValidationScope<T>(
+  scopeKey: string,
+): QuickPickValidationScope<T> {
+  return { scopeKey, invalidFields: new Set<T>() };
+}
+
+export function updateScopedInvalidQuickPickFields<T>(
+  current: QuickPickValidationScope<T>,
+  activeScopeKey: string,
+  sourceScopeKey: string,
+  field: T,
+  invalid: boolean,
+): QuickPickValidationScope<T> {
+  const active = current.scopeKey === activeScopeKey
+    ? current
+    : createQuickPickValidationScope<T>(activeScopeKey);
+  if (sourceScopeKey !== activeScopeKey) return active;
+  return {
+    scopeKey: activeScopeKey,
+    invalidFields: updateInvalidQuickPickFields(active.invalidFields, field, invalid),
+  };
+}
+
+export function hasPendingInvalidQuickPickForScope(
+  scope: QuickPickValidationScope<unknown>,
+  activeScopeKey: string,
+): boolean {
+  return scope.scopeKey === activeScopeKey
+    && hasPendingInvalidQuickPick(scope.invalidFields);
 }
 
 export function hasPendingInvalidQuickPick(fields: ReadonlySet<unknown>): boolean {

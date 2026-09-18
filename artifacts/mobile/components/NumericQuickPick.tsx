@@ -5,22 +5,26 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import {
   NUMERIC_QUICK_PICK_VALUES,
+  createNumericQuickPickLocalState,
   openNumericExactEntry,
   parseExactIntegerInput,
+  reconcileNumericQuickPickScope,
   resolveExactIntegerInput,
   selectNumericQuickPick,
-  shouldOpenExactEntry,
+  synchronizeNumericQuickPickValue,
 } from '@/services/numericQuickPick';
 
 export interface NumericQuickPickProps {
+  readonly scopeKey: string;
   readonly label: string;
   readonly value: string;
   readonly onChangeText: (value: string) => void;
-  readonly onPendingValidityChange?: (invalid: boolean) => void;
+  readonly onPendingValidityChange?: (scopeKey: string, invalid: boolean) => void;
   readonly testID: string;
 }
 
 export function NumericQuickPick({
+  scopeKey,
   label,
   value,
   onChangeText,
@@ -29,19 +33,19 @@ export function NumericQuickPick({
 }: NumericQuickPickProps) {
   const colors = useColors();
   const { language, isRTL, fonts } = useI18n();
-  const [expanded, setExpanded] = useState(() => shouldOpenExactEntry(value));
-  const [pending, setPending] = useState(value);
-  const [invalid, setInvalid] = useState(false);
+  const [localState, setLocalState] = useState(() => createNumericQuickPickLocalState(scopeKey, value));
   const validityCallbackRef = useRef(onPendingValidityChange);
 
   validityCallbackRef.current = onPendingValidityChange;
 
   useEffect(() => {
-    if (!invalid) setPending(value);
-    if (shouldOpenExactEntry(value)) setExpanded(true);
-  }, [invalid, value]);
+    setLocalState(current => synchronizeNumericQuickPickValue(current, scopeKey, value));
+  }, [scopeKey, value]);
 
-  useEffect(() => () => validityCallbackRef.current?.(false), []);
+  useEffect(() => () => validityCallbackRef.current?.(localState.scopeKey, false), [localState.scopeKey]);
+
+  const visibleState = reconcileNumericQuickPickScope(localState, scopeKey, value);
+  const { expanded, pending, invalid } = visibleState;
 
   const parsedValue = parseExactIntegerInput(value);
   const exactActionLabel = language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
@@ -51,8 +55,10 @@ export function NumericQuickPick({
     : 'Enter a non-negative whole number';
 
   const setValidity = (nextInvalid: boolean) => {
-    setInvalid(nextInvalid);
-    validityCallbackRef.current?.(nextInvalid);
+    setLocalState(current => current.scopeKey === scopeKey
+      ? { ...current, invalid: nextInvalid }
+      : current);
+    validityCallbackRef.current?.(scopeKey, nextInvalid);
   };
 
   return (
@@ -68,8 +74,9 @@ export function NumericQuickPick({
             selected={parsedValue.kind === 'valid' && parsedValue.value === option}
             onPress={() => {
               const next = selectNumericQuickPick(option);
-              setPending(next);
-              setExpanded(false);
+              setLocalState(current => current.scopeKey === scopeKey
+                ? { ...current, pending: next, expanded: false, invalid: false }
+                : current);
               setValidity(false);
               onChangeText(next);
             }}
@@ -84,8 +91,9 @@ export function NumericQuickPick({
           selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
           onPress={() => {
             const transition = openNumericExactEntry(value);
-            setPending(transition.value);
-            setExpanded(transition.expanded);
+            setLocalState(current => current.scopeKey === scopeKey
+              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: false }
+              : current);
             setValidity(false);
           }}
           testID={`${testID}-6-plus`}
@@ -100,8 +108,9 @@ export function NumericQuickPick({
           style={styles.exactActionButton}
           onPress={() => {
             const transition = openNumericExactEntry(value);
-            setPending(transition.value);
-            setExpanded(transition.expanded);
+            setLocalState(current => current.scopeKey === scopeKey
+              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: false }
+              : current);
             setValidity(false);
           }}
           testID={`${testID}-exact-open`}
@@ -116,7 +125,9 @@ export function NumericQuickPick({
             value={pending}
             onChangeText={input => {
               const transition = resolveExactIntegerInput(input, value);
-              setPending(transition.pending);
+              setLocalState(current => current.scopeKey === scopeKey
+                ? { ...current, pending: transition.pending, invalid: transition.invalid }
+                : current);
               setValidity(transition.invalid);
               if (!transition.invalid) onChangeText(transition.committedValue);
             }}

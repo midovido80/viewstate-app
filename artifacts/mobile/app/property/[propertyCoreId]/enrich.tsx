@@ -18,7 +18,7 @@ import {
   EnrichmentFieldValues,
   PropertyEnrichmentFields,
 } from '@/components/PropertyEnrichmentFields';
-import { hasPendingInvalidQuickPick, updateInvalidQuickPickFields } from '@/services/numericQuickPick';
+import { createQuickPickValidationScope, hasPendingInvalidQuickPickForScope, updateScopedInvalidQuickPickFields } from '@/services/numericQuickPick';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -276,6 +276,7 @@ function initialFields(property: Property): EnrichmentFieldValues {
 export default function PropertyEnrichmentScreen() {
   const params = useLocalSearchParams<{ propertyCoreId?: string | string[] }>();
   const id = Array.isArray(params.propertyCoreId) ? params.propertyCoreId[0] : params.propertyCoreId;
+  const recordScopeKey = `property:${id ?? 'missing'}`;
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -290,7 +291,8 @@ export default function PropertyEnrichmentScreen() {
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(() => new Set());
+  const [quickPickValidation, setQuickPickValidation] = useState(() =>
+    createQuickPickValidationScope<PropertyDetailField>(recordScopeKey));
   const [enrichmentDraft, setEnrichmentDraft] = useState<PropertyEnrichmentDraftV1 | null>(null);
   const generation = useRef(0);
   const mounted = useRef(true);
@@ -317,28 +319,35 @@ export default function PropertyEnrichmentScreen() {
   tRef.current = t;
 
   useEffect(() => {
+    setProperty(null);
+    setQuickPickValidation(createQuickPickValidationScope(recordScopeKey));
+  }, [recordScopeKey]);
+
+  useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     Promise.all([store.getProperty(id), loadPropertyEnrichmentDraft(id)]).then(async ([saved, recovered]) => {
+      if (cancelled) return;
       if (!saved) {
-        if (!mounted.current) return;
+        if (!mounted.current || cancelled) return;
         setError(t('edit.not_found'));
         return;
       }
       if (recovered && JSON.stringify(recovered.candidate) === JSON.stringify(saved)) {
         // CAS completed before the process stopped; only exact evidence is removed.
         await clearConfirmedPropertyEnrichmentDraft(recovered);
-        if (!mounted.current) return;
+        if (!mounted.current || cancelled) return;
         propertyRef.current = saved;
         enrichmentDraftRef.current = null;
         durableCandidateSnapshot.current = JSON.stringify(saved);
         setProperty(saved);
         setEnrichmentDraft(null);
       } else if (recovered && JSON.stringify(recovered.baseline) !== JSON.stringify(saved)) {
-        if (!mounted.current) return;
+        if (!mounted.current || cancelled) return;
         setError(t('enrich.save_failed'));
         return;
       } else {
-        if (!mounted.current) return;
+        if (!mounted.current || cancelled) return;
         propertyRef.current = saved;
         enrichmentDraftRef.current = recovered;
         durableCandidateSnapshot.current = JSON.stringify(recovered?.candidate ?? saved);
@@ -355,12 +364,13 @@ export default function PropertyEnrichmentScreen() {
       setMapsLink(visible.locationEnrichment?.mapsLink?.value ?? '');
       setAttachments((visible.attachments ?? []).map(attachmentToLocal).sort((a, b) => a.order - b.order));
     }).catch(() => {
-      if (mounted.current) setError(t('edit.unreadable'));
+      if (mounted.current && !cancelled) setError(t('edit.unreadable'));
     });
-  }, [id, t]);
+    return () => { cancelled = true; };
+  }, [id, recordScopeKey, t]);
 
   const buildCandidate = (baseline: Property, nextAttachments = attachments, strict = true): Property => {
-    if (strict && hasPendingInvalidQuickPick(invalidQuickPickFields)) {
+    if (strict && hasPendingInvalidQuickPickForScope(quickPickValidation, recordScopeKey)) {
       throw new Error('INVALID_ENRICHMENT_NUMBER');
     }
     const rawDetails: Record<string, unknown> = {
@@ -675,7 +685,7 @@ export default function PropertyEnrichmentScreen() {
   };
 
   const save = async () => {
-    if (!property || saving || persistFlight.current) return;
+    if (!property || property.core.id !== id || saving || persistFlight.current) return;
     setSaving(true);
     setError('');
     try {
@@ -751,7 +761,7 @@ export default function PropertyEnrichmentScreen() {
     return reorderAttachments(current, ids);
   }).catch(reportAttachmentFailure);
 
-  if (!property) {
+  if (!property || property.core.id !== id) {
     return <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}><Text style={{ color: colors.foreground }}>{error || t('edit.loading')}</Text></View>;
   }
 
@@ -773,11 +783,14 @@ export default function PropertyEnrichmentScreen() {
         {error ? <Text testID="enrich-error" accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{error}</Text> : null}
         <Section title={t('enrich.property_details')} colors={colors} fonts={fonts} isRTL={isRTL}>
           <PropertyEnrichmentFields
+            recordScopeKey={recordScopeKey}
             propertyType={property.core.propertyType}
             values={fields}
             onChange={(field, value) => setFields(current => ({ ...current, [field]: value }))}
-            onInvalidQuickPickChange={(field, invalid) => setInvalidQuickPickFields(
-              current => updateInvalidQuickPickFields(current, field, invalid),
+            onInvalidQuickPickChange={(field, sourceScopeKey, invalid) => setQuickPickValidation(
+              current => updateScopedInvalidQuickPickFields(
+                current, recordScopeKey, sourceScopeKey, field, invalid,
+              ),
             )}
           />
         </Section>

@@ -100,15 +100,17 @@ function safeDecimalInput(value: string): string | null {
 }
 
 export function PropertyEnrichmentFields({
+  recordScopeKey,
   propertyType,
   values,
   onChange,
   onInvalidQuickPickChange,
 }: {
+  recordScopeKey: string;
   propertyType: PropertyType;
   values: EnrichmentFieldValues;
   onChange: (field: PropertyDetailField, value: string) => void;
-  onInvalidQuickPickChange?: (field: PropertyDetailField, invalid: boolean) => void;
+  onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -134,10 +136,12 @@ export function PropertyEnrichmentFields({
     if (usesResidentialQuickPick) {
       return (
         <NumericQuickPick
+          scopeKey={recordScopeKey}
           label={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
           value={values[field] ?? ''}
           onChangeText={value => onChange(field, value)}
-          onPendingValidityChange={invalid => onInvalidQuickPickChange?.(field, invalid)}
+          onPendingValidityChange={(sourceScopeKey, invalid) =>
+            onInvalidQuickPickChange?.(field, sourceScopeKey, invalid)}
           testID={`enrich-${field}-quick-pick`}
         />
       );

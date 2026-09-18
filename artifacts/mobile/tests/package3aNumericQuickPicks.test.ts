@@ -2,15 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
+  createNumericQuickPickLocalState,
+  createQuickPickValidationScope,
   isPropertyNumericQuickPickSurface,
   isRequirementNumericQuickPickSurface,
   hasPendingInvalidQuickPick,
   openNumericExactEntry,
   parseExactIntegerInput,
+  reconcileNumericQuickPickScope,
   resolveExactIntegerInput,
   selectNumericQuickPick,
   shouldOpenExactEntry,
+  synchronizeNumericQuickPickValue,
   updateInvalidQuickPickFields,
+  updateScopedInvalidQuickPickFields,
+  hasPendingInvalidQuickPickForScope,
 } from '../services/numericQuickPick.ts';
 
 test('BEHAVIOR: quick values set the intended exact numeric value', () => {
@@ -82,6 +88,70 @@ test('BEHAVIOR: invalid pending fields block commit until each field is correcte
   assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
 });
 
+test('BEHAVIOR: A invalid to B valid resets pending text and permits B save', () => {
+  const a = { ...createNumericQuickPickLocalState('property:A', '8'), pending: '8x', invalid: true, expanded: true };
+  const b = reconcileNumericQuickPickScope(a, 'property:B', '3');
+  assert.deepEqual(b, { scopeKey: 'property:B', pending: '3', invalid: false, expanded: false });
+  let validation = createQuickPickValidationScope<string>('property:A');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A', 'property:A', 'bedrooms', true);
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:B', 'property:B', 'bedrooms', false);
+  assert.equal(hasPendingInvalidQuickPickForScope(validation, 'property:B'), false);
+});
+
+test('BEHAVIOR: identical numeric values still reset across record identities', () => {
+  const a = { ...createNumericQuickPickLocalState('requirement:A', '6'), pending: '6x', invalid: true };
+  assert.deepEqual(reconcileNumericQuickPickScope(a, 'requirement:B', '6'), {
+    scopeKey: 'requirement:B', pending: '6', invalid: false, expanded: true,
+  });
+});
+
+test('BEHAVIOR: same-identity rerender preserves invalid pending text and blocker', () => {
+  const current = { ...createNumericQuickPickLocalState('property:A', '8'), pending: '8x', invalid: true };
+  assert.equal(synchronizeNumericQuickPickValue(current, 'property:A', '8'), current);
+  let validation = createQuickPickValidationScope<string>('property:A');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A', 'property:A', 'bedrooms', true);
+  assert.equal(hasPendingInvalidQuickPickForScope(validation, 'property:A'), true);
+});
+
+test('BEHAVIOR: same-identity async initialization synchronizes value when no invalid text exists', () => {
+  const loading = createNumericQuickPickLocalState('requirement:A', '');
+  assert.deepEqual(synchronizeNumericQuickPickValue(loading, 'requirement:A', '6'), {
+    scopeKey: 'requirement:A', pending: '6', invalid: false, expanded: true,
+  });
+});
+
+test('BEHAVIOR: record initialization preserves blank, zero, quick, six, and higher exact values', () => {
+  for (const [value, expanded] of [['', false], ['0', true], ['3', false], ['6', true], ['12', true]] as const) {
+    assert.deepEqual(createNumericQuickPickLocalState(`record:${value}`, value), {
+      scopeKey: `record:${value}`, pending: value, invalid: false, expanded,
+    });
+  }
+});
+
+test('BEHAVIOR: inapplicable control scope leaves no obsolete save blocker', () => {
+  let validation = createQuickPickValidationScope<string>('property:A');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A', 'property:A', 'parking', true);
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A:commercial', 'property:A', 'parking', false);
+  assert.equal(hasPendingInvalidQuickPickForScope(validation, 'property:A:commercial'), false);
+});
+
+test('BEHAVIOR: stale A callbacks cannot restore A state or clear a legitimate B error', () => {
+  let validation = createQuickPickValidationScope<string>('property:B');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:B', 'property:B', 'bedrooms', true);
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:B', 'property:A', 'bedrooms', false);
+  assert.equal(validation.scopeKey, 'property:B');
+  assert.deepEqual([...validation.invalidFields], ['bedrooms']);
+});
+
+test('BEHAVIOR: new Requirement preserves same-owner state and resets on observable owner change', () => {
+  const ownerA = 'requirement:new:owner:person-A';
+  const current = { ...createNumericQuickPickLocalState(ownerA, ''), pending: '2x', invalid: true, expanded: true };
+  assert.equal(reconcileNumericQuickPickScope(current, ownerA, ''), current);
+  assert.deepEqual(reconcileNumericQuickPickScope(current, 'requirement:new:owner:person-B', ''), {
+    scopeKey: 'requirement:new:owner:person-B', pending: '', invalid: false, expanded: false,
+  });
+});
+
 test('BEHAVIOR: only authorized residential Property surfaces use quick picks', () => {
   for (const type of ['apartment', 'house', 'villa', 'chalet'] as const) {
     assert.equal(isPropertyNumericQuickPickSurface(type), true);
@@ -108,7 +178,7 @@ test('BEHAVIOR: unsupported quick values cannot be converted into stored markers
 test('SOURCE ASSERTION: production control opens +6 without assigning a numeric value', async () => {
   const source = await readFile('components/NumericQuickPick.tsx', 'utf8');
   assert.match(source, /label="\+6"/);
-  assert.match(source, /setExpanded\(true\)/);
+  assert.match(source, /expanded: transition\.expanded/);
   assert.doesNotMatch(source, /onChangeText\(['"]6['"]\)/);
   assert.match(source, /accessibilityRole="alert"/);
   assert.match(source, /minHeight: 44/);
@@ -125,7 +195,11 @@ test('SOURCE ASSERTION: Property applies quick picks only to the three authorize
 test('SOURCE ASSERTION: Requirement keeps ambiguous surfaces on current inputs and Buy without Rent details', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   assert.match(source, /isRequirementNumericQuickPickSurface\(purpose, propertyType\)/);
-  assert.match(source, /hasPendingInvalidQuickPick\(invalidQuickPickFields\)/);
+  assert.match(source, /requirement:new:owner:/);
+  assert.match(source, /quickPickValueScopeKey === recordScopeKey \? bedrooms : ''/);
+  assert.match(source, /quickPickValueScopeKey === recordScopeKey \? bathrooms : ''/);
+  assert.match(source, /hasPendingInvalidQuickPickForScope\(quickPickValidation, recordScopeKey\)/);
+  assert.match(source, /scopeKey=\{recordScopeKey\}/);
   assert.match(source, /requirements\.buy_no_rent_details/);
   assert.match(source, /<TextInput value=\{bedrooms\}/);
   assert.match(source, /<TextInput value=\{bathrooms\}/);
