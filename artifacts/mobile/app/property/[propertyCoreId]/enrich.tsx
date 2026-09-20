@@ -19,6 +19,12 @@ import {
   PropertyEnrichmentFields,
 } from '@/components/PropertyEnrichmentFields';
 import { createQuickPickValidationScope, hasPendingInvalidQuickPickForScope, updateScopedInvalidQuickPickFields } from '@/services/numericQuickPick';
+import {
+  applyFloorTransition,
+  createFloorTransitionProposal,
+  type FloorTransitionProposal,
+} from '@/services/amenityTypeTransitions';
+import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -308,17 +314,22 @@ export default function PropertyEnrichmentScreen() {
   const persistFlight = useRef<Promise<Property> | null>(null);
   const attachmentMutationFlight = useRef<Promise<void>>(Promise.resolve());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fieldsRef = useRef(fields);
+  const pendingFloorTransition = useRef<FloorTransitionProposal | null>(null);
+  const skipNextDraftAutosave = useRef(false);
   const mapsLinkRef = useRef('');
   const mapsLaunchPending = useRef(false);
   const tRef = useRef(t);
 
   propertyRef.current = property;
+  fieldsRef.current = fields;
   enrichmentDraftRef.current = enrichmentDraft;
   attachmentsRef.current = attachments;
   mapsLinkRef.current = mapsLink;
   tRef.current = t;
 
   useEffect(() => {
+    pendingFloorTransition.current = null;
     setProperty(null);
     setQuickPickValidation(createQuickPickValidationScope(recordScopeKey));
   }, [recordScopeKey]);
@@ -505,6 +516,10 @@ export default function PropertyEnrichmentScreen() {
 
   useEffect(() => {
     if (!property) return;
+    if (skipNextDraftAutosave.current) {
+      skipNextDraftAutosave.current = false;
+      return;
+    }
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
       void autosaveRef.current().catch(() => undefined);
@@ -514,6 +529,55 @@ export default function PropertyEnrichmentScreen() {
       debounceTimer.current = null;
     };
   }, [property, fields, description, privateNotes, paci, manualLocation, mapsLink, attachments]);
+
+  const updateEnrichmentField = (field: PropertyDetailField, value: string) => {
+    if (field !== 'floorUse' || fields.floorUse !== 'residential' || value !== 'commercial') {
+      pendingFloorTransition.current = null;
+      setFields(current => ({ ...current, [field]: value }));
+      return;
+    }
+    const proposal = createFloorTransitionProposal(recordScopeKey, fields, 'commercial');
+    if (!proposal || proposal.affected.length === 0) {
+      skipNextDraftAutosave.current = true;
+      setFields(current => ({ ...current, floorUse: 'commercial' }));
+      return;
+    }
+    pendingFloorTransition.current = proposal;
+    const details = proposal.affected.map(item => {
+      const rawValue = item.value === 'true' ? true : item.value === 'false' ? false : item.value;
+      return `${propertyDetailLabels[item.field][language === 'ar' ? 1 : 0]}: ${formatPropertyDetailValue(item.field, rawValue, language)}`;
+    }).join('\n');
+    const invalidate = () => {
+      if (pendingFloorTransition.current === proposal) pendingFloorTransition.current = null;
+    };
+    Alert.alert(
+      t('transition.floor.title'),
+      `${t('transition.floor.message')}\n\n${details}\n\n${t('transition.draft_only')}`,
+      [
+        { text: t('capture.cancel'), style: 'cancel', onPress: invalidate },
+        {
+          text: t('transition.remove_confirm'),
+          style: 'destructive',
+          onPress: () => {
+            if (!mounted.current || pendingFloorTransition.current !== proposal) return;
+            pendingFloorTransition.current = null;
+            const next = applyFloorTransition(recordScopeKey, fieldsRef.current, proposal);
+            if (!next) return;
+            skipNextDraftAutosave.current = true;
+            fieldsRef.current = next;
+            setFields(next);
+            setQuickPickValidation(current => proposal.affected.reduce(
+              (result, item) => updateScopedInvalidQuickPickFields(
+                result, recordScopeKey, recordScopeKey, item.field, false,
+              ),
+              current,
+            ));
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: invalidate },
+    );
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -786,7 +850,7 @@ export default function PropertyEnrichmentScreen() {
             recordScopeKey={recordScopeKey}
             propertyType={property.core.propertyType}
             values={fields}
-            onChange={(field, value) => setFields(current => ({ ...current, [field]: value }))}
+            onChange={updateEnrichmentField}
             onInvalidQuickPickChange={(field, sourceScopeKey, invalid) => setQuickPickValidation(
               current => updateScopedInvalidQuickPickFields(
                 current, recordScopeKey, sourceScopeKey, field, invalid,

@@ -313,10 +313,11 @@ test('People source exposes selected contact import, actions, links, and confirm
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Done action', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
-  const [successSource, enrichmentSource, fieldSource, detailSource, translations] = await Promise.all([
+  const [successSource, enrichmentSource, fieldSource, detailPresentationSource, detailSource, translations] = await Promise.all([
     readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
     readFile(sourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+    readFile(sourcePath('../services/propertyDetailPresentation.ts'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
@@ -342,7 +343,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
   assert.match(fieldSource, /FURNISHING_VALUES/);
   assert.match(fieldSource, /enrich\.furnishing\./);
-  assert.match(fieldSource, /hasHeating[\s\S]*hasBBQArea/);
+  assert.match(detailPresentationSource, /hasHeating[\s\S]*hasBBQArea/);
   assert.match(fieldSource, /hasPool.*hasWaterfront.*hasColdStorage/);
   assert.doesNotMatch(fieldSource, /value \|\| 'clear'|enrich\.clear/);
   assert.match(fieldSource, /\['true', 'false'\]/);

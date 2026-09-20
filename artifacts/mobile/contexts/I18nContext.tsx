@@ -5,6 +5,7 @@ import {
   hydrateLanguagePreference,
   type SupportedLanguage,
 } from '@/services/languageHydration';
+import { AMENITY_TRANSITION_COPY } from '@/services/amenityTransitionCopy';
 
 export type Language = SupportedLanguage;
 
@@ -457,6 +458,13 @@ const en: Translations = {
   'requirements.error.invalid_rent_field': 'Enter valid rent details.',
   'requirements.error.invalid_occupancy': 'Choose a valid occupancy preference.',
   'requirements.error.buy_rent_field_not_allowed': 'Rent-only fields are not allowed for Buy.',
+  'requirements.error.amenities_not_allowed': AMENITY_TRANSITION_COPY.en.amenitiesNotAllowed,
+  'transition.floor.title': AMENITY_TRANSITION_COPY.en.floorTitle,
+  'transition.floor.message': AMENITY_TRANSITION_COPY.en.floorMessage,
+  'transition.requirement.title': AMENITY_TRANSITION_COPY.en.requirementTitle,
+  'transition.requirement.message': AMENITY_TRANSITION_COPY.en.requirementMessage,
+  'transition.draft_only': AMENITY_TRANSITION_COPY.en.draftOnly,
+  'transition.remove_confirm': AMENITY_TRANSITION_COPY.en.confirm,
 };
 
 const ar: Translations = {
@@ -904,6 +912,13 @@ const ar: Translations = {
   'requirements.error.invalid_rent_field': 'أدخل تفاصيل إيجار صالحة.',
   'requirements.error.invalid_occupancy': 'اختر تفضيل إشغال صالحاً.',
   'requirements.error.buy_rent_field_not_allowed': 'حقول الإيجار غير مسموحة لمتطلبات الشراء.',
+  'requirements.error.amenities_not_allowed': AMENITY_TRANSITION_COPY.ar.amenitiesNotAllowed,
+  'transition.floor.title': AMENITY_TRANSITION_COPY.ar.floorTitle,
+  'transition.floor.message': AMENITY_TRANSITION_COPY.ar.floorMessage,
+  'transition.requirement.title': AMENITY_TRANSITION_COPY.ar.requirementTitle,
+  'transition.requirement.message': AMENITY_TRANSITION_COPY.ar.requirementMessage,
+  'transition.draft_only': AMENITY_TRANSITION_COPY.ar.draftOnly,
+  'transition.remove_confirm': AMENITY_TRANSITION_COPY.ar.confirm,
 };
 
 export const translations = { en, ar };
