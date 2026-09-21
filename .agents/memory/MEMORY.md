@@ -1,2 +1,3 @@
 - [Person identity consolidation](person-identity-consolidation.md) — one phone identity can hold multiple roles; consolidate links safely and fail closed on opaque data.
 - [Incompatible property detail transitions](incompatible-property-detail-transitions.md) — confirm before removing incompatible draft values; never silently clear or auto-persist them.
+- [Expo Preview navigation](expo-preview-navigation.md) — verify stateful mobile routes through normal in-app navigation when direct Expo web deep links render blank.

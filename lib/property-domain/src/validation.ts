@@ -17,6 +17,7 @@ import type {
   PropertyAttachmentMetadata,
   PropertyCore,
   PropertySource,
+  PropertyDemoCaptureMetadata,
   ShareDisclosurePolicy,
   TypeDetails,
   ValidationIssue,
@@ -432,6 +433,10 @@ export function validateProperty(
   const issues: ValidationIssue[] = [];
   const coreResult = validatePropertyCore(property.core);
   const offerResult = validateOffer(property.activeOffer);
+  const demoResult = validateDemoCapture(property.demoCapture);
+  if (!demoResult.ok) issues.push(...demoResult.issues);
+  if (property.areaSquareMeters !== undefined && (!Number.isFinite(property.areaSquareMeters) || property.areaSquareMeters < 0)) issues.push(issue("invalid_area", ["areaSquareMeters"], "Area must be finite and non-negative."));
+  if (property.areaUnit !== undefined && property.areaUnit !== "square_meter" && property.areaUnit !== "square_foot") issues.push(issue("invalid_area_unit", ["areaUnit"], "Area unit is invalid."));
 
   if (!coreResult.ok) issues.push(...coreResult.issues);
   if (!offerResult.ok) issues.push(...offerResult.issues);
@@ -456,4 +461,27 @@ export function validateProperty(
   }
 
   return issues.length === 0 ? valid(property) : invalid(issues);
+}
+
+const CAPTURE_CATEGORY_IDS = new Set([
+  "whole_building_corporate_rent", "whole_building_sale", "commercial_complex_sale",
+  "family_apartment", "bachelor_apartment", "house", "villa", "chalet", "warehouse", "duplex",
+]);
+
+export function validateDemoCapture(value: PropertyDemoCaptureMetadata | undefined): ValidationResult<PropertyDemoCaptureMetadata | undefined> {
+  if (value === undefined) return valid(undefined);
+  const issues: ValidationIssue[] = [];
+  if (!CAPTURE_CATEGORY_IDS.has(value.categoryId)) issues.push(issue("invalid_demo_category", ["demoCapture", "categoryId"], "Demo category is not approved."));
+  if (value.areaSquareMeters !== undefined && (!Number.isFinite(value.areaSquareMeters) || value.areaSquareMeters < 0)) issues.push(issue("invalid_demo_area", ["demoCapture", "areaSquareMeters"], "Demo area must be finite and non-negative."));
+  if (value.areaUnit !== undefined && value.areaUnit !== "square_meter" && value.areaUnit !== "square_foot") issues.push(issue("invalid_demo_area_unit", ["demoCapture", "areaUnit"], "Demo area unit is invalid."));
+  for (const [name, values] of [["numericValues", value.numericValues], ["choices", value.choices]] as const) {
+    if (!values) continue;
+    for (const [key, entry] of Object.entries(values)) {
+      if (!key || (name === "numericValues" ? typeof entry !== "number" || !Number.isFinite(entry) || entry < 0 : typeof entry !== "string" || !entry)) issues.push(issue("invalid_demo_value", ["demoCapture", name, key], "Demo metadata value is invalid."));
+    }
+  }
+  for (const [name, values] of [["selectedFeatures", value.selectedFeatures], ["nearbyServices", value.nearbyServices]] as const) {
+    if (values && values.some(entry => typeof entry !== "string" || !entry)) issues.push(issue("invalid_demo_id", ["demoCapture", name], "Demo metadata identifier is invalid."));
+  }
+  return issues.length ? invalid(issues) : valid(value);
 }

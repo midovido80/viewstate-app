@@ -55,6 +55,8 @@ interface CaptureContextValue {
   projectToProperty: () => { ok: true; property: Property } | { ok: false; issues: readonly any[] };
   savePropertyWithRecovery: (property?: Property) => Promise<SaveRecoveryResult>;
   resetDraft: (expectedSnapshot?: string) => Promise<boolean>;
+  persistCurrentCapture: () => Promise<boolean>;
+  getCurrentCaptureDetails: () => CaptureDetailValues;
 }
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
@@ -348,6 +350,20 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     }
   }, [pendingOperation, saveRecoveryStatus, setCurrentDraft]);
 
+  const persistCurrentCapture = useCallback(async () => {
+    if (!isReady || draftLoadFailed || saveRecoveryStatus !== 'none' || mutationsBlocked.current) return false;
+    try {
+      await flushDraftWrites();
+      await flushCaptureDetailsWrites();
+      const persisted = await loadDraft();
+      if (!persisted || serializeRecoveryValue(persisted) !== serializeRecoveryValue(draftRef.current)) return false;
+      const details = await loadCaptureDetails(draftRef.current.propertyCoreId, AsyncStorage);
+      return serializeRecoveryValue(details) === serializeRecoveryValue(captureDetailsRef.current);
+    } catch {
+      return false;
+    }
+  }, [draftLoadFailed, isReady, saveRecoveryStatus]);
+
   const savePropertyWithRecovery = useCallback(async (property?: Property) => {
     if (saveRecoveryStatus === 'unreadable' || saveRecoveryStatus === 'conflict') {
       return { status: 'conflict' } as const;
@@ -407,6 +423,8 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     projectToProperty,
     savePropertyWithRecovery,
     resetDraft
+    ,persistCurrentCapture
+    ,getCurrentCaptureDetails: () => captureDetailsRef.current
   }), [
     draft,
     captureDetails,
@@ -421,6 +439,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     projectToProperty,
     savePropertyWithRecovery,
     resetDraft,
+    persistCurrentCapture,
   ]);
 
   if (!isReady) return null;

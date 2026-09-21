@@ -3,6 +3,7 @@ import {
   Property,
   PropertyType,
   Transaction,
+  PropertyDemoCaptureMetadata,
   validateProperty,
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
@@ -24,6 +25,11 @@ export interface PropertyEditChoices {
   priceAmount?: number;
   locationAreaId: string;
   rentalPeriodId?: string;
+  demoMetadata?: PropertyDemoCaptureMetadata;
+  nearbyServices?: readonly string[];
+  areaSquareMeters?: number;
+  areaUnit?: 'square_meter' | 'square_foot';
+  block?: string;
 }
 
 export interface PropertyEditDraftV1 {
@@ -237,6 +243,13 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
       ...(baseline.activeOffer.transaction === 'rent'
         ? { rentalPeriodId: baseline.activeOffer.rentalPeriodId }
         : {}),
+      ...(baseline.demoCapture ? { demoMetadata: clone(baseline.demoCapture) } : {}),
+      ...(baseline.nearbyServices ? { nearbyServices: clone(baseline.nearbyServices) } : {}),
+      ...(baseline.areaSquareMeters !== undefined ? { areaSquareMeters: baseline.areaSquareMeters, areaUnit: baseline.areaUnit } : {}),
+      ...(baseline.areaSquareMeters === undefined && baseline.demoCapture?.areaSquareMeters !== undefined
+        ? { areaSquareMeters: baseline.demoCapture.areaSquareMeters, areaUnit: baseline.demoCapture.areaUnit }
+        : {}),
+      ...(baseline.core.block ? { block: baseline.core.block } : {}),
     },
     writeGeneration: (generations.get(baseline.core.id) ?? 0) + 1,
   };
@@ -268,6 +281,7 @@ export function buildPropertyUpdateCandidate(
   }
 
   const candidate = clone(baseline) as unknown as {
+    [key: string]: unknown;
     core: Record<string, unknown>;
     activeOffer: Record<string, unknown>;
   };
@@ -277,6 +291,22 @@ export function buildPropertyUpdateCandidate(
     id: choices.locationAreaId,
   };
   candidate.activeOffer.transaction = choices.transaction;
+  if (choices.demoMetadata) {
+    const demo = clone(choices.demoMetadata) as unknown as Record<string, unknown>;
+    delete demo.areaSquareMeters;
+    delete demo.areaUnit;
+    candidate.demoCapture = demo;
+  } else {
+    delete candidate.demoCapture;
+  }
+  if (choices.nearbyServices !== undefined) candidate.nearbyServices = clone(choices.nearbyServices);
+  else delete candidate.nearbyServices;
+  if (choices.areaSquareMeters !== undefined) candidate.areaSquareMeters = choices.areaSquareMeters;
+  else delete candidate.areaSquareMeters;
+  if (choices.areaUnit) candidate.areaUnit = choices.areaUnit;
+  else delete candidate.areaUnit;
+  if (choices.block !== undefined) candidate.core.block = choices.block;
+  else delete candidate.core.block;
   if (choices.transaction === 'sale') {
     delete candidate.activeOffer.rentalPrice;
     delete candidate.activeOffer.rentalPeriodId;

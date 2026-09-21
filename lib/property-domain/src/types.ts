@@ -11,6 +11,28 @@ export type PropertyType =
   | "chalet"
   | "other_built_property";
 
+export type PropertyCaptureCategoryId =
+  | "whole_building_corporate_rent"
+  | "whole_building_sale"
+  | "commercial_complex_sale"
+  | "family_apartment"
+  | "bachelor_apartment"
+  | "house"
+  | "villa"
+  | "chalet"
+  | "warehouse"
+  | "duplex";
+
+export interface PropertyDemoCaptureMetadata {
+  readonly categoryId: PropertyCaptureCategoryId;
+  readonly areaSquareMeters?: number;
+  readonly areaUnit?: "square_meter" | "square_foot";
+  readonly numericValues?: Readonly<Record<string, number>>;
+  readonly choices?: Readonly<Record<string, string>>;
+  readonly selectedFeatures?: readonly string[];
+  readonly nearbyServices?: readonly string[];
+}
+
 export type ApartmentSubtype =
   | "studio"
   | "standard_apartment"
@@ -300,12 +322,18 @@ export interface PropertySource {
 export interface PropertyAdditiveMetadata {
   readonly locationEnrichment?: LocationEnrichmentMetadata;
   readonly attachments?: readonly PropertyAttachmentMetadata[];
+  /** Selected nearby-service identifiers captured by the native Property flow. */
+  readonly nearbyServices?: readonly string[];
+  readonly demoCapture?: PropertyDemoCaptureMetadata;
+  readonly areaSquareMeters?: number;
+  readonly areaUnit?: "square_meter" | "square_foot";
 }
 
 export interface PropertyCore {
   readonly id: PropertyCoreId;
   readonly propertyType: PropertyType;
   readonly locationArea: LocationAreaReference;
+  readonly block?: string;
   readonly description?: ClassifiedLiteralText;
   readonly privateNotes?: ClassifiedLiteralText;
   readonly ownerSource?: ClassifiedLiteralText;
@@ -340,6 +368,7 @@ export interface PropertyDraft {
   readonly offerId?: OfferId;
   readonly propertyType?: PropertyType;
   readonly locationAreaId?: LocationAreaId;
+  readonly block?: string;
   readonly transaction?: Transaction;
   readonly salePrice?: PriceValue;
   readonly rentalPrice?: PriceValue;
@@ -378,7 +407,14 @@ export type ValidationIssueCode =
   | "incompatible_rental_terms"
   | "property_core_mismatch"
   | "type_details_mismatch"
-  | "whitespace_only";
+  | "whitespace_only"
+  | "invalid_area"
+  | "invalid_area_unit"
+  | "invalid_demo_category"
+  | "invalid_demo_area"
+  | "invalid_demo_area_unit"
+  | "invalid_demo_value"
+  | "invalid_demo_id";
 
 export interface ValidationIssue {
   readonly code: ValidationIssueCode;

@@ -12,9 +12,10 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
-import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction } from '@workspace/property-domain';
+import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
+import { getDemoCategory, DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
@@ -62,6 +63,7 @@ export default function PropertyDetailScreen() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'unreadable'>('loading');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const saveFlight = useRef(false);
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaSearch, setAreaSearch] = useState('');
   const [leaveVisible, setLeaveVisible] = useState(false);
@@ -345,7 +347,8 @@ export default function PropertyDetailScreen() {
   };
 
   const save = async () => {
-    if (!draft || saving) return;
+    if (!draft || saving || saveFlight.current) return;
+    saveFlight.current = true;
     setSaving(true);
     setError('');
     try {
@@ -411,6 +414,7 @@ export default function PropertyDetailScreen() {
                 : t('edit.save_failed'),
       );
     } finally {
+      saveFlight.current = false;
       setSaving(false);
     }
   };
@@ -471,6 +475,7 @@ export default function PropertyDetailScreen() {
     : property.activeOffer.transaction === 'rent'
       ? property.activeOffer.rentalPeriodId
       : undefined;
+  const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -593,6 +598,29 @@ export default function PropertyDetailScreen() {
                 );
               }) : null}
             {property.core.description ? <DetailRow label={t('enrich.description')} value={property.core.description.value} /> : null}
+            {property.core.block ? <DetailRow label={language === 'ar' ? 'القطعة' : 'Block'} value={property.core.block} /> : null}
+            {demoCategory?.numericFields.map(field => {
+              const value = property.demoCapture?.numericValues?.[field.id];
+              return value === undefined ? null : <DetailRow key={`demo-${field.id}`} label={field.label[language === 'ar' ? 1 : 0]} value={String(value)} />;
+            })}
+            {(property.demoCapture?.areaSquareMeters ?? property.areaSquareMeters) !== undefined ? (
+              <DetailRow
+                label={language === 'ar' ? 'المساحة' : 'Area'}
+                value={`${property.demoCapture?.areaSquareMeters ?? property.areaSquareMeters} ${(property.demoCapture?.areaUnit ?? property.areaUnit) === 'square_foot' ? (language === 'ar' ? 'قدم مربع' : 'sq ft') : (language === 'ar' ? 'متر مربع' : 'm²')}`}
+              />
+            ) : null}
+            {demoCategory?.choices.map(choice => {
+              const selected = property.demoCapture?.choices?.[choice.id];
+              const option = choice.options.find(item => item.id === selected);
+              return option ? <DetailRow key={`demo-choice-${choice.id}`} label={choice.label[language === 'ar' ? 1 : 0]} value={option.label[language === 'ar' ? 1 : 0]} /> : null;
+            })}
+            {property.demoCapture?.selectedFeatures?.length ? <DetailRow label={language === 'ar' ? 'المزايا' : 'Features'} value={property.demoCapture.selectedFeatures.map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} /> : null}
+            {property.nearbyServices?.length ? (
+              <DetailRow
+                label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}
+                value={property.nearbyServices.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')}
+              />
+            ) : null}
             {property.core.privateNotes ? <DetailRow label={t('enrich.private_notes')} value={property.core.privateNotes.value} /> : null}
             {property.locationEnrichment?.manualLocationText ? <DetailRow label={t('enrich.manual_location')} value={property.locationEnrichment.manualLocationText.value} /> : null}
             {property.attachments?.map(attachment => (
@@ -646,6 +674,34 @@ export default function PropertyDetailScreen() {
             >
               <Text style={{ color: colors.foreground, fontFamily: fonts.regular }}>{areaName(choices.locationAreaId)}</Text>
             </TouchableOpacity>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'مساحة العقار' : 'Property area'}</Text>
+            <TextInput
+              value={choices.areaSquareMeters === undefined ? '' : String(choices.areaSquareMeters)}
+              onChangeText={value => updateChoices({ areaSquareMeters: value.trim() === '' ? undefined : Number(value) })}
+              keyboardType="decimal-pad"
+              testID="edit-area-square-meters"
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+            />
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
+            <TextInput
+              value={choices.block ?? ''}
+              onChangeText={value => updateChoices({ block: value || undefined })}
+              keyboardType="number-pad"
+              testID="edit-block"
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+            />
+            {demoCategory ? (
+              <DemoEditFields
+                category={demoCategory}
+                metadata={choices.demoMetadata}
+                nearby={choices.nearbyServices ?? property.nearbyServices ?? []}
+                language={language}
+                colors={colors}
+                fonts={fonts}
+                onChange={(changes: Partial<PropertyDemoCaptureMetadata>) => updateChoices({ demoMetadata: { ...(choices.demoMetadata ?? { categoryId: demoCategory.id }), ...changes } })}
+                onNearbyChange={(nearby: readonly string[]) => updateChoices({ nearbyServices: nearby, demoMetadata: { ...(choices.demoMetadata ?? { categoryId: demoCategory.id }), nearbyServices: nearby } })}
+              />
+            ) : null}
             <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" />
           </>
         ) : null}
@@ -885,6 +941,58 @@ export default function PropertyDetailScreen() {
   }
 }
 
+function DemoEditFields({ category, metadata, nearby, language, colors, fonts, onChange, onNearbyChange }: any) {
+  return (
+    <View style={styles.demoEditSection}>
+      {category.numericFields.map((item: any) => (
+        <View key={item.id}>
+          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{item.label[language === 'ar' ? 1 : 0]}</Text>
+          <TextInput
+            value={metadata?.numericValues?.[item.id] === undefined ? '' : String(metadata.numericValues[item.id])}
+            onChangeText={value => {
+              const normalized = value.replace(/[٠-٩]/g, (digit: string) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, (digit: string) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
+              const parsed = normalized === '' ? undefined : Number(normalized);
+              if (parsed === undefined || Number.isFinite(parsed)) {
+                const numericValues = { ...(metadata?.numericValues ?? {}) };
+                if (parsed === undefined) delete numericValues[item.id];
+                else numericValues[item.id] = parsed;
+                onChange({ numericValues });
+              }
+            }}
+            keyboardType="decimal-pad"
+            testID={`edit-demo-numeric-${item.id}`}
+            style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+          />
+        </View>
+      ))}
+      {category.choices.map((choice: any) => (
+        <View key={choice.id}>
+          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{choice.label[language === 'ar' ? 1 : 0]}</Text>
+          <View style={styles.options}>{choice.options.map((option: any) => (
+            <TouchableOpacity key={option.id} onPress={() => onChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} testID={`edit-demo-choice-${choice.id}-${option.id}`} style={[styles.editDemoChoice, { borderColor: metadata?.choices?.[choice.id] === option.id ? colors.primary : colors.border }]}>
+              <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{option.label[language === 'ar' ? 1 : 0]}</Text>
+            </TouchableOpacity>
+          ))}</View>
+        </View>
+      ))}
+      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المزايا' : 'Features'}</Text>
+      <View style={styles.options}>{category.features.map((feature: any) => {
+        const selected = metadata?.selectedFeatures?.includes(feature.id);
+        return <TouchableOpacity key={feature.id} onPress={() => onChange({ selectedFeatures: selected ? metadata.selectedFeatures.filter((id: string) => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} testID={`edit-demo-feature-${feature.id}`} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} style={[styles.editDemoChoice, { borderColor: selected ? colors.primary : colors.border }]}>
+          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selected ? '✓ ' : ''}{feature.label[language === 'ar' ? 1 : 0]}</Text>
+        </TouchableOpacity>;
+      })}</View>
+      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
+      <View style={styles.options}>{DEMO_NEARBY_SERVICES.map(item => {
+        const selected = nearby.includes(item.id);
+        return <TouchableOpacity key={item.id} onPress={() => onNearbyChange(selected ? nearby.filter((id: string) => id !== item.id) : [...nearby, item.id])} testID={`edit-demo-nearby-${item.id}`} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} style={[styles.editDemoChoice, { borderColor: selected ? colors.primary : colors.border }]}>
+          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selected ? '✓ ' : ''}{item.label[language === 'ar' ? 1 : 0]}</Text>
+        </TouchableOpacity>;
+      })}</View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, padding: 24, justifyContent: 'center', gap: 24 },
@@ -911,6 +1019,8 @@ const styles = StyleSheet.create({
   choice: { minHeight: 48, padding: 12, borderWidth: 1, borderRadius: 10, justifyContent: 'center' },
   input: { minHeight: 54, paddingHorizontal: 14, borderWidth: 1, borderRadius: 10, justifyContent: 'center' },
   error: { padding: 12 },
+  demoEditSection: { marginTop: 14, gap: 10 },
+  editDemoChoice: { minHeight: 44, padding: 10, borderWidth: 1, borderRadius: 10, justifyContent: 'center' },
   areaSearch: { marginHorizontal: 20, marginTop: 16 },
   areaRow: { minHeight: 52, justifyContent: 'center', borderBottomWidth: 1 },
   modalOverlay: {

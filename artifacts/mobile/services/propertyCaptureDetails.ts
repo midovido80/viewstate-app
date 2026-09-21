@@ -3,6 +3,7 @@ import {
   type Property,
   type PropertyDetailField,
   type PropertyDraft,
+  type PropertyDemoCaptureMetadata,
 } from '@workspace/property-domain';
 import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentFields';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
@@ -13,7 +14,12 @@ const normalPrivacy = {
   disclosurePolicy: 'normal' as const,
 };
 
-export type CaptureDetailValues = EnrichmentFieldValues;
+export type CaptureDetailValues = EnrichmentFieldValues & {
+  nearbyServices?: string;
+  demoMetadata?: PropertyDemoCaptureMetadata;
+  areaSquareMeters?: number;
+  areaUnit?: "square_meter" | "square_foot";
+};
 
 export function applyCaptureTransactionDefaults(
   draft: PropertyDraft,
@@ -78,6 +84,19 @@ export function buildPropertyWithCaptureDetails(
 
   const candidate: Property = {
     ...baseline,
+    ...(fields.nearbyServices?.trim()
+      ? { nearbyServices: JSON.parse(fields.nearbyServices) as readonly string[] }
+      : {}),
+    ...(fields.demoMetadata ? {
+      demoCapture: (() => {
+        const legacy = { ...fields.demoMetadata };
+        delete legacy.areaSquareMeters;
+        delete legacy.areaUnit;
+        return legacy;
+      })(),
+    } : {}),
+    ...(fields.areaSquareMeters !== undefined ? { areaSquareMeters: fields.areaSquareMeters } : {}),
+    ...(fields.areaUnit ? { areaUnit: fields.areaUnit } : {}),
     typeDetails: populatedDetailKeys.length > 0
       ? rawDetails as unknown as Property['typeDetails']
       : undefined,

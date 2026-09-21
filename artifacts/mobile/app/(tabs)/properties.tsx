@@ -140,7 +140,7 @@ export default function PropertiesScreen() {
       }]}>
         <Button
           title={t('properties.new')}
-          onPress={() => router.push('/capture/transaction' as any)}
+        onPress={() => router.push('/capture' as any)}
           style={styles.fab}
           testID="btn-capture"
         />
