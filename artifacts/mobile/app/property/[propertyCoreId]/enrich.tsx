@@ -316,7 +316,6 @@ export default function PropertyEnrichmentScreen() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fieldsRef = useRef(fields);
   const pendingFloorTransition = useRef<FloorTransitionProposal | null>(null);
-  const skipNextDraftAutosave = useRef(false);
   const mapsLinkRef = useRef('');
   const mapsLaunchPending = useRef(false);
   const tRef = useRef(t);
@@ -516,10 +515,6 @@ export default function PropertyEnrichmentScreen() {
 
   useEffect(() => {
     if (!property) return;
-    if (skipNextDraftAutosave.current) {
-      skipNextDraftAutosave.current = false;
-      return;
-    }
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
       void autosaveRef.current().catch(() => undefined);
@@ -531,15 +526,18 @@ export default function PropertyEnrichmentScreen() {
   }, [property, fields, description, privateNotes, paci, manualLocation, mapsLink, attachments]);
 
   const updateEnrichmentField = (field: PropertyDetailField, value: string) => {
-    if (field !== 'floorUse' || fields.floorUse !== 'residential' || value !== 'commercial') {
+    if (field !== 'floorUse' || !fields.floorUse || fields.floorUse === value) {
       pendingFloorTransition.current = null;
       setFields(current => ({ ...current, [field]: value }));
       return;
     }
-    const proposal = createFloorTransitionProposal(recordScopeKey, fields, 'commercial');
+    const proposal = createFloorTransitionProposal(
+      recordScopeKey,
+      fields,
+      value as 'residential' | 'commercial',
+    );
     if (!proposal || proposal.affected.length === 0) {
-      skipNextDraftAutosave.current = true;
-      setFields(current => ({ ...current, floorUse: 'commercial' }));
+      setFields(current => ({ ...current, floorUse: value }));
       return;
     }
     pendingFloorTransition.current = proposal;
@@ -563,7 +561,6 @@ export default function PropertyEnrichmentScreen() {
             pendingFloorTransition.current = null;
             const next = applyFloorTransition(recordScopeKey, fieldsRef.current, proposal);
             if (!next) return;
-            skipNextDraftAutosave.current = true;
             fieldsRef.current = next;
             setFields(next);
             setQuickPickValidation(current => proposal.affected.reduce(

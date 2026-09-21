@@ -17,6 +17,15 @@ export default function TransactionScreen() {
   const { draft, updateDraft } = useCapture();
   const { t, fonts, isRTL } = useI18n();
 
+  const chooseTransaction = (transaction: Transaction) => {
+    if (updateDraft({ transaction })) {
+      router.push({
+        pathname: '/capture/property-type',
+        params: linkPersonId ? { linkPersonId } : {},
+      } as never);
+    }
+  };
+
   const handleNext = () => {
     if (draft.transaction) {
       router.push({ pathname: '/capture/property-type', params: linkPersonId ? { linkPersonId } : {} } as never);
@@ -34,7 +43,7 @@ export default function TransactionScreen() {
           title={t('transaction.sale')}
           icon="tag"
           selected={draft.transaction === 'sale'}
-          onSelect={() => updateDraft({ transaction: 'sale' as Transaction })}
+           onSelect={() => chooseTransaction('sale')}
           testID="select-sale"
         />
         
@@ -42,7 +51,7 @@ export default function TransactionScreen() {
           title={t('transaction.rent')}
           icon="key"
           selected={draft.transaction === 'rent'}
-          onSelect={() => updateDraft({ transaction: 'rent' as Transaction })}
+           onSelect={() => chooseTransaction('rent')}
           testID="select-rent"
         />
       </View>

@@ -70,6 +70,51 @@ test('Floor transition without incompatible populated values needs no destructiv
     bathroomCount: '2',
     bedroomCount: '',
   });
+
+  const commercialFields = {
+    floorUse: 'commercial',
+    builtUpAreaSquareMeters: '300',
+    bathroomCount: '2',
+    intendedUse: '',
+  } as const;
+  const residentialProposal = createFloorTransitionProposal(
+    'property:A',
+    commercialFields,
+    'residential',
+  );
+  assert.ok(residentialProposal);
+  assert.deepEqual(residentialProposal.affected, []);
+  assert.deepEqual(applyFloorTransition('property:A', commercialFields, residentialProposal), {
+    floorUse: 'residential',
+    builtUpAreaSquareMeters: '300',
+    bathroomCount: '2',
+    intendedUse: '',
+  });
+});
+
+test('Floor transition removes only populated Commercial fields when switching to Residential', () => {
+  const fields = {
+    floorUse: 'commercial',
+    bathroomCount: '2',
+    intendedUse: 'clinic',
+    commercialActivity: 'medical',
+    frontageWidthMeters: '0',
+  } as const;
+  const proposal = createFloorTransitionProposal('property:commercial', fields, 'residential');
+  assert.ok(proposal);
+  assert.deepEqual(
+    proposal.affected.map(item => [item.field, item.value]),
+    [
+      ['intendedUse', 'clinic'],
+      ['commercialActivity', 'medical'],
+      ['frontageWidthMeters', '0'],
+    ],
+  );
+  assert.deepEqual(applyFloorTransition('property:commercial', fields, proposal), {
+    floorUse: 'residential',
+    bathroomCount: '2',
+  });
+  assert.equal(applyFloorTransition('property:other', fields, proposal), null);
 });
 
 test('Floor proposals reject another record, newer draft, and duplicate application', () => {

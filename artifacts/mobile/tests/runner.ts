@@ -313,10 +313,11 @@ test('People source exposes selected contact import, actions, links, and confirm
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Done action', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
-  const [successSource, enrichmentSource, fieldSource, detailPresentationSource, detailSource, translations] = await Promise.all([
+  const [successSource, enrichmentSource, fieldSource, catalogSource, detailPresentationSource, detailSource, translations] = await Promise.all([
     readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
     readFile(sourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
+    readFile(sourcePath('../services/propertyFormCatalog.ts'), 'utf8'),
     readFile(sourcePath('../services/propertyDetailPresentation.ts'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
@@ -339,12 +340,13 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.doesNotMatch(enrichmentSource, /requestCurrentCoordinates|enrich-current-location/);
   assert.match(enrichmentSource, /\.\.\.\(\(baseline\.locationEnrichment \?\? \{\}\)/);
   assert.match(enrichmentSource, /enrich-other-required|OTHER_CLARIFICATION_REQUIRED/);
-  assert.match(fieldSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS/);
+  assert.match(fieldSource, /getApplicablePropertyFormFields/);
+  assert.match(catalogSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS\.map/);
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
   assert.match(fieldSource, /FURNISHING_VALUES/);
   assert.match(fieldSource, /enrich\.furnishing\./);
   assert.match(detailPresentationSource, /hasHeating[\s\S]*hasBBQArea/);
-  assert.match(fieldSource, /hasPool.*hasWaterfront.*hasColdStorage/);
+  assert.match(catalogSource, /hasPool.*hasWaterfront.*hasColdStorage/);
   assert.doesNotMatch(fieldSource, /value \|\| 'clear'|enrich\.clear/);
   assert.match(fieldSource, /\['true', 'false'\]/);
   assert.match(fieldSource, /Math\.max\(0, current - 1\)/);

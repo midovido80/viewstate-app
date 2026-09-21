@@ -186,9 +186,7 @@ test('SOURCE ASSERTION: production control opens +6 without assigning a numeric 
 
 test('SOURCE ASSERTION: Property applies quick picks only to the three authorized fields', async () => {
   const source = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
-  for (const field of ['bedroomCount', 'bathroomCount', 'parkingSpaceCount']) {
-    assert.match(source, new RegExp(`field === '${field}'`));
-  }
+  assert.match(source, /definition\.control === 'numeric_quick_pick'/);
   assert.match(source, /isPropertyNumericQuickPickSurface\(propertyType, floorUse\)/);
 });
 

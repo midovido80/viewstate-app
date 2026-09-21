@@ -17,6 +17,15 @@ export default function PropertyTypeScreen() {
   const { draft, updateDraft } = useCapture();
   const { t, fonts, isRTL } = useI18n();
 
+  const choosePropertyType = (propertyType: typeof PROPERTY_TYPES[number]) => {
+    if (updateDraft({ propertyType })) {
+      router.push({
+        pathname: '/capture/price',
+        params: linkPersonId ? { linkPersonId } : {},
+      } as never);
+    }
+  };
+
   const handleNext = () => {
     if (draft.propertyType) {
       router.push({ pathname: '/capture/price', params: linkPersonId ? { linkPersonId } : {} } as never);
@@ -35,7 +44,7 @@ export default function PropertyTypeScreen() {
             key={type}
             title={t(`propertyType.${type}` as keyof Translations)}
             selected={draft.propertyType === type}
-            onSelect={() => updateDraft({ propertyType: type })}
+            onSelect={() => choosePropertyType(type)}
             testID={`select-type-${type}`}
           />
         ))}

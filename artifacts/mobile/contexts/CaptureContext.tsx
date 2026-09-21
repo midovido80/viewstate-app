@@ -22,6 +22,17 @@ import {
   serializeRecoveryValue,
 } from '@/services/propertySaveRecovery';
 import { generateDomainId } from '@/services/identity';
+import {
+  applyCaptureTransactionDefaults,
+  type CaptureDetailValues,
+} from '@/services/propertyCaptureDetails';
+import {
+  clearCaptureDetails as clearStoredCaptureDetails,
+  flushCaptureDetailsWrites,
+  loadCaptureDetails,
+  saveCaptureDetails,
+} from '@/services/captureDetailsStorage';
+import { recoverPreparedCapturedDetails } from '@/services/propertyCaptureSave';
 
 type SaveRecoveryStatus =
   | 'none'
@@ -32,8 +43,12 @@ type SaveRecoveryStatus =
 
 interface CaptureContextValue {
   draft: PropertyDraft;
+  captureDetails: CaptureDetailValues;
+  updateCaptureDetails: (changes: CaptureDetailValues) => boolean;
+  replaceCaptureDetails: (next: CaptureDetailValues) => boolean;
+  clearCaptureDetails: (propertyCoreId?: string) => Promise<boolean>;
   draftOrigin: 'fresh' | 'resumed';
-  updateDraft: (changes: Partial<PropertyDraft>) => void;
+  updateDraft: (changes: Partial<PropertyDraft>) => boolean;
   isReady: boolean;
   draftLoadFailed: boolean;
   saveRecoveryStatus: SaveRecoveryStatus;
@@ -43,7 +58,6 @@ interface CaptureContextValue {
 }
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
-
 const DEFAULT_DRAFT: PropertyDraft = {
   propertyCoreId: undefined,
   offerId: undefined,
@@ -72,12 +86,15 @@ function isBlankGeneratedScaffold(draft: PropertyDraft): boolean {
 export function CaptureProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<PropertyDraft>(DEFAULT_DRAFT);
+  const [captureDetails, setCaptureDetails] = useState<CaptureDetailValues>({});
   const [draftOrigin, setDraftOrigin] = useState<'fresh' | 'resumed'>('fresh');
   const [isReady, setIsReady] = useState(false);
   const [draftLoadFailed, setDraftLoadFailed] = useState(false);
   const [saveRecoveryStatus, setSaveRecoveryStatus] = useState<SaveRecoveryStatus>('none');
   const [pendingOperation, setPendingOperation] = useState<PropertySaveOperationV1 | null>(null);
   const draftRef = useRef(draft);
+  const captureDetailsRef = useRef(captureDetails);
+  const captureDetailsOwnerRef = useRef<string | undefined>(undefined);
   const mutationsBlocked = useRef(false);
 
   const setCurrentDraft = useCallback((next: PropertyDraft) => {
@@ -150,18 +167,25 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         if (saved) {
           setCurrentDraft(saved);
           setDraftOrigin(isBlankGeneratedScaffold(saved) ? 'fresh' : 'resumed');
+          const parsed = await loadCaptureDetails(saved.propertyCoreId, AsyncStorage);
+          captureDetailsRef.current = parsed;
+          captureDetailsOwnerRef.current = saved.propertyCoreId;
+          setCaptureDetails(parsed);
         } else {
           const newDraft = createFreshDraft();
           await saveDraft(newDraft);
           setCurrentDraft(newDraft);
+          captureDetailsOwnerRef.current = newDraft.propertyCoreId;
           setDraftOrigin('fresh');
         }
 
+        let basicRecoveryComplete = true;
         try {
           const operation = await loadPropertySaveOperation(AsyncStorage);
           if (operation) {
             setPendingOperation(operation);
             const result = await runRecovery(operation, false);
+            basicRecoveryComplete = result.status === 'complete';
             if (result.status === 'retry_required') {
               Alert.alert(t('errors.recovery_retry_title'), t('errors.recovery_retry'));
             } else if (result.status === 'cleanup_failed') {
@@ -174,7 +198,31 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
           console.error('Property save recovery failed:', error);
           setSaveRecoveryStatus('unreadable');
           mutationsBlocked.current = true;
+          basicRecoveryComplete = false;
           Alert.alert(t('errors.recovery_unreadable_title'), t('errors.recovery_unreadable'));
+        }
+        if (basicRecoveryComplete) {
+          try {
+            const prepared = await recoverPreparedCapturedDetails(store, AsyncStorage);
+            if (prepared.status === 'complete') {
+              const oldDetails = await loadCaptureDetails(prepared.propertyCoreId, AsyncStorage);
+              await clearStoredCaptureDetails(prepared.propertyCoreId, oldDetails, AsyncStorage);
+              if (captureDetailsOwnerRef.current === prepared.propertyCoreId) {
+                captureDetailsOwnerRef.current = undefined;
+                captureDetailsRef.current = {};
+                setCaptureDetails({});
+              }
+            } else if (prepared.status === 'conflict') {
+              setSaveRecoveryStatus('conflict');
+              mutationsBlocked.current = true;
+              Alert.alert(t('errors.recovery_conflict_title'), t('errors.recovery_conflict'));
+            }
+          } catch (error) {
+            console.error('Prepared capture detail recovery failed:', error);
+            setSaveRecoveryStatus('unreadable');
+            mutationsBlocked.current = true;
+            Alert.alert(t('errors.recovery_unreadable_title'), t('errors.recovery_unreadable'));
+          }
         }
       } catch (error) {
         console.error('Draft recovery failed:', error);
@@ -194,22 +242,64 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         t(recoveryBlocked ? 'errors.recovery_conflict_title' : 'errors.draft_read_title'),
         t(recoveryBlocked ? 'errors.recovery_pending' : 'errors.draft_read'),
       );
-      return;
+      return false;
     }
 
     setDraft(prev => {
-      const freshRentDefaults = draftOrigin === 'fresh'
-        && changes.transaction === 'rent'
-        && prev.rentalPeriodId === undefined
-        && changes.rentalPeriodId === undefined
-        ? { rentalPeriodId: 'monthly' }
-        : {};
-      const next = updatePropertyDraft(prev, { ...changes, ...freshRentDefaults });
+      const next = updatePropertyDraft(
+        prev,
+        applyCaptureTransactionDefaults(prev, changes, draftOrigin),
+      );
       draftRef.current = next;
       saveDraft(next).catch(console.error);
       return next;
     });
+    return true;
   }, [draftLoadFailed, draftOrigin, isReady, saveRecoveryStatus, t]);
+
+  const updateCaptureDetails = useCallback((changes: CaptureDetailValues) => {
+    if (!isReady || draftLoadFailed || saveRecoveryStatus !== 'none' || mutationsBlocked.current) {
+      return false;
+    }
+    setCaptureDetails(current => {
+      const next = { ...current, ...changes };
+      captureDetailsRef.current = next;
+      const expected = Object.keys(current).length > 0 ? current : null;
+      void saveCaptureDetails(
+        draftRef.current.propertyCoreId,
+        next,
+        expected,
+        AsyncStorage,
+      ).catch(console.error);
+      return next;
+    });
+    return true;
+  }, [draftLoadFailed, isReady, saveRecoveryStatus]);
+
+  const replaceCaptureDetails = useCallback((next: CaptureDetailValues) => {
+    if (!isReady || draftLoadFailed || saveRecoveryStatus !== 'none' || mutationsBlocked.current) {
+      return false;
+    }
+    const expected = Object.keys(captureDetailsRef.current).length > 0
+      ? captureDetailsRef.current
+      : null;
+    captureDetailsRef.current = next;
+    setCaptureDetails(next);
+    void saveCaptureDetails(draftRef.current.propertyCoreId, next, expected, AsyncStorage)
+      .catch(console.error);
+    return true;
+  }, [draftLoadFailed, isReady, saveRecoveryStatus]);
+
+  const clearCaptureDetails = useCallback(async (propertyCoreId = draftRef.current.propertyCoreId) => {
+    await flushCaptureDetailsWrites();
+    const expected = captureDetailsRef.current;
+    const cleared = await clearStoredCaptureDetails(propertyCoreId, expected, AsyncStorage);
+    if (cleared) {
+      captureDetailsRef.current = {};
+      setCaptureDetails({});
+    }
+    return cleared;
+  }, []);
 
   const projectToProperty = useCallback(() => {
     const result = projectDraftToProperty(draft);
@@ -236,6 +326,8 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       ) {
         return false;
       }
+      const priorPropertyCoreId = draftRef.current.propertyCoreId;
+      const priorCaptureDetails = captureDetailsRef.current;
       const newDraft = createFreshDraft();
       if (expectedSnapshot === undefined) {
         await replaceDraft(newDraft);
@@ -243,6 +335,11 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         return false;
       }
       setCurrentDraft(newDraft);
+      captureDetailsOwnerRef.current = newDraft.propertyCoreId;
+      captureDetailsRef.current = {};
+      setCaptureDetails({});
+      await flushCaptureDetailsWrites();
+      await clearStoredCaptureDetails(priorPropertyCoreId, priorCaptureDetails, AsyncStorage);
       setDraftOrigin('fresh');
       setDraftLoadFailed(false);
       return true;
@@ -298,6 +395,10 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({
     draft,
+    captureDetails,
+    updateCaptureDetails,
+    replaceCaptureDetails,
+    clearCaptureDetails,
     draftOrigin,
     updateDraft,
     isReady,
@@ -308,6 +409,10 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     resetDraft
   }), [
     draft,
+    captureDetails,
+    updateCaptureDetails,
+    replaceCaptureDetails,
+    clearCaptureDetails,
     draftOrigin,
     updateDraft,
     isReady,
