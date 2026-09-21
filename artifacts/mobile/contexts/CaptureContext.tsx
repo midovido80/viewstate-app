@@ -57,6 +57,7 @@ interface CaptureContextValue {
   resetDraft: (expectedSnapshot?: string) => Promise<boolean>;
   persistCurrentCapture: () => Promise<boolean>;
   getCurrentCaptureDetails: () => CaptureDetailValues;
+  getCurrentDraft: () => PropertyDraft;
 }
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
@@ -266,11 +267,10 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     setCaptureDetails(current => {
       const next = { ...current, ...changes };
       captureDetailsRef.current = next;
-      const expected = Object.keys(current).length > 0 ? current : null;
       void saveCaptureDetails(
         draftRef.current.propertyCoreId,
         next,
-        expected,
+        undefined,
         AsyncStorage,
       ).catch(console.error);
       return next;
@@ -425,6 +425,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     resetDraft
     ,persistCurrentCapture
     ,getCurrentCaptureDetails: () => captureDetailsRef.current
+    ,getCurrentDraft: () => draftRef.current
   }), [
     draft,
     captureDetails,

@@ -30,14 +30,14 @@ export async function loadCaptureDetails(
 export async function saveCaptureDetails(
   propertyCoreId: string | undefined,
   details: CaptureDetailValues,
-  expected: CaptureDetailValues | null,
+  expected: CaptureDetailValues | null | undefined,
   storage: CaptureDetailsStorage,
 ): Promise<boolean> {
   let saved = false;
   await writes.enqueue(async () => {
     const key = captureDetailsKey(propertyCoreId);
     const current = await storage.getItem(key);
-    if (current !== (expected === null ? null : JSON.stringify(expected))) return;
+    if (expected !== undefined && current !== (expected === null ? null : JSON.stringify(expected))) return;
     await storage.setItem(key, JSON.stringify(details));
     saved = true;
   });

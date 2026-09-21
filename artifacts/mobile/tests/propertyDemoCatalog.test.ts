@@ -5,7 +5,16 @@ import {
   PROPERTY_DEMO_CATALOG,
   parseDemoNumericInput,
   hasPopulatedCategoryCapture,
+  createDemoCategoryTransitionProposal,
+  applyDemoCategoryTransition,
+  createDemoTransactionTransitionProposal,
+  applyDemoTransactionTransition,
 } from '@/services/propertyDemoCatalog';
+import {
+  getSelectableKuwaitAreas,
+  searchAreasSorted,
+  validateKuwaitAreaPresentation,
+} from '@/constants/kuwait-areas';
 import { buildPropertyUpdateCandidate, createEditDraft } from '@/services/propertyUpdateRecovery';
 import { projectDraftToProperty } from '@workspace/property-domain';
 
@@ -72,4 +81,60 @@ test('BEHAVIOR: demo metadata is included in guarded edit candidates', () => {
   });
   assert.deepEqual(candidate.demoCapture?.numericValues, { bedroomCount: 5 });
   assert.deepEqual(candidate.nearbyServices, ['school', 'hospital']);
+});
+
+test('BEHAVIOR: category transitions retain compatible IDs and reject stale proposals', () => {
+  const source = {
+    categoryId: 'family_apartment' as const,
+    numericValues: { bedroomCount: 3, bathroomCount: 2 },
+    choices: { furnishing: 'furnished' },
+    selectedFeatures: ['balcony', 'garden'],
+    nearbyServices: ['school'],
+  };
+  const proposal = createDemoCategoryTransitionProposal(source, 'duplex');
+  assert.ok(proposal);
+  assert.equal(proposal?.sourceSnapshot, JSON.stringify(source));
+  const transitioned = applyDemoCategoryTransition(source, proposal!);
+  assert.ok(transitioned);
+  assert.equal(transitioned?.categoryId, 'duplex');
+  assert.equal(transitioned?.numericValues?.bedroomCount, 3);
+  assert.deepEqual(transitioned?.nearbyServices, ['school']);
+  assert.equal(applyDemoCategoryTransition({ ...source, numericValues: { bedroomCount: 4 } }, proposal!), null);
+});
+
+test('BEHAVIOR: transaction transitions clear only transaction-specific offer state', () => {
+  const draft = {
+    propertyCoreId: 'transition-property',
+    offerId: 'transition-offer',
+    propertyType: 'apartment' as const,
+    locationAreaId: 'adailiya',
+    block: '4',
+    transaction: 'rent' as const,
+    rentalPrice: { amount: 700, currencyCode: 'KWD' as const },
+    rentalPeriodId: 'monthly' as const,
+    description: { value: 'shared', privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const } },
+  };
+  const metadata = { categoryId: 'family_apartment' as const, nearbyServices: ['school'] };
+  const proposal = createDemoTransactionTransitionProposal(draft, metadata, 'sale');
+  assert.ok(proposal);
+  const transitioned = applyDemoTransactionTransition(draft, metadata, proposal!);
+  assert.ok(transitioned);
+  assert.equal(transitioned?.draft.transaction, 'sale');
+  assert.equal(transitioned?.draft.rentalPrice, undefined);
+  assert.equal(transitioned?.draft.rentalPeriodId, undefined);
+  assert.equal(transitioned?.draft.block, '4');
+  assert.deepEqual(transitioned?.nearbyServices, ['school']);
+  assert.equal(applyDemoTransactionTransition({ ...draft, block: '5' }, metadata, proposal!), null);
+});
+
+test('BEHAVIOR: selectable area presentation is unique, grouped, sorted, and excludes Doha/Qatar', () => {
+  const areas = getSelectableKuwaitAreas();
+  assert.equal(validateKuwaitAreaPresentation(areas).ok, true);
+  assert.equal(new Set(areas.map(area => area.id)).size, areas.length);
+  assert.equal(areas.some(area => /doha|qatar/i.test(`${area.id} ${area.en} ${area.ar}`)), false);
+  const english = searchAreasSorted('  salmiya ', 'en');
+  const arabic = searchAreasSorted('سالم', 'ar');
+  assert.equal(english[0]?.id, 'salmiya');
+  assert.ok(arabic.length > 0);
+  assert.ok(arabic.every(area => area.governorateEn && area.governorateAr));
 });

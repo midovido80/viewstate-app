@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -37,10 +38,10 @@ import {
   prepareCapturedDetails,
 } from '@/services/propertyCaptureSave';
 import { store } from '@/services/persistence';
-import { getAreaById, KUWAIT_AREAS } from '@/constants/kuwait-areas';
+import { getAreaById, getAreasByGovernorate, getSelectableKuwaitAreas, KUWAIT_GOVERNORATES, searchAreasSorted } from '@/constants/kuwait-areas';
 import type { Transaction } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
-import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture } from '@/services/propertyDemoCatalog';
+import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition } from '@/services/propertyDemoCatalog';
 
 export default function CaptureWorkflow() {
   const router = useRouter();
@@ -58,6 +59,7 @@ export default function CaptureWorkflow() {
     clearCaptureDetails,
     persistCurrentCapture,
     getCurrentCaptureDetails,
+    getCurrentDraft,
   } = useCapture();
   const [stage, setStage] = useState<1 | 2 | 3>(draft.propertyType && draft.transaction ? 2 : 1);
   const [nearby, setNearby] = useState<string[]>(() => {
@@ -70,11 +72,18 @@ export default function CaptureWorkflow() {
   const [description, setDescription] = useState(draft.description?.value ?? '');
   const [block, setBlock] = useState(draft.block ?? '');
   const [areaSearch, setAreaSearch] = useState('');
+  const [areaSelectorOpen, setAreaSelectorOpen] = useState(false);
+  const [expandedGovernorates, setExpandedGovernorates] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
   const [pendingFloorTransition, setPendingFloorTransition] = useState<FloorTransitionProposal | null>(null);
   const [quickErrors, setQuickErrors] = useState<Record<string, string>>({});
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
   const demoMetadata = captureDetails.demoMetadata;
   const demoCategory = getDemoCategory(demoMetadata?.categoryId);
 
@@ -86,10 +95,7 @@ export default function CaptureWorkflow() {
     [captureDetails.floorUse, draft.propertyType],
   );
   const selectedArea = draft.locationAreaId ? getAreaById(draft.locationAreaId) : undefined;
-  const visibleAreas = KUWAIT_AREAS.filter(area => {
-    const query = areaSearch.trim().toLocaleLowerCase();
-    return !query || area.en.toLocaleLowerCase().includes(query) || area.ar.includes(areaSearch.trim());
-  });
+  const areaResults = searchAreasSorted(areaSearch, language === 'ar' ? 'ar' : 'en', getSelectableKuwaitAreas());
   useEffect(() => {
     if (
       captureDetails.areaSquareMeters === undefined
@@ -114,31 +120,47 @@ export default function CaptureWorkflow() {
       return;
     }
     setPendingFloorTransition(proposal);
-    Alert.alert(
-      t('transition.floor.title'),
-       `${t('transition.floor.message')}\n\n${proposal.affected.map(item => `${propertyDetailLabels[item.field][language === 'ar' ? 1 : 0]}: ${item.value}`).join(', ')}`,
-      [
-        { text: t('capture.cancel'), style: 'cancel', onPress: () => setPendingFloorTransition(null) },
-        {
-          text: t('transition.remove_confirm'),
-          style: 'destructive',
-          onPress: () => {
-            const next = applyFloorTransition(scopeKey, getCurrentCaptureDetails(), proposal);
-            setPendingFloorTransition(null);
-            if (next) replaceCaptureDetails(next);
-          },
-        },
-      ],
-    );
+    setPendingConfirmation({
+      title: t('transition.floor.title'),
+      message: `${t('transition.floor.message')}\n\n${proposal.affected.map(item => `${propertyDetailLabels[item.field][language === 'ar' ? 1 : 0]}: ${item.value}`).join(', ')}`,
+      onConfirm: () => {
+        const next = applyFloorTransition(scopeKey, getCurrentCaptureDetails(), proposal);
+        setPendingFloorTransition(null);
+        if (next) replaceCaptureDetails(next);
+      },
+    });
   };
 
   const selectType = (propertyType: typeof PROPERTY_FORM_TYPES[number]) => {
-    if (draft.propertyType !== propertyType) {
-      replaceCaptureDetails({});
-      setNearby([]);
+    if (draft.propertyType === propertyType) return;
+    const populated = hasPopulatedCategoryCapture(captureDetails as Record<string, unknown>);
+    const sourceDetailsSnapshot = JSON.stringify(captureDetails);
+    const apply = () => {
+      const currentDetails = getCurrentCaptureDetails();
+      if (JSON.stringify(currentDetails) !== sourceDetailsSnapshot) return;
+      const shared = {
+        ...(currentDetails.areaSquareMeters !== undefined ? { areaSquareMeters: currentDetails.areaSquareMeters } : {}),
+        ...(currentDetails.areaUnit ? { areaUnit: currentDetails.areaUnit } : {}),
+        nearbyServices: currentDetails.nearbyServices ?? JSON.stringify([]),
+      };
+      replaceCaptureDetails(shared);
+      try {
+        setNearby(currentDetails.nearbyServices ? JSON.parse(currentDetails.nearbyServices) as string[] : []);
+      } catch {
+        setNearby([]);
+      }
       setQuickErrors({});
+      updateDraft({ propertyType });
+    };
+    if (!populated) {
+      apply();
+      return;
     }
-    updateDraft({ propertyType });
+    setPendingConfirmation({
+      title: language === 'ar' ? 'تغيير نوع العقار؟' : 'Change property type?',
+      message: language === 'ar' ? 'سيتم حذف المواصفات غير المتوافقة.' : 'Incompatible specifications will be cleared.',
+      onConfirm: apply,
+    });
   };
 
   const selectDemoCategory = (category: typeof PROPERTY_DEMO_CATALOG[number]) => {
@@ -151,22 +173,37 @@ export default function CaptureWorkflow() {
       return;
     }
     const next: PropertyDemoCaptureMetadata = { categoryId: category.id };
-    const populated = hasPopulatedCategoryCapture(captureDetails as Record<string, unknown>);
+    const proposal = createDemoCategoryTransitionProposal(demoMetadata, category.id);
+    const populated = Boolean(proposal?.affected.length)
+      || (!demoMetadata && hasPopulatedCategoryCapture(captureDetails as Record<string, unknown>));
     const apply = () => {
       setNearby([]);
       setQuickErrors({});
-      replaceCaptureDetails({ demoMetadata: { ...next, nearbyServices: [] }, nearbyServices: JSON.stringify([]) });
+      const currentMetadata = getCurrentCaptureDetails().demoMetadata;
+      const currentDetails = getCurrentCaptureDetails();
+      const transitioned = proposal
+        ? applyDemoCategoryTransition(currentMetadata, proposal)
+        : next;
+      if (!transitioned) return;
+      const nearbyServices = transitioned.nearbyServices ?? [];
+      setNearby([...nearbyServices]);
+      replaceCaptureDetails({
+        ...(currentDetails.areaSquareMeters !== undefined ? { areaSquareMeters: currentDetails.areaSquareMeters } : {}),
+        ...(currentDetails.areaUnit ? { areaUnit: currentDetails.areaUnit } : {}),
+        demoMetadata: transitioned,
+        nearbyServices: JSON.stringify(nearbyServices),
+      });
       updateDraft({ propertyType: category.canonicalType, transaction: category.transaction });
     };
     if (!populated) {
       apply();
       return;
     }
-    Alert.alert(
-      language === 'ar' ? 'تغيير التصنيف؟' : 'Change category?',
-      language === 'ar' ? 'سيتم حذف مواصفات التصنيف الحالي والمزايا والخدمات القريبة.' : 'Category specifications, features, and nearby services for the current category will be cleared.',
-      [{ text: language === 'ar' ? 'إلغاء' : 'Cancel', style: 'cancel' }, { text: language === 'ar' ? 'متابعة' : 'Continue', style: 'destructive', onPress: apply }],
-    );
+    setPendingConfirmation({
+      title: language === 'ar' ? 'تغيير التصنيف؟' : 'Change category?',
+      message: `${language === 'ar' ? 'سيتم حذف مواصفات التصنيف الحالي والمزايا والخدمات القريبة.' : 'Category specifications, features, and nearby services for the current category will be cleared.'}${proposal?.affected.length ? `\n\n${proposal.affected.map(item => `${item.label[language === 'ar' ? 1 : 0]}: ${item.value}`).join(', ')}` : ''}`,
+      onConfirm: apply,
+    });
   };
 
   const updateDemoMetadata = (changes: Partial<PropertyDemoCaptureMetadata>) => {
@@ -187,24 +224,53 @@ export default function CaptureWorkflow() {
     if (draft.transaction === transaction) return;
     const hasCategoryData = Boolean(demoCategory)
       || hasPopulatedCategoryCapture(captureDetails as Record<string, unknown>);
+    const proposal = createDemoTransactionTransitionProposal(draft, demoMetadata, transaction);
+    const sourceDraftSnapshot = JSON.stringify(draft);
+    const sourceDetailsSnapshot = JSON.stringify(captureDetails);
     const apply = () => {
-      setNearby([]);
+      const currentDraft = getCurrentDraft();
+      const currentDetails = getCurrentCaptureDetails();
+      if (JSON.stringify(currentDraft) !== sourceDraftSnapshot || JSON.stringify(currentDetails) !== sourceDetailsSnapshot) return;
+      const transitioned = proposal
+        ? applyDemoTransactionTransition(currentDraft, currentDetails.demoMetadata, proposal)
+        : null;
+      if (proposal && !transitioned) return;
       const sharedArea = {
-        ...(captureDetails.areaSquareMeters !== undefined ? { areaSquareMeters: captureDetails.areaSquareMeters } : {}),
-        ...(captureDetails.areaUnit ? { areaUnit: captureDetails.areaUnit } : {}),
+        ...(currentDetails.areaSquareMeters !== undefined ? { areaSquareMeters: currentDetails.areaSquareMeters } : {}),
+        ...(currentDetails.areaUnit ? { areaUnit: currentDetails.areaUnit } : {}),
       };
-      replaceCaptureDetails({ ...sharedArea, nearbyServices: JSON.stringify([]) });
-      if (updateDraft({ transaction, propertyType: undefined })) setStage(1);
+      const nextMetadata = transitioned?.metadata;
+      const nextNearby = transitioned?.nearbyServices ?? nextMetadata?.nearbyServices ?? [];
+      setNearby([...nextNearby]);
+      replaceCaptureDetails({
+        ...sharedArea,
+        nearbyServices: JSON.stringify(nextNearby),
+        ...(nextMetadata ? { demoMetadata: nextMetadata } : {}),
+      });
+      const nextDraft = transitioned?.draft;
+      if (updateDraft(nextDraft ? {
+        transaction: nextDraft.transaction,
+        propertyType: nextDraft.propertyType,
+        salePrice: nextDraft.salePrice,
+        rentalPrice: nextDraft.rentalPrice,
+        rentalPeriodId: nextDraft.rentalPeriodId,
+      } : {
+        transaction,
+        propertyType: undefined,
+        salePrice: transaction === 'sale' ? currentDraft.salePrice : undefined,
+        rentalPrice: transaction === 'rent' ? currentDraft.rentalPrice : undefined,
+        rentalPeriodId: transaction === 'rent' ? (currentDraft.rentalPeriodId ?? 'monthly') : undefined,
+      })) setStage(1);
     };
     if (!hasCategoryData) {
       apply();
       return;
     }
-    Alert.alert(
-      language === 'ar' ? 'تغيير المعاملة؟' : 'Change transaction?',
-      language === 'ar' ? 'سيتم حذف مواصفات التصنيف الحالي والمزايا والخدمات القريبة.' : 'Category specifications, features, and nearby services will be cleared.',
-      [{ text: language === 'ar' ? 'إلغاء' : 'Cancel', style: 'cancel' }, { text: language === 'ar' ? 'متابعة' : 'Continue', style: 'destructive', onPress: apply }],
-    );
+    setPendingConfirmation({
+      title: language === 'ar' ? 'تغيير المعاملة؟' : 'Change transaction?',
+      message: `${language === 'ar' ? 'سيتم حذف مواصفات التصنيف الحالي والمزايا والخدمات القريبة.' : 'Category specifications, features, and nearby services will be cleared.'}${proposal?.affected.length ? `\n\n${proposal.affected.map(item => `${item.label[language === 'ar' ? 1 : 0]}: ${item.value}`).join(', ')}` : ''}`,
+      onConfirm: apply,
+    });
   };
 
   const updateDescription = (value: string) => {
@@ -355,11 +421,34 @@ export default function CaptureWorkflow() {
               <View style={styles.chips}>
                 {(['sale', 'rent'] as const).map(value => <Choice key={value} selected={draft.transaction === value} label={t(`transaction.${value}` as keyof Translations)} onPress={() => selectTransaction(value)} colors={colors} fonts={fonts} />)}
               </View>
-              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area'}</Text>
-              <TextInput value={areaSearch} onChangeText={setAreaSearch} placeholder={language === 'ar' ? 'ابحث في جميع المناطق' : 'Search all Kuwait areas'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
-              <View style={styles.chips}>
-                {visibleAreas.map(area => <Choice key={area.id} selected={draft.locationAreaId === area.id} label={language === 'ar' ? area.ar : area.en} onPress={() => updateDraft({ locationAreaId: area.id })} colors={colors} fonts={fonts} />)}
-              </View>
+               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area'}</Text>
+               <TouchableOpacity testID="capture-area-selector" accessibilityRole="button" onPress={() => setAreaSelectorOpen(true)} style={[styles.areaField, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                 <Text style={{ color: selectedArea ? colors.foreground : colors.mutedForeground, fontFamily: fonts.regular }}>{selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : (language === 'ar' ? 'اختر المنطقة' : 'Select area')}</Text>
+                 <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
+               </TouchableOpacity>
+               <Modal visible={areaSelectorOpen} animationType="slide" transparent onRequestClose={() => { setAreaSearch(''); setAreaSelectorOpen(false); }}>
+                 <View style={styles.modalBackdrop}>
+                   <View style={[styles.areaSheet, { backgroundColor: colors.background }]}>
+                     <View style={[styles.areaSheetHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                       <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{language === 'ar' ? 'اختر المنطقة' : 'Select area'}</Text>
+                       <TouchableOpacity testID="capture-area-cancel" accessibilityRole="button" onPress={() => { setAreaSearch(''); setAreaSelectorOpen(false); }}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Text></TouchableOpacity>
+                     </View>
+                     <TextInput testID="capture-area-search" autoFocus value={areaSearch} onChangeText={setAreaSearch} placeholder={language === 'ar' ? 'ابحث بالمنطقة أو المحافظة' : 'Search area or governorate'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+                     <ScrollView keyboardShouldPersistTaps="handled">
+                       {areaSearch.trim() ? areaResults.map(area => (
+                         <TouchableOpacity key={area.id} testID={`capture-area-option-${area.id}`} accessibilityRole="radio" accessibilityState={{ selected: draft.locationAreaId === area.id }} onPress={() => { updateDraft({ locationAreaId: area.id }); setAreaSearch(''); setAreaSelectorOpen(false); }} style={[styles.areaOption, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                           <Check selected={draft.locationAreaId === area.id} colors={colors} />
+                           <View style={styles.areaOptionText}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? area.ar : area.en}</Text><Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{language === 'ar' ? area.governorateAr : area.governorateEn}</Text></View>
+                         </TouchableOpacity>
+                       )) : KUWAIT_GOVERNORATES.map(governorate => {
+                         const expanded = expandedGovernorates.has(governorate.id);
+                       return <View key={governorate.id}><TouchableOpacity testID={`capture-governorate-${governorate.id}`} accessibilityRole="button" onPress={() => setExpandedGovernorates(current => { const next = new Set(current); if (next.has(governorate.id)) next.delete(governorate.id); else next.add(governorate.id); return next; })} style={[styles.governorateRow, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? governorate.ar : governorate.en}</Text><Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} /></TouchableOpacity>{expanded && getAreasByGovernorate(governorate.id, language === 'ar' ? 'ar' : 'en').map(area => <TouchableOpacity key={area.id} testID={`capture-area-option-${area.id}`} accessibilityRole="radio" accessibilityState={{ selected: draft.locationAreaId === area.id }} onPress={() => { updateDraft({ locationAreaId: area.id }); setAreaSearch(''); setAreaSelectorOpen(false); }} style={[styles.areaOption, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Check selected={draft.locationAreaId === area.id} colors={colors} /><Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? area.ar : area.en}</Text></TouchableOpacity>)}</View>;
+                       })}
+                       {areaSearch.trim() && areaResults.length === 0 && <Text style={[styles.emptyArea, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{language === 'ar' ? 'لا توجد مناطق مطابقة' : 'No matching areas'}</Text>}
+                     </ScrollView>
+                   </View>
+                 </View>
+               </Modal>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
               <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
@@ -488,6 +577,49 @@ export default function CaptureWorkflow() {
           ) : null}
         </View>
       )}
+      <Modal
+        visible={pendingConfirmation !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setPendingConfirmation(null);
+          setPendingFloorTransition(null);
+        }}
+      >
+        <View style={styles.confirmationBackdrop}>
+          <View style={[styles.confirmationCard, { backgroundColor: colors.card }]}>
+            <Text testID="capture-transition-title" style={[styles.confirmationTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>
+              {pendingConfirmation?.title}
+            </Text>
+            <Text testID="capture-transition-message" accessibilityRole="text" style={[styles.confirmationMessage, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>
+              {pendingConfirmation?.message}
+            </Text>
+            <View style={[styles.confirmationActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <Button
+                title={language === 'ar' ? 'إلغاء' : 'Cancel'}
+                variant="outline"
+                onPress={() => {
+                  setPendingConfirmation(null);
+                  setPendingFloorTransition(null);
+                }}
+                testID="capture-transition-cancel"
+                style={styles.confirmationAction}
+              />
+              <Button
+                title={language === 'ar' ? 'متابعة' : 'Confirm'}
+                onPress={() => {
+                  const confirmation = pendingConfirmation;
+                  setPendingConfirmation(null);
+                  setPendingFloorTransition(null);
+                  confirmation?.onConfirm();
+                }}
+                testID="capture-transition-confirm"
+                style={styles.confirmationAction}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage === 2 ? <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <Button title={t('capture.back')} onPress={() => setStage(stage === 3 ? 2 : 1)} variant="outline" testID="capture-back" />}
         {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={!draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} testID="capture-save-property" />}
@@ -577,6 +709,14 @@ const styles = StyleSheet.create({
   choiceText: { fontSize: 13, maxWidth: 210 },
   label: { fontSize: 13, marginTop: 12, marginBottom: 6 },
   input: { minHeight: 46, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, fontSize: 15 },
+  areaField: { minHeight: 46, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalBackdrop: { flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' },
+  areaSheet: { maxHeight: '88%', minHeight: '55%', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18 },
+  areaSheetHeader: { justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  governorateRow: { minHeight: 48, justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1 },
+  areaOption: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, borderBottomWidth: 1 },
+  areaOptionText: { flex: 1, gap: 2 },
+  emptyArea: { textAlign: 'center', paddingVertical: 28 },
   textarea: { minHeight: 82, textAlignVertical: 'top', paddingTop: 12 },
   footer: { borderTopWidth: 1, paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', gap: 10 },
   footerButton: { flex: 1 },
@@ -585,6 +725,12 @@ const styles = StyleSheet.create({
   draftStatusBody: { fontSize: 13, lineHeight: 19 },
   draftStatusActions: { gap: 8 },
   draftStatusAction: { flex: 1 },
+  confirmationBackdrop: { flex: 1, backgroundColor: '#00000066', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  confirmationCard: { width: '100%', maxWidth: 420, borderRadius: 16, padding: 18, gap: 10 },
+  confirmationTitle: { fontSize: 18 },
+  confirmationMessage: { fontSize: 14, lineHeight: 21 },
+  confirmationActions: { gap: 10, marginTop: 6 },
+  confirmationAction: { flex: 1 },
   previewTitle: { fontSize: 24, marginBottom: 5 },
   previewEdit: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center', alignSelf: 'flex-start', marginBottom: 12 },
   previewMeta: { marginBottom: 14 },

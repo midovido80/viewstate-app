@@ -1,5 +1,7 @@
 import type {
   PropertyCaptureCategoryId,
+  PropertyDemoCaptureMetadata,
+  PropertyDraft,
   PropertyType,
   Transaction,
 } from '@workspace/property-domain';
@@ -122,6 +124,127 @@ export const PROPERTY_DEMO_CATALOG: readonly DemoCategoryDefinition[] = [
 
 export function getDemoCategory(id: PropertyCaptureCategoryId | undefined) {
   return PROPERTY_DEMO_CATALOG.find(category => category.id === id);
+}
+
+export interface DemoCategoryTransitionProposal {
+  readonly kind: 'demo_category';
+  readonly from: PropertyCaptureCategoryId;
+  readonly to: PropertyCaptureCategoryId;
+  readonly sourceSnapshot: string;
+  readonly affected: readonly { readonly label: readonly [string, string]; readonly value: string }[];
+}
+
+const demoTransitionSnapshot = (metadata: PropertyDemoCaptureMetadata | undefined): string =>
+  JSON.stringify(metadata ?? {});
+
+const demoChoice = (category: DemoCategoryDefinition, id: string) =>
+  category.choices.find(choice => choice.id === id);
+
+export function createDemoCategoryTransitionProposal(
+  metadata: PropertyDemoCaptureMetadata | undefined,
+  to: PropertyCaptureCategoryId,
+): DemoCategoryTransitionProposal | null {
+  const from = metadata?.categoryId;
+  const target = getDemoCategory(to);
+  if (!from || !target || from === to) return null;
+  const source = getDemoCategory(from);
+  if (!source) return null;
+  const affected: { label: readonly [string, string]; value: string }[] = [];
+  for (const field of source.numericFields) {
+    const value = metadata?.numericValues?.[field.id];
+    if (value !== undefined && !target.numericFields.some(item => item.id === field.id)) {
+      affected.push({ label: field.label, value: String(value) });
+    }
+  }
+  for (const field of source.choices) {
+    const value = metadata?.choices?.[field.id];
+    const targetField = demoChoice(target, field.id);
+    if (value !== undefined && (!targetField || !targetField.options.some(option => option.id === value))) {
+      affected.push({ label: field.label, value: String(value) });
+    }
+  }
+  for (const feature of source.features) {
+    if (metadata?.selectedFeatures?.includes(feature.id) && !target.features.some(item => item.id === feature.id)) {
+      affected.push({ label: feature.label, value: feature.label[0] });
+    }
+  }
+  return { kind: 'demo_category', from, to, sourceSnapshot: demoTransitionSnapshot(metadata), affected };
+}
+
+export function applyDemoCategoryTransition(
+  metadata: PropertyDemoCaptureMetadata | undefined,
+  proposal: DemoCategoryTransitionProposal,
+): PropertyDemoCaptureMetadata | null {
+  if (proposal.sourceSnapshot !== demoTransitionSnapshot(metadata)) return null;
+  const target = getDemoCategory(proposal.to);
+  if (!target) return null;
+  const numericValues = Object.fromEntries(
+    Object.entries(metadata?.numericValues ?? {}).filter(([id]) => target.numericFields.some(field => field.id === id)),
+  );
+  const choices = Object.fromEntries(
+    Object.entries(metadata?.choices ?? {}).filter(([id, value]) => {
+      const field = demoChoice(target, id);
+      return field?.options.some(option => option.id === value);
+    }),
+  );
+  const selectedFeatures = (metadata?.selectedFeatures ?? []).filter(id => target.features.some(feature => feature.id === id));
+  return {
+    categoryId: proposal.to,
+    ...(Object.keys(numericValues).length ? { numericValues } : {}),
+    ...(Object.keys(choices).length ? { choices } : {}),
+    ...(selectedFeatures.length ? { selectedFeatures } : {}),
+    ...(metadata?.nearbyServices?.length ? { nearbyServices: [...metadata.nearbyServices] } : {}),
+  };
+}
+
+export interface DemoTransactionTransitionProposal {
+  readonly kind: 'demo_transaction';
+  readonly from: Transaction;
+  readonly to: Transaction;
+  readonly sourceSnapshot: string;
+  readonly affected: readonly { readonly label: readonly [string, string]; readonly value: string }[];
+  readonly clearCategory: boolean;
+}
+
+export function createDemoTransactionTransitionProposal(
+  draft: PropertyDraft,
+  metadata: PropertyDemoCaptureMetadata | undefined,
+  to: Transaction,
+): DemoTransactionTransitionProposal | null {
+  if (!draft.transaction || draft.transaction === to) return null;
+  const category = getDemoCategory(metadata?.categoryId);
+  const affected = category && hasPopulatedCategoryCapture({ demoMetadata: metadata })
+    ? [{ label: category.label, value: category.label[0] }]
+    : [];
+  return {
+    kind: 'demo_transaction',
+    from: draft.transaction,
+    to,
+    sourceSnapshot: JSON.stringify({ draft, metadata }),
+    affected,
+    clearCategory: !!category && category.transaction !== to,
+  };
+}
+
+export function applyDemoTransactionTransition(
+  draft: PropertyDraft,
+  metadata: PropertyDemoCaptureMetadata | undefined,
+  proposal: DemoTransactionTransitionProposal,
+): { draft: PropertyDraft; metadata: PropertyDemoCaptureMetadata | undefined; nearbyServices: readonly string[] } | null {
+  if (proposal.sourceSnapshot !== JSON.stringify({ draft, metadata })) return null;
+  const nextDraft: PropertyDraft = {
+    ...draft,
+    transaction: proposal.to,
+    salePrice: proposal.to === 'sale' ? draft.salePrice : undefined,
+    rentalPrice: proposal.to === 'rent' ? draft.rentalPrice : undefined,
+    rentalPeriodId: proposal.to === 'rent' ? (draft.rentalPeriodId ?? 'monthly') : undefined,
+    ...(proposal.clearCategory ? { propertyType: undefined } : {}),
+  };
+  return {
+    draft: nextDraft,
+    metadata: proposal.clearCategory ? undefined : metadata,
+    nearbyServices: metadata?.nearbyServices ?? [],
+  };
 }
 
 export function parseDemoNumericInput(value: string, decimal = false): number | null {
