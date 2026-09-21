@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useCapture } from '@/contexts/CaptureContext';
@@ -22,7 +22,9 @@ import {
   getApplicablePropertyFormFields,
   PROPERTY_FORM_TYPES,
 } from '@/services/propertyFormCatalog';
-import { PropertyEnrichmentFields, propertyDetailLabels, formatPropertyDetailValue } from '@/components/PropertyEnrichmentFields';
+import { propertyDetailLabels, formatPropertyDetailValue } from '@/components/PropertyEnrichmentFields';
+import { ModernPropertyForm } from '@/components/ModernPropertyForm';
+import { isMappedTemplateField } from '@/services/propertyFactProjection';
 import {
   applyFloorTransition,
   createFloorTransitionProposal,
@@ -39,12 +41,13 @@ import {
 } from '@/services/propertyCaptureSave';
 import { store } from '@/services/persistence';
 import { getAreaById, getAreasByGovernorate, getSelectableKuwaitAreas, KUWAIT_GOVERNORATES, searchAreasSorted } from '@/constants/kuwait-areas';
-import type { Transaction } from '@workspace/property-domain';
+import type { Transaction, PropertyDetailField } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
 import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition } from '@/services/propertyDemoCatalog';
 
 export default function CaptureWorkflow() {
   const router = useRouter();
+  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { t, isRTL, fonts, language } = useI18n();
@@ -318,10 +321,13 @@ export default function CaptureWorkflow() {
       if (evidence) {
         await finalizeCapturedDetails(store, evidence);
       }
+      if (linkPersonId) {
+        await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: projection.property.core.id });
+      }
       await clearCaptureDetails(projection.property.core.id);
       router.replace({
         pathname: '/capture/success',
-        params: { propertyCoreId: projection.property.core.id },
+        params: { propertyCoreId: projection.property.core.id, ...(linkPersonId ? { linkPersonId } : {}) },
       } as never);
     } catch (error) {
       console.error('Capture workflow save failed:', error);
@@ -478,42 +484,29 @@ export default function CaptureWorkflow() {
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
             </Section>
             <Section title={language === 'ar' ? 'المواصفات' : 'Property specifications'} colors={colors} fonts={fonts}>
-              {demoCategory && (
-                <DemoSpecificationFields
-                  category={demoCategory}
-                  metadata={demoMetadata}
-                  language={language}
-                  colors={colors}
-                  fonts={fonts}
-                  onChange={updateDemoMetadata}
-                  quickErrors={quickErrors}
-                  onQuickError={(field: string, invalid: boolean) => setQuickErrors(current => {
-                    const next = { ...current };
-                    if (invalid) next[field] = language === 'ar' ? 'أدخل قيمة صحيحة.' : 'Enter a valid value.';
-                    else delete next[field];
-                    return next;
-                  })}
-                />
-              )}
-              {!demoCategory && <PropertyEnrichmentFields
+              <ModernPropertyForm
                 recordScopeKey={scopeKey}
-                propertyType={draft.propertyType}
+                propertyType={draft.propertyType ?? 'other_built_property'}
                 values={captureDetails}
-                onChange={(field, value) => field === 'floorUse' ? chooseFloorUse(value) : updateCaptureDetails({ [field]: value })}
-              />}
-            </Section>
-            <Section title={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} colors={colors} fonts={fonts}>
-              <View style={styles.chips}>
-                {DEMO_NEARBY_SERVICES.map(item => <Choice key={item.id} testID={`capture-nearby-${item.id}`} selected={nearby.includes(item.id)} label={item.label[language === 'ar' ? 1 : 0]} onPress={() => {
-                  const id = item.id;
-                  const next = nearby.includes(id) ? nearby.filter(item => item !== id) : [...nearby, id];
-                  setNearby(next);
-                  updateCaptureDetails({
-                    nearbyServices: JSON.stringify(next),
-                    ...(demoCategory ? { demoMetadata: { ...demoMetadata, categoryId: demoCategory.id, nearbyServices: next } } : {}),
-                  });
-                }} colors={colors} fonts={fonts} multi />)}
-              </View>
+                category={demoCategory}
+                metadata={demoMetadata}
+                nearby={nearby}
+                language={language}
+                colors={colors}
+                fonts={fonts}
+                onChange={(field: PropertyDetailField, value: string) => field === 'floorUse' ? chooseFloorUse(value) : updateCaptureDetails({ [field]: value })}
+                onDemoChange={updateDemoMetadata}
+                onNearbyChange={next => {
+                  setNearby([...next]);
+                  updateCaptureDetails({ nearbyServices: JSON.stringify(next), ...(demoCategory ? { demoMetadata: { ...demoMetadata, categoryId: demoCategory.id, nearbyServices: next } } : {}) });
+                }}
+                onInvalidQuickPickChange={(field, _scopeKey, invalid) => setQuickErrors(current => {
+                  const next = { ...current };
+                  if (invalid) next[field] = language === 'ar' ? 'أدخل قيمة صحيحة.' : 'Enter a valid value.';
+                  else delete next[field];
+                  return next;
+                })}
+              />
             </Section>
           </>
         )}
@@ -534,10 +527,10 @@ export default function CaptureWorkflow() {
             {applicable.filter(definition => captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field as any, captureDetails[definition.field], language)} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
-            {demoCategory?.numericFields.map(item => (
-              <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={metadataValue(demoMetadata?.numericValues?.[item.id])} colors={colors} fonts={fonts} />
+             {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (
+               <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={metadataValue(demoMetadata?.numericValues?.[item.id])} colors={colors} fonts={fonts} />
             ))}
-            {demoCategory?.choices.map(item => (
+             {demoCategory?.choices.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.choices?.[item.id] !== undefined).map(item => (
               <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={item.options.find(option => option.id === demoMetadata?.choices?.[item.id])?.label[language === 'ar' ? 1 : 0] ?? ''} colors={colors} fonts={fonts} />
             ))}
             {demoMetadata?.selectedFeatures?.length ? <PreviewRow label={language === 'ar' ? 'المزايا' : 'Features'} value={demoMetadata.selectedFeatures.map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} colors={colors} fonts={fonts} /> : null}
@@ -646,7 +639,22 @@ function metadataValue(value: number | undefined) {
 }
 function DemoSpecificationFields({ category, metadata, language, colors, fonts, onChange, quickErrors, onQuickError }: any) {
   return (
-    <View>
+    <ModernPropertyForm
+      recordScopeKey="capture"
+      propertyType={category.canonicalType}
+      values={{}}
+      onChange={() => undefined}
+      category={category}
+      metadata={metadata}
+      nearby={metadata?.nearbyServices ?? []}
+      language={language}
+      colors={colors}
+      fonts={fonts}
+      onDemoChange={onChange}
+      onInvalidQuickPickChange={(field, _scope, invalid) => onQuickError(field, invalid)}
+      onNearbyChange={nearby => onChange({ nearbyServices: nearby })}
+    />
+    /*
       {category.numericFields.map((item: any) => (
         <View key={item.id} style={styles.demoField}>
           <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{item.label[language === 'ar' ? 1 : 0]}</Text>
@@ -670,7 +678,7 @@ function DemoSpecificationFields({ category, metadata, language, colors, fonts, 
         return <Choice key={feature.id} selected={selected} multi label={feature.label[language === 'ar' ? 1 : 0]} onPress={() => onChange({ selectedFeatures: selected ? (metadata?.selectedFeatures ?? []).filter((id: string) => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} colors={colors} fonts={fonts} />;
       })}</View>
     </View>
-  );
+  */);
 }
 function QuickCount({ field, value, decimal, colors, fonts, error, onValidity, onChange }: any) {
   const [exact, setExact] = useState(value !== undefined && value > 5 ? String(value) : '');

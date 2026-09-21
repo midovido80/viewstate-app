@@ -1,3 +1,4 @@
 - [Person identity consolidation](person-identity-consolidation.md) — one phone identity can hold multiple roles; consolidate links safely and fail closed on opaque data.
 - [Incompatible property detail transitions](incompatible-property-detail-transitions.md) — confirm before removing incompatible draft values; never silently clear or auto-persist them.
 - [Expo Preview verification](expo-preview-navigation.md) — use normal in-app entry; destructive confirmations need in-flow UI because web Alert can fail silently.
+- [Property fact convergence](property-fact-convergence.md) — mapped legacy metadata is fallback-only; a canonical edit snapshot, including deletion, is authoritative.

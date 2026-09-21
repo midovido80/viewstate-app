@@ -11,7 +11,7 @@ import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { SingleFlight } from '@/services/serialTaskQueue';
 import { store } from '@/services/persistence';
-import { PropertyEnrichmentFields } from '@/components/PropertyEnrichmentFields';
+import { ModernPropertyForm } from '@/components/ModernPropertyForm';
 import {
   applyFloorTransition,
   createFloorTransitionProposal,
@@ -255,21 +255,6 @@ export default function SummaryScreen() {
           <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
             {t('summary.details')}
           </Text>
-          <PropertyEnrichmentFields
-            recordScopeKey={captureDetailsScopeKey(draft.propertyCoreId)}
-            propertyType={draft.propertyType ?? 'other_built_property'}
-            values={captureDetails}
-            onChange={handleDetailChange}
-            onInvalidQuickPickChange={(field, scopeKey, invalid) => {
-              if (scopeKey !== captureDetailsScopeKey(draft.propertyCoreId)) return;
-              setInvalidQuickPickFields(current => {
-                const next = new Set(current);
-                if (invalid) next.add(field);
-                else next.delete(field);
-                return next;
-              });
-            }}
-          />
         </View>
         
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}>

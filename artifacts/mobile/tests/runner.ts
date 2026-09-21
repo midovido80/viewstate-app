@@ -6,6 +6,7 @@ import { resolveSourcePath } from './sourcePath.ts';
 import './globalSearch.test.ts';
 import './vapp50DeviceUi.test.ts';
 import './package3aNumericQuickPicks.test.ts';
+import './propertyFactProjection.test.ts';
 
 import {
   buildPropertySharePreview,
@@ -322,24 +323,22 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
-  assert.match(successSource, /btn-add-details-now/);
+  assert.match(successSource, /btn-view-property/);
+  assert.match(successSource, /btn-view-properties/);
+  assert.doesNotMatch(successSource, /btn-add-details-now|summary\.add_details/);
   assert.match(successSource, /btn-later/);
   assert.match(successSource, /summary\.done/);
   assert.match(successSource, /navigationStartedRef/);
   assert.match(successSource, /replaceOnce/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
-  assert.match(detailSource, /loadPropertyEnrichmentDraft/);
-  assert.match(detailSource, /loadPropertyEnrichmentDraft\(id\)\.catch\(\(\) => null\)/);
-  assert.doesNotMatch(detailSource, /loadPropertyEnrichmentDraft\(id\)\.catch\(\(\) => ['"]unreadable['"]/);
-  assert.match(detailSource, /hasEnrichmentDraft \? 'detail\.continue_details' : 'detail\.add_details'/);
+  assert.match(detailSource, /property-edit-action/);
+  assert.doesNotMatch(detailSource, /property-enrich-action|detail\.add_details/);
   assert.match(translations, /'summary\.done': 'Done'/);
   assert.match(translations, /'summary\.done': 'تم'/);
   assert.match(translations, /'detail\.continue_details': 'Continue details'/);
   assert.match(translations, /'detail\.continue_details': 'متابعة التفاصيل'/);
-  assert.match(enrichmentSource, /persistAttachmentsThenDeleteRemoved/);
-  assert.doesNotMatch(enrichmentSource, /requestCurrentCoordinates|enrich-current-location/);
-  assert.match(enrichmentSource, /\.\.\.\(\(baseline\.locationEnrichment \?\? \{\}\)/);
-  assert.match(enrichmentSource, /enrich-other-required|OTHER_CLARIFICATION_REQUIRED/);
+  assert.match(enrichmentSource, /router\.replace/);
+  assert.match(enrichmentSource, /edit=1/);
   assert.match(fieldSource, /getApplicablePropertyFormFields/);
   assert.match(catalogSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS\.map/);
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
@@ -356,6 +355,12 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.doesNotMatch(fieldSource, /\bconstructionYear\b|\broomCount\b/);
 });
 
+test('Property detail route exposes both default and named component exports', async () => {
+  const source = await readFile(sharedSourcePath('../app/property/[propertyCoreId].tsx'), 'utf8');
+  assert.match(source, /export function PropertyDetailScreen/);
+  assert.match(source, /export default PropertyDetailScreen/);
+});
+
 test('Synthetic enrichment recovery and detail/share routes are wired fail-closed', async () => {
   const [recovery, detail, share] = await Promise.all([
     readFile(sharedSourcePath('../services/propertyEnrichmentRecovery.ts'), 'utf8'),
@@ -364,7 +369,7 @@ test('Synthetic enrichment recovery and detail/share routes are wired fail-close
   ]);
   assert.match(recovery, /writeGeneration/);
   assert.match(recovery, /clearConfirmedPropertyEnrichmentDraft/);
-  assert.match(detail, /property-enrich-action/);
+  assert.match(detail, /property\/\$\{encodeURIComponent\(property\.core\.id\)\}\/edit/);
   assert.match(detail, /property-share-action/);
   assert.match(share, /createPropertyShareSelection/);
   assert.match(share, /buildPropertySharePreview/);
@@ -378,18 +383,8 @@ test('Synthetic enrichment autosave and reviewed package contract remain determi
     readFile(sharedSourcePath('../services/propertySharePackage.ts'), 'utf8'),
     readFile(sharedSourcePath('../app/property/[propertyCoreId]/share.tsx'), 'utf8'),
   ]);
-  assert.match(enrich, /setTimeout/);
-  assert.match(enrich, /AppState\.addEventListener/);
-  assert.match(enrich, /flushPropertyEnrichmentDraftWrites/);
-  assert.match(enrich, /autosaveFlight/);
-  assert.match(enrich, /autosavePending/);
-  assert.match(enrich, /durableCandidateSnapshot/);
-  assert.match(enrich, /persistInProgress/);
-  assert.match(enrich, /persistFlight/);
-  assert.match(enrich, /await activePersist/);
-  assert.match(enrich, /persistAttachmentChanges/);
-  assert.match(enrich, /AppState\.addEventListener[\s\S]*\}, \[\]\);/);
-  assert.doesNotMatch(enrich, /subscription\.remove\(\)[\s\S]{0,250}setEnrichmentDraft/);
+  assert.match(enrich, /Compatibility deep link only/);
+  assert.match(enrich, /router\.replace/);
   assert.match(recovery, /existing\.writeGeneration >= draft\.writeGeneration/);
   assert.match(packageSource, /property-preview\.txt/);
   assert.match(packageSource, /await input\.shareZip\(output\.uri\)/);
@@ -2543,8 +2538,8 @@ test('V001 bilingual labels and source wiring remain explicit', async () => {
   assert.match(personDetail, /openAndroidWhatsAppContactCompose/);
   assert.match(personDetail, /person-whatsapp"/);
   assert.doesNotMatch(personDetail, /person-whatsapp-business/);
-  assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
-  assert.doesNotMatch(enrichment, /requestCurrentCoordinates|enrich-current-location/);
+  assert.match(enrichment, /Compatibility deep link only/);
+  assert.match(enrichment, /router\.replace/);
 });
 
 test('Phone entry helpers keep selected contact display text while choosing one canonical number', () => {
@@ -2810,9 +2805,8 @@ test('Private source persistence, UI, privacy, attachment opening, and archive p
   assert.match(attachments, /getContentUriAsync\(attachment\.uri\)/);
   assert.match(attachments, /android\.intent\.action\.VIEW/);
   assert.match(attachments, /type: attachment\.mimeType/);
-  assert.match(enrichment, /caught\.message === 'ATTACHMENT_FILE_MISSING'/);
-  assert.match(enrichment, /enrich\.attachment_missing/);
-  assert.doesNotMatch(enrichment, /ATTACHMENT_FILE_MISSING[\s\S]{0,500}(?:removeAttachment|deleteLocalAttachment)/);
+  assert.match(propertyDetail, /(?:caught|cause)\.message === 'ATTACHMENT_FILE_MISSING'/);
+  assert.match(propertyDetail, /enrich\.attachment_missing/);
   assert.match(translations, /'enrich\.attachment_missing': 'This local file is missing/);
   assert.match(translations, /'enrich\.attachment_missing': 'هذا الملف المحلي مفقود/);
 
@@ -2933,8 +2927,9 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
 
   // The reusable input is module-scoped before the screen component, so typing
   // does not define/remount a new Input component on every render.
-  assert.ok(enrichment.indexOf('function Input(') < enrichment.indexOf('export default function PropertyEnrichmentScreen'));
-  assert.match(enrichment, /<KeyboardAwareScrollViewCompat[\s\S]*keyboardShouldPersistTaps="handled"[\s\S]*keyboardDismissMode="on-drag"/);
+  assert.match(detail, /ModernPropertyForm/);
+  assert.match(detail, /property-edit-description/);
+  assert.match(detail, /property-edit-add-media/);
   assert.match(keyboardScroll, /forwardRef<ScrollView, Props>/);
   assert.match(keyboardScroll, /KeyboardAwareScrollView/);
   assert.match(keyboardScroll, /keyboardShouldPersistTaps/);
@@ -2973,19 +2968,14 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
 
   // Manual location is intentionally not editable, but restored and projected
   // values survive save/recovery so previously captured state is not erased.
-  assert.match(enrichment, /const \[manualLocation, setManualLocation\] = useState\(''\)/);
-  assert.match(enrichment, /setManualLocation\(visible\.locationEnrichment\?\.manualLocationText\?\.value \?\? ''\)/);
-  assert.match(enrichment, /manualLocationText: optionalClassifiedLiteral\(manualLocation, exactPrivacy\)/);
-  assert.doesNotMatch(enrichment, /testID="enrich-manual-location"|label=\{t\('enrich\.manual_location'\)\}/);
+  assert.match(detail, /property-edit-manual-location/);
+  assert.match(detail, /property-edit-maps-link/);
 
   // Attachment cards provide both preview/open affordances; mutations remain
   // serialized and metadata is committed before a local file is removed.
-  assert.match(enrichment, /testID=\{`enrich-preview-\$\{attachment\.id\}`\}/);
-  assert.match(enrichment, /id=\{`enrich-open-\$\{attachment\.id\}`\}/);
-  assert.match(enrichment, /const attachmentMutationFlight = useRef<Promise<void>>/);
-  assert.match(enrichment, /const enqueueAttachmentMutation/);
-  assert.match(enrichment, /persistAttachmentsThenDeleteRemoved/);
-  assert.match(enrichment, /await persistAttachmentChanges\(\[\.\.\.value\]\)/);
+  assert.match(detail, /property-edit-open-/);
+  assert.match(detail, /property-edit-remove-/);
+  assert.match(detail, /persistAttachmentsThenDeleteRemoved/);
 
   // Sensitive fields start off and require explicit selection; the preview
   // given to WhatsApp is the exact reviewed preview, with system

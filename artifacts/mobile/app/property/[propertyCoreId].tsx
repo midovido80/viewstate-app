@@ -12,10 +12,13 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
-import { getDemoCategory, DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
+import { ModernPropertyForm } from '@/components/ModernPropertyForm';
+import { getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG } from '@/constants/market';
@@ -28,8 +31,11 @@ import {
   PropertySourceRole,
 } from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
-import { loadPropertyEnrichmentDraft } from '@/services/propertyEnrichmentRecovery';
-import { openAttachment } from '@/services/attachments';
+import { clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, type PropertyEnrichmentDraftV1 } from '@/services/propertyEnrichmentRecovery';
+import { createExpoFileStore, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment } from '@/services/attachments';
+import { reorderAttachments, setAttachmentCover } from '@/services/attachmentOperations';
+import { projectPropertyFacts, isMappedTemplateField } from '@/services/propertyFactProjection';
+import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation } from '@/services/location';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -47,9 +53,11 @@ import {
   persistPropertyUpdateOperation,
   savePropertyEditDraft,
 } from '@/services/propertyUpdateRecovery';
+import { Alert } from 'react-native';
+import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
 
-export default function PropertyDetailScreen() {
-  const { propertyCoreId } = useLocalSearchParams<{ propertyCoreId?: string | string[] }>();
+export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
+  const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string }>();
   const id = Array.isArray(propertyCoreId) ? propertyCoreId[0] : propertyCoreId;
   const router = useRouter();
   const colors = useColors();
@@ -57,6 +65,7 @@ export default function PropertyDetailScreen() {
   const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
   const [hasEnrichmentDraft, setHasEnrichmentDraft] = useState(false);
+  const [legacyEnrichmentDraft, setLegacyEnrichmentDraft] = useState<PropertyEnrichmentDraftV1 | null>(null);
   const [draft, setDraft] = useState<PropertyEditDraftV1 | null>(null);
   const draftRef = useRef<PropertyEditDraftV1 | null>(null);
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
@@ -64,10 +73,12 @@ export default function PropertyDetailScreen() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const saveFlight = useRef(false);
+  const draftMutationFlight = useRef<Promise<boolean>>(Promise.resolve(true));
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaSearch, setAreaSearch] = useState('');
   const [leaveVisible, setLeaveVisible] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [newAttachmentUris, setNewAttachmentUris] = useState<string[]>([]);
   const [pendingOperation, setPendingOperation] = useState<PropertyUpdateOperationV1 | null>(null);
   const [recoveryStatus, setRecoveryStatus] = useState<PropertyUpdateRecoveryResult['status'] | null>(null);
   const [deleteVisible, setDeleteVisible] = useState(false);
@@ -81,7 +92,11 @@ export default function PropertyDetailScreen() {
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
+  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
+  const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
+  const editEntryConsumed = useRef(false);
   const canPermanentlyDelete = store.canPermanentlyDelete();
+  const attachmentStore = createExpoFileStore(FileSystem);
 
   const openPropertyAttachment = async (attachment: NonNullable<Property['attachments']>[number]) => {
     if (openingAttachmentId) return;
@@ -117,6 +132,7 @@ export default function PropertyDetailScreen() {
     setStatus('loading');
     try {
       const pending = await loadPropertyUpdateOperation();
+      let completedRecoveryForProperty = false;
       if (pending) {
         if (pending.baseline.core.id === id) {
           const recovered = await executePropertyUpdateRecovery({
@@ -124,8 +140,10 @@ export default function PropertyDetailScreen() {
             allowUpdate: false,
             getProperty: value => store.getProperty(value),
             compareAndUpdate: (baseline, candidate) => store.compareAndUpdate(baseline, candidate),
+            attachmentFileStore: attachmentStore,
           });
           if (recovered.status === 'complete') {
+            completedRecoveryForProperty = true;
             setPendingOperation(null);
             setRecoveryStatus(null);
           } else {
@@ -144,7 +162,7 @@ export default function PropertyDetailScreen() {
       }
       const [saved, enrichmentDraft, savedSource] = await Promise.all([
         store.getProperty(id),
-        loadPropertyEnrichmentDraft(id).catch(() => null),
+        loadPropertyEnrichmentDraft(id),
         store.getPropertySource(id),
       ]);
       if (!saved) {
@@ -153,8 +171,12 @@ export default function PropertyDetailScreen() {
         setStatus('missing');
         return;
       }
+      if (completedRecoveryForProperty && enrichmentDraft) {
+        await clearConfirmedPropertyEnrichmentDraft(enrichmentDraft);
+      }
       setProperty(saved);
-      setHasEnrichmentDraft(enrichmentDraft !== null);
+      setHasEnrichmentDraft(!completedRecoveryForProperty && enrichmentDraft !== null);
+      setLegacyEnrichmentDraft(completedRecoveryForProperty ? null : enrichmentDraft);
       setSource(savedSource);
       setSourcePerson(savedSource ? await store.getPerson(savedSource.personId) : null);
       setStatus('ready');
@@ -239,7 +261,16 @@ export default function PropertyDetailScreen() {
         setError(t('edit.draft_conflict'));
         return;
       }
-      const next = existing ?? createEditDraft(property);
+      if (legacyEnrichmentDraft && !exactPropertyEqual(legacyEnrichmentDraft.baseline, property)) {
+        setError(t('edit.draft_conflict'));
+        return;
+      }
+      const next = existing ?? (() => {
+        const fresh = createEditDraft(property);
+        if (!legacyEnrichmentDraft) return fresh;
+        return { ...fresh, choices: createEditDraft(legacyEnrichmentDraft.candidate).choices };
+      })();
+      setConflictResolutions({});
       if (!existing && !await savePropertyEditDraft(next)) {
         setError(t('edit.draft_conflict'));
         return;
@@ -252,21 +283,243 @@ export default function PropertyDetailScreen() {
     }
   };
 
-  const updateChoices = (changes: Partial<PropertyEditDraftV1['choices']>) => {
-    const previous = draftRef.current;
-    if (!previous) return;
-    const next = {
-      ...previous,
-      choices: { ...previous.choices, ...changes },
-      writeGeneration: previous.writeGeneration + 1,
+  useFocusEffect(useCallback(() => {
+    if ((edit === '1' || forceEdit) && status === 'ready' && mode === 'detail' && !editEntryConsumed.current) {
+      editEntryConsumed.current = true;
+      void beginEdit();
+    }
+  }, [edit, forceEdit, status, mode]));
+
+  const updateChoices = (
+    changesOrUpdater: Partial<PropertyEditDraftV1['choices']>
+      | ((current: PropertyEditDraftV1['choices']) => Partial<PropertyEditDraftV1['choices']>),
+    options: { replaceCanonicalDetails?: boolean; replaceDemoMetadata?: boolean } = {},
+  ): Promise<boolean> => {
+    const mutation = draftMutationFlight.current.then(async () => {
+      const previous = draftRef.current;
+      if (!previous) return false;
+      const changes = typeof changesOrUpdater === 'function'
+        ? changesOrUpdater(previous.choices)
+        : changesOrUpdater;
+      const next = {
+        ...previous,
+        choices: {
+          ...previous.choices,
+          ...changes,
+          ...(changes.canonicalDetails ? {
+            canonicalDetails: options.replaceCanonicalDetails
+              ? changes.canonicalDetails
+              : {
+                ...(previous.choices.canonicalDetails ?? {}),
+                ...changes.canonicalDetails,
+              },
+          } : {}),
+          ...(changes.demoMetadata ? {
+            demoMetadata: options.replaceDemoMetadata
+              ? changes.demoMetadata
+              : {
+                ...(previous.choices.demoMetadata ?? changes.demoMetadata),
+                ...changes.demoMetadata,
+              },
+          } : {}),
+          ...(changes.newlyCopiedAttachmentUris ? {
+            newlyCopiedAttachmentUris: [...new Set([
+              ...(previous.choices.newlyCopiedAttachmentUris ?? []),
+              ...changes.newlyCopiedAttachmentUris,
+            ])],
+          } : {}),
+        },
+        writeGeneration: previous.writeGeneration + 1,
+      };
+      try {
+        const saved = await savePropertyEditDraft(next, previous);
+        if (!saved) {
+          setError(t('edit.draft_conflict'));
+          return false;
+        }
+        draftRef.current = next;
+        setDraft(next);
+        return true;
+      } catch {
+        setError(t('edit.draft_unreadable'));
+        return false;
+      }
+    });
+    draftMutationFlight.current = mutation.catch(() => false);
+    return mutation;
+  };
+
+  const resolveFactConflict = async (
+    conflict: ReturnType<typeof projectPropertyFacts>['conflicts'][number],
+    choice: 'canonical' | 'legacy',
+  ) => {
+    if (!draft) return;
+    const selectedValue = choice === 'legacy' ? conflict.legacyValue : conflict.canonicalValue;
+    let persisted: boolean;
+    if (conflict.key === 'area') persisted = await updateChoices({ areaSquareMeters: Number(selectedValue) });
+    else if (conflict.key === 'areaUnit') persisted = await updateChoices({ areaUnit: selectedValue as 'square_meter' | 'square_foot' });
+    else persisted = await updateChoices({ canonicalDetails: { [conflict.key]: String(selectedValue) } });
+    if (persisted) setConflictResolutions(current => ({ ...current, [conflict.key]: choice }));
+  };
+  const factLabel = (key: string) => key === 'area'
+    ? (language === 'ar' ? 'المساحة' : 'Area')
+    : key === 'areaUnit'
+      ? (language === 'ar' ? 'وحدة المساحة' : 'Area unit')
+      : propertyDetailLabels[key as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? (language === 'ar' ? 'حقيقة العقار' : 'Property fact');
+
+  const updateCanonicalDetail = (field: PropertyDetailField | 'clarification', value: string) => {
+    if (!draft) return;
+    if (field === 'clarification') {
+      updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), clarification: value } });
+      return;
+    }
+    if (field !== 'floorUse' || !draft.choices.canonicalDetails?.floorUse || draft.choices.canonicalDetails.floorUse === value) {
+      updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), [field]: value } });
+      return;
+    }
+    const scope = `property:${draft.propertyCoreId}`;
+    const proposal = createFloorTransitionProposal(scope, draft.choices.canonicalDetails, value as 'residential' | 'commercial');
+    if (!proposal || proposal.affected.length === 0) {
+      updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), [field]: value } });
+      return;
+    }
+    Alert.alert(
+      language === 'ar' ? 'تغيير استخدام الطابق؟' : 'Change floor use?',
+      language === 'ar' ? 'سيتم حذف القيم غير المتوافقة بعد التأكيد.' : 'Incompatible values will be removed after confirmation.',
+      [
+        { text: t('capture.cancel'), style: 'cancel' },
+        {
+          text: t('transition.remove_confirm'),
+          style: 'destructive',
+          onPress: () => {
+            const next = applyFloorTransition(scope, draft.choices.canonicalDetails ?? {}, proposal);
+            if (next) updateChoices({ canonicalDetails: next }, { replaceCanonicalDetails: true });
+          },
+        },
+      ],
+    );
+  };
+
+  const localAttachments = (draft?.choices.attachments ?? property?.attachments ?? []).map(item => ({
+    id: item.id,
+    kind: item.kind,
+    originalName: item.originalName,
+    mimeType: item.mimeType,
+    uri: item.managedUri,
+    order: item.order,
+    ...(item.isCover ? { isCover: true as const } : {}),
+  })) as LocalAttachment[];
+
+  const updateAttachmentChoices = (
+    transform: (items: LocalAttachment[]) => LocalAttachment[],
+  ) => updateChoices(current => {
+    const domainItems = current.attachments ?? property?.attachments ?? [];
+    const latest = domainItems.map(item => ({
+      id: item.id,
+      kind: item.kind,
+      originalName: item.originalName,
+      mimeType: item.mimeType,
+      uri: item.managedUri,
+      order: item.order,
+      ...(item.isCover ? { isCover: true as const } : {}),
+    })) as LocalAttachment[];
+    return {
+      attachments: transform(latest).map(item => {
+        const existing = domainItems.find(candidate => candidate.id === item.id);
+        return {
+          id: item.id,
+          kind: item.kind,
+          originalName: item.originalName,
+          mimeType: item.mimeType,
+          order: item.order,
+          managedUri: item.uri,
+          ...(item.isCover ? { isCover: true } : {}),
+          privacy: existing?.privacy ?? { classification: 'normal', disclosurePolicy: 'normal' },
+        };
+      }),
     };
-    draftRef.current = next;
-    setDraft(next);
-    void savePropertyEditDraft(next, previous)
-      .then(saved => {
-        if (!saved) setError(t('edit.draft_conflict'));
-      })
-      .catch(() => setError(t('edit.draft_unreadable')));
+  });
+
+  const addMedia = async () => {
+    if (!property || !draft) return;
+    try {
+      const next = await pickAndStoreMedia(property.core.id, localAttachments, { fileStore: attachmentStore });
+      if (next.length) {
+        const copied = next.map(item => item.uri);
+        const owned = await updateChoices(current => {
+          const existing = current.attachments ?? property.attachments ?? [];
+          const hasCover = existing.some(item => item.isCover);
+          return {
+            attachments: [
+              ...existing,
+              ...next.map((item, index) => ({
+                id: item.id,
+                kind: item.kind,
+                originalName: item.originalName,
+                mimeType: item.mimeType,
+                order: existing.length + index,
+                managedUri: item.uri,
+                ...(!hasCover && index === 0 && item.kind === 'image' ? { isCover: true } : {}),
+                privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+              })),
+            ],
+            newlyCopiedAttachmentUris: [...(current.newlyCopiedAttachmentUris ?? []), ...copied],
+          };
+        });
+        if (!owned) {
+          await Promise.all(copied.map(uri => attachmentStore.delete(uri).catch(() => undefined)));
+          return;
+        }
+        setNewAttachmentUris(current => [...current, ...copied]);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+    }
+  };
+
+  const addPdfs = async () => {
+    if (!property || !draft) return;
+    try {
+      const next = await pickAndStorePdfs(property.core.id, localAttachments, DocumentPicker, { fileStore: attachmentStore });
+      if (next.length) {
+        const copied = next.map(item => item.uri);
+        const owned = await updateChoices(current => {
+          const existing = current.attachments ?? property.attachments ?? [];
+          return {
+            attachments: [
+              ...existing,
+              ...next.map((item, index) => ({
+                id: item.id,
+                kind: item.kind,
+                originalName: item.originalName,
+                mimeType: item.mimeType,
+                order: existing.length + index,
+                managedUri: item.uri,
+                privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+              })),
+            ],
+            newlyCopiedAttachmentUris: [...(current.newlyCopiedAttachmentUris ?? []), ...copied],
+          };
+        });
+        if (!owned) {
+          await Promise.all(copied.map(uri => attachmentStore.delete(uri).catch(() => undefined)));
+          return;
+        }
+        setNewAttachmentUris(current => [...current, ...copied]);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+    }
+  };
+
+  const openMapsLink = async () => {
+    const link = draft?.choices.mapsLink?.trim();
+    if (!link) return;
+    try {
+      await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+    } catch {
+      setError(t('enrich.maps_link_invalid'));
+    }
   };
 
   const selectTransaction = (transaction: Transaction) => {
@@ -290,9 +543,11 @@ export default function PropertyDetailScreen() {
         allowUpdate,
         getProperty: value => store.getProperty(value),
         compareAndUpdate: (baseline, candidate) => store.compareAndUpdate(baseline, candidate),
+        attachmentFileStore: attachmentStore,
       });
       if (result.status === 'complete') {
         const saved = await store.getProperty(pendingOperation.baseline.core.id);
+        if (legacyEnrichmentDraft) await clearConfirmedPropertyEnrichmentDraft(legacyEnrichmentDraft);
         setProperty(saved);
         setPendingOperation(null);
         setRecoveryStatus(null);
@@ -300,6 +555,7 @@ export default function PropertyDetailScreen() {
         draftRef.current = null;
         setError('');
         setMode('detail');
+        router.replace(`/property/${encodeURIComponent(id!)}` as never);
       } else {
         setRecoveryStatus(result.status);
         setError(
@@ -319,6 +575,7 @@ export default function PropertyDetailScreen() {
   const leaveEditor = () => {
     if (!draft) {
       setMode('detail');
+      router.replace(`/property/${encodeURIComponent(id!)}` as never);
       return;
     }
     setLeaveVisible(true);
@@ -335,9 +592,25 @@ export default function PropertyDetailScreen() {
         setError(t('edit.draft_conflict'));
         return;
       }
+      const ownedUris = [...new Set([
+        ...(current.choices.newlyCopiedAttachmentUris ?? []),
+        ...newAttachmentUris,
+      ])];
+      for (const uri of ownedUris) {
+        try {
+          await attachmentStore.delete(uri);
+        } catch (cause) {
+          if (!(cause instanceof Error && (
+            cause.message === 'ATTACHMENT_FILE_MISSING'
+            || cause.message.includes('ENOENT')
+          ))) throw cause;
+        }
+      }
+      setNewAttachmentUris([]);
       setDraft(null);
       draftRef.current = null;
       setMode('detail');
+      router.replace(`/property/${encodeURIComponent(id!)}` as never);
     } catch {
       setLeaveVisible(false);
       setError(t('edit.draft_unreadable'));
@@ -352,6 +625,26 @@ export default function PropertyDetailScreen() {
     setSaving(true);
     setError('');
     try {
+      const latestMutationSaved = await draftMutationFlight.current;
+      if (!latestMutationSaved) {
+        setError(t('edit.draft_conflict'));
+        return;
+      }
+      const currentDraft = draftRef.current;
+      if (!currentDraft || currentDraft.propertyCoreId !== draft.propertyCoreId) {
+        setError(t('edit.draft_conflict'));
+        return;
+      }
+      if (invalidQuickPickFields.size > 0) {
+        setError(t('errors.capture_incomplete'));
+        return;
+      }
+      if (projectPropertyFacts(currentDraft.baseline).conflicts.some(conflict => conflictResolutions[conflict.key] === undefined)) {
+         setError(language === 'ar'
+           ? 'توجد حقائق متعارضة. اختر قيمة معتمدة لكل حقيقة قبل الحفظ.'
+           : 'Conflicting facts need resolution. Choose an authoritative value for each fact before saving.');
+        return;
+      }
       const pending = await loadPropertyUpdateOperation();
       if (pending) {
         if (pending.baseline.core.id !== draft.propertyCoreId) {
@@ -363,30 +656,48 @@ export default function PropertyDetailScreen() {
           allowUpdate: true,
           getProperty: value => store.getProperty(value),
           compareAndUpdate: (baseline, replacement) => store.compareAndUpdate(baseline, replacement),
+          attachmentFileStore: attachmentStore,
         });
         if (retry.status !== 'complete') {
-          setError(retry.status === 'conflict' ? t('edit.recovery_conflict') : t('edit.save_failed'));
+           setError(retry.status === 'conflict' ? t('edit.recovery_conflict') : retry.status === 'cleanup_failed' ? t('edit.recovery_cleanup') : t('edit.save_failed'));
           return;
         }
+        if (legacyEnrichmentDraft) await clearConfirmedPropertyEnrichmentDraft(legacyEnrichmentDraft);
         setProperty(pending.candidate);
         setDraft(null);
       draftRef.current = null;
         setMode('detail');
+        router.replace(`/property/${encodeURIComponent(id!)}` as never);
         return;
       }
       await flushPropertyEditDraftWrites();
-      const persistedDraft = await loadPropertyEditDraft(draft.propertyCoreId);
-      if (!persistedDraft || JSON.stringify(persistedDraft) !== JSON.stringify(draft)) {
+      const persistedDraft = await loadPropertyEditDraft(currentDraft.propertyCoreId);
+      if (!persistedDraft || JSON.stringify(persistedDraft) !== JSON.stringify(currentDraft)) {
         setError(t('edit.draft_conflict'));
         return;
       }
-      const candidate = buildPropertyUpdateCandidate(draft.baseline, draft.choices);
+      const candidate = buildPropertyUpdateCandidate(currentDraft.baseline, currentDraft.choices);
+      const baselineUris = new Set((currentDraft.baseline.attachments ?? []).map(item => item.managedUri));
+      const candidateUris = new Set((candidate.attachments ?? []).map(item => item.managedUri));
+      const newlyCopiedUris = [...new Set([
+        ...(persistedDraft.choices.newlyCopiedAttachmentUris ?? []),
+        ...newAttachmentUris,
+      ])].filter(uri => !baselineUris.has(uri));
       const operation = createPropertyUpdateOperation({
         operationId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        baseline: draft.baseline,
+        baseline: currentDraft.baseline,
         candidate,
-        draftSnapshot: draft,
+        draftSnapshot: currentDraft,
         preparedAt: new Date().toISOString(),
+        attachmentCleanup: {
+          newlyCopiedUris,
+          retiredManagedUris: [...new Set([
+            ...[...baselineUris].filter(uri => !candidateUris.has(uri)),
+            ...newlyCopiedUris.filter(uri => !candidateUris.has(uri)),
+          ])],
+          phase: 'before_cas',
+          status: 'pending',
+        },
       });
       await persistPropertyUpdateOperation(operation);
       const result = await executePropertyUpdateRecovery({
@@ -394,15 +705,19 @@ export default function PropertyDetailScreen() {
         allowUpdate: true,
         getProperty: value => store.getProperty(value),
         compareAndUpdate: (baseline, replacement) => store.compareAndUpdate(baseline, replacement),
+        attachmentFileStore: attachmentStore,
       });
       if (result.status !== 'complete') {
-        setError(result.status === 'conflict' ? t('edit.recovery_conflict') : t('edit.save_failed'));
+         setError(result.status === 'conflict' ? t('edit.recovery_conflict') : result.status === 'cleanup_failed' ? t('edit.recovery_cleanup') : t('edit.save_failed'));
         return;
       }
+      if (legacyEnrichmentDraft) await clearConfirmedPropertyEnrichmentDraft(legacyEnrichmentDraft);
+      setNewAttachmentUris([]);
       setProperty(candidate);
       setDraft(null);
       draftRef.current = null;
       setMode('detail');
+      router.replace(`/property/${encodeURIComponent(id!)}` as never);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : '';
       setError(
@@ -476,6 +791,7 @@ export default function PropertyDetailScreen() {
       ? property.activeOffer.rentalPeriodId
       : undefined;
   const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
+  const propertyFacts = projectPropertyFacts(property);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -505,13 +821,8 @@ export default function PropertyDetailScreen() {
         {mode === 'detail' ? (
           <View style={styles.headerActionGroups}>
             <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <TouchableOpacity onPress={beginEdit} accessibilityRole="button" testID="property-edit-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
+               <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/edit` as never)} accessibilityRole="button" testID="property-edit-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('detail.edit')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/enrich` as never)} accessibilityRole="button" testID="property-enrich-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>
-                  {t(hasEnrichmentDraft ? 'detail.continue_details' : 'detail.add_details')}
-                </Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}/share` as never)} accessibilityRole="button" testID="property-share-action" style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('detail.share')}</Text>
@@ -599,17 +910,17 @@ export default function PropertyDetailScreen() {
               }) : null}
             {property.core.description ? <DetailRow label={t('enrich.description')} value={property.core.description.value} /> : null}
             {property.core.block ? <DetailRow label={language === 'ar' ? 'القطعة' : 'Block'} value={property.core.block} /> : null}
-            {demoCategory?.numericFields.map(field => {
+            {demoCategory?.numericFields.filter(field => !isMappedTemplateField(field.id) || projectPropertyFacts(property).templateFacts[field.id] !== undefined).map(field => {
               const value = property.demoCapture?.numericValues?.[field.id];
               return value === undefined ? null : <DetailRow key={`demo-${field.id}`} label={field.label[language === 'ar' ? 1 : 0]} value={String(value)} />;
             })}
-            {(property.demoCapture?.areaSquareMeters ?? property.areaSquareMeters) !== undefined ? (
+            {projectPropertyFacts(property).areaSquareMeters !== undefined ? (
               <DetailRow
                 label={language === 'ar' ? 'المساحة' : 'Area'}
-                value={`${property.demoCapture?.areaSquareMeters ?? property.areaSquareMeters} ${(property.demoCapture?.areaUnit ?? property.areaUnit) === 'square_foot' ? (language === 'ar' ? 'قدم مربع' : 'sq ft') : (language === 'ar' ? 'متر مربع' : 'm²')}`}
+                value={`${projectPropertyFacts(property).areaSquareMeters} ${projectPropertyFacts(property).areaUnit === 'square_foot' ? (language === 'ar' ? 'قدم مربع' : 'sq ft') : (language === 'ar' ? 'متر مربع' : 'm²')}`}
               />
             ) : null}
-            {demoCategory?.choices.map(choice => {
+            {demoCategory?.choices.filter(choice => !isMappedTemplateField(choice.id) || projectPropertyFacts(property).templateFacts[choice.id] !== undefined).map(choice => {
               const selected = property.demoCapture?.choices?.[choice.id];
               const option = choice.options.find(item => item.id === selected);
               return option ? <DetailRow key={`demo-choice-${choice.id}`} label={choice.label[language === 'ar' ? 1 : 0]} value={option.label[language === 'ar' ? 1 : 0]} /> : null;
@@ -641,6 +952,33 @@ export default function PropertyDetailScreen() {
           </>
         ) : choices ? (
           <>
+            {propertyFacts.conflicts.length > 0 && propertyFacts.conflicts.some(conflict => conflictResolutions[conflict.key] === undefined) ? (
+              <View style={[styles.sourceSection, { borderColor: colors.destructive, backgroundColor: colors.card }]}>
+                <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+                  {language === 'ar' ? 'تعارض يحتاج إلى حل' : 'Conflict requires resolution'}
+                </Text>
+                {propertyFacts.conflicts.map(conflict => (
+                  <View key={conflict.key} style={styles.sourceSection}>
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+                      {language === 'ar'
+                         ? `${factLabel(conflict.key)}: القيمة الحالية ${conflict.canonicalValue} · قيمة التوافق القديمة ${conflict.legacyValue}`
+                         : `${factLabel(conflict.key)}: Current value ${conflict.canonicalValue} · Legacy-compatible value ${conflict.legacyValue}`}
+                    </Text>
+                    <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                      <TouchableOpacity onPress={() => resolveFactConflict(conflict, 'canonical')} testID={`property-conflict-canonical-${conflict.key}`} style={[styles.headerAction, { borderColor: colors.border }]}>
+                        <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{language === 'ar' ? 'اختيار الحالية' : 'Choose current'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => resolveFactConflict(conflict, 'legacy')} testID={`property-conflict-legacy-${conflict.key}`} style={[styles.headerAction, { borderColor: colors.border }]}>
+                        <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{language === 'ar' ? 'اختيار القديمة' : 'Choose legacy'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+                  {language === 'ar' ? 'عدّل القيمة في الحقول أدناه لاختيار القيمة المعتمدة.' : 'Edit the field below to choose the authoritative value.'}
+                </Text>
+              </View>
+            ) : null}
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.type')}</Text>
             <View style={styles.options}>
               {PROPERTY_TYPES.map(type => (
@@ -660,11 +998,18 @@ export default function PropertyDetailScreen() {
             </Text>
             <TextInput
               value={shownPrice === undefined ? '' : String(shownPrice)}
-              onChangeText={value => updateChoices({ priceAmount: value.trim() === '' ? undefined : Number(value) })}
+              onChangeText={value => {
+                const parsed = value.trim() === '' ? undefined : parseDemoNumericInput(value, true);
+                if (parsed === undefined || parsed !== null) updateChoices({ priceAmount: parsed ?? undefined });
+              }}
               keyboardType="decimal-pad"
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="edit-price"
             />
+            <View style={styles.horizontal}>
+              <Choice selected={choices.areaUnit === 'square_meter'} onPress={() => updateChoices({ areaUnit: 'square_meter' })} title={language === 'ar' ? 'متر مربع' : 'Square meter'} testID="edit-area-unit-square-meter" />
+              <Choice selected={choices.areaUnit === 'square_foot'} onPress={() => updateChoices({ areaUnit: 'square_foot' })} title={language === 'ar' ? 'قدم مربع' : 'Square foot'} testID="edit-area-unit-square-foot" />
+            </View>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.area')}</Text>
             <TouchableOpacity
               onPress={() => setAreaOpen(true)}
@@ -677,7 +1022,10 @@ export default function PropertyDetailScreen() {
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'مساحة العقار' : 'Property area'}</Text>
             <TextInput
               value={choices.areaSquareMeters === undefined ? '' : String(choices.areaSquareMeters)}
-              onChangeText={value => updateChoices({ areaSquareMeters: value.trim() === '' ? undefined : Number(value) })}
+              onChangeText={value => {
+                const parsed = value.trim() === '' ? undefined : parseDemoNumericInput(value, true);
+                if (parsed === undefined || parsed !== null) updateChoices({ areaSquareMeters: parsed ?? undefined });
+              }}
               keyboardType="decimal-pad"
               testID="edit-area-square-meters"
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -690,18 +1038,103 @@ export default function PropertyDetailScreen() {
               testID="edit-block"
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
             />
-            {demoCategory ? (
-              <DemoEditFields
-                category={demoCategory}
-                metadata={choices.demoMetadata}
-                nearby={choices.nearbyServices ?? property.nearbyServices ?? []}
-                language={language}
-                colors={colors}
-                fonts={fonts}
-                onChange={(changes: Partial<PropertyDemoCaptureMetadata>) => updateChoices({ demoMetadata: { ...(choices.demoMetadata ?? { categoryId: demoCategory.id }), ...changes } })}
-                onNearbyChange={(nearby: readonly string[]) => updateChoices({ nearbyServices: nearby, demoMetadata: { ...(choices.demoMetadata ?? { categoryId: demoCategory.id }), nearbyServices: nearby } })}
-              />
-            ) : null}
+            <ModernPropertyForm
+              recordScopeKey={`property:${property.core.id}`}
+              propertyType={choices.propertyType}
+              values={choices.canonicalDetails ?? {}}
+              onChange={updateCanonicalDetail}
+              category={demoCategory}
+              metadata={choices.demoMetadata}
+              nearby={choices.nearbyServices ?? []}
+              language={language}
+              colors={colors}
+              fonts={fonts}
+              onDemoChange={(changes: Partial<PropertyDemoCaptureMetadata>) => updateChoices({
+                demoMetadata: { categoryId: demoCategory!.id, ...(draftRef.current?.choices.demoMetadata ?? choices.demoMetadata ?? {}), ...changes },
+              }, { replaceDemoMetadata: true })}
+              onNearbyChange={(nearby: readonly string[]) => updateChoices({ nearbyServices: nearby })}
+              onInvalidQuickPickChange={(field, scopeKey, invalid) => {
+                if (scopeKey !== `property:${property.core.id}`) return;
+                setInvalidQuickPickFields(current => {
+                  const next = new Set(current);
+                  if (invalid) next.add(field);
+                  else next.delete(field);
+                  return next;
+                });
+              }}
+            />
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.description')}</Text>
+            <TextInput
+              value={choices.description ?? ''}
+              onChangeText={value => updateChoices({ description: value })}
+              multiline
+              style={[styles.input, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              testID="property-edit-description"
+            />
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.private_notes')}</Text>
+            <TextInput
+              value={choices.privateNotes ?? ''}
+              onChangeText={value => updateChoices({ privateNotes: value })}
+              multiline
+              style={[styles.input, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              testID="property-edit-private-notes"
+            />
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.paci')}</Text>
+            <TextInput
+              value={choices.paciNumber ?? ''}
+              onChangeText={value => updateChoices({ paciNumber: value })}
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              testID="property-edit-paci"
+            />
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.manual_location')}</Text>
+            <TextInput
+              value={choices.manualLocationText ?? ''}
+              onChangeText={value => updateChoices({ manualLocationText: value })}
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              testID="property-edit-manual-location"
+            />
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
+            <TextInput
+              value={choices.mapsLink ?? ''}
+              onChangeText={value => updateChoices({ mapsLink: value })}
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              testID="property-edit-maps-link"
+            />
+            <TouchableOpacity onPress={() => void openMapsLink()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-open-maps">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.open_maps')}</Text>
+            </TouchableOpacity>
+            <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <TouchableOpacity onPress={() => void addMedia()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-add-media">
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_media')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => void addPdfs()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-add-pdf">
+                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_pdf')}</Text>
+              </TouchableOpacity>
+            </View>
+            {localAttachments.map((attachment, index) => (
+              <View key={attachment.id} style={[styles.sourceSection, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <TouchableOpacity onPress={() => void openPropertyAttachment({ ...attachment, managedUri: attachment.uri, privacy: { classification: 'normal', disclosurePolicy: 'normal' } })} testID={`property-edit-open-${attachment.id}`}>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{attachment.isCover ? '★ ' : ''}{attachment.originalName}</Text>
+                </TouchableOpacity>
+                <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <TouchableOpacity disabled={index === 0} onPress={() => updateAttachmentChoices(items => {
+                    const currentIndex = items.findIndex(item => item.id === attachment.id);
+                    if (currentIndex <= 0) return items;
+                    const ids = items.map(item => item.id);
+                    [ids[currentIndex - 1], ids[currentIndex]] = [ids[currentIndex], ids[currentIndex - 1]];
+                    return reorderAttachments(items, ids);
+                  })} testID={`property-edit-up-${attachment.id}`}>
+                    <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t('enrich.move_up')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => updateAttachmentChoices(items => setAttachmentCover(items, attachment.id))} testID={`property-edit-cover-${attachment.id}`}>
+                    <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t('enrich.cover')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => updateAttachmentChoices(items => items.filter(item => item.id !== attachment.id).map((item, order) => ({ ...item, order })))} testID={`property-edit-remove-${attachment.id}`}>
+                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('enrich.remove')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
             <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" />
           </>
         ) : null}
@@ -890,6 +1323,7 @@ export default function PropertyDetailScreen() {
               onPress={() => {
                 setLeaveVisible(false);
                 setMode('detail');
+                router.replace(`/property/${encodeURIComponent(id!)}` as never);
               }}
               style={[styles.modalAction, { borderColor: colors.border }]}
               testID="property-edit-keep-draft-exit"
@@ -941,57 +1375,7 @@ export default function PropertyDetailScreen() {
   }
 }
 
-function DemoEditFields({ category, metadata, nearby, language, colors, fonts, onChange, onNearbyChange }: any) {
-  return (
-    <View style={styles.demoEditSection}>
-      {category.numericFields.map((item: any) => (
-        <View key={item.id}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{item.label[language === 'ar' ? 1 : 0]}</Text>
-          <TextInput
-            value={metadata?.numericValues?.[item.id] === undefined ? '' : String(metadata.numericValues[item.id])}
-            onChangeText={value => {
-              const normalized = value.replace(/[٠-٩]/g, (digit: string) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, (digit: string) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
-              const parsed = normalized === '' ? undefined : Number(normalized);
-              if (parsed === undefined || Number.isFinite(parsed)) {
-                const numericValues = { ...(metadata?.numericValues ?? {}) };
-                if (parsed === undefined) delete numericValues[item.id];
-                else numericValues[item.id] = parsed;
-                onChange({ numericValues });
-              }
-            }}
-            keyboardType="decimal-pad"
-            testID={`edit-demo-numeric-${item.id}`}
-            style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-          />
-        </View>
-      ))}
-      {category.choices.map((choice: any) => (
-        <View key={choice.id}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{choice.label[language === 'ar' ? 1 : 0]}</Text>
-          <View style={styles.options}>{choice.options.map((option: any) => (
-            <TouchableOpacity key={option.id} onPress={() => onChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} testID={`edit-demo-choice-${choice.id}-${option.id}`} style={[styles.editDemoChoice, { borderColor: metadata?.choices?.[choice.id] === option.id ? colors.primary : colors.border }]}>
-              <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{option.label[language === 'ar' ? 1 : 0]}</Text>
-            </TouchableOpacity>
-          ))}</View>
-        </View>
-      ))}
-      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المزايا' : 'Features'}</Text>
-      <View style={styles.options}>{category.features.map((feature: any) => {
-        const selected = metadata?.selectedFeatures?.includes(feature.id);
-        return <TouchableOpacity key={feature.id} onPress={() => onChange({ selectedFeatures: selected ? metadata.selectedFeatures.filter((id: string) => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} testID={`edit-demo-feature-${feature.id}`} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} style={[styles.editDemoChoice, { borderColor: selected ? colors.primary : colors.border }]}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selected ? '✓ ' : ''}{feature.label[language === 'ar' ? 1 : 0]}</Text>
-        </TouchableOpacity>;
-      })}</View>
-      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
-      <View style={styles.options}>{DEMO_NEARBY_SERVICES.map(item => {
-        const selected = nearby.includes(item.id);
-        return <TouchableOpacity key={item.id} onPress={() => onNearbyChange(selected ? nearby.filter((id: string) => id !== item.id) : [...nearby, item.id])} testID={`edit-demo-nearby-${item.id}`} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} style={[styles.editDemoChoice, { borderColor: selected ? colors.primary : colors.border }]}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selected ? '✓ ' : ''}{item.label[language === 'ar' ? 1 : 0]}</Text>
-        </TouchableOpacity>;
-      })}</View>
-    </View>
-  );
-}
+export default PropertyDetailScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -1018,6 +1402,7 @@ const styles = StyleSheet.create({
   horizontal: { flexDirection: 'row', gap: 8 },
   choice: { minHeight: 48, padding: 12, borderWidth: 1, borderRadius: 10, justifyContent: 'center' },
   input: { minHeight: 54, paddingHorizontal: 14, borderWidth: 1, borderRadius: 10, justifyContent: 'center' },
+  multiline: { minHeight: 96, paddingTop: 14, textAlignVertical: 'top' },
   error: { padding: 12 },
   demoEditSection: { marginTop: 14, gap: 10 },
   editDemoChoice: { minHeight: 44, padding: 10, borderWidth: 1, borderRadius: 10, justifyContent: 'center' },

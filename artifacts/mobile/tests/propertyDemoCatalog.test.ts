@@ -76,11 +76,19 @@ test('BEHAVIOR: demo metadata is included in guarded edit candidates', () => {
   const draft = createEditDraft(baseline);
   const candidate = buildPropertyUpdateCandidate(baseline, {
     ...draft.choices,
-    demoMetadata: { ...draft.choices.demoMetadata!, numericValues: { bedroomCount: 5 } },
+    canonicalDetails: { ...draft.choices.canonicalDetails, bedroomCount: '5' },
     nearbyServices: ['school', 'hospital'],
   });
-  assert.deepEqual(candidate.demoCapture?.numericValues, { bedroomCount: 5 });
+  assert.equal((candidate.typeDetails as { bedroomCount?: number } | undefined)?.bedroomCount, 5);
+  assert.equal(candidate.demoCapture?.numericValues?.bedroomCount, undefined);
   assert.deepEqual(candidate.nearbyServices, ['school', 'hospital']);
+
+  const cleared = buildPropertyUpdateCandidate(baseline, {
+    ...draft.choices,
+    canonicalDetails: { ...draft.choices.canonicalDetails, bedroomCount: '' },
+  });
+  assert.equal((cleared.typeDetails as { bedroomCount?: number } | undefined)?.bedroomCount, undefined);
+  assert.equal(cleared.demoCapture?.numericValues?.bedroomCount, undefined);
 });
 
 test('BEHAVIOR: category transitions retain compatible IDs and reject stale proposals', () => {

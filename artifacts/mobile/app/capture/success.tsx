@@ -53,10 +53,19 @@ export default function SuccessScreen() {
       <View style={styles.spacer} />
       {propertyCoreId ? (
         <Button
-          title={t('summary.add_details')}
-          onPress={() => replaceOnce(`/property/${encodeURIComponent(propertyCoreId)}/enrich`)}
+          title={t('summary.view_property')}
+          onPress={() => replaceOnce(`/property/${encodeURIComponent(propertyCoreId)}`)}
           size="large"
-          testID="btn-add-details-now"
+          testID="btn-view-property"
+        />
+      ) : null}
+      {propertyCoreId ? (
+        <Button
+          title={t('summary.view_properties')}
+          onPress={() => replaceOnce('/(tabs)/properties')}
+          variant="outline"
+          size="large"
+          testID="btn-view-properties"
         />
       ) : null}
       <Button
