@@ -29,6 +29,13 @@ test('BEHAVIOR: catalog applicability is derived from the canonical domain defin
   }
 });
 
+test('BEHAVIOR: A/C feature has one canonical domain-backed UI identity', () => {
+  const centralAC = PROPERTY_FORM_CATALOG.find(item => item.field === 'hasCentralAC');
+  assert.ok(centralAC);
+  assert.equal(centralAC.group, 'amenity');
+  assert.equal(centralAC.control, 'boolean');
+});
+
 test('BEHAVIOR: Floor exposes exactly Residential and Commercial branches', () => {
   const floorUse = PROPERTY_FORM_CATALOG.find(definition => definition.field === 'floorUse');
   assert.deepEqual(floorUse?.floorUses, undefined);

@@ -43,6 +43,7 @@ export const EQUIVALENT_TEMPLATE_FIELDS: Readonly<Record<string, PropertyDetailF
   security: 'hasSecurityGuard',
   bbq: 'hasBBQArea',
   pool: 'hasPool',
+  central_ac: 'hasCentralAC',
 };
 
 export function isDemoFeatureSuppressed(

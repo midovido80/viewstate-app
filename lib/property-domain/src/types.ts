@@ -107,6 +107,7 @@ export interface WholeBuildingTypeDetails {
   readonly parkingSpaceCount?: number;
   readonly roomsPerUnit?: number;
   readonly bathroomsPerUnit?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface CommercialComplexTypeDetails {
@@ -122,6 +123,7 @@ export interface CommercialComplexTypeDetails {
   readonly parkingSpaceCount?: number;
   readonly roomsPerUnit?: number;
   readonly bathroomsPerUnit?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ApartmentTypeDetails {
@@ -143,11 +145,13 @@ export interface ApartmentTypeDetails {
   readonly hasSecurityGuard?: boolean;
   readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface EmptyFloorTypeDetails {
   readonly propertyType: "floor";
   readonly floorUse?: undefined;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ResidentialFloorTypeDetails {
@@ -169,6 +173,7 @@ export interface ResidentialFloorTypeDetails {
   readonly hasSecurityGuard?: boolean;
   readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface CommercialFloorTypeDetails {
@@ -182,6 +187,7 @@ export interface CommercialFloorTypeDetails {
   readonly parkingSpaceCount?: number;
   readonly frontageWidthMeters?: number;
   readonly ceilingHeightMeters?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export type FloorTypeDetails =
@@ -209,6 +215,7 @@ export interface HouseTypeDetails {
   readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
   readonly hasPool?: boolean;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface VillaTypeDetails extends Omit<HouseTypeDetails, "propertyType"> {
@@ -223,6 +230,7 @@ export interface OfficeTypeDetails {
   readonly intendedUse?: ClassifiedLiteralText;
   readonly commercialActivity?: ClassifiedLiteralText;
   readonly parkingSpaceCount?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ShopTypeDetails extends Omit<OfficeTypeDetails, "propertyType"> {
@@ -242,6 +250,7 @@ export interface WarehouseTypeDetails {
   readonly ceilingHeightMeters?: number;
   readonly loadingBayCount?: number;
   readonly hasColdStorage?: boolean;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"> {
@@ -252,6 +261,7 @@ export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"
 export interface OtherBuiltPropertyTypeDetails {
   readonly propertyType: "other_built_property";
   readonly clarification: ClassifiedLiteralText;
+  readonly hasCentralAC?: boolean;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly parkingSpaceCount?: number;

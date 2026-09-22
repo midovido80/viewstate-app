@@ -2209,18 +2209,18 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   assert.equal(PROPERTY_TYPES.length, 11);
   const residentialAmenities = ['hasMaidRoom', 'hasHeating', 'hasBalcony', 'hasLaundryRoom', 'hasSolarHeater', 'hasElevator', 'hasGarden', 'hasSecurityGuard', 'hasBBQArea'] as const;
   const exactFields = {
-    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount'],
-    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool'],
-    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool'],
-    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront'],
-    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', ...residentialAmenities],
-    floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
-    office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity'],
-    shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
-     whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'],
-     commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'frontageWidthMeters'],
-    warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage'],
-    other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification'],
+    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasCentralAC'],
+    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
+    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
+    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront', 'hasCentralAC'],
+    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', ...residentialAmenities, 'hasCentralAC'],
+    floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
+    office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'hasCentralAC'],
+    shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
+     whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'hasCentralAC'],
+     commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'frontageWidthMeters', 'hasCentralAC'],
+    warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage', 'hasCentralAC'],
+    other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification', 'hasCentralAC'],
   } as const;
   const fieldsFor = (propertyType: Property['core']['propertyType'], floorUse?: 'residential' | 'commercial') =>
     PROPERTY_DETAIL_FIELD_DEFINITIONS
@@ -2239,7 +2239,7 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
 
   const normal = (value: string) => createLiteralText(value, createPrivacyMetadata('normal', 'normal'));
   const enrichedByType: Record<string, Property['typeDetails']> = {
-    apartment: { propertyType: 'apartment', builtUpAreaSquareMeters: 90, apartmentSubtype: 'duplex', bedroomCount: 3, bathroomCount: 2, livingRoomCount: 1, floorNumber: 4, furnishing: 'semi_furnished', hasMaidRoom: true, parkingSpaceCount: 2 },
+    apartment: { propertyType: 'apartment', builtUpAreaSquareMeters: 90, apartmentSubtype: 'duplex', bedroomCount: 3, bathroomCount: 2, livingRoomCount: 1, floorNumber: 4, furnishing: 'semi_furnished', hasMaidRoom: true, parkingSpaceCount: 2, hasCentralAC: true },
     house: { propertyType: 'house', plotAreaSquareMeters: 400, builtUpAreaSquareMeters: 300, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorCount: 2, furnishing: 'unfurnished', hasMaidRoom: true, parkingSpaceCount: 3, hasPool: false },
     villa: { propertyType: 'villa', plotAreaSquareMeters: 500, builtUpAreaSquareMeters: 350, bedroomCount: 5, bathroomCount: 4, livingRoomCount: 2, floorCount: 3, furnishing: 'furnished', hasMaidRoom: true, parkingSpaceCount: 4, hasPool: true },
     chalet: { propertyType: 'chalet', plotAreaSquareMeters: 600, builtUpAreaSquareMeters: 250, bedroomCount: 4, bathroomCount: 3, livingRoomCount: 2, floorCount: 2, furnishing: 'furnished', hasMaidRoom: false, parkingSpaceCount: 4, hasPool: true, hasWaterfront: true },

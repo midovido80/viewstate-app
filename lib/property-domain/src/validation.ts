@@ -250,6 +250,7 @@ export function validateTypeDetails(
     "hasPool",
     "hasWaterfront",
     "hasColdStorage",
+    "hasCentralAC",
   ] as const) {
     const value = candidate[field];
     if (value !== undefined && typeof value !== "boolean") {

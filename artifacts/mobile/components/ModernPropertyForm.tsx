@@ -27,7 +27,30 @@ export interface ModernPropertyFormProps {
 export function ModernPropertyForm({ recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange }: ModernPropertyFormProps) {
   return (
     <View>
-      <ModernPropertyFields recordScopeKey={recordScopeKey} propertyType={propertyType as PropertyType} values={values} onChange={(field, value) => onChange(field, value)} onInvalidQuickPickChange={onInvalidQuickPickChange} />
+      <ModernPropertyFields
+        recordScopeKey={recordScopeKey}
+        propertyType={propertyType as PropertyType}
+        values={values}
+        onChange={(field, value) => onChange(field, value)}
+        onInvalidQuickPickChange={onInvalidQuickPickChange}
+        amenityRenderExtra={
+          category && onDemoChange ? (
+            <View style={{ gap: 10, marginTop: 8 }}>
+              {category.features.length > 0 && (
+                <View style={styles.chips}>
+                  {category.features.filter(feature => !isDemoFeatureSuppressed(feature.id, propertyType, values as Record<string, unknown>, (values as Record<string, string>).floorUse)).map(feature => <ChoiceChip key={feature.id} label={feature.label[language === 'ar' ? 1 : 0]} selected={metadata?.selectedFeatures?.includes(feature.id) ?? false} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} />)}
+                </View>
+              )}
+              {DEMO_NEARBY_SERVICES.length > 0 && (
+                <>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, marginTop: 8 }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
+                  <View style={styles.chips}>{DEMO_NEARBY_SERVICES.map(item => <ChoiceChip key={item.id} label={item.label[language === 'ar' ? 1 : 0]} selected={nearby.includes(item.id)} onPress={() => onNearbyChange?.(nearby.includes(item.id) ? nearby.filter(id => id !== item.id) : [...nearby, item.id])} />)}</View>
+                </>
+              )}
+            </View>
+          ) : null
+        }
+      />
       {propertyType === 'other_built_property' ? (
         <View>
           <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'توضيح نوع العقار' : 'Property clarification'}</Text>
@@ -56,10 +79,6 @@ export function ModernPropertyForm({ recordScopeKey, propertyType, values, onCha
           }} onPendingValidityChange={(_scope, invalid) => onInvalidQuickPickChange?.(item.id as PropertyDetailField, recordScopeKey, invalid)} testID={`demo-${item.id}-quick-pick`} />;
         })}
         {category.choices.filter(choice => !isMappedTemplateField(choice.id)).map(choice => <View key={choice.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{choice.label[language === 'ar' ? 1 : 0]}</Text><View style={styles.chips}>{choice.options.map(option => <ChoiceChip key={option.id} label={option.label[language === 'ar' ? 1 : 0]} selected={metadata?.choices?.[choice.id] === option.id} role="radio" onPress={() => onDemoChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} />)}</View></View>)}
-        <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'المزايا' : 'Features'}</Text>
-        <View style={styles.chips}>{category.features.filter(feature => !isDemoFeatureSuppressed(feature.id, propertyType, values as Record<string, unknown>, (values as Record<string, string>).floorUse)).map(feature => <ChoiceChip key={feature.id} label={feature.label[language === 'ar' ? 1 : 0]} selected={metadata?.selectedFeatures?.includes(feature.id) ?? false} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} />)}</View>
-        <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
-        <View style={styles.chips}>{DEMO_NEARBY_SERVICES.map(item => <ChoiceChip key={item.id} label={item.label[language === 'ar' ? 1 : 0]} selected={nearby.includes(item.id)} onPress={() => onNearbyChange?.(nearby.includes(item.id) ? nearby.filter(id => id !== item.id) : [...nearby, item.id])} />)}</View>
       </View> : null}
     </View>
   );

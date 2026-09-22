@@ -94,7 +94,6 @@ export default function CaptureWorkflow() {
   });
   const [description, setDescription] = useState(draft.description?.value ?? '');
   const [block, setBlock] = useState(draft.block ?? '');
-  const [areaSelectorOpen, setAreaSelectorOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
@@ -133,6 +132,14 @@ export default function CaptureWorkflow() {
       : [],
     [captureDetails.floorUse, draft.propertyType],
   );
+  const previewFeatureLabels = Array.from(new Set([
+    ...applicable
+      .filter(definition => definition.group === 'amenity' && captureDetails[definition.field] === 'true')
+      .map(definition => definition.label[language === 'ar' ? 1 : 0]),
+    ...(demoMetadata?.selectedFeatures ?? [])
+      .filter(id => !isDemoFeatureSuppressed(id, draft.propertyType ?? 'other_built_property', captureDetails as Record<string, unknown>, captureDetails.floorUse))
+      .map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id),
+  ]));
   const selectedArea = draft.locationAreaId ? getAreaById(draft.locationAreaId) : undefined;
   useEffect(() => {
     if (
@@ -573,31 +580,12 @@ export default function CaptureWorkflow() {
                 {(['sale', 'rent'] as const).map(value => <Choice key={value} selected={draft.transaction === value} label={t(`transaction.${value}` as keyof Translations)} onPress={() => selectTransaction(value)} colors={colors} fonts={fonts} />)}
               </View>
                <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
-               <TouchableOpacity testID="capture-area-selector" accessibilityRole="button" onPress={() => setAreaSelectorOpen(true)} style={[styles.areaField, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                 <Text style={{ color: selectedArea ? colors.foreground : colors.mutedForeground, fontFamily: fonts.regular }}>{selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : (language === 'ar' ? 'اختر المنطقة' : 'Select area')}</Text>
-                 <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
-               </TouchableOpacity>
-               <Modal visible={areaSelectorOpen} animationType="slide" transparent onRequestClose={() => setAreaSelectorOpen(false)}>
-                 <View style={styles.modalBackdrop}>
-                   <View style={[styles.areaSheet, { backgroundColor: colors.background }]}>
-                     <View style={[styles.areaSheetHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                       <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{language === 'ar' ? 'اختر المنطقة' : 'Select area'}</Text>
-                       <TouchableOpacity testID="capture-area-cancel" accessibilityRole="button" onPress={() => setAreaSelectorOpen(false)}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Text></TouchableOpacity>
-                     </View>
-                     <ScrollView keyboardShouldPersistTaps="handled">
-                       <KuwaitAreaSelector
-                         selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
-                         onChange={ids => {
-                           updateDraft({ locationAreaId: ids[0] });
-                           setAreaSelectorOpen(false);
-                         }}
-                         multiSelect={false}
-                         testID="capture-area"
-                       />
-                     </ScrollView>
-                   </View>
-                 </View>
-               </Modal>
+               <KuwaitAreaSelector
+                 selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
+                 onChange={ids => updateDraft({ locationAreaId: ids[0] })}
+                 multiSelect={false}
+                 testID="capture-area"
+               />
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
               <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
@@ -727,7 +715,7 @@ export default function CaptureWorkflow() {
             <PreviewRow label={draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')} value={String((draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount) ?? '')} colors={colors} fonts={fonts} />
             {draft.transaction === 'rent' && <PreviewRow label={language === 'ar' ? 'الدورية' : 'Cadence'} value={draft.rentalPeriodId === 'yearly' ? (language === 'ar' ? 'سنوياً' : 'Yearly') : (language === 'ar' ? 'شهرياً' : 'Monthly')} colors={colors} fonts={fonts} />}
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
-            {applicable.filter(definition => captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field as any, captureDetails[definition.field], language)} colors={colors} fonts={fonts} />)}
+             {applicable.filter(definition => definition.group !== 'amenity' && captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language)} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
              {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (
@@ -736,7 +724,7 @@ export default function CaptureWorkflow() {
              {demoCategory?.choices.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.choices?.[item.id] !== undefined).map(item => (
               <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={item.options.find(option => option.id === demoMetadata?.choices?.[item.id])?.label[language === 'ar' ? 1 : 0] ?? ''} colors={colors} fonts={fonts} />
             ))}
-             {demoMetadata?.selectedFeatures?.filter(id => !isDemoFeatureSuppressed(id, draft.propertyType ?? 'other_built_property', captureDetails as Record<string, unknown>, captureDetails.floorUse)).length ? <PreviewRow label={language === 'ar' ? 'المزايا' : 'Features'} value={demoMetadata.selectedFeatures.filter(id => !isDemoFeatureSuppressed(id, draft.propertyType ?? 'other_built_property', captureDetails as Record<string, unknown>, captureDetails.floorUse)).map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} colors={colors} fonts={fonts} /> : null}
+              {previewFeatureLabels.length ? <PreviewRow label={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available Property Features'} value={previewFeatureLabels.join(', ')} colors={colors} fonts={fonts} /> : null}
              {captureDetails.manualLocationText ? <PreviewRow label={t('enrich.manual_location')} value={captureDetails.manualLocationText} colors={colors} fonts={fonts} /> : null}
              {captureDetails.mapsLink ? <PreviewRow label={t('enrich.maps_link')} value={captureDetails.mapsLink} colors={colors} fonts={fonts} /> : null}
              {captureDetails.coordinates ? <PreviewRow label={language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'} value={`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`} colors={colors} fonts={fonts} /> : null}

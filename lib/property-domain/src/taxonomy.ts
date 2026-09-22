@@ -80,6 +80,7 @@ export type PropertyDetailField =
   | "hasBBQArea"
   | "hasPool"
   | "hasWaterfront"
+  | "hasCentralAC"
   | "intendedUse"
   | "commercialActivity"
   | "frontageWidthMeters"
@@ -125,6 +126,7 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasBBQArea", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasPool", appliesTo: ["house", "villa", "chalet"] },
   { field: "hasWaterfront", appliesTo: ["chalet"] },
+  { field: "hasCentralAC", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "commercial_complex", "office", "shop", "warehouse", "other_built_property"] },
   { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "commercialActivity", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "frontageWidthMeters", appliesTo: ["floor", "shop", "commercial_complex"], floorUses: ["commercial"] },

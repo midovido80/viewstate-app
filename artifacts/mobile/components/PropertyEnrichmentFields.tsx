@@ -40,12 +40,14 @@ export function PropertyEnrichmentFields({
   values,
   onChange,
   onInvalidQuickPickChange,
+  amenityRenderExtra,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
   values: EnrichmentFieldValues;
   onChange: (field: PropertyDetailField, value: string) => void;
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
+  amenityRenderExtra?: React.ReactNode;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -200,15 +202,20 @@ export function PropertyEnrichmentFields({
 
   return (
     <View style={styles.wrap}>
-      {ordered.map(definition => (
-        <View key={definition.field}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-             {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
-          </Text>
-          {renderFieldContent(definition)}
-        </View>
-      ))}
-      {applicableDefinitions.some(definition => definition.group === 'amenity') && (
+      {ordered.map(definition => {
+        const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && isPropertyNumericQuickPickSurface(propertyType, floorUse);
+        return (
+          <View key={definition.field}>
+            {!usesResidentialQuickPick && (
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+                {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
+              </Text>
+            )}
+            {renderFieldContent(definition)}
+          </View>
+        );
+      })}
+      {(applicableDefinitions.some(definition => definition.group === 'amenity') || amenityRenderExtra) && (
         <View>
           <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
             {language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'}
@@ -242,6 +249,7 @@ export function PropertyEnrichmentFields({
               );
             })}
           </View>
+          {amenityRenderExtra}
         </View>
       )}
     </View>

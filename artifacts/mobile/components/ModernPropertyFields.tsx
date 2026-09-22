@@ -15,12 +15,14 @@ export function ModernPropertyFields({
   values,
   onChange,
   onInvalidQuickPickChange,
+  amenityRenderExtra,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
   values: EnrichmentFieldValues;
   onChange: (field: PropertyDetailField, value: string) => void;
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
+  amenityRenderExtra?: React.ReactNode;
 }) {
   return (
     <PropertyEnrichmentFields
@@ -29,6 +31,7 @@ export function ModernPropertyFields({
       values={values}
       onChange={onChange}
       onInvalidQuickPickChange={onInvalidQuickPickChange}
+      amenityRenderExtra={amenityRenderExtra}
     />
   );
 }

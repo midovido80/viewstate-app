@@ -21,7 +21,7 @@ export interface PropertyFormFieldDefinition extends PropertyDetailFieldDefiniti
   readonly group: 'detail' | 'amenity';
 }
 
-const LABELS: Record<PropertyDetailField, readonly [string, string]> = {
+const LABELS: Record<string, readonly [string, string]> = {
   plotAreaSquareMeters: ['Plot area (m²)', 'مساحة الأرض (م²)'],
   builtUpAreaSquareMeters: ['Built-up area (m²)', 'مساحة البناء (م²)'],
   bathroomCount: ['Bathrooms', 'الحمامات'],
@@ -51,6 +51,7 @@ const LABELS: Record<PropertyDetailField, readonly [string, string]> = {
   hasBBQArea: ['BBQ area', 'منطقة شواء'],
   hasPool: ['Pool', 'مسبح'],
   hasWaterfront: ['Waterfront', 'واجهة بحرية'],
+  hasCentralAC: ['Central air conditioning', 'تكييف مركزي'],
   intendedUse: ['Intended use', 'الاستخدام المقصود'],
   commercialActivity: ['Commercial activity', 'النشاط التجاري'],
   frontageWidthMeters: ['Frontage width (m)', 'عرض الواجهة (م)'],
@@ -69,8 +70,8 @@ const COUNT_FIELDS = new Set<PropertyDetailField>([
 const DECIMAL_FIELDS = new Set<PropertyDetailField>([
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
 ]);
-const BOOLEAN_FIELDS = new Set<PropertyDetailField>([
-  'hasPool', 'hasWaterfront', 'hasColdStorage',
+const BOOLEAN_FIELDS = new Set<string>([
+  'hasPool', 'hasWaterfront', 'hasColdStorage', 'hasCentralAC',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
   'apartmentSubtype', 'floorUse', 'furnishing',
@@ -92,13 +93,14 @@ function controlFor(field: PropertyDetailField): PropertyFormControl {
 }
 
 /** The one UI-facing catalog; applicability always comes from the domain matrix. */
-export const PROPERTY_FORM_CATALOG: readonly PropertyFormFieldDefinition[] =
-  PROPERTY_DETAIL_FIELD_DEFINITIONS.map(definition => ({
+export const PROPERTY_FORM_CATALOG: readonly PropertyFormFieldDefinition[] = [
+  ...PROPERTY_DETAIL_FIELD_DEFINITIONS.map(definition => ({
     ...definition,
     control: controlFor(definition.field),
-    label: LABELS[definition.field],
-    group: definition.field.startsWith('has') ? 'amenity' : 'detail',
-  }));
+    label: LABELS[definition.field] ?? ['Unknown', 'غير معروف'],
+    group: definition.field.startsWith('has') ? 'amenity' as const : 'detail' as const,
+  })),
+];
 
 export const PROPERTY_FORM_TYPES = PROPERTY_TYPES;
 
