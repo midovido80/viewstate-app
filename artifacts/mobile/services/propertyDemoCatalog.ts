@@ -67,7 +67,7 @@ export const PROPERTY_DEMO_CATALOG: readonly DemoCategoryDefinition[] = [
   {
     id: 'commercial_complex_sale', canonicalType: 'commercial_complex', transaction: 'sale',
     label: ['Commercial complex / mall — sale', 'مجمع تجاري للبيع'], subtitle: ['Mall or shops complex', 'مول أو مجمع محلات'],
-    numericFields: [field('floorCount', 'Number of floors', 'عدد الأدوار'), field('shopCount', 'Shops', 'عدد المحلات'), field('officeCount', 'Offices', 'عدد المكاتب'), field('parkingSpaceCount', 'Parking spaces', 'عدد المواقف'), field('frontageWidthMeters', 'Frontage (m)', 'طول الواجهة بالمتر', 'decimal')],
+    numericFields: [field('floorCount', 'Number of floors', 'عدد الأدوار'), field('unitCount', 'Units', 'عدد الوحدات'), field('apartmentCount', 'Apartments', 'عدد الشقق'), field('shopCount', 'Shops', 'عدد المحلات'), field('officeCount', 'Offices', 'عدد المكاتب'), field('roomsPerUnit', 'Rooms per unit', 'الغرف في كل وحدة'), field('bathroomsPerUnit', 'Bathrooms per unit', 'الحمامات في كل وحدة'), field('parkingSpaceCount', 'Parking spaces', 'عدد المواقف'), field('frontageWidthMeters', 'Frontage (m)', 'طول الواجهة بالمتر', 'decimal')],
     choices: [{ id: 'activity', label: ['Current use', 'الاستخدام الحالي'], options: [option('retail', 'Retail', 'تجزئة'), option('restaurants', 'Restaurants and cafés', 'مطاعم ومقاهٍ'), option('offices', 'Offices', 'مكاتب'), option('mixed', 'Mixed use', 'متعدد الاستخدامات')] }],
     features: features([['restaurants', 'Restaurant zone', 'منطقة مطاعم'], ['elevator', 'Elevators', 'مصاعد'], ['escalators', 'Escalators', 'سلالم كهربائية'], ['parking', 'Parking', 'مواقف سيارات'], ['central_ac', 'Central air conditioning', 'تكييف مركزي'], ['fire_system', 'Fire system', 'نظام إطفاء'], ['operations', 'Operations management', 'إدارة تشغيل']]),
   },
@@ -75,8 +75,15 @@ export const PROPERTY_DEMO_CATALOG: readonly DemoCategoryDefinition[] = [
     id: 'family_apartment', canonicalType: 'apartment', transaction: 'rent',
     label: ['Family apartment', 'شقة للعائلات'], subtitle: ['Family residence', 'سكن عائلي'],
     numericFields: [field('bedroomCount', 'Bedrooms', 'غرف النوم'), field('bathroomCount', 'Bathrooms', 'الحمامات'), field('floorNumber', 'Floor number', 'رقم الطابق')],
-    choices: [{ id: 'furnishing', label: ['Furnishing', 'الفرش'], options: [option('furnished', 'Furnished', 'مفروشة'), option('unfurnished', 'Unfurnished', 'غير مفروشة'), option('semi_furnished', 'Semi-furnished', 'مفروشة جزئياً')] }, { id: 'kitchen', label: ['Kitchen', 'نوع المطبخ'], options: [option('closed', 'Closed', 'مغلق'), option('open', 'Open', 'مفتوح'), option('fully_equipped', 'Fully equipped', 'مجهز بالكامل')] }],
+    choices: [{ id: 'furnishing', label: ['Furnishing', 'الفرش'], options: [option('furnished', 'Furnished', 'مفروشة'), option('unfurnished', 'Unfurnished', 'غير مفروشة'), option('semi_furnished', 'Semi-furnished', 'مفروشة جزئياً')] }, { id: 'kitchen', label: ['Kitchen Type', 'نوع المطبخ'], options: [option('closed', 'Closed', 'مغلق'), option('open', 'Open', 'مفتوح'), option('fully_equipped', 'Fully equipped', 'مجهز بالكامل')] }],
     features: features([['balcony', 'Balcony', 'بلكونة'], ['maid_room', 'Maid room', 'غرفة خادمة'], ['laundry_room', 'Laundry room', 'غرفة غسيل'], ['pool', 'Pool', 'مسبح'], ['gym', 'Gym', 'جيم'], ['parking', 'Parking', 'موقف سيارة'], ['elevator', 'Elevator', 'مصعد'], ['security', 'Guard / security', 'حارس / أمن']]),
+  },
+  {
+    id: 'studio_apartment', canonicalType: 'apartment', transaction: 'rent',
+    label: ['Studio apartment', 'شقة استوديو'], subtitle: ['Compact studio residence', 'سكن استوديو'],
+    numericFields: [field('bathroomCount', 'Bathrooms', 'الحمامات'), field('floorNumber', 'Floor number', 'رقم الطابق')],
+    choices: [{ id: 'furnishing', label: ['Furnishing', 'الفرش'], options: [option('furnished', 'Furnished', 'مفروشة'), option('unfurnished', 'Unfurnished', 'غير مفروشة'), option('semi_furnished', 'Semi-furnished', 'مفروشة جزئياً')] }],
+    features: features([['balcony', 'Balcony', 'بلكونة'], ['pool', 'Pool', 'مسبح'], ['parking', 'Parking', 'موقف سيارة'], ['elevator', 'Elevator', 'مصعد']]),
   },
   {
     id: 'bachelor_apartment', canonicalType: 'apartment', transaction: 'rent',
@@ -116,11 +123,18 @@ export const PROPERTY_DEMO_CATALOG: readonly DemoCategoryDefinition[] = [
   {
     id: 'duplex', canonicalType: 'apartment', transaction: 'sale',
     label: ['Duplex', 'دوبلكس'], subtitle: ['Two connected levels', 'طابقان متصلان'],
-    numericFields: [field('bedroomCount', 'Bedrooms', 'غرف النوم'), field('bathroomCount', 'Bathrooms', 'الحمامات'), field('livingRoomCount', 'Living rooms', 'عدد الصالات'), field('floorCount', 'Levels', 'عدد الطوابق')],
+    numericFields: [field('bedroomCount', 'Bedrooms', 'غرف النوم'), field('bathroomCount', 'Bathrooms', 'الحمامات'), field('livingRoomCount', 'Number of halls', 'عدد الصالات'), field('floorCount', 'Levels', 'عدد الطوابق')],
     choices: [{ id: 'furnishing', label: ['Furnishing', 'الفرش'], options: [option('furnished', 'Furnished', 'مفروش'), option('unfurnished', 'Unfurnished', 'غير مفروش'), option('semi_furnished', 'Semi-furnished', 'مفروش جزئياً')] }],
     features: features([['private_roof', 'Private roof', 'سطح خاص'], ['garden', 'Garden', 'حديقة'], ['balcony', 'Balcony', 'بلكونة'], ['maid_room', 'Maid room', 'غرفة خادمة'], ['pool', 'Pool', 'مسبح'], ['gym', 'Gym', 'جيم'], ['parking_two', 'Two parking spaces', 'موقفان'], ['separate_entrance', 'Separate entrance', 'مدخل مستقل']]),
   },
 ];
+
+export function canonicalApartmentSubtypeForCategory(categoryId: PropertyCaptureCategoryId): 'studio' | 'standard_apartment' | 'duplex' | undefined {
+  if (categoryId === 'duplex') return 'duplex';
+  if (categoryId === 'studio_apartment') return 'studio';
+  if (categoryId === 'family_apartment' || categoryId === 'bachelor_apartment') return 'standard_apartment';
+  return undefined;
+}
 
 export function getDemoCategory(id: PropertyCaptureCategoryId | undefined) {
   return PROPERTY_DEMO_CATALOG.find(category => category.id === id);

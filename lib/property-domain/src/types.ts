@@ -16,6 +16,7 @@ export type PropertyCaptureCategoryId =
   | "whole_building_sale"
   | "commercial_complex_sale"
   | "family_apartment"
+  | "studio_apartment"
   | "bachelor_apartment"
   | "house"
   | "villa"
@@ -104,6 +105,8 @@ export interface WholeBuildingTypeDetails {
   readonly officeCount?: number;
   readonly elevatorCount?: number;
   readonly parkingSpaceCount?: number;
+  readonly roomsPerUnit?: number;
+  readonly bathroomsPerUnit?: number;
 }
 
 export interface CommercialComplexTypeDetails {
@@ -117,6 +120,8 @@ export interface CommercialComplexTypeDetails {
   readonly officeCount?: number;
   readonly elevatorCount?: number;
   readonly parkingSpaceCount?: number;
+  readonly roomsPerUnit?: number;
+  readonly bathroomsPerUnit?: number;
 }
 
 export interface ApartmentTypeDetails {

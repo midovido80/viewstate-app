@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { evaluateMatch, normalizeSeekerRequirement, validateSeekerRequirement, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement, parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
+import { KUWAIT_GOVERNORATES, searchAreasSorted } from '@/constants/kuwait-areas';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const SEEKER = 'person-seeker';
@@ -153,6 +154,57 @@ test('Requirement wizard uses wrapped compact choice chips for bounded controls'
   assert.match(source, /<ChoiceChip/);
   assert.match(source, /choicesWrap/);
   assert.match(source, /flexWrap: 'wrap'/);
+});
+
+test('Requirement area selector uses the canonical six-governorate source and bilingual search', async () => {
+  const [selector, requirement] = await Promise.all([
+    readFile('components/KuwaitAreaSelector.tsx', 'utf8'),
+    readFile('app/requirement/[requirementId].tsx', 'utf8'),
+  ]);
+  assert.equal(KUWAIT_GOVERNORATES.length, 6);
+  assert.ok(searchAreasSorted('salmiya', 'en').some(area => area.id === 'salmiya'));
+  assert.ok(searchAreasSorted('سالم', 'ar').some(area => area.id === 'salmiya'));
+  assert.ok(searchAreasSorted('Hawalli', 'en').length > 0);
+  assert.match(selector, /getAreasByGovernorate/);
+  assert.match(selector, /searchAreasSorted/);
+  assert.match(selector, /accessibilityState=\{\{ expanded \}\}/);
+  assert.match(selector, /selectedIds\.includes/);
+  assert.match(requirement, /<KuwaitAreaSelector selectedIds=\{areas\} onChange=\{setAreas\} multiSelect/);
+});
+
+test('Requirement save serializes direct invocations while preserving sequential distinct requirements', async () => {
+  const [requirement, person] = await Promise.all([
+    readFile('app/requirement/[requirementId].tsx', 'utf8'),
+    readFile('app/person/[personId].tsx', 'utf8'),
+  ]);
+  const saveStart = requirement.indexOf('const save = async () =>');
+  const guard = requirement.indexOf('if (saveFlight.current) return;', saveStart);
+  const acquire = requirement.indexOf('saveFlight.current = true;', guard);
+  const firstStoreAwait = requirement.indexOf('await store.', acquire);
+  const release = requirement.indexOf('saveFlight.current = false;', firstStoreAwait);
+  assert.ok(saveStart >= 0 && guard > saveStart && acquire > guard);
+  assert.ok(firstStoreAwait > acquire, 'flight must be acquired before the first persistence await');
+  assert.ok(release > firstStoreAwait, 'flight must be released after the persistence flight');
+  assert.match(requirement, /finally \{\s*saveFlight\.current = false;\s*\}/);
+  assert.doesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
+  assert.doesNotMatch(person, /testID="person-saved-add-requirement"/);
+  assert.match(person, /testID="person-add-requirement"/);
+  assert.match(person, /requirements\.map\(requirement/);
+  assert.match(person, /testID=\{`requirement-edit-\$\{requirement\.id\}`\}/);
+});
+
+test('Requirement return navigation guards destructive click-through on Person details', async () => {
+  const [requirement, person] = await Promise.all([
+    readFile('app/requirement/[requirementId].tsx', 'utf8'),
+    readFile('app/person/[personId].tsx', 'utf8'),
+  ]);
+  assert.match(requirement, /requirementSaved: '1'/);
+  assert.match(person, /requirementReturnGuard/);
+  assert.match(person, /disabled=\{busy \|\| requirementReturnGuard\}/);
+  assert.match(person, /setTimeout\(\(\) => \{/);
+  assert.match(person, /testID="requirement-return-click-guard"/);
+  assert.match(person, /pointerEvents="auto"/);
+  assert.match(person, /StyleSheet\.absoluteFillObject/);
 });
 
 test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {

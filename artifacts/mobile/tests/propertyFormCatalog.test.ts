@@ -49,7 +49,16 @@ test('BEHAVIOR: numeric quick-pick and exact-entry metadata is catalog-owned', (
   );
   assert.equal(controls.get('bedroomCount'), 'numeric_quick_pick');
   assert.equal(controls.get('bathroomCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('livingRoomCount'), 'numeric_quick_pick');
   assert.equal(controls.get('parkingSpaceCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('floorCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('unitCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('apartmentCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('shopCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('officeCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('elevatorCount'), 'numeric_quick_pick');
+  assert.equal(controls.get('floorNumber'), 'numeric_quick_pick');
+  assert.equal(controls.get('loadingBayCount'), 'numeric_quick_pick');
   assert.equal(controls.get('builtUpAreaSquareMeters'), 'decimal');
   assert.equal(controls.get('hasPool'), 'boolean');
 });

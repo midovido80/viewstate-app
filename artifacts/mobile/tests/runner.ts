@@ -324,7 +324,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
   assert.match(successSource, /btn-view-property/);
-  assert.match(successSource, /btn-view-properties/);
+  assert.doesNotMatch(successSource, /btn-view-properties/);
   assert.doesNotMatch(successSource, /btn-add-details-now|summary\.add_details/);
   assert.match(successSource, /btn-later/);
   assert.match(successSource, /summary\.done/);
@@ -332,6 +332,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(successSource, /replaceOnce/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
   assert.match(detailSource, /property-edit-action/);
+  assert.match(detailSource, /property\.typeDetails \?\? \{\}/);
   assert.doesNotMatch(detailSource, /property-enrich-action|detail\.add_details/);
   assert.match(translations, /'summary\.done': 'Done'/);
   assert.match(translations, /'summary\.done': 'تم'/);
@@ -348,9 +349,9 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(catalogSource, /hasPool.*hasWaterfront.*hasColdStorage/);
   assert.doesNotMatch(fieldSource, /value \|\| 'clear'|enrich\.clear/);
   assert.match(fieldSource, /\['true', 'false'\]/);
-  assert.match(fieldSource, /Math\.max\(0, current - 1\)/);
-  assert.match(fieldSource, /keyboardType="number-pad"/);
-  assert.match(fieldSource, /safeCountInput/);
+   assert.match(fieldSource, /NumericQuickPick/);
+   assert.match(catalogSource, /numeric_quick_pick/);
+   assert.doesNotMatch(fieldSource, /Math\.max\(0, current - 1\)|safeCountInput|stepperButton/);
   assert.match(fieldSource, /safeDecimalInput/);
   assert.doesNotMatch(fieldSource, /\bconstructionYear\b|\broomCount\b/);
 });
@@ -2216,8 +2217,8 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
     floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
     office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity'],
     shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters'],
-    whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount'],
-    commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount'],
+     whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'],
+     commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'frontageWidthMeters'],
     warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage'],
     other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification'],
   } as const;

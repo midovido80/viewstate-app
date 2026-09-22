@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -37,7 +37,7 @@ import { store } from '@/services/persistence';
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 
 export default function PersonDetailScreen() {
-  const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string }>();
+  const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string }>();
   const id = Array.isArray(params.personId) ? params.personId[0] : params.personId;
   const router = useRouter();
   const colors = useColors();
@@ -61,6 +61,17 @@ export default function PersonDetailScreen() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
+  const [requirementReturnGuard, setRequirementReturnGuard] = useState(params.requirementSaved === '1');
+
+  useEffect(() => {
+    if (params.requirementSaved !== '1') return;
+    setRequirementReturnGuard(true);
+    const timer = setTimeout(() => {
+      setRequirementReturnGuard(false);
+      router.setParams({ requirementSaved: undefined });
+    }, 750);
+    return () => clearTimeout(timer);
+  }, [params.requirementSaved, router]);
 
   const navigateBack = () => {
     if (mode === 'edit') {
@@ -366,7 +377,7 @@ export default function PersonDetailScreen() {
               </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
-            {params.saved === '1' && person.classifications.includes('seeker') ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('requirements.add_property_requirement')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-saved-add-requirement"/><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
+             {params.saved === '1' && person.classifications.includes('seeker') ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
               {person.classifications.includes('seeker') ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" accessibilityRole="button" style={[styles.addRequirementButton, { borderColor: colors.primary }]}><Text style={[styles.addRequirementText, { color: colors.primary, fontFamily: fonts.semiBold }]}>{t('requirements.add')}</Text></TouchableOpacity> : null}
@@ -416,10 +427,20 @@ export default function PersonDetailScreen() {
             )) : (
               <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none_for_person')}</Text>
             )}
-            <Button title={t('people.remove')} onPress={() => setDeleteOpen(true)} variant="outline" testID="person-remove" />
+            <Button title={t('people.remove')} onPress={() => { if (!requirementReturnGuard) setDeleteOpen(true); }} disabled={busy || requirementReturnGuard} variant="outline" testID="person-remove" />
           </>
         )}
       </KeyboardAwareScrollViewCompat>
+
+      {requirementReturnGuard ? (
+        <View
+          pointerEvents="auto"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          testID="requirement-return-click-guard"
+          style={styles.requirementReturnGuard}
+        />
+      ) : null}
 
       <Modal visible={linkOpen} animationType="slide" onRequestClose={() => setLinkOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -532,5 +553,6 @@ const styles = StyleSheet.create({
   countryChoice: { minHeight: 50, alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
   countryName: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(10,29,31,.45)', justifyContent: 'center', padding: 24 },
+  requirementReturnGuard: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
   dialog: { borderWidth: 1, borderRadius: 12, padding: 20, gap: 14 },
 });

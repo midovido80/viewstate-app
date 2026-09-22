@@ -4,6 +4,7 @@ import type { Property } from '@workspace/property-domain';
 import {
   hasUnresolvedPropertyFactConflicts,
   projectPropertyFacts,
+  isDemoFeatureSuppressed,
   writeCanonicalArea,
 } from '../services/propertyFactProjection';
 import { buildPropertyUpdateCandidate, createEditDraft, migratePropertyEditDraft, createPropertyUpdateOperation, executePropertyUpdateRecovery } from '../services/propertyUpdateRecovery';
@@ -30,6 +31,41 @@ test('legacy-only area is a read fallback and zero remains present', () => {
   }));
   assert.equal(result.areaSquareMeters, 0);
   assert.equal(result.conflicts.length, 0);
+});
+
+test('square-foot legacy areas convert once to deterministic square meters for read and edit', () => {
+  const legacy = property({
+    areaSquareMeters: 1000,
+    areaUnit: 'square_foot',
+    demoCapture: { categoryId: 'family_apartment', areaSquareMeters: 1000, areaUnit: 'square_foot' },
+  });
+  const projected = projectPropertyFacts(legacy);
+  assert.equal(projected.areaSquareMeters, 92.903);
+  assert.equal(projected.areaUnit, 'square_meter');
+  assert.equal(projected.conflicts.length, 0);
+  const draft = createEditDraft(legacy);
+  assert.equal(draft.choices.areaSquareMeters, 92.903);
+  assert.equal(draft.choices.areaUnit, 'square_meter');
+  const candidate = buildPropertyUpdateCandidate(legacy, draft.choices);
+  assert.equal(candidate.areaSquareMeters, 92.903);
+  assert.equal(candidate.areaUnit, 'square_meter');
+});
+
+test('feature suppression is property-type aware and preserves apartment Pool', () => {
+  assert.equal(isDemoFeatureSuppressed('pool', 'apartment', {}), false);
+  assert.equal(isDemoFeatureSuppressed('pool', 'apartment', { hasPool: true }), false);
+  assert.equal(isDemoFeatureSuppressed('pool', 'chalet', {}), true);
+  assert.equal(isDemoFeatureSuppressed('pool', 'villa', { hasPool: true }), true);
+  assert.equal(isDemoFeatureSuppressed('private_pool', 'villa', { hasPool: true }), false);
+});
+
+test('legacy chalet Pool projects into one canonical detail when typeDetails is absent', () => {
+  const result = projectPropertyFacts(property({
+    core: { id: 'property-1', propertyType: 'chalet', locationArea: { id: 'salmiya' } },
+    demoCapture: { categoryId: 'chalet', selectedFeatures: ['pool'] },
+  }));
+  assert.equal(result.templateFacts.hasPool, true);
+  assert.equal(result.templateFacts.privatePool, undefined);
 });
 
 test('canonical area wins when values are equal and conflicts when they differ', () => {

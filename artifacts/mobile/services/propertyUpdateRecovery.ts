@@ -4,6 +4,7 @@ import {
   PropertyType,
   Transaction,
   PropertyDemoCaptureMetadata,
+  CoordinatesMetadata,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   validateProperty,
 } from '@workspace/property-domain';
@@ -12,7 +13,7 @@ import { MARKET_CONFIG } from '@/constants/market';
 import { SerialTaskQueue } from '@/services/serialTaskQueue';
 import { optionalClassifiedLiteral } from '@/services/literalText';
 import { getDemoCategory } from '@/services/propertyDemoCatalog';
-import { isMappedTemplateField, projectPropertyFacts } from '@/services/propertyFactProjection';
+import { isMappedTemplateField, projectPropertyFacts, squareFeetToSquareMeters } from '@/services/propertyFactProjection';
 import type { AttachmentFileStore } from '@/services/attachmentOperations';
 import { normalizeGoogleMapsLink } from '@/services/mapsLink';
 
@@ -43,6 +44,7 @@ export interface PropertyEditChoices {
   paciNumber?: string;
   manualLocationText?: string;
   mapsLink?: string;
+  coordinates?: CoordinatesMetadata;
   attachments?: Property['attachments'];
   newlyCopiedAttachmentUris?: readonly string[];
 }
@@ -309,7 +311,10 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
         : {}),
       ...(baseline.demoCapture ? { demoMetadata: clone(baseline.demoCapture) } : {}),
       ...(baseline.nearbyServices ? { nearbyServices: clone(baseline.nearbyServices) } : {}),
-      ...(baseline.areaSquareMeters !== undefined ? { areaSquareMeters: baseline.areaSquareMeters, areaUnit: baseline.areaUnit } : {}),
+      ...(baseline.areaSquareMeters !== undefined ? {
+        areaSquareMeters: baseline.areaUnit === 'square_foot' ? squareFeetToSquareMeters(baseline.areaSquareMeters) : baseline.areaSquareMeters,
+        areaUnit: 'square_meter' as const,
+      } : {}),
        ...(baseline.areaSquareMeters === undefined && projected.areaSquareMeters !== undefined
          ? { areaSquareMeters: projected.areaSquareMeters, areaUnit: projected.areaUnit }
         : {}),
@@ -337,6 +342,7 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
       paciNumber: baseline.locationEnrichment?.paciNumber?.value ?? '',
       manualLocationText: baseline.locationEnrichment?.manualLocationText?.value ?? '',
       mapsLink: baseline.locationEnrichment?.mapsLink?.value ?? '',
+      ...(baseline.locationEnrichment?.coordinates ? { coordinates: clone(baseline.locationEnrichment.coordinates) } : {}),
       ...(baseline.attachments ? { attachments: clone(baseline.attachments) } : {}),
     },
     writeGeneration: (generations.get(baseline.core.id) ?? 0) + 1,
@@ -438,6 +444,10 @@ export function buildPropertyUpdateCandidate(
     const literal = optionalClassifiedLiteral(normalizedValue ?? '', exactPrivacy);
     if (literal) locationEnrichment[key] = literal; else delete locationEnrichment[key];
   }
+  if (Object.prototype.hasOwnProperty.call(choices, 'coordinates')) {
+    if (choices.coordinates) locationEnrichment.coordinates = clone(choices.coordinates);
+    else delete locationEnrichment.coordinates;
+  }
   if (Object.keys(locationEnrichment).length) candidate.locationEnrichment = locationEnrichment;
   else delete candidate.locationEnrichment;
   candidate.attachments = Object.prototype.hasOwnProperty.call(choices, 'attachments')
@@ -471,10 +481,15 @@ export function buildPropertyUpdateCandidate(
   }
   if (choices.nearbyServices !== undefined) candidate.nearbyServices = clone(choices.nearbyServices);
   else delete candidate.nearbyServices;
-  if (choices.areaSquareMeters !== undefined) candidate.areaSquareMeters = choices.areaSquareMeters;
-  else delete candidate.areaSquareMeters;
-  if (choices.areaUnit) candidate.areaUnit = choices.areaUnit;
-  else delete candidate.areaUnit;
+  if (choices.areaSquareMeters !== undefined) {
+    candidate.areaSquareMeters = choices.areaUnit === 'square_foot'
+      ? squareFeetToSquareMeters(choices.areaSquareMeters)
+      : choices.areaSquareMeters;
+    candidate.areaUnit = 'square_meter';
+  } else {
+    delete candidate.areaSquareMeters;
+    delete candidate.areaUnit;
+  }
   if (choices.block !== undefined) candidate.core.block = choices.block;
   else delete candidate.core.block;
   if (choices.transaction === 'sale') {

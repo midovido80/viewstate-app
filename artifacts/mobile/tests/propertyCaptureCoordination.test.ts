@@ -5,6 +5,7 @@ import {
   applyCaptureTransactionDefaults,
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  preserveCaptureOwnershipAndEvidence,
 } from '@/services/propertyCaptureDetails';
 import {
   finalizeCapturedDetails,
@@ -17,8 +18,11 @@ import {
 import {
   clearCaptureDetails,
   flushCaptureDetailsWrites,
+  loadCaptureDetails,
   saveCaptureDetails,
 } from '@/services/captureDetailsStorage';
+import { persistAttachmentsThenDeleteRemoved, persistNewAttachmentsOrDeleteOnFailure, type LocalAttachment } from '@/services/attachmentOperations';
+import { readFile } from 'node:fs/promises';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -51,6 +55,28 @@ test('BEHAVIOR: BASIC projection rejects missing required capture data', () => {
   });
   assert.equal(result.ok, false);
   if (!result.ok) assert.ok(result.issues.some(issue => issue.code === 'required'));
+});
+
+test('BEHAVIOR: commercial complex canonical counts round-trip through capture builder', () => {
+  const candidate = buildPropertyWithCaptureDetails({
+    ...baseline,
+    core: { ...baseline.core, propertyType: 'commercial_complex' },
+  }, {
+    floorCount: '7',
+    unitCount: '3',
+    apartmentCount: '1',
+    shopCount: '1',
+    officeCount: '1',
+    elevatorCount: '1',
+    parkingSpaceCount: '1',
+    frontageWidthMeters: '50',
+    roomsPerUnit: '2',
+    bathroomsPerUnit: '1',
+  });
+  const details = candidate.typeDetails as unknown as Record<string, unknown>;
+  assert.equal(details.unitCount, 3);
+  assert.equal(details.frontageWidthMeters, 50);
+  assert.equal(details.roomsPerUnit, 2);
 });
 
 test('BEHAVIOR: fresh Rent draft applies monthly cadence without inventing values', () => {
@@ -86,6 +112,137 @@ test('BEHAVIOR: one capture target combines BASIC and optional applicable detail
   if (candidate.activeOffer.transaction === 'rent') {
     assert.equal(candidate.activeOffer.rentalPeriodId, 'monthly');
   }
+});
+
+test('BEHAVIOR: capture candidate preserves precise location and private attachments', () => {
+  const candidate = buildPropertyWithCaptureDetails(baseline, {
+    floorUse: 'residential',
+    bathroomCount: '2',
+    manualLocationText: 'Building entrance',
+    mapsLink: 'https://www.google.com/maps/search/?api=1&query=29.33%2C48.01',
+    coordinates: {
+      latitude: 29.33,
+      longitude: 48.01,
+      privacy: { classification: 'exact_location' as const, disclosurePolicy: 'explicit_per_share' as const },
+    },
+    attachments: [{
+      id: 'capture-image-1',
+      kind: 'image',
+      originalName: 'front.jpg',
+      mimeType: 'image/jpeg',
+      order: 0,
+      managedUri: 'file:///properties/property-capture-test/attachments/front.jpg',
+      privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+    }],
+  }, true);
+  assert.equal(candidate.locationEnrichment?.manualLocationText?.privacy.classification, 'exact_location');
+  assert.equal(candidate.locationEnrichment?.mapsLink?.privacy.disclosurePolicy, 'explicit_per_share');
+  assert.deepEqual(candidate.locationEnrichment?.coordinates?.privacy, {
+    classification: 'exact_location',
+    disclosurePolicy: 'explicit_per_share',
+  });
+  assert.equal(candidate.attachments?.[0].id, 'capture-image-1');
+  assert.equal(candidate.attachments?.[0].privacy.disclosurePolicy, 'normal');
+});
+
+test('BEHAVIOR: capture transitions preserve ownership evidence and copied attachment references', () => {
+  const details = {
+    manualLocationText: 'Owner entrance',
+    mapsLink: 'https://www.google.com/maps/search/?api=1&query=29.33%2C48.01',
+    coordinates: {
+      latitude: 29.33,
+      longitude: 48.01,
+      privacy: { classification: 'exact_location' as const, disclosurePolicy: 'explicit_per_share' as const },
+    },
+    attachments: [{
+      id: 'copied-1',
+      kind: 'image' as const,
+      originalName: 'owner.jpg',
+      mimeType: 'image/jpeg',
+      order: 0,
+      managedUri: 'file:///properties/property-capture-test/attachments/owner.jpg',
+      privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+    }],
+  };
+  assert.deepEqual(preserveCaptureOwnershipAndEvidence(details), details);
+});
+
+test('BEHAVIOR: copied attachments are deleted when metadata ownership persistence fails', async () => {
+  const deleted: string[] = [];
+  const attachment: LocalAttachment = {
+    id: 'new-copy', kind: 'image', originalName: 'new.jpg', mimeType: 'image/jpeg',
+    uri: 'file:///new.jpg', order: 0,
+  };
+  await assert.rejects(
+    persistNewAttachmentsOrDeleteOnFailure(
+      [attachment],
+      async () => false,
+      { copyToProperty: async () => attachment.uri, delete: async uri => { deleted.push(uri); } },
+    ),
+    /ATTACHMENT_METADATA_PERSIST_FAILED/,
+  );
+  assert.deepEqual(deleted, ['file:///new.jpg']);
+});
+
+test('BEHAVIOR: resumed capture drafts normalize square feet before hydration', async () => {
+  const storage = new MemoryStorage();
+  await storage.setItem('@viewstate_property_capture_details_v1:property-capture-test', JSON.stringify({
+    areaSquareMeters: 1000,
+    areaUnit: 'square_foot',
+    demoMetadata: { categoryId: 'family_apartment', areaSquareMeters: 1000, areaUnit: 'square_foot' },
+  }));
+  const hydrated = await loadCaptureDetails('property-capture-test', storage);
+  assert.equal(hydrated.areaSquareMeters, 92.903);
+  assert.equal(hydrated.areaUnit, 'square_meter');
+  assert.equal(hydrated.demoMetadata?.areaSquareMeters, 92.903);
+  assert.equal(hydrated.demoMetadata?.areaUnit, 'square_meter');
+});
+
+test('BEHAVIOR: demo-only square-foot area hydrates into top-level square meters', async () => {
+  const storage = new MemoryStorage();
+  await storage.setItem('@viewstate_property_capture_details_v1:property-capture-test', JSON.stringify({
+    demoMetadata: { categoryId: 'family_apartment', areaSquareMeters: 1000, areaUnit: 'square_foot' },
+  }));
+  const hydrated = await loadCaptureDetails('property-capture-test', storage);
+  assert.equal(hydrated.areaSquareMeters, 92.903);
+  assert.equal(hydrated.areaUnit, 'square_meter');
+  assert.equal(hydrated.demoMetadata?.areaSquareMeters, 92.903);
+  assert.equal(hydrated.demoMetadata?.areaUnit, 'square_meter');
+});
+
+test('BEHAVIOR: removed attachment metadata persists before retired file deletion', async () => {
+  const events: string[] = [];
+  const attachment: LocalAttachment = {
+    id: 'retired', kind: 'image', originalName: 'retired.jpg', mimeType: 'image/jpeg',
+    uri: 'file:///retired.jpg', order: 0,
+  };
+  await persistAttachmentsThenDeleteRemoved(
+    [attachment],
+    [],
+    async () => { events.push('metadata'); },
+    { copyToProperty: async () => attachment.uri, delete: async () => { events.push('delete'); } },
+  );
+  assert.deepEqual(events, ['metadata', 'delete']);
+});
+
+test('SOURCE ASSERTION: web attachment controls and native media filters are explicit', async () => {
+  const source = await readFile('services/attachments.ts', 'utf8');
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(source, /createWebFileAttachments/);
+  assert.match(source, /WEB_ATTACHMENT_MAX_BYTES/);
+  assert.match(source, /createIndexedDbWebAttachmentBlobStore|indexedDB\.open/);
+  assert.match(source, /viewstate-web-attachment:/);
+  assert.doesNotMatch(source, /btoa\(binary\)/);
+  assert.match(source, /mediaTypes: \('images' \| 'videos'\)\[\] = \['images', 'videos'\]/);
+  assert.match(capture, /capture-add-images/);
+  assert.match(capture, /capture-add-videos/);
+  assert.match(capture, /capture-add-files/);
+  assert.match(capture, /accept="image\/\*"/);
+  assert.match(capture, /accept="video\/\*"/);
+  assert.match(capture, /accept="\.pdf,application\/pdf"/);
+  assert.match(capture, /capture-save-validation-error/);
+  assert.match(capture, /accessibilityRole="alert"/);
+  assert.match(capture, /setSaveError\(message\)/);
 });
 
 test('BEHAVIOR: Floor transition scopes are record-owned for stale protection', () => {

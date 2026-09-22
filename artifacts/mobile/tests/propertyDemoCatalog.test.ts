@@ -9,6 +9,7 @@ import {
   applyDemoCategoryTransition,
   createDemoTransactionTransitionProposal,
   applyDemoTransactionTransition,
+  canonicalApartmentSubtypeForCategory,
 } from '@/services/propertyDemoCatalog';
 import {
   getSelectableKuwaitAreas,
@@ -21,7 +22,7 @@ import { projectDraftToProperty } from '@workspace/property-domain';
 test('BEHAVIOR: every attachment category variant has canonical transaction and complete matrix', () => {
   assert.deepEqual(PROPERTY_DEMO_CATALOG.map(category => category.id), [
     'whole_building_corporate_rent', 'whole_building_sale', 'commercial_complex_sale',
-    'family_apartment', 'bachelor_apartment', 'house', 'villa', 'chalet', 'warehouse', 'duplex',
+     'family_apartment', 'studio_apartment', 'bachelor_apartment', 'house', 'villa', 'chalet', 'warehouse', 'duplex',
   ]);
   for (const category of PROPERTY_DEMO_CATALOG) {
     assert.ok(category.canonicalType);
@@ -29,6 +30,13 @@ test('BEHAVIOR: every attachment category variant has canonical transaction and 
     assert.ok(category.numericFields.length > 0);
     assert.ok(category.features.length > 0);
   }
+});
+
+test('BEHAVIOR: apartment categories map to canonical subtypes without a top-level duplex type', () => {
+  assert.equal(canonicalApartmentSubtypeForCategory('family_apartment'), 'standard_apartment');
+  assert.equal(canonicalApartmentSubtypeForCategory('studio_apartment'), 'studio');
+  assert.equal(canonicalApartmentSubtypeForCategory('duplex'), 'duplex');
+  assert.equal(PROPERTY_DEMO_CATALOG.find(item => item.id === 'duplex')?.canonicalType, 'apartment');
 });
 
 test('BEHAVIOR: numeric parser preserves zero and normalizes Western Arabic Persian digits', () => {

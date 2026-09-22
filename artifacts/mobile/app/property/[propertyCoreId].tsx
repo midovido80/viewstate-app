@@ -32,10 +32,10 @@ import {
 } from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
 import { clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, type PropertyEnrichmentDraftV1 } from '@/services/propertyEnrichmentRecovery';
-import { createExpoFileStore, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment } from '@/services/attachments';
+import { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, createWebAttachmentFileStore, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment, type WebAttachmentBlobStore } from '@/services/attachments';
 import { reorderAttachments, setAttachmentCover } from '@/services/attachmentOperations';
-import { projectPropertyFacts, isMappedTemplateField } from '@/services/propertyFactProjection';
-import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation } from '@/services/location';
+import { projectPropertyFacts, isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
+import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates } from '@/services/location';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -92,11 +92,16 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
   const editEntryConsumed = useRef(false);
   const canPermanentlyDelete = store.canPermanentlyDelete();
-  const attachmentStore = createExpoFileStore(FileSystem);
+  const webBlobStore = useRef<WebAttachmentBlobStore | null>(null);
+  if (Platform.OS === 'web' && !webBlobStore.current) webBlobStore.current = createIndexedDbWebAttachmentBlobStore();
+  const attachmentStore = Platform.OS === 'web'
+    ? createWebAttachmentFileStore(webBlobStore.current!)
+    : createExpoFileStore(FileSystem);
 
   const openPropertyAttachment = async (attachment: NonNullable<Property['attachments']>[number]) => {
     if (openingAttachmentId) return;
@@ -111,7 +116,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         uri: attachment.managedUri,
         order: attachment.order,
         isCover: attachment.isCover ? true : undefined,
-      }, Sharing);
+      }, Sharing, Platform.OS, undefined, undefined, undefined, webBlobStore.current ?? undefined);
     } catch (cause) {
       setError(cause instanceof Error && cause.message === 'ATTACHMENT_FILE_MISSING'
         ? t('enrich.attachment_missing')
@@ -522,6 +527,25 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
+  const captureEditCoordinates = async () => {
+    if (!draft || locationBusy) return;
+    setLocationBusy(true);
+    try {
+      const coordinates = await requestCurrentCoordinates();
+      await updateChoices({
+        coordinates: {
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+        },
+      });
+    } catch {
+      setError(t('enrich.location_failed'));
+    } finally {
+      setLocationBusy(false);
+    }
+  };
+
   const selectTransaction = (transaction: Transaction) => {
     if (!draft || transaction === draft.choices.transaction) return;
     setError('');
@@ -867,7 +891,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 ? formatRentalPrice(shownPrice!, 'KWD', shownRentalPeriodId, language, t)
                 : formatPrice(shownPrice!, 'KWD', language)}
             />
-            <DetailRow label={t('detail.area')} value={areaName(property.core.locationArea.id)} />
+            <DetailRow label={language === 'ar' ? 'المنطقة' : 'Area / Region'} value={areaName(property.core.locationArea.id)} />
             <View style={[styles.sourceSection, { borderColor: colors.border, backgroundColor: colors.card }]}>
               <View style={[styles.sourceHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 <View style={styles.sourceTitle}>
@@ -896,10 +920,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none')}</Text>
               )}
             </View>
-            {property.typeDetails ? propertyDetailDisplayDefinitions
-              .filter(definition => definition.appliesTo.includes(property.core.propertyType))
-              .map(definition => {
-                const value = (property.typeDetails as unknown as Record<string, unknown>)[definition.field];
+             {(property.typeDetails || Object.keys(propertyFacts.templateFacts).length > 0) ? propertyDetailDisplayDefinitions
+               .filter(definition =>
+                 definition.appliesTo.includes(property.core.propertyType)
+                 && definition.field !== 'plotAreaSquareMeters'
+                 && definition.field !== 'builtUpAreaSquareMeters')
+             .map(definition => {
+                  const value = ((property.typeDetails ?? {}) as unknown as Record<string, unknown>)[definition.field]
+                    ?? propertyFacts.templateFacts[definition.field];
                 return value === undefined ? null : (
                   <DetailRow
                     key={definition.field}
@@ -914,10 +942,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               const value = property.demoCapture?.numericValues?.[field.id];
               return value === undefined ? null : <DetailRow key={`demo-${field.id}`} label={field.label[language === 'ar' ? 1 : 0]} value={String(value)} />;
             })}
-            {projectPropertyFacts(property).areaSquareMeters !== undefined ? (
+             {projectPropertyFacts(property).areaSquareMeters !== undefined ? (
               <DetailRow
-                label={language === 'ar' ? 'المساحة' : 'Area'}
-                value={`${projectPropertyFacts(property).areaSquareMeters} ${projectPropertyFacts(property).areaUnit === 'square_foot' ? (language === 'ar' ? 'قدم مربع' : 'sq ft') : (language === 'ar' ? 'متر مربع' : 'm²')}`}
+                 label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}
+                 value={`${projectPropertyFacts(property).areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`}
               />
             ) : null}
             {demoCategory?.choices.filter(choice => !isMappedTemplateField(choice.id) || projectPropertyFacts(property).templateFacts[choice.id] !== undefined).map(choice => {
@@ -925,7 +953,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               const option = choice.options.find(item => item.id === selected);
               return option ? <DetailRow key={`demo-choice-${choice.id}`} label={choice.label[language === 'ar' ? 1 : 0]} value={option.label[language === 'ar' ? 1 : 0]} /> : null;
             })}
-            {property.demoCapture?.selectedFeatures?.length ? <DetailRow label={language === 'ar' ? 'المزايا' : 'Features'} value={property.demoCapture.selectedFeatures.map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} /> : null}
+            {property.demoCapture?.selectedFeatures?.filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, (property.typeDetails ?? {}) as Record<string, unknown>, (property.typeDetails as Record<string, string> | undefined)?.floorUse)).length ? <DetailRow label={language === 'ar' ? 'المزايا' : 'Features'} value={property.demoCapture.selectedFeatures.filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, (property.typeDetails ?? {}) as Record<string, unknown>, (property.typeDetails as Record<string, string> | undefined)?.floorUse)).map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} /> : null}
             {property.nearbyServices?.length ? (
               <DetailRow
                 label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}
@@ -934,6 +962,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             ) : null}
             {property.core.privateNotes ? <DetailRow label={t('enrich.private_notes')} value={property.core.privateNotes.value} /> : null}
             {property.locationEnrichment?.manualLocationText ? <DetailRow label={t('enrich.manual_location')} value={property.locationEnrichment.manualLocationText.value} /> : null}
+            {property.locationEnrichment?.mapsLink ? <DetailRow label={t('enrich.maps_link')} value={property.locationEnrichment.mapsLink.value} /> : null}
+            {property.locationEnrichment?.coordinates ? (
+              <DetailRow
+                label={language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'}
+                value={`${property.locationEnrichment.coordinates.latitude}, ${property.locationEnrichment.coordinates.longitude}`}
+              />
+            ) : null}
             {property.attachments?.map(attachment => (
               <TouchableOpacity
                 key={attachment.id}
@@ -1006,11 +1041,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="edit-price"
             />
-            <View style={styles.horizontal}>
-              <Choice selected={choices.areaUnit === 'square_meter'} onPress={() => updateChoices({ areaUnit: 'square_meter' })} title={language === 'ar' ? 'متر مربع' : 'Square meter'} testID="edit-area-unit-square-meter" />
-              <Choice selected={choices.areaUnit === 'square_foot'} onPress={() => updateChoices({ areaUnit: 'square_foot' })} title={language === 'ar' ? 'قدم مربع' : 'Square foot'} testID="edit-area-unit-square-foot" />
-            </View>
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.area')}</Text>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
             <TouchableOpacity
               onPress={() => setAreaOpen(true)}
               style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card }]}
@@ -1019,12 +1050,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             >
               <Text style={{ color: colors.foreground, fontFamily: fonts.regular }}>{areaName(choices.locationAreaId)}</Text>
             </TouchableOpacity>
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'مساحة العقار' : 'Property area'}</Text>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
             <TextInput
               value={choices.areaSquareMeters === undefined ? '' : String(choices.areaSquareMeters)}
               onChangeText={value => {
                 const parsed = value.trim() === '' ? undefined : parseDemoNumericInput(value, true);
-                if (parsed === undefined || parsed !== null) updateChoices({ areaSquareMeters: parsed ?? undefined });
+                 if (parsed === undefined || parsed !== null) updateChoices({ areaSquareMeters: parsed ?? undefined, areaUnit: 'square_meter' });
               }}
               keyboardType="decimal-pad"
               testID="edit-area-square-meters"
@@ -1103,6 +1134,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <TouchableOpacity onPress={() => void openMapsLink()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-open-maps">
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.open_maps')}</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => void captureEditCoordinates()} disabled={locationBusy} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-current-location">
+              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.current_location')}</Text>
+            </TouchableOpacity>
+            {choices.coordinates ? (
+              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
+                {`${choices.coordinates.latitude}, ${choices.coordinates.longitude}`}
+              </Text>
+            ) : null}
             <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <TouchableOpacity onPress={() => void addMedia()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-add-media">
                 <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_media')}</Text>

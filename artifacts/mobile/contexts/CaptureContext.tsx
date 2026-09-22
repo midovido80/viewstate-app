@@ -56,6 +56,7 @@ interface CaptureContextValue {
   savePropertyWithRecovery: (property?: Property) => Promise<SaveRecoveryResult>;
   resetDraft: (expectedSnapshot?: string) => Promise<boolean>;
   persistCurrentCapture: () => Promise<boolean>;
+  persistCaptureDetails: () => Promise<boolean>;
   getCurrentCaptureDetails: () => CaptureDetailValues;
   getCurrentDraft: () => PropertyDraft;
 }
@@ -264,17 +265,15 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     if (!isReady || draftLoadFailed || saveRecoveryStatus !== 'none' || mutationsBlocked.current) {
       return false;
     }
-    setCaptureDetails(current => {
-      const next = { ...current, ...changes };
-      captureDetailsRef.current = next;
-      void saveCaptureDetails(
-        draftRef.current.propertyCoreId,
-        next,
-        undefined,
-        AsyncStorage,
-      ).catch(console.error);
-      return next;
-    });
+    const next = { ...captureDetailsRef.current, ...changes };
+    captureDetailsRef.current = next;
+    setCaptureDetails(next);
+    void saveCaptureDetails(
+      draftRef.current.propertyCoreId,
+      next,
+      undefined,
+      AsyncStorage,
+    ).catch(console.error);
     return true;
   }, [draftLoadFailed, isReady, saveRecoveryStatus]);
 
@@ -364,6 +363,17 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     }
   }, [draftLoadFailed, isReady, saveRecoveryStatus]);
 
+  const persistCaptureDetails = useCallback(async () => {
+    if (!isReady || draftLoadFailed || saveRecoveryStatus !== 'none' || mutationsBlocked.current) return false;
+    try {
+      await flushCaptureDetailsWrites();
+      const details = await loadCaptureDetails(draftRef.current.propertyCoreId, AsyncStorage);
+      return serializeRecoveryValue(details) === serializeRecoveryValue(captureDetailsRef.current);
+    } catch {
+      return false;
+    }
+  }, [draftLoadFailed, isReady, saveRecoveryStatus]);
+
   const savePropertyWithRecovery = useCallback(async (property?: Property) => {
     if (saveRecoveryStatus === 'unreadable' || saveRecoveryStatus === 'conflict') {
       return { status: 'conflict' } as const;
@@ -423,7 +433,8 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     projectToProperty,
     savePropertyWithRecovery,
     resetDraft
-    ,persistCurrentCapture
+     ,persistCurrentCapture
+     ,persistCaptureDetails
     ,getCurrentCaptureDetails: () => captureDetailsRef.current
     ,getCurrentDraft: () => draftRef.current
   }), [
@@ -441,6 +452,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     savePropertyWithRecovery,
     resetDraft,
     persistCurrentCapture,
+    persistCaptureDetails,
   ]);
 
   if (!isReady) return null;

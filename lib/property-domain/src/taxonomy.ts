@@ -57,6 +57,8 @@ export type PropertyDetailField =
   | "parkingSpaceCount"
   | "floorCount"
   | "unitCount"
+  | "roomsPerUnit"
+  | "bathroomsPerUnit"
   | "apartmentCount"
   | "shopCount"
   | "officeCount"
@@ -100,6 +102,8 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "parkingSpaceCount", appliesTo: PROPERTY_TYPES },
   { field: "floorCount", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "chalet"] },
   { field: "unitCount", appliesTo: ["whole_building", "commercial_complex"] },
+  { field: "roomsPerUnit", appliesTo: ["whole_building", "commercial_complex"] },
+  { field: "bathroomsPerUnit", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "apartmentCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "shopCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "officeCount", appliesTo: ["whole_building", "commercial_complex"] },
@@ -123,7 +127,7 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasWaterfront", appliesTo: ["chalet"] },
   { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "commercialActivity", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
-  { field: "frontageWidthMeters", appliesTo: ["floor", "shop"], floorUses: ["commercial"] },
+  { field: "frontageWidthMeters", appliesTo: ["floor", "shop", "commercial_complex"], floorUses: ["commercial"] },
   { field: "ceilingHeightMeters", appliesTo: ["floor", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "loadingBayCount", appliesTo: ["warehouse"] },
   { field: "hasColdStorage", appliesTo: ["warehouse"] },

@@ -28,13 +28,15 @@ const LABELS: Record<PropertyDetailField, readonly [string, string]> = {
   parkingSpaceCount: ['Parking spaces', 'مواقف السيارات'],
   floorCount: ['Floors', 'عدد الأدوار'],
   unitCount: ['Units', 'عدد الوحدات'],
+  roomsPerUnit: ['Rooms per unit', 'الغرف في كل وحدة'],
+  bathroomsPerUnit: ['Bathrooms per unit', 'الحمامات في كل وحدة'],
   apartmentCount: ['Apartments', 'عدد الشقق'],
   shopCount: ['Shops', 'عدد المحلات'],
   officeCount: ['Offices', 'عدد المكاتب'],
   elevatorCount: ['Elevators', 'عدد المصاعد'],
   apartmentSubtype: ['Apartment subtype', 'نوع الشقة'],
   bedroomCount: ['Bedrooms', 'غرف النوم'],
-  livingRoomCount: ['Living rooms', 'غرف المعيشة'],
+  livingRoomCount: ['Number of halls', 'عدد الصالات'],
   floorNumber: ['Floor number', 'رقم الدور'],
   floorUse: ['Floor use', 'استخدام الدور'],
   furnishing: ['Furnishing', 'التأثيث'],
@@ -62,6 +64,7 @@ const COUNT_FIELDS = new Set<PropertyDetailField>([
   'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
+  'roomsPerUnit', 'bathroomsPerUnit',
 ]);
 const DECIMAL_FIELDS = new Set<PropertyDetailField>([
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
@@ -73,7 +76,10 @@ const CHOICE_FIELDS = new Set<PropertyDetailField>([
   'apartmentSubtype', 'floorUse', 'furnishing',
 ]);
 const NUMERIC_QUICK_PICK_FIELDS = new Set<PropertyDetailField>([
-  'bedroomCount', 'bathroomCount', 'parkingSpaceCount',
+  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount',
+  'elevatorCount', 'floorNumber', 'loadingBayCount',
+  'roomsPerUnit', 'bathroomsPerUnit',
 ]);
 
 function controlFor(field: PropertyDetailField): PropertyFormControl {

@@ -152,13 +152,14 @@ test('BEHAVIOR: new Requirement preserves same-owner state and resets on observa
   });
 });
 
-test('BEHAVIOR: only authorized residential Property surfaces use quick picks', () => {
+test('BEHAVIOR: every active Property count surface uses the shared quick picks', () => {
   for (const type of ['apartment', 'house', 'villa', 'chalet'] as const) {
     assert.equal(isPropertyNumericQuickPickSurface(type), true);
   }
   assert.equal(isPropertyNumericQuickPickSurface('floor', 'residential'), true);
-  assert.equal(isPropertyNumericQuickPickSurface('floor', 'commercial'), false);
-  assert.equal(isPropertyNumericQuickPickSurface('office'), false);
+  assert.equal(isPropertyNumericQuickPickSurface('floor', 'commercial'), true);
+  assert.equal(isPropertyNumericQuickPickSurface('office'), true);
+  assert.equal(isPropertyNumericQuickPickSurface('warehouse'), true);
 });
 
 test('BEHAVIOR: only unambiguous residential Rent Requirements use quick picks', () => {

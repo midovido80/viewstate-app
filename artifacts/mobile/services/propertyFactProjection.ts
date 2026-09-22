@@ -1,4 +1,4 @@
-import type { Property, PropertyDetailField } from '@workspace/property-domain';
+import { PROPERTY_DETAIL_FIELD_DEFINITIONS, type Property, type PropertyDetailField } from '@workspace/property-domain';
 import { getDemoCategory } from '@/services/propertyDemoCatalog';
 
 /**
@@ -20,7 +20,7 @@ export interface PropertyFactProjection {
   readonly templateFacts: Readonly<Record<string, number | string | boolean>>;
 }
 
-const EQUIVALENT_TEMPLATE_FIELDS: Readonly<Record<string, PropertyDetailField>> = {
+export const EQUIVALENT_TEMPLATE_FIELDS: Readonly<Record<string, PropertyDetailField>> = {
   bedroomCount: 'bedroomCount',
   bathroomCount: 'bathroomCount',
   floorNumber: 'floorNumber',
@@ -28,10 +28,44 @@ const EQUIVALENT_TEMPLATE_FIELDS: Readonly<Record<string, PropertyDetailField>> 
   apartmentCount: 'apartmentCount',
   shopCount: 'shopCount',
   officeCount: 'officeCount',
+  roomsPerUnit: 'roomsPerUnit',
+  bathroomsPerUnit: 'bathroomsPerUnit',
   parkingSpaceCount: 'parkingSpaceCount',
   elevatorCount: 'elevatorCount',
   furnishing: 'furnishing',
+  maid_room: 'hasMaidRoom',
+  heating: 'hasHeating',
+  balcony: 'hasBalcony',
+  laundry_room: 'hasLaundryRoom',
+  solar_heater: 'hasSolarHeater',
+  elevator: 'hasElevator',
+  garden: 'hasGarden',
+  security: 'hasSecurityGuard',
+  bbq: 'hasBBQArea',
+  pool: 'hasPool',
 };
+
+export function isDemoFeatureSuppressed(
+  featureId: string,
+  propertyType: Property['core']['propertyType'],
+  canonicalValues: Readonly<Record<string, unknown>> = {},
+  floorUse?: string,
+): boolean {
+  const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[featureId];
+  if (!canonicalField || !canonicalField.startsWith('has')) return false;
+  const applicable = PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition =>
+    definition.field === canonicalField
+    && definition.appliesTo.includes(propertyType)
+    && (!definition.floorUses || propertyType !== 'floor' || definition.floorUses.includes(floorUse as 'residential' | 'commercial')),
+  );
+  return applicable;
+}
+
+export const SQUARE_FEET_TO_SQUARE_METERS = 0.092903;
+
+export function squareFeetToSquareMeters(value: number): number {
+  return Math.round(value * SQUARE_FEET_TO_SQUARE_METERS * 1_000_000) / 1_000_000;
+}
 
 function unwrap(value: unknown): unknown {
   return typeof value === 'object' && value !== null && 'value' in value
@@ -40,14 +74,22 @@ function unwrap(value: unknown): unknown {
 }
 
 export function projectPropertyFacts(property: Property): PropertyFactProjection {
-  const canonicalArea = property.areaSquareMeters;
-  const legacyArea = property.demoCapture?.areaSquareMeters;
+  const canonicalArea = property.areaSquareMeters === undefined
+    ? undefined
+    : property.areaUnit === 'square_foot'
+      ? squareFeetToSquareMeters(property.areaSquareMeters)
+      : property.areaSquareMeters;
+  const legacyArea = property.demoCapture?.areaSquareMeters === undefined
+    ? undefined
+    : property.demoCapture.areaUnit === 'square_foot'
+      ? squareFeetToSquareMeters(property.demoCapture.areaSquareMeters)
+      : property.demoCapture.areaSquareMeters;
   const conflicts: PropertyFactConflict[] = [];
   if (canonicalArea !== undefined && legacyArea !== undefined && canonicalArea !== legacyArea) {
     conflicts.push({ key: 'area', canonicalValue: canonicalArea, legacyValue: legacyArea });
   }
-  const canonicalUnit = property.areaUnit;
-  const legacyUnit = property.demoCapture?.areaUnit;
+  const canonicalUnit = property.areaUnit === 'square_foot' ? 'square_meter' : property.areaUnit;
+  const legacyUnit = property.demoCapture?.areaUnit === 'square_foot' ? 'square_meter' : property.demoCapture?.areaUnit;
   if (canonicalUnit !== undefined && legacyUnit !== undefined && canonicalUnit !== legacyUnit) {
     conflicts.push({ key: 'areaUnit', canonicalValue: canonicalUnit, legacyValue: legacyUnit });
   }
@@ -72,9 +114,23 @@ export function projectPropertyFacts(property: Property): PropertyFactProjection
       else if (canonical !== legacy) conflicts.push({ key: canonicalField, canonicalValue: canonical as string, legacyValue: legacy });
     }
   }
+  for (const feature of category?.features ?? []) {
+    const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[feature.id];
+    if (!canonicalField || !canonicalField.startsWith('has') || !property.demoCapture?.selectedFeatures?.includes(feature.id)) continue;
+    const definition = PROPERTY_DETAIL_FIELD_DEFINITIONS.find(item => item.field === canonicalField);
+    const floorUse = typeof details.floorUse === 'string' ? details.floorUse : undefined;
+    if (
+      definition
+      && definition.appliesTo.includes(property.core.propertyType)
+      && (!definition.floorUses || property.core.propertyType !== 'floor' || definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
+      && details[canonicalField] === undefined
+    ) {
+      templateFacts[canonicalField] = true;
+    }
+  }
   return {
     areaSquareMeters: canonicalArea ?? legacyArea,
-    areaUnit: property.areaUnit ?? property.demoCapture?.areaUnit,
+    areaUnit: canonicalUnit ?? legacyUnit,
     nearbyServices: property.nearbyServices ?? property.demoCapture?.nearbyServices,
     conflicts,
     templateFacts,
@@ -97,9 +153,11 @@ export function writeCanonicalArea(
 ): Property {
   const candidate = { ...property } as Property & { areaSquareMeters?: number; areaUnit?: Property['areaUnit']; demoCapture?: Property['demoCapture'] };
   if (areaSquareMeters === undefined) delete candidate.areaSquareMeters;
-  else candidate.areaSquareMeters = areaSquareMeters;
-  if (areaUnit === undefined) delete candidate.areaUnit;
-  else candidate.areaUnit = areaUnit;
+  else candidate.areaSquareMeters = areaUnit === 'square_foot'
+    ? squareFeetToSquareMeters(areaSquareMeters)
+    : areaSquareMeters;
+  if (areaSquareMeters === undefined) delete candidate.areaUnit;
+  else candidate.areaUnit = 'square_meter';
   if (candidate.demoCapture) {
     const demoCapture = { ...candidate.demoCapture };
     delete (demoCapture as { areaSquareMeters?: number }).areaSquareMeters;

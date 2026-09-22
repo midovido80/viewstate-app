@@ -63,3 +63,17 @@ export async function persistAttachmentsThenDeleteRemoved(
     if (!retained.has(attachment.id)) await fileStore.delete(attachment.uri);
   }
 }
+
+/** New files are owned only after metadata persistence succeeds. */
+export async function persistNewAttachmentsOrDeleteOnFailure(
+  newlyCopied: readonly LocalAttachment[],
+  persistMetadata: () => Promise<boolean>,
+  fileStore: AttachmentFileStore,
+): Promise<void> {
+  try {
+    if (!await persistMetadata()) throw new Error('ATTACHMENT_METADATA_PERSIST_FAILED');
+  } catch (error) {
+    await Promise.all(newlyCopied.map(attachment => fileStore.delete(attachment.uri).catch(() => undefined)));
+    throw error;
+  }
+}

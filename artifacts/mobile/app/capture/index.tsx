@@ -14,6 +14,9 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
@@ -24,7 +27,9 @@ import {
 } from '@/services/propertyFormCatalog';
 import { propertyDetailLabels, formatPropertyDetailValue } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
-import { isMappedTemplateField } from '@/services/propertyFactProjection';
+import { AttachmentPickerControl } from '@/components/AttachmentPickerControl';
+import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
+import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
 import {
   applyFloorTransition,
   createFloorTransitionProposal,
@@ -33,6 +38,7 @@ import {
 import {
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  preserveCaptureOwnershipAndEvidence,
   type CaptureDetailValues,
 } from '@/services/propertyCaptureDetails';
 import {
@@ -40,10 +46,23 @@ import {
   prepareCapturedDetails,
 } from '@/services/propertyCaptureSave';
 import { store } from '@/services/persistence';
-import { getAreaById, getAreasByGovernorate, getSelectableKuwaitAreas, KUWAIT_GOVERNORATES, searchAreasSorted } from '@/constants/kuwait-areas';
+import {
+  createExpoFileStore,
+  openAttachment,
+  pickAndStoreMedia,
+  pickAndStorePdfs,
+  createWebFileAttachments,
+  createIndexedDbWebAttachmentBlobStore,
+  createWebAttachmentFileStore,
+  persistNewAttachmentsOrDeleteOnFailure,
+  type LocalAttachment,
+  type WebAttachmentBlobStore,
+} from '@/services/attachments';
+import { requestCurrentCoordinates, normalizeGoogleMapsLink, pastedMapLocation, openPastedLocationLink } from '@/services/location';
+import { getAreaById } from '@/constants/kuwait-areas';
 import type { Transaction, PropertyDetailField } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
-import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition } from '@/services/propertyDemoCatalog';
+import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
 
 export default function CaptureWorkflow() {
   const router = useRouter();
@@ -61,6 +80,7 @@ export default function CaptureWorkflow() {
     savePropertyWithRecovery,
     clearCaptureDetails,
     persistCurrentCapture,
+    persistCaptureDetails,
     getCurrentCaptureDetails,
     getCurrentDraft,
   } = useCapture();
@@ -74,14 +94,15 @@ export default function CaptureWorkflow() {
   });
   const [description, setDescription] = useState(draft.description?.value ?? '');
   const [block, setBlock] = useState(draft.block ?? '');
-  const [areaSearch, setAreaSearch] = useState('');
   const [areaSelectorOpen, setAreaSelectorOpen] = useState(false);
-  const [expandedGovernorates, setExpandedGovernorates] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
   const [pendingFloorTransition, setPendingFloorTransition] = useState<FloorTransitionProposal | null>(null);
   const [quickErrors, setQuickErrors] = useState<Record<string, string>>({});
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingConfirmation, setPendingConfirmation] = useState<{
     title: string;
     message: string;
@@ -89,6 +110,21 @@ export default function CaptureWorkflow() {
   } | null>(null);
   const demoMetadata = captureDetails.demoMetadata;
   const demoCategory = getDemoCategory(demoMetadata?.categoryId);
+  const webBlobStore = useRef<WebAttachmentBlobStore | null>(null);
+  if (Platform.OS === 'web' && !webBlobStore.current) webBlobStore.current = createIndexedDbWebAttachmentBlobStore();
+  const attachmentStore = Platform.OS === 'web'
+    ? createWebAttachmentFileStore(webBlobStore.current!)
+    : createExpoFileStore(FileSystem);
+  const captureAttachments = (captureDetails.attachments ?? []).map(item => ({
+    id: item.id,
+    kind: item.kind,
+    originalName: item.originalName,
+    mimeType: item.mimeType,
+    uri: item.managedUri,
+    order: item.order,
+    ...(item.isCover ? { isCover: true as const } : {}),
+  })) as LocalAttachment[];
+
 
   const scopeKey = captureDetailsScopeKey(draft.propertyCoreId);
   const applicable = useMemo(
@@ -98,7 +134,6 @@ export default function CaptureWorkflow() {
     [captureDetails.floorUse, draft.propertyType],
   );
   const selectedArea = draft.locationAreaId ? getAreaById(draft.locationAreaId) : undefined;
-  const areaResults = searchAreasSorted(areaSearch, language === 'ar' ? 'ar' : 'en', getSelectableKuwaitAreas());
   useEffect(() => {
     if (
       captureDetails.areaSquareMeters === undefined
@@ -141,12 +176,7 @@ export default function CaptureWorkflow() {
     const apply = () => {
       const currentDetails = getCurrentCaptureDetails();
       if (JSON.stringify(currentDetails) !== sourceDetailsSnapshot) return;
-      const shared = {
-        ...(currentDetails.areaSquareMeters !== undefined ? { areaSquareMeters: currentDetails.areaSquareMeters } : {}),
-        ...(currentDetails.areaUnit ? { areaUnit: currentDetails.areaUnit } : {}),
-        nearbyServices: currentDetails.nearbyServices ?? JSON.stringify([]),
-      };
-      replaceCaptureDetails(shared);
+       replaceCaptureDetails(preserveCaptureOwnershipAndEvidence(currentDetails));
       try {
         setNearby(currentDetails.nearbyServices ? JSON.parse(currentDetails.nearbyServices) as string[] : []);
       } catch {
@@ -190,9 +220,9 @@ export default function CaptureWorkflow() {
       if (!transitioned) return;
       const nearbyServices = transitioned.nearbyServices ?? [];
       setNearby([...nearbyServices]);
-      replaceCaptureDetails({
-        ...(currentDetails.areaSquareMeters !== undefined ? { areaSquareMeters: currentDetails.areaSquareMeters } : {}),
-        ...(currentDetails.areaUnit ? { areaUnit: currentDetails.areaUnit } : {}),
+       replaceCaptureDetails({
+         ...preserveCaptureOwnershipAndEvidence(currentDetails),
+         ...(canonicalApartmentSubtypeForCategory(category.id) ? { apartmentSubtype: canonicalApartmentSubtypeForCategory(category.id) } : {}),
         demoMetadata: transitioned,
         nearbyServices: JSON.stringify(nearbyServices),
       });
@@ -238,10 +268,7 @@ export default function CaptureWorkflow() {
         ? applyDemoTransactionTransition(currentDraft, currentDetails.demoMetadata, proposal)
         : null;
       if (proposal && !transitioned) return;
-      const sharedArea = {
-        ...(currentDetails.areaSquareMeters !== undefined ? { areaSquareMeters: currentDetails.areaSquareMeters } : {}),
-        ...(currentDetails.areaUnit ? { areaUnit: currentDetails.areaUnit } : {}),
-      };
+       const sharedArea = preserveCaptureOwnershipAndEvidence(currentDetails);
       const nextMetadata = transitioned?.metadata;
       const nextNearby = transitioned?.nearbyServices ?? nextMetadata?.nearbyServices ?? [];
       setNearby([...nextNearby]);
@@ -283,6 +310,116 @@ export default function CaptureWorkflow() {
     } : { description: undefined });
   };
 
+  const commitCaptureAttachments = async (next: readonly LocalAttachment[]) => {
+    if (!next.length) return;
+    const hasCover = captureAttachments.some(item => item.isCover);
+    const accepted = updateCaptureDetails({
+      attachments: [
+        ...(captureDetails.attachments ?? []),
+        ...next.map((item, index) => ({
+          id: item.id, kind: item.kind, originalName: item.originalName, mimeType: item.mimeType,
+          order: captureAttachments.length + index, managedUri: item.uri,
+          ...(!hasCover && index === 0 && item.kind === 'image' ? { isCover: true as const } : {}),
+          privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+        })),
+      ],
+    });
+    try {
+      await persistNewAttachmentsOrDeleteOnFailure(next, async () => accepted && await persistCaptureDetails(), attachmentStore);
+    } catch {
+      replaceCaptureDetails(captureDetails);
+    }
+  };
+
+  const addCaptureMedia = async (mediaTypes: ('images' | 'videos')[]) => {
+    if (attachmentBusy || !draft.propertyCoreId) return;
+    setAttachmentBusy(true);
+    try {
+      const next = await pickAndStoreMedia(draft.propertyCoreId, captureAttachments, {
+        fileStore: attachmentStore,
+      }, undefined, mediaTypes);
+      await commitCaptureAttachments(next);
+    } catch (cause) {
+      Alert.alert(t('errors.storage_title'), cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const addCapturePdfs = async () => {
+    if (attachmentBusy || !draft.propertyCoreId) return;
+    setAttachmentBusy(true);
+    try {
+      const next = await pickAndStorePdfs(draft.propertyCoreId, captureAttachments, DocumentPicker, {
+        fileStore: attachmentStore,
+      });
+      if (next.length) {
+        await commitCaptureAttachments(next);
+      }
+    } catch (cause) {
+      Alert.alert(t('errors.storage_title'), cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const addCaptureWebFiles = async (files: readonly { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> }[]) => {
+    if (attachmentBusy || !files.length || !draft.propertyCoreId || !webBlobStore.current) return;
+    setAttachmentBusy(true);
+    try {
+      await commitCaptureAttachments(await createWebFileAttachments(draft.propertyCoreId, captureAttachments, files, undefined, webBlobStore.current!));
+    } catch (cause) {
+      Alert.alert(t('errors.storage_title'), cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeCaptureAttachment = async (attachment: LocalAttachment) => {
+    const next = (captureDetails.attachments ?? []).filter(item => item.id !== attachment.id)
+      .map((item, order) => ({ ...item, order, ...(item.id === captureDetails.attachments?.find(candidate => candidate.kind === 'image')?.id ? { isCover: true } : {}) }));
+    const previous = captureDetails;
+    const accepted = updateCaptureDetails({ attachments: next.length ? next : undefined });
+    if (!accepted || !await persistCaptureDetails()) {
+      replaceCaptureDetails(previous);
+      return;
+    }
+    try {
+      await attachmentStore.delete(attachment.uri);
+    } catch {
+      // Metadata is already durably removed; a missing local file is harmless.
+    }
+  };
+
+  const captureCurrentCoordinates = async () => {
+    if (locationBusy) return;
+    setLocationBusy(true);
+    try {
+      const coordinates = await requestCurrentCoordinates();
+      updateCaptureDetails({
+        coordinates: {
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+        },
+      });
+    } catch {
+      Alert.alert(t('errors.storage_title'), t('enrich.location_failed'));
+    } finally {
+      setLocationBusy(false);
+    }
+  };
+
+  const openCaptureMapsLink = async () => {
+    const link = captureDetails.mapsLink?.trim();
+    if (!link) return;
+    try {
+      await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+    } catch {
+      Alert.alert(t('errors.validation_title'), t('enrich.maps_link_invalid'));
+    }
+  };
+
   const openPreview = () => {
     if (!draft.transaction || !draft.propertyType || !draft.locationAreaId) {
       Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
@@ -297,12 +434,14 @@ export default function CaptureWorkflow() {
       Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
       return;
     }
+    setSaveError(null);
     setStage(3);
   };
 
   const save = async () => {
     if (saveFlight.current) return;
     saveFlight.current = true;
+    setSaveError(null);
     const projection = projectToProperty();
     if (!projection.ok) {
       saveFlight.current = false;
@@ -331,7 +470,13 @@ export default function CaptureWorkflow() {
       } as never);
     } catch (error) {
       console.error('Capture workflow save failed:', error);
-      Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
+      const message = error instanceof Error && error.message.startsWith('INVALID_CAPTURE_DETAILS:')
+        ? (language === 'ar'
+          ? 'تحقق من أعداد الوحدات: يجب ألا يتجاوز مجموع الشقق والمحلات والمكاتب عدد الوحدات، ثم أعد المحاولة.'
+          : 'Check the unit totals: apartments, shops, and offices together cannot exceed the unit count. Correct the details and try again.')
+        : t('errors.storage_save');
+      setSaveError(message);
+      if (Platform.OS !== 'web') Alert.alert(t('errors.validation_title'), message);
     } finally {
       saveFlight.current = false;
       setSubmitting(false);
@@ -427,30 +572,28 @@ export default function CaptureWorkflow() {
               <View style={styles.chips}>
                 {(['sale', 'rent'] as const).map(value => <Choice key={value} selected={draft.transaction === value} label={t(`transaction.${value}` as keyof Translations)} onPress={() => selectTransaction(value)} colors={colors} fonts={fonts} />)}
               </View>
-               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area'}</Text>
+               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
                <TouchableOpacity testID="capture-area-selector" accessibilityRole="button" onPress={() => setAreaSelectorOpen(true)} style={[styles.areaField, { borderColor: colors.border, backgroundColor: colors.card }]}>
                  <Text style={{ color: selectedArea ? colors.foreground : colors.mutedForeground, fontFamily: fonts.regular }}>{selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : (language === 'ar' ? 'اختر المنطقة' : 'Select area')}</Text>
                  <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
                </TouchableOpacity>
-               <Modal visible={areaSelectorOpen} animationType="slide" transparent onRequestClose={() => { setAreaSearch(''); setAreaSelectorOpen(false); }}>
+               <Modal visible={areaSelectorOpen} animationType="slide" transparent onRequestClose={() => setAreaSelectorOpen(false)}>
                  <View style={styles.modalBackdrop}>
                    <View style={[styles.areaSheet, { backgroundColor: colors.background }]}>
                      <View style={[styles.areaSheetHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                        <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{language === 'ar' ? 'اختر المنطقة' : 'Select area'}</Text>
-                       <TouchableOpacity testID="capture-area-cancel" accessibilityRole="button" onPress={() => { setAreaSearch(''); setAreaSelectorOpen(false); }}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Text></TouchableOpacity>
+                       <TouchableOpacity testID="capture-area-cancel" accessibilityRole="button" onPress={() => setAreaSelectorOpen(false)}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Text></TouchableOpacity>
                      </View>
-                     <TextInput testID="capture-area-search" autoFocus value={areaSearch} onChangeText={setAreaSearch} placeholder={language === 'ar' ? 'ابحث بالمنطقة أو المحافظة' : 'Search area or governorate'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
                      <ScrollView keyboardShouldPersistTaps="handled">
-                       {areaSearch.trim() ? areaResults.map(area => (
-                         <TouchableOpacity key={area.id} testID={`capture-area-option-${area.id}`} accessibilityRole="radio" accessibilityState={{ selected: draft.locationAreaId === area.id }} onPress={() => { updateDraft({ locationAreaId: area.id }); setAreaSearch(''); setAreaSelectorOpen(false); }} style={[styles.areaOption, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                           <Check selected={draft.locationAreaId === area.id} colors={colors} />
-                           <View style={styles.areaOptionText}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? area.ar : area.en}</Text><Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{language === 'ar' ? area.governorateAr : area.governorateEn}</Text></View>
-                         </TouchableOpacity>
-                       )) : KUWAIT_GOVERNORATES.map(governorate => {
-                         const expanded = expandedGovernorates.has(governorate.id);
-                       return <View key={governorate.id}><TouchableOpacity testID={`capture-governorate-${governorate.id}`} accessibilityRole="button" onPress={() => setExpandedGovernorates(current => { const next = new Set(current); if (next.has(governorate.id)) next.delete(governorate.id); else next.add(governorate.id); return next; })} style={[styles.governorateRow, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? governorate.ar : governorate.en}</Text><Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} /></TouchableOpacity>{expanded && getAreasByGovernorate(governorate.id, language === 'ar' ? 'ar' : 'en').map(area => <TouchableOpacity key={area.id} testID={`capture-area-option-${area.id}`} accessibilityRole="radio" accessibilityState={{ selected: draft.locationAreaId === area.id }} onPress={() => { updateDraft({ locationAreaId: area.id }); setAreaSearch(''); setAreaSelectorOpen(false); }} style={[styles.areaOption, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Check selected={draft.locationAreaId === area.id} colors={colors} /><Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? area.ar : area.en}</Text></TouchableOpacity>)}</View>;
-                       })}
-                       {areaSearch.trim() && areaResults.length === 0 && <Text style={[styles.emptyArea, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{language === 'ar' ? 'لا توجد مناطق مطابقة' : 'No matching areas'}</Text>}
+                       <KuwaitAreaSelector
+                         selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
+                         onChange={ids => {
+                           updateDraft({ locationAreaId: ids[0] });
+                           setAreaSelectorOpen(false);
+                         }}
+                         multiSelect={false}
+                         testID="capture-area"
+                       />
                      </ScrollView>
                    </View>
                  </View>
@@ -470,16 +613,12 @@ export default function CaptureWorkflow() {
                   <Choice selected={draft.rentalPeriodId === 'yearly'} label={language === 'ar' ? 'سنوياً' : 'Yearly'} onPress={() => updateDraft({ rentalPeriodId: 'yearly' })} colors={colors} fonts={fonts} />
                 </View>
               )}
-              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'مساحة العقار' : 'Property area'}</Text>
+               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
               <TextInput value={metadataValue(captureDetails.areaSquareMeters)} onChangeText={value => {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
                 const number = Number(normalized);
-                if (normalized === '' || Number.isFinite(number)) updateCaptureDetails({ areaSquareMeters: normalized === '' ? undefined : number });
+                 if (normalized === '' || Number.isFinite(number)) updateCaptureDetails({ areaSquareMeters: normalized === '' ? undefined : number, areaUnit: 'square_meter' });
               }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
-              <View style={styles.chips}>
-                <Choice selected={captureDetails.areaUnit === 'square_meter'} label={language === 'ar' ? 'متر مربع' : 'Square meter'} onPress={() => updateCaptureDetails({ areaUnit: 'square_meter' })} colors={colors} fonts={fonts} />
-                <Choice selected={captureDetails.areaUnit === 'square_foot'} label={language === 'ar' ? 'قدم مربع' : 'Square foot'} onPress={() => updateCaptureDetails({ areaUnit: 'square_foot' })} colors={colors} fonts={fonts} />
-              </View>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
             </Section>
@@ -508,12 +647,76 @@ export default function CaptureWorkflow() {
                 })}
               />
             </Section>
+            <Section title={language === 'ar' ? 'الموقع الدقيق والمرفقات' : 'Precise location and attachments'} colors={colors} fonts={fonts}>
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.manual_location')}</Text>
+              <TextInput
+                value={captureDetails.manualLocationText ?? ''}
+                onChangeText={value => updateCaptureDetails({ manualLocationText: value || undefined })}
+                style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                testID="capture-manual-location"
+              />
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
+              <TextInput
+                value={captureDetails.mapsLink ?? ''}
+                onChangeText={value => updateCaptureDetails({ mapsLink: value || undefined })}
+                style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                testID="capture-maps-link"
+              />
+              <View style={styles.chips}>
+                <Choice selected={Boolean(captureDetails.coordinates)} label={t('enrich.current_location')} onPress={() => void captureCurrentCoordinates()} colors={colors} fonts={fonts} />
+                <Choice selected={false} label={t('enrich.open_maps')} onPress={() => void openCaptureMapsLink()} colors={colors} fonts={fonts} />
+              </View>
+              {captureDetails.coordinates ? (
+                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
+                  {`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`}
+                </Text>
+              ) : null}
+              <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                {Platform.OS === 'web' ? <>
+                  <AttachmentPickerControl label={t('enrich.add_images')} accept="image/*" testID="capture-add-images" disabled={attachmentBusy} onFiles={files => void addCaptureWebFiles(files)} />
+                  <AttachmentPickerControl label={t('enrich.add_videos')} accept="video/*" testID="capture-add-videos" disabled={attachmentBusy} onFiles={files => void addCaptureWebFiles(files)} />
+                  <AttachmentPickerControl label={t('enrich.add_files')} accept=".pdf,application/pdf" testID="capture-add-files" disabled={attachmentBusy} onFiles={files => void addCaptureWebFiles(files)} />
+                </> : <>
+                  <TouchableOpacity onPress={() => void addCaptureMedia(['images'])} disabled={attachmentBusy} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card }]} testID="capture-add-images">
+                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_images')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => void addCaptureMedia(['videos'])} disabled={attachmentBusy} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card }]} testID="capture-add-videos">
+                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_videos')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => void addCapturePdfs()} disabled={attachmentBusy} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card }]} testID="capture-add-files">
+                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_files')}</Text>
+                  </TouchableOpacity>
+                </>}
+              </View>
+              {captureAttachments.map(attachment => (
+                <View key={attachment.id} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card, marginTop: 8, justifyContent: 'space-between' }]}>
+                  <TouchableOpacity onPress={() => void openAttachment(attachment, Sharing).catch(() => Alert.alert(t('errors.storage_title'), t('enrich.attachment_failed')))} testID={`capture-open-${attachment.id}`}>
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{attachment.isCover ? '★ ' : ''}{attachment.originalName}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => void removeCaptureAttachment(attachment)} testID={`capture-remove-${attachment.id}`}>
+                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('enrich.remove')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('enrich.attachment_privacy')}</Text>
+            </Section>
           </>
         )}
 
         {stage === 3 && (
           <Section title={language === 'ar' ? 'مراجعة وتأكيد' : 'Preview and confirmation'} colors={colors} fonts={fonts}>
-            <TouchableOpacity onPress={() => setStage(2)} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, { borderColor: colors.primary }]}>
+            {saveError ? (
+              <View
+                accessibilityRole="alert"
+                testID="capture-save-validation-error"
+                style={[styles.saveError, { borderColor: colors.destructive, backgroundColor: colors.destructive + '0F' }]}
+              >
+                <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+                  {saveError}
+                </Text>
+              </View>
+            ) : null}
+            <TouchableOpacity onPress={() => { setSaveError(null); setStage(2); }} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, { borderColor: colors.primary }]}>
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'العودة للتحرير' : 'Back to Edit'}</Text>
             </TouchableOpacity>
             <Text style={[styles.previewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{demoCategory?.label[language === 'ar' ? 1 : 0] ?? (draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : '')}</Text>
@@ -523,7 +726,7 @@ export default function CaptureWorkflow() {
             <PreviewRow label={language === 'ar' ? 'القطعة' : 'Block'} value={draft.block ?? ''} colors={colors} fonts={fonts} />
             <PreviewRow label={draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')} value={String((draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount) ?? '')} colors={colors} fonts={fonts} />
             {draft.transaction === 'rent' && <PreviewRow label={language === 'ar' ? 'الدورية' : 'Cadence'} value={draft.rentalPeriodId === 'yearly' ? (language === 'ar' ? 'سنوياً' : 'Yearly') : (language === 'ar' ? 'شهرياً' : 'Monthly')} colors={colors} fonts={fonts} />}
-            <PreviewRow label={language === 'ar' ? 'المساحة' : 'Area'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${captureDetails.areaUnit === 'square_foot' ? (language === 'ar' ? 'قدم مربع' : 'sq ft') : (language === 'ar' ? 'متر مربع' : 'm²')}`} colors={colors} fonts={fonts} />
+             <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
             {applicable.filter(definition => captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field as any, captureDetails[definition.field], language)} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
@@ -533,7 +736,11 @@ export default function CaptureWorkflow() {
              {demoCategory?.choices.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.choices?.[item.id] !== undefined).map(item => (
               <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={item.options.find(option => option.id === demoMetadata?.choices?.[item.id])?.label[language === 'ar' ? 1 : 0] ?? ''} colors={colors} fonts={fonts} />
             ))}
-            {demoMetadata?.selectedFeatures?.length ? <PreviewRow label={language === 'ar' ? 'المزايا' : 'Features'} value={demoMetadata.selectedFeatures.map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} colors={colors} fonts={fonts} /> : null}
+             {demoMetadata?.selectedFeatures?.filter(id => !isDemoFeatureSuppressed(id, draft.propertyType ?? 'other_built_property', captureDetails as Record<string, unknown>, captureDetails.floorUse)).length ? <PreviewRow label={language === 'ar' ? 'المزايا' : 'Features'} value={demoMetadata.selectedFeatures.filter(id => !isDemoFeatureSuppressed(id, draft.propertyType ?? 'other_built_property', captureDetails as Record<string, unknown>, captureDetails.floorUse)).map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(', ')} colors={colors} fonts={fonts} /> : null}
+             {captureDetails.manualLocationText ? <PreviewRow label={t('enrich.manual_location')} value={captureDetails.manualLocationText} colors={colors} fonts={fonts} /> : null}
+             {captureDetails.mapsLink ? <PreviewRow label={t('enrich.maps_link')} value={captureDetails.mapsLink} colors={colors} fonts={fonts} /> : null}
+             {captureDetails.coordinates ? <PreviewRow label={language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'} value={`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`} colors={colors} fonts={fonts} /> : null}
+             {captureAttachments.length ? <PreviewRow label={language === 'ar' ? 'المرفقات' : 'Attachments'} value={captureAttachments.map(item => item.originalName).join(', ')} colors={colors} fonts={fonts} /> : null}
           </Section>
         )}
       </ScrollView>
@@ -741,6 +948,7 @@ const styles = StyleSheet.create({
   confirmationAction: { flex: 1 },
   previewTitle: { fontSize: 24, marginBottom: 5 },
   previewEdit: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center', alignSelf: 'flex-start', marginBottom: 12 },
+  saveError: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
   previewMeta: { marginBottom: 14 },
   previewRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 13, borderBottomWidth: 1 },
   previewLabel: { flex: 1, fontSize: 13 },

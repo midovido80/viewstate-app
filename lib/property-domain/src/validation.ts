@@ -216,6 +216,8 @@ export function validateTypeDetails(
     "parkingSpaceCount",
     "floorCount",
     "unitCount",
+    "roomsPerUnit",
+    "bathroomsPerUnit",
     "apartmentCount",
     "shopCount",
     "officeCount",

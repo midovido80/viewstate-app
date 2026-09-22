@@ -1,10 +1,12 @@
-import { Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { Text, TextInput, View, StyleSheet } from 'react-native';
 import type { PropertyType, PropertyCaptureCategoryId, PropertyDemoCaptureMetadata, PropertyDetailField } from '@workspace/property-domain';
 import type { DemoCategoryDefinition } from '@/services/propertyDemoCatalog';
 import { DEMO_NEARBY_SERVICES, parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { ModernPropertyFields } from '@/components/ModernPropertyFields';
 import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentFields';
-import { isMappedTemplateField } from '@/services/propertyFactProjection';
+import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
+import { ChoiceChip } from '@/components/ChoiceChip';
+import { NumericQuickPick } from '@/components/NumericQuickPick';
 
 export interface ModernPropertyFormProps {
   recordScopeKey: string;
@@ -33,30 +35,34 @@ export function ModernPropertyForm({ recordScopeKey, propertyType, values, onCha
         </View>
       ) : null}
       {category && onDemoChange ? <View style={styles.demo}>
-        {category.numericFields.filter(item => !isMappedTemplateField(item.id)).map(item => <View key={item.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{item.label[language === 'ar' ? 1 : 0]}</Text><TextInput value={metadata?.numericValues?.[item.id] === undefined ? '' : String(metadata.numericValues[item.id])} onChangeText={(value: string) => {
-          const parsed = value.trim() === '' ? undefined : parseDemoNumericInput(value, item.kind === 'decimal');
-          const invalid = value.trim() !== '' && parsed === null;
-          onInvalidQuickPickChange?.(item.id as PropertyDetailField, recordScopeKey, invalid);
-          if (invalid) {
-            const numericValues = { ...(metadata?.numericValues ?? {}) };
-            delete numericValues[item.id];
-            onDemoChange({ numericValues });
+        {category.numericFields.filter(item => !isMappedTemplateField(item.id)).map(item => {
+          const current = metadata?.numericValues?.[item.id];
+          if (item.kind === 'decimal') {
+            return <View key={item.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{item.label[language === 'ar' ? 1 : 0]}</Text><TextInput value={current === undefined ? '' : String(current)} onChangeText={(value: string) => {
+              const parsed = value.trim() === '' ? undefined : parseDemoNumericInput(value, true);
+              const invalid = value.trim() !== '' && parsed === null;
+              onInvalidQuickPickChange?.(item.id as PropertyDetailField, recordScopeKey, invalid);
+              if (parsed === undefined || parsed !== null) {
+                const numericValues = { ...(metadata?.numericValues ?? {}) };
+                if (parsed === undefined) delete numericValues[item.id]; else numericValues[item.id] = parsed;
+                onDemoChange({ numericValues });
+              }
+            }} keyboardType="decimal-pad" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} /></View>;
           }
-          if (parsed === undefined || parsed !== null) {
+          return <NumericQuickPick key={item.id} scopeKey={`${recordScopeKey}:demo:${item.id}`} label={item.label[language === 'ar' ? 1 : 0]} value={current === undefined ? '' : String(current)} onChangeText={value => {
             const numericValues = { ...(metadata?.numericValues ?? {}) };
-            if (parsed === undefined) delete numericValues[item.id];
-            else numericValues[item.id] = parsed;
+            if (value.trim() === '') delete numericValues[item.id]; else numericValues[item.id] = Number(value);
             onDemoChange({ numericValues });
-          }
-        }} keyboardType="decimal-pad" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} /></View>)}
-        {category.choices.filter(choice => !isMappedTemplateField(choice.id)).map(choice => <View key={choice.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{choice.label[language === 'ar' ? 1 : 0]}</Text><View>{choice.options.map(option => <TouchableOpacity key={option.id} onPress={() => onDemoChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })}><Text style={{ color: colors.foreground }}>{metadata?.choices?.[choice.id] === option.id ? '✓ ' : ''}{option.label[language === 'ar' ? 1 : 0]}</Text></TouchableOpacity>)}</View></View>)}
+          }} onPendingValidityChange={(_scope, invalid) => onInvalidQuickPickChange?.(item.id as PropertyDetailField, recordScopeKey, invalid)} testID={`demo-${item.id}-quick-pick`} />;
+        })}
+        {category.choices.filter(choice => !isMappedTemplateField(choice.id)).map(choice => <View key={choice.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{choice.label[language === 'ar' ? 1 : 0]}</Text><View style={styles.chips}>{choice.options.map(option => <ChoiceChip key={option.id} label={option.label[language === 'ar' ? 1 : 0]} selected={metadata?.choices?.[choice.id] === option.id} role="radio" onPress={() => onDemoChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} />)}</View></View>)}
         <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'المزايا' : 'Features'}</Text>
-        {category.features.map(feature => <TouchableOpacity key={feature.id} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })}><Text style={{ color: colors.foreground }}>{metadata?.selectedFeatures?.includes(feature.id) ? '✓ ' : ''}{feature.label[language === 'ar' ? 1 : 0]}</Text></TouchableOpacity>)}
+        <View style={styles.chips}>{category.features.filter(feature => !isDemoFeatureSuppressed(feature.id, propertyType, values as Record<string, unknown>, (values as Record<string, string>).floorUse)).map(feature => <ChoiceChip key={feature.id} label={feature.label[language === 'ar' ? 1 : 0]} selected={metadata?.selectedFeatures?.includes(feature.id) ?? false} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} />)}</View>
         <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
-        {DEMO_NEARBY_SERVICES.map(item => <TouchableOpacity key={item.id} onPress={() => onNearbyChange?.(nearby.includes(item.id) ? nearby.filter(id => id !== item.id) : [...nearby, item.id])}><Text style={{ color: colors.foreground }}>{nearby.includes(item.id) ? '✓ ' : ''}{item.label[language === 'ar' ? 1 : 0]}</Text></TouchableOpacity>)}
+        <View style={styles.chips}>{DEMO_NEARBY_SERVICES.map(item => <ChoiceChip key={item.id} label={item.label[language === 'ar' ? 1 : 0]} selected={nearby.includes(item.id)} onPress={() => onNearbyChange?.(nearby.includes(item.id) ? nearby.filter(id => id !== item.id) : [...nearby, item.id])} />)}</View>
       </View> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12 } });
+const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } });

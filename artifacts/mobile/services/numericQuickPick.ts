@@ -3,6 +3,13 @@ import { toEnglishDigits } from '@/constants/market';
 
 export const NUMERIC_QUICK_PICK_VALUES = [1, 2, 3, 4, 5] as const;
 
+const UNAMBIGUOUS_RESIDENTIAL_TYPES = new Set<PropertyType>([
+  'apartment',
+  'house',
+  'villa',
+  'chalet',
+]);
+
 export type ExactIntegerInput =
   | { readonly kind: 'blank'; readonly normalized: '' }
   | { readonly kind: 'valid'; readonly normalized: string; readonly value: number }
@@ -25,13 +32,6 @@ export interface QuickPickValidationScope<T> {
   readonly scopeKey: string;
   readonly invalidFields: ReadonlySet<T>;
 }
-
-const UNAMBIGUOUS_RESIDENTIAL_TYPES = new Set<PropertyType>([
-  'apartment',
-  'house',
-  'villa',
-  'chalet',
-]);
 
 export function parseExactIntegerInput(input: string): ExactIntegerInput {
   const normalized = toEnglishDigits(input);
@@ -167,8 +167,12 @@ export function isPropertyNumericQuickPickSurface(
   propertyType: PropertyType,
   floorUse?: string,
 ): boolean {
-  return UNAMBIGUOUS_RESIDENTIAL_TYPES.has(propertyType)
-    || propertyType === 'floor' && floorUse === 'residential';
+  // Every applicable count field uses the same production control. The
+  // catalog remains responsible for deciding whether a field is applicable;
+  // this predicate only prevents non-count/unsupported property surfaces from
+  // accidentally opting in.
+  return propertyType !== 'other_built_property'
+    && (propertyType !== 'floor' || floorUse === undefined || floorUse === 'residential' || floorUse === 'commercial');
 }
 
 export function isRequirementNumericQuickPickSurface(

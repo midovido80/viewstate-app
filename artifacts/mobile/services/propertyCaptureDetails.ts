@@ -3,23 +3,32 @@ import {
   type Property,
   type PropertyDetailField,
   type PropertyDraft,
-  type PropertyDemoCaptureMetadata,
 } from '@workspace/property-domain';
-import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentFields';
+import type { CaptureDetailValues } from '@/services/captureDetailsStorage';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
 import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
+import { normalizeGoogleMapsLink } from '@/services/mapsLink';
+import { optionalClassifiedLiteral } from '@/services/literalText';
+import { squareFeetToSquareMeters } from '@/services/propertyFactProjection';
 
 const normalPrivacy = {
   classification: 'normal' as const,
   disclosurePolicy: 'normal' as const,
 };
 
-export type CaptureDetailValues = EnrichmentFieldValues & {
-  nearbyServices?: string;
-  demoMetadata?: PropertyDemoCaptureMetadata;
-  areaSquareMeters?: number;
-  areaUnit?: "square_meter" | "square_foot";
-};
+export type { CaptureDetailValues } from '@/services/captureDetailsStorage';
+
+export function preserveCaptureOwnershipAndEvidence(details: CaptureDetailValues): CaptureDetailValues {
+  return {
+    ...(details.areaSquareMeters !== undefined ? { areaSquareMeters: details.areaSquareMeters } : {}),
+    ...(details.areaUnit ? { areaUnit: details.areaUnit } : {}),
+    ...(details.nearbyServices ? { nearbyServices: details.nearbyServices } : {}),
+    ...(details.manualLocationText ? { manualLocationText: details.manualLocationText } : {}),
+    ...(details.mapsLink ? { mapsLink: details.mapsLink } : {}),
+    ...(details.coordinates ? { coordinates: details.coordinates } : {}),
+    ...(details.attachments ? { attachments: details.attachments } : {}),
+  };
+}
 
 export function applyCaptureTransactionDefaults(
   draft: PropertyDraft,
@@ -95,8 +104,27 @@ export function buildPropertyWithCaptureDetails(
         return legacy;
       })(),
     } : {}),
-    ...(fields.areaSquareMeters !== undefined ? { areaSquareMeters: fields.areaSquareMeters } : {}),
-    ...(fields.areaUnit ? { areaUnit: fields.areaUnit } : {}),
+    ...(fields.areaSquareMeters !== undefined
+      ? { areaSquareMeters: fields.areaUnit === 'square_foot' ? squareFeetToSquareMeters(fields.areaSquareMeters) : fields.areaSquareMeters, areaUnit: 'square_meter' as const }
+      : {}),
+    ...(fields.areaSquareMeters === undefined && baseline.areaSquareMeters !== undefined && baseline.areaUnit === 'square_foot'
+      ? { areaSquareMeters: squareFeetToSquareMeters(baseline.areaSquareMeters), areaUnit: 'square_meter' as const }
+      : {}),
+    ...((fields.manualLocationText?.trim() || fields.mapsLink?.trim() || fields.coordinates) ? {
+      locationEnrichment: {
+        ...(baseline.locationEnrichment ?? {}),
+        ...(fields.manualLocationText?.trim()
+          ? { manualLocationText: optionalClassifiedLiteral(fields.manualLocationText, { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' }) }
+          : {}),
+        ...(fields.mapsLink?.trim()
+          ? { mapsLink: optionalClassifiedLiteral(normalizeGoogleMapsLink(fields.mapsLink), { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' }) }
+          : {}),
+        ...(fields.coordinates ? { coordinates: fields.coordinates } : {}),
+      },
+    } : {}),
+    ...(fields.attachments?.length ? {
+      attachments: fields.attachments,
+    } : {}),
     typeDetails: populatedDetailKeys.length > 0
       ? rawDetails as unknown as Property['typeDetails']
       : undefined,

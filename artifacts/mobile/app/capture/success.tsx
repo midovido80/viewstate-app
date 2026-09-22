@@ -59,15 +59,6 @@ export default function SuccessScreen() {
           testID="btn-view-property"
         />
       ) : null}
-      {propertyCoreId ? (
-        <Button
-          title={t('summary.view_properties')}
-          onPress={() => replaceOnce('/(tabs)/properties')}
-          variant="outline"
-          size="large"
-          testID="btn-view-properties"
-        />
-      ) : null}
       <Button
         title={t('summary.done')}
         onPress={() => replaceOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/')}

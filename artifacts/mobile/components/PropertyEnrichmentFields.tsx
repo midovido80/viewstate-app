@@ -26,13 +26,6 @@ function normalizeDigits(value: string): string {
     .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
 }
 
-function safeCountInput(value: string): string | null {
-  const normalized = normalizeDigits(value);
-  if (!/^\d*$/.test(normalized)) return null;
-  if (normalized === '') return normalized;
-  return Number.isSafeInteger(Number(normalized)) ? normalized : null;
-}
-
 function safeDecimalInput(value: string): string | null {
   const normalized = normalizeDigits(value)
     .replace(/[٫,]/g, '.');
@@ -61,11 +54,26 @@ export function PropertyEnrichmentFields({
   const definitions = applicableDefinitions.filter(definition =>
     definition.field !== 'floorUse'
     && definition.group !== 'amenity'
+    && definition.field !== 'plotAreaSquareMeters'
+    && definition.field !== 'builtUpAreaSquareMeters'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
   const ordered = propertyType === 'floor'
     ? [getApplicablePropertyFormFields(propertyType).find(item => item.field === 'floorUse')!, ...definitions]
-    : definitions;
+    : propertyType === 'apartment'
+      ? [...definitions].sort((left, right) => {
+        const order: PropertyDetailField[] = [
+          'apartmentSubtype',
+          'bedroomCount',
+          'bathroomCount',
+          'floorNumber',
+          'parkingSpaceCount',
+          'livingRoomCount',
+          'furnishing',
+        ];
+        return order.indexOf(left.field) - order.indexOf(right.field);
+      })
+      : definitions;
 
   function renderFieldContent(definition: PropertyFormFieldDefinition) {
     const field = definition.field;
@@ -171,54 +179,6 @@ export function PropertyEnrichmentFields({
       );
     }
 
-    if (definition.control === 'count') {
-      return (
-        <View style={[styles.stepperWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <TouchableOpacity
-            style={[styles.stepperButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => {
-              const current = Number.parseInt(values[field] || '0', 10);
-              const next = Number.isNaN(current) ? 0 : Math.max(0, current - 1);
-              onChange(field, String(next));
-            }}
-            testID={`enrich-${field}-minus`}
-            accessibilityRole="button"
-            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} −`}
-          >
-            <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>-</Text>
-          </TouchableOpacity>
-
-          <TextInput
-            value={values[field] ?? ''}
-            onChangeText={value => {
-              const normalized = safeCountInput(value);
-              if (normalized !== null) onChange(field, normalized);
-            }}
-            keyboardType="number-pad"
-            style={[styles.stepperInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-            testID={`enrich-field-${field}`}
-            accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
-          />
-
-          <TouchableOpacity
-            style={[styles.stepperButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => {
-              const current = Number.parseInt(values[field] || '0', 10);
-              const next = Number.isNaN(current)
-                ? 1
-                : Number.isSafeInteger(current + 1) ? current + 1 : current;
-              onChange(field, String(next));
-            }}
-            testID={`enrich-${field}-plus`}
-            accessibilityRole="button"
-            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} +`}
-          >
-            <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>+</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
     return (
       <TextInput
         value={values[field] ?? ''}
@@ -304,29 +264,4 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 14,
   },
-  stepperWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepperButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperButtonText: {
-    fontSize: 22,
-  },
-  stepperInput: {
-    flex: 1,
-    height: 46,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    textAlign: 'center',
-    fontSize: 16,
-  }
 });
