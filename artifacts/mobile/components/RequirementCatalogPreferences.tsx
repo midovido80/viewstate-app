@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type CatalogPreference, type FloorUse, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
+import { ChoiceChip } from '@/components/ChoiceChip';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { getRequirementCatalogFields } from '@/services/requirementFieldMap';
@@ -16,12 +17,14 @@ type Props = {
   values: readonly CatalogPreference[];
   onChange: (values: readonly CatalogPreference[]) => void;
   onInvalidChange?: (field: PropertyDetailField, invalid: boolean) => void;
+  fields?: readonly PropertyDetailField[];
 };
 
-export function RequirementCatalogPreferences({ scopeKey, propertyType, floorUse, values, onChange, onInvalidChange }: Props) {
+export function RequirementCatalogPreferences({ scopeKey, propertyType, floorUse, values, onChange, onInvalidChange, fields }: Props) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
-  const definitions = getRequirementCatalogFields(propertyType, floorUse);
+  const applicableDefinitions = getRequirementCatalogFields(propertyType, floorUse);
+  const definitions = fields ? fields.flatMap(field => applicableDefinitions.filter(definition => definition.field === field)) : applicableDefinitions;
   const byField = new Map(values.map(value => [value.field, value]));
   const [modes, setModes] = useState<Record<string, 'exact' | 'minimum' | 'maximum'>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -42,10 +45,15 @@ export function RequirementCatalogPreferences({ scopeKey, propertyType, floorUse
            <NumericQuickPick scopeKey={`${scopeKey}:catalog:${field}`} label={label} value={current?.kind === 'number' ? String(current.value) : ''} onChangeText={value => { if (!value.trim()) { clear(field); return; } update(field, { field, kind: 'number', comparison: current?.kind === 'number' ? current.comparison : modes[field] ?? 'exact', value: Number(value) }); }} onPendingValidityChange={(_, invalid) => onInvalidChange?.(field, invalid)} testID={`requirement-preference-${field}`} />
           <TouchableOpacity onPress={() => clear(field)}><Text style={{ color: colors.mutedForeground }}>{language === 'ar' ? 'غير مهم' : 'Not important'}</Text></TouchableOpacity>
         </View>;
-        if (isBoolean) return <View key={field} style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text>
-          <View style={styles.row}>{[true, false].map(value => <TouchableOpacity key={String(value)} onPress={() => update(field, { field, kind: 'feature', value })} style={[styles.chip, { borderColor: current?.kind === 'feature' && current.value === value ? colors.primary : colors.border }]}><Text style={{ color: colors.foreground }}>{value ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No')}</Text></TouchableOpacity>)}<TouchableOpacity onPress={() => clear(field)}><Text style={{ color: colors.mutedForeground }}>{language === 'ar' ? 'غير مهم' : 'Not important'}</Text></TouchableOpacity></View>
-        </View>;
+        if (isBoolean) {
+          const selected = current?.kind === 'feature';
+          const forbidden = selected && !current.value;
+          return <ChoiceChip key={field} label={`${selected ? '✓ ' : ''}${label}${forbidden ? (language === 'ar' ? ' · يجب ألا تتوفر' : ' · Must not have') : ''}`} selected={selected} onPress={() => {
+            if (!selected) update(field, { field, kind: 'feature', value: true });
+            else if (!forbidden) update(field, { field, kind: 'feature', value: false });
+            else clear(field);
+          }} testID={`requirement-preference-${field}`} role="checkbox" />;
+        }
         if (isChoice) {
           const options = field === 'apartmentSubtype' ? APARTMENT_SUBTYPES : field === 'furnishing' ? FURNISHING_VALUES : field === 'intendedUse' ? INTENDED_USE_VALUES : COMMERCIAL_ACTIVITY_VALUES;
           return <View key={field} style={styles.field}><Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{label}</Text><View style={styles.row}>{options.map(option => <TouchableOpacity key={option} onPress={() => update(field, { field, kind: 'choice', value: option })} style={[styles.chip, { borderColor: current?.kind === 'choice' && current.value === option ? colors.primary : colors.border }]}><Text style={{ color: colors.foreground }}>{field === 'furnishing' ? t(`enrich.furnishing.${option}` as any) : field === 'apartmentSubtype' ? t(`enrich.apartment_subtype.${option}` as any) : field === 'intendedUse' ? (language === 'ar' ? ({ office: 'مكتب', retail: 'تجزئة', warehouse: 'مستودع', residential: 'سكني' } as Record<string, string>)[option] : option) : (language === 'ar' ? ({ retail: 'تجزئة', office: 'مكتب', restaurant: 'مطعم', clinic: 'عيادة', warehouse: 'مستودع' } as Record<string, string>)[option] : option)}</Text></TouchableOpacity>)}<TouchableOpacity onPress={() => clear(field)}><Text style={{ color: colors.mutedForeground }}>{language === 'ar' ? 'غير مهم' : 'Not important'}</Text></TouchableOpacity></View></View>;

@@ -26,6 +26,18 @@ export function getRequirementCatalogFields(propertyType: PropertyType, floorUse
     .filter(definition => definition.field !== 'floorUse' && isRequirementCatalogFieldAllowed(definition.field));
 }
 
+/** Divide approved controls by meaning, never by their persistence location. */
+export function getRequirementPresentationFields(propertyType: PropertyType, floorUse?: FloorUse) {
+  const definitions = getRequirementCatalogFields(propertyType, floorUse);
+  const leading = (['apartmentSubtype', 'furnishing'] as const)
+    .filter(field => definitions.some(definition => definition.field === field));
+  return {
+    leading,
+    specifications: definitions.filter(definition => definition.group !== 'amenity' && !leading.some(field => field === definition.field)).map(definition => definition.field),
+    amenities: definitions.filter(definition => definition.group === 'amenity').map(definition => definition.field),
+  };
+}
+
 export const REQUIREMENT_FIELD_SECTIONS = {
   location: ['preferredAreaIds', 'preferredAreaMode'],
   core: ['bedroomsMinimum', 'masterBedroomsMinimum', 'bathroomsMinimum', 'livingRoomMinimum', 'parkingSpacesMinimum', 'floorNumber', 'requiredAreaSquareMeters'],

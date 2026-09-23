@@ -26,3 +26,9 @@ For multi-step Expo wizards, verify category decisions at the step where they ar
 **Why:** A Floor Requirement could advance without choosing Residential or Commercial; later validation would reject it, but the intervening Core page showed neither set of category-specific controls. Source assertions had passed because the controls existed inside a conditional branch.
 
 **How to apply:** At mobile viewport, test unselected choices, each branch, transition Cancel/Confirm, and the next rendered step through normal navigation. A valid final validator does not guarantee a usable intermediate flow.
+
+Do not assume that a new browser tester sees people or Requirements created in another browser context. If the local People screen is empty, create a uniquely named Seeker through the normal Add Person flow before testing Requirement creation.
+
+**Why:** A UX-2 browser pass initially stopped at an empty People screen even though earlier passes had saved Seeker records. Reusing the presumed fixture would have hidden the fact that this browser had its own local state.
+
+**How to apply:** Let the tester seed and record its own Person and Requirement IDs through visible UI, then reopen those exact records to verify persistence and edit identity.
