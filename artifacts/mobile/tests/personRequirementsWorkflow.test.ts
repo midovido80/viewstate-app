@@ -16,14 +16,14 @@ const basic = {
   notes: '  literal broker note  ',
 };
 
-test('Person workflow builds valid Rent and Buy M1 requirements without rental period', () => {
+test('Person workflow defaults Rent to monthly and excludes cadence from Buy', () => {
   const rent = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', bedroomsMinimum: 2, occupancy: 'any' });
   assert.equal(rent.ok, true);
   if (!rent.ok) return;
   assert.equal(rent.value.seekerId, SEEKER);
   assert.deepEqual(rent.value.preferredAreaIds, ['salmiya', 'midan_hawalli']);
   assert.equal(rent.value.notes, '  literal broker note  ');
-  assert.equal((rent.value as unknown as Record<string, unknown>).rentalPeriodId, undefined);
+  assert.equal((rent.value as unknown as Record<string, unknown>).rentalPeriodId, 'monthly');
   assert.equal(rent.value.purpose === 'rent' && rent.value.occupancy, 'any');
 
   const buy = buildPersonRequirement('22222222-2222-4222-8222-222222222222', SEEKER, { ...basic, purpose: 'buy', bedroomsMinimum: 9, occupancy: 'family', swimmingPool: true });
@@ -31,6 +31,16 @@ test('Person workflow builds valid Rent and Buy M1 requirements without rental p
   if (!buy.ok) return;
   assert.equal(buy.value.purpose, 'buy');
   for (const field of ['bedroomsMinimum', 'bathroomsMinimum', 'occupancy', 'swimmingPool', 'gym', 'seaView', 'centralAC', 'rentalPeriodId']) assert.equal((buy.value as unknown as Record<string, unknown>)[field], undefined);
+});
+
+test('Yearly Rent cadence survives edit round-trip without entering Buy', () => {
+  const yearly = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', rentalPeriodId: 'yearly' });
+  assert.equal(yearly.ok, true);
+  if (!yearly.ok) return;
+  assert.equal(formValuesFromRequirement(yearly.value).rentalPeriodId, 'yearly');
+  const buy = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'buy', rentalPeriodId: 'yearly' });
+  assert.equal(buy.ok, true);
+  if (buy.ok) assert.equal('rentalPeriodId' in buy.value, false);
 });
 
 test('missing occupancy and services differ from explicit Any and false', () => {

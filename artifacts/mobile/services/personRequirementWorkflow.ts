@@ -22,6 +22,7 @@ export interface RequirementFormValues {
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
   readonly occupancy?: RequirementOccupancy;
+  readonly rentalPeriodId?: 'monthly' | 'yearly';
   readonly swimmingPool?: boolean;
   readonly gym?: boolean;
   readonly seaView?: boolean;
@@ -85,6 +86,7 @@ export function buildPersonRequirement(
     ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
     ...(values.bathroomsMinimum !== undefined ? { bathroomsMinimum: values.bathroomsMinimum } : {}),
     ...(values.occupancy !== undefined ? { occupancy: values.occupancy } : {}),
+    rentalPeriodId: values.rentalPeriodId ?? 'monthly',
     ...(values.swimmingPool !== undefined ? { swimmingPool: values.swimmingPool } : {}),
     ...(values.gym !== undefined ? { gym: values.gym } : {}),
     ...(values.seaView !== undefined ? { seaView: values.seaView } : {}),
@@ -113,6 +115,7 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
       : {}),
     ...(requirement.floorUse !== undefined ? { floorUse: requirement.floorUse } : {}),
     ...(requirement.purpose === 'rent' ? {
+      rentalPeriodId: requirement.rentalPeriodId ?? 'monthly',
       ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
       ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),
       ...(requirement.occupancy !== undefined ? { occupancy: requirement.occupancy } : {}),

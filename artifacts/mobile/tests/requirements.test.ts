@@ -182,14 +182,29 @@ test('SeekerRequirement validates canonical structure without Matching semantics
     ));
   }
 
-  const rentalPeriod = validateSeekerRequirement({
+  const yearly = normalizeSeekerRequirement({
     ...rent,
+    rentalPeriodId: 'yearly',
+  });
+  assert.equal(yearly.ok, true);
+  if (yearly.ok && yearly.value.purpose === 'rent') {
+    assert.equal(yearly.value.rentalPeriodId, 'yearly');
+  }
+
+  const invalidRentalPeriod = validateSeekerRequirement({
+    ...rent,
+    rentalPeriodId: 'weekly',
+  });
+  assert.equal(invalidRentalPeriod.ok, false);
+
+  const buyWithRentalPeriod = validateSeekerRequirement({
+    ...buyRequirement(),
     rentalPeriodId: 'monthly',
   });
-  assert.equal(rentalPeriod.ok, false);
-  if (!rentalPeriod.ok) {
-    assert.ok(rentalPeriod.issues.some(issue =>
-      issue.code === 'invalid_requirement'
+  assert.equal(buyWithRentalPeriod.ok, false);
+  if (!buyWithRentalPeriod.ok) {
+    assert.ok(buyWithRentalPeriod.issues.some(issue =>
+      issue.code === 'buy_rent_field_not_allowed'
       && issue.path.join('.') === 'rentalPeriodId'
     ));
   }

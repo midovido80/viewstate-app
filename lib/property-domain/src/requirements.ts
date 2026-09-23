@@ -18,6 +18,9 @@ export type RequirementPurpose = typeof REQUIREMENT_PURPOSES[number];
 export const REQUIREMENT_OCCUPANCIES = ["family", "bachelor", "any"] as const;
 export type RequirementOccupancy = typeof REQUIREMENT_OCCUPANCIES[number];
 
+export const RENTAL_PERIOD_IDS = ["monthly", "yearly"] as const;
+export type RequirementRentalPeriodId = typeof RENTAL_PERIOD_IDS[number];
+
 export interface SeekerRequirementBudget {
   readonly minimum: number;
   readonly maximum: number;
@@ -58,6 +61,7 @@ export interface RentSeekerRequirement extends SeekerRequirementBase {
   readonly purpose: "rent";
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
+  readonly rentalPeriodId?: RequirementRentalPeriodId;
   readonly occupancy?: RequirementOccupancy;
   readonly swimmingPool?: boolean;
   readonly gym?: boolean;
@@ -113,6 +117,7 @@ const UUID_V4_PATTERN =
 const RENT_FIELDS = [
   "bedroomsMinimum",
   "bathroomsMinimum",
+  "rentalPeriodId",
   "occupancy",
   "swimmingPool",
   "gym",
@@ -217,6 +222,10 @@ export function isRequirementPurpose(value: unknown): value is RequirementPurpos
 
 export function isRequirementOccupancy(value: unknown): value is RequirementOccupancy {
   return REQUIREMENT_OCCUPANCIES.includes(value as RequirementOccupancy);
+}
+
+export function isRentalPeriodId(value: unknown): value is RequirementRentalPeriodId {
+  return RENTAL_PERIOD_IDS.includes(value as RequirementRentalPeriodId);
 }
 
 export function isRequirementUuidV4(value: unknown): value is string {
@@ -487,6 +496,13 @@ export function validateSeekerRequirement(
           `${field} must be a non-negative integer when provided.`,
         ));
       }
+    }
+    if (value.rentalPeriodId !== undefined && !isRentalPeriodId(value.rentalPeriodId)) {
+      issues.push(issue(
+        "invalid_rent_field",
+        ["rentalPeriodId"],
+        "rentalPeriodId must be monthly or yearly when provided.",
+      ));
     }
     if (value.occupancy !== undefined && !isRequirementOccupancy(value.occupancy)) {
       issues.push(issue("invalid_occupancy", ["occupancy"], "Occupancy is not approved."));
