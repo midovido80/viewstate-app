@@ -193,13 +193,12 @@ test('SOURCE ASSERTION: Property applies quick picks only to the three authorize
 
 test('SOURCE ASSERTION: Requirement keeps ambiguous surfaces on current inputs and Buy without Rent details', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  assert.match(source, /isRequirementNumericQuickPickSurface\(purpose, propertyType\)/);
-  assert.match(source, /requirement:new:owner:/);
-  assert.match(source, /quickPickValueScopeKey === recordScopeKey \? bedrooms : ''/);
-  assert.match(source, /quickPickValueScopeKey === recordScopeKey \? bathrooms : ''/);
-  assert.match(source, /hasPendingInvalidQuickPickForScope\(quickPickValidation, recordScopeKey\)/);
-  assert.match(source, /scopeKey=\{recordScopeKey\}/);
-  assert.match(source, /requirements\.buy_no_rent_details/);
-  assert.match(source, /<TextInput value=\{bedrooms\}/);
-  assert.match(source, /<TextInput value=\{bathrooms\}/);
+  assert.match(source, /const scopeKey = editing \? `requirement:\$\{requirementId\}` : `requirement:new:\$\{ownerFromRoute/);
+  assert.match(source, /const coreApplicable = isResidential\(propertyType, floorUse\)/);
+  assert.match(source, /scopeKey=\{scopeKey\} label=\{label\('Bedrooms'/);
+  assert.match(source, /scopeKey=\{scopeKey\} label=\{label\('Bathrooms'/);
+  assert.match(source, /parseOptionalRequirementNumber\(value\)\.ok/);
+  assert.match(source, /\.\.\.\(purpose === 'rent' \? \{ rentalPeriodId: cadence/);
+  const quickPick = await readFile('components/NumericQuickPick.tsx', 'utf8');
+  assert.match(quickPick, /onChangeText\(transition\.invalid \? transition\.pending : transition\.committedValue\)/);
 });

@@ -21,6 +21,7 @@ export interface NumericQuickPickProps {
   readonly onChangeText: (value: string) => void;
   readonly onPendingValidityChange?: (scopeKey: string, invalid: boolean) => void;
   readonly testID: string;
+  readonly quickPickValues?: readonly number[];
 }
 
 export function NumericQuickPick({
@@ -30,6 +31,7 @@ export function NumericQuickPick({
   onChangeText,
   onPendingValidityChange,
   testID,
+  quickPickValues = NUMERIC_QUICK_PICK_VALUES,
 }: NumericQuickPickProps) {
   const colors = useColors();
   const { language, isRTL, fonts } = useI18n();
@@ -67,7 +69,7 @@ export function NumericQuickPick({
         {label}
       </Text>
       <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        {NUMERIC_QUICK_PICK_VALUES.map(option => (
+        {quickPickValues.map(option => (
           <ChoiceChip
             key={option}
             label={String(option)}
@@ -129,7 +131,11 @@ export function NumericQuickPick({
                 ? { ...current, pending: transition.pending, invalid: transition.invalid }
                 : current);
               setValidity(transition.invalid);
-              if (!transition.invalid) onChangeText(transition.committedValue);
+              // Keep the pending text in the owning draft as well. This lets
+              // Review/Save validate the same candidate instead of silently
+              // retaining a previous valid value while an invalid exact entry
+              // is visible.
+              onChangeText(transition.invalid ? transition.pending : transition.committedValue);
             }}
             keyboardType="number-pad"
             accessibilityLabel={exactInputLabel}

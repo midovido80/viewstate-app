@@ -390,11 +390,18 @@ export default function PersonDetailScreen() {
             </View>
             {!person.classifications.includes('seeker') ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.seeker_required')}</Text> : requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
               <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}</Text>
-              <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.preferredAreaIds.map(areaId => { const area = getAreaById(areaId); return area ? (language === 'ar' ? area.ar : area.en) : areaId; }).join(' → ')}</Text>
+              <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
+                {requirement.preferredAreaMode === 'all_kuwait'
+                  ? (language === 'ar' ? 'كل مناطق الكويت' : 'All Kuwait')
+                  : requirement.preferredAreaIds.map(areaId => {
+                    const area = getAreaById(areaId);
+                    return area ? (language === 'ar' ? area.ar : area.en) : (language === 'ar' ? 'منطقة غير معروفة' : 'Unknown area');
+                  }).join(' → ')}
+              </Text>
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
-              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} style={styles.flex} testID={`requirement-view-${requirement.id}`}/><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.flex} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.flex} testID={`requirement-edit-${requirement.id}`}/></View>
+              <View style={[styles.secondaryActions, styles.requirementActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} style={styles.requirementAction} testID={`requirement-view-${requirement.id}`}/><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.requirementAction} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.requirementAction} testID={`requirement-edit-${requirement.id}`}/></View>
             </View>)}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
@@ -542,6 +549,8 @@ const styles = StyleSheet.create({
   choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   actions: { gap: 10 },
   secondaryActions: { gap: 10 },
+  requirementActions: { flexWrap: 'wrap' },
+  requirementAction: { flexGrow: 1, flexBasis: 120 },
   flex: { flex: 1 },
   ltrText: { writingDirection: 'ltr', textAlign: 'left' },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },

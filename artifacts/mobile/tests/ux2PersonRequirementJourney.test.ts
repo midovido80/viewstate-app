@@ -28,10 +28,9 @@ test('UX-2 Rent preferences preserve zero, false, absence, and exact/custom valu
   const result = buildPersonRequirement(rentId, seekerId, {
     purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
     minimumBudget: 0, maximumBudget: 900, currencyCode: 'KWD', notes: '',
-    bedroomsMinimum: 0, swimmingPool: false,
+    bedroomsMinimum: 0, swimmingPool: false, preferredAmenityExclusions: ['balcony'],
     catalogPreferences: [
-      { field: 'bedroomCount', kind: 'number', comparison: 'exact', value: 7 },
-      { field: 'hasBalcony', kind: 'feature', value: false },
+      { field: 'floorNumber', kind: 'number', comparison: 'exact', value: 7 },
     ],
   });
   assert.equal(result.ok, true);
@@ -40,6 +39,7 @@ test('UX-2 Rent preferences preserve zero, false, absence, and exact/custom valu
   assert.equal(restored.bedroomsMinimum, 0);
   assert.equal(restored.swimmingPool, false);
   assert.equal(restored.gym, undefined);
+  assert.deepEqual(restored.preferredAmenityExclusions, ['balcony']);
   assert.equal(restored.catalogPreferences?.[0].kind, 'number');
   assert.deepEqual(restored.catalogPreferences, result.value.catalogPreferences);
   assert.equal(result.value.id, rentId);
@@ -58,8 +58,7 @@ test('UX-2 Buy and Floor preferences persist under canonical applicability witho
     preferredAreaIds: ['hawalli'], minimumBudget: 1, maximumBudget: 100000,
     currencyCode: 'KWD', notes: 'office preference',
     catalogPreferences: [
-      { field: 'frontageWidthMeters', kind: 'number', comparison: 'minimum', value: 12.5 },
-      { field: 'commercialActivity', kind: 'choice', value: 'Retail' },
+      { field: 'commercialActivity', kind: 'choice', value: 'retail' },
     ],
   });
   assert.equal(buy.ok, true);

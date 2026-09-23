@@ -20,3 +20,9 @@ When adding a new component file while Expo is already running, Metro may keep r
 **Why:** During a live Requirement UI addition, Metro retained an unresolved import for a newly created component until the existing Expo workflow restarted.
 
 **How to apply:** Check workflow logs before treating a blank page as a runtime or routing failure. Restart only when logs identify this concrete stale-resolution case, then confirm the root preview renders.
+
+For multi-step Expo wizards, verify category decisions at the step where they are made, then inspect the next step in the real browser before relying on final candidate validation or source assertions.
+
+**Why:** A Floor Requirement could advance without choosing Residential or Commercial; later validation would reject it, but the intervening Core page showed neither set of category-specific controls. Source assertions had passed because the controls existed inside a conditional branch.
+
+**How to apply:** At mobile viewport, test unselected choices, each branch, transition Cancel/Confirm, and the next rendered step through normal navigation. A valid final validator does not guarantee a usable intermediate flow.

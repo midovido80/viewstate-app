@@ -230,13 +230,27 @@ export class SQLiteRequirementStore implements RequirementStore {
   ): Promise<boolean> {
     if (!this.requirementsEnabled) throw new Error('REQUIREMENT_FEATURE_DISABLED');
     if (expected.id !== replacement.id) return false;
+    const normalizedExpected = normalizeForStorage(expected);
     const normalized = normalizeForStorage(replacement);
     let updated = false;
     await this.mutations.enqueue(async () => {
       await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      const db = this.database();
+      const row = await db.getFirstAsync<{ data: string }>(
+        `SELECT data FROM ${NATIVE_REQUIREMENTS_TABLE} WHERE id = ?`,
+        [normalized.id],
+      );
+      if (!row) return;
+      let matches = false;
+      try {
+        matches = JSON.stringify(parseRequirement(row.data)) === JSON.stringify(normalizedExpected);
+      } catch {
+        return;
+      }
+      if (!matches) return;
       const result = await this.database().runAsync(
         `UPDATE ${NATIVE_REQUIREMENTS_TABLE} SET data = ? WHERE id = ? AND data = ?`,
-        [JSON.stringify(normalized), normalized.id, JSON.stringify(expected)],
+        [JSON.stringify(normalized), normalized.id, row.data],
       );
       updated = resultChanges(result) === 1;
     });
@@ -366,6 +380,7 @@ export class WebRequirementStore implements RequirementStore {
   ): Promise<boolean> {
     if (!this.requirementsEnabled) throw new Error('REQUIREMENT_FEATURE_DISABLED');
     if (expected.id !== replacement.id) return false;
+    const normalizedExpected = normalizeForStorage(expected);
     const normalized = normalizeForStorage(replacement);
     return this.withMutationLock(async () => {
       await assertSeekerOwnership(this.personStore, normalized.seekerId);
@@ -377,7 +392,7 @@ export class WebRequirementStore implements RequirementStore {
         .filter(item => item.requirement.id === expected.id);
       if (
         matching.length !== 1
-        || JSON.stringify(matching[0].requirement) !== JSON.stringify(expected)
+        || JSON.stringify(matching[0].requirement) !== JSON.stringify(normalizedExpected)
       ) return false;
       all[matching[0].index] = normalized;
       await this.storage.setItem(WEB_REQUIREMENTS_KEY, JSON.stringify(all));

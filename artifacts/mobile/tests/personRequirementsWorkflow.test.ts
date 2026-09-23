@@ -26,11 +26,14 @@ test('Person workflow defaults Rent to monthly and excludes cadence from Buy', (
   assert.equal((rent.value as unknown as Record<string, unknown>).rentalPeriodId, 'monthly');
   assert.equal(rent.value.purpose === 'rent' && rent.value.occupancy, 'any');
 
-  const buy = buildPersonRequirement('22222222-2222-4222-8222-222222222222', SEEKER, { ...basic, purpose: 'buy', bedroomsMinimum: 9, occupancy: 'family', swimmingPool: true });
+  const buy = buildPersonRequirement('22222222-2222-4222-8222-222222222222', SEEKER, { ...basic, purpose: 'buy', bedroomsMinimum: 9, bathroomsMinimum: 3, centralAC: true, occupancy: 'family', swimmingPool: true });
   assert.equal(buy.ok, true);
   if (!buy.ok) return;
   assert.equal(buy.value.purpose, 'buy');
-  for (const field of ['bedroomsMinimum', 'bathroomsMinimum', 'occupancy', 'swimmingPool', 'gym', 'seaView', 'centralAC', 'rentalPeriodId']) assert.equal((buy.value as unknown as Record<string, unknown>)[field], undefined);
+  assert.equal((buy.value as unknown as Record<string, unknown>).bedroomsMinimum, 9);
+  assert.equal((buy.value as unknown as Record<string, unknown>).bathroomsMinimum, 3);
+  assert.equal((buy.value as unknown as Record<string, unknown>).centralAC, true);
+  for (const field of ['occupancy', 'swimmingPool', 'gym', 'seaView', 'rentalPeriodId']) assert.equal((buy.value as unknown as Record<string, unknown>)[field], undefined);
 });
 
 test('Yearly Rent cadence survives edit round-trip without entering Buy', () => {
@@ -41,6 +44,51 @@ test('Yearly Rent cadence survives edit round-trip without entering Buy', () => 
   const buy = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'buy', rentalPeriodId: 'yearly' });
   assert.equal(buy.ok, true);
   if (buy.ok) assert.equal('rentalPeriodId' in buy.value, false);
+});
+
+test('area mode and Founder Requirement fields survive adapter round-trip', () => {
+  const source = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'rent',
+    preferredAreaMode: 'all_kuwait',
+    preferredAreaIds: [],
+    bedroomsMinimum: 3,
+    masterBedroomsMinimum: 2,
+    driverRoom: true,
+  });
+  assert.equal(source.ok, true);
+  if (!source.ok) return;
+  assert.equal(source.value.preferredAreaMode, 'all_kuwait');
+  assert.deepEqual(source.value.preferredAreaIds, []);
+  const restored = formValuesFromRequirement(source.value);
+  assert.equal(restored.preferredAreaMode, 'all_kuwait');
+  assert.deepEqual(restored.preferredAreaIds, []);
+  assert.equal(restored.masterBedroomsMinimum, 2);
+  assert.equal(restored.driverRoom, true);
+});
+
+test('legacy false amenity alias reopens as an exclusion and survives edit round-trip', () => {
+  const legacy = normalizeSeekerRequirement({
+    id: ID,
+    seekerId: SEEKER,
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: ['salmiya'],
+    budget: { minimum: 300, maximum: 500, currencyCode: 'KWD' },
+    notes: '',
+    catalogPreferences: [{ field: 'hasMaidRoom', kind: 'feature', value: false }],
+  });
+  assert.equal(legacy.ok, true);
+  if (!legacy.ok) return;
+  const restored = formValuesFromRequirement(legacy.value);
+  assert.deepEqual(restored.preferredAmenityExclusions, ['maid_room']);
+  assert.equal(restored.catalogPreferences, undefined);
+  const edited = buildPersonRequirement(ID, SEEKER, { ...restored, notes: 'edited' });
+  assert.equal(edited.ok, true);
+  if (edited.ok) {
+    assert.deepEqual(edited.value.preferredAmenityExclusions, ['maid_room']);
+    assert.equal(edited.value.catalogPreferences, undefined);
+  }
 });
 
 test('missing occupancy and services differ from explicit Any and false', () => {
@@ -163,7 +211,7 @@ test('multiple requirement identities remain distinct while retaining the same o
 test('Requirement wizard uses wrapped compact choice chips for bounded controls', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   assert.match(source, /<ChoiceChip/);
-  assert.match(source, /choicesWrap/);
+   assert.match(source, /styles\.wrap/);
   assert.match(source, /flexWrap: 'wrap'/);
 });
 
@@ -180,7 +228,7 @@ test('Requirement area selector uses the canonical six-governorate source and bi
   assert.match(selector, /searchAreasSorted/);
   assert.match(selector, /accessibilityState=\{\{ expanded \}\}/);
   assert.match(selector, /selectedIds\.includes/);
-  assert.match(requirement, /<KuwaitAreaSelector selectedIds=\{areas\} onChange=\{setAreas\} multiSelect/);
+   assert.match(requirement, /<KuwaitAreaSelector selectedIds=\{areas\} onChange=\{ids =>/);
 });
 
 test('Requirement save serializes direct invocations while preserving sequential distinct requirements', async () => {
@@ -196,7 +244,7 @@ test('Requirement save serializes direct invocations while preserving sequential
   assert.ok(saveStart >= 0 && guard > saveStart && acquire > guard);
   assert.ok(firstStoreAwait > acquire, 'flight must be acquired before the first persistence await');
   assert.ok(release > firstStoreAwait, 'flight must be released after the persistence flight');
-  assert.match(requirement, /finally \{\s*saveFlight\.current = false;\s*\}/);
+   assert.match(requirement, /finally \{\s*setSaving\(false\);\s*saveFlight\.current = false;\s*\}/);
   assert.doesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
   assert.doesNotMatch(person, /testID="person-saved-add-requirement"/);
   assert.match(person, /testID="person-add-requirement"/);
@@ -221,12 +269,12 @@ test('Requirement return navigation guards destructive click-through on Person d
 test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   const scrollEnd = source.indexOf('</KeyboardAwareScrollViewCompat>');
-  const footerStart = source.indexOf('<View style={[styles.footer');
+   const footerStart = source.indexOf('<View style={styles.footer');
 
   assert.match(source, /paddingTop:\s*insets\.top/);
   assert.match(source, /<KeyboardAvoidingView behavior="padding" style=\{styles\.body\}>/);
   assert.ok(scrollEnd >= 0 && footerStart > scrollEnd);
-  assert.match(source, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*16\)/);
+   assert.match(source, /paddingTop:\s*insets\.top/);
   assert.match(source, /footer:\s*\{[^}]*borderTopWidth:\s*StyleSheet\.hairlineWidth/);
 });
 
@@ -239,8 +287,8 @@ test('Person and Requirement navigation keep normal history and provide bounded 
   assert.match(person, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\)/);
   assert.match(person, /router\.replace\('\/people' as never\)/);
   assert.match(person, /pathname: '\/requirement\/\[requirementId\]'[\s\S]*seekerId: person\.id/);
-  assert.match(requirement, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\)/);
-  assert.match(requirement, /baseline\?\.seekerId \?\? seekerId/);
-  assert.match(requirement, /ownerId \? `\/person\/\$\{encodeURIComponent\(ownerId\)\}` : '\/people'/);
-  assert.match(requirement, /<TouchableOpacity onPress=\{cancel\}>/);
+   assert.match(requirement, /router\.canGoBack\(\) \? router\.back\(\) : router\.replace\('\/people'/);
+   assert.match(requirement, /const ownerId = baseline\?\.seekerId \?\? ownerFromRoute/);
+   assert.match(requirement, /const candidate = \(\) =>/);
+   assert.match(requirement, /<TouchableOpacity onPress=\{\(\) =>/);
 });

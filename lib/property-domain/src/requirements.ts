@@ -20,6 +20,8 @@ export type RequirementOccupancy = typeof REQUIREMENT_OCCUPANCIES[number];
 
 export const RENTAL_PERIOD_IDS = ["monthly", "yearly"] as const;
 export type RequirementRentalPeriodId = typeof RENTAL_PERIOD_IDS[number];
+export const REQUIREMENT_AREA_MODES = ["specific_areas", "all_kuwait"] as const;
+export type RequirementAreaMode = typeof REQUIREMENT_AREA_MODES[number];
 
 export interface SeekerRequirementBudget {
   readonly minimum: number;
@@ -50,23 +52,27 @@ export interface SeekerRequirementBase {
   readonly seekerId: string;
   readonly propertyType: PropertyType;
   readonly preferredAreaIds: readonly LocationAreaId[];
+  readonly preferredAreaMode?: RequirementAreaMode;
   readonly budget: SeekerRequirementBudget;
   readonly notes: string;
   readonly preferredAmenities?: readonly ResidentialAmenity[];
+  readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
   readonly catalogPreferences?: readonly CatalogPreference[];
   readonly floorUse?: FloorUse;
+  readonly masterBedroomsMinimum?: number;
+  readonly driverRoom?: boolean;
+  readonly bedroomsMinimum?: number;
+  readonly bathroomsMinimum?: number;
+  readonly centralAC?: boolean;
 }
 
 export interface RentSeekerRequirement extends SeekerRequirementBase {
   readonly purpose: "rent";
-  readonly bedroomsMinimum?: number;
-  readonly bathroomsMinimum?: number;
   readonly rentalPeriodId?: RequirementRentalPeriodId;
   readonly occupancy?: RequirementOccupancy;
   readonly swimmingPool?: boolean;
   readonly gym?: boolean;
   readonly seaView?: boolean;
-  readonly centralAC?: boolean;
 }
 
 export interface BuySeekerRequirement extends SeekerRequirementBase {
@@ -109,21 +115,24 @@ export type RequirementValidationResult<T> =
 
 export interface RequirementValidationOptions {
   readonly isCanonicalAreaId?: (id: string) => boolean;
+  /** Read-only compatibility for pre-correction rows; new candidates stay strict. */
+  readonly allowLegacyCatalogAliases?: boolean;
+  /** Read compatibility only; new candidates must choose an explicit scope. */
+  readonly allowLegacyEmptyAreaScope?: boolean;
 }
 
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const RENT_FIELDS = [
-  "bedroomsMinimum",
-  "bathroomsMinimum",
   "rentalPeriodId",
   "occupancy",
   "swimmingPool",
   "gym",
   "seaView",
-  "centralAC",
 ] as const;
+const COMMON_SPEC_FIELDS = ["bedroomsMinimum", "bathroomsMinimum", "centralAC"] as const;
+const REQUIREMENT_TYPED_FIELDS = ["masterBedroomsMinimum", "driverRoom"] as const;
 
 const REQUIREMENT_FIELDS = new Set([
   "id",
@@ -131,38 +140,60 @@ const REQUIREMENT_FIELDS = new Set([
   "purpose",
   "propertyType",
   "preferredAreaIds",
+  "preferredAreaMode",
   "budget",
   "notes",
   "preferredAmenities",
+  "preferredAmenityExclusions",
   "catalogPreferences",
   "floorUse",
+  ...REQUIREMENT_TYPED_FIELDS,
   ...RENT_FIELDS,
+  ...COMMON_SPEC_FIELDS,
 ]);
 
 const BUDGET_FIELDS = new Set(["minimum", "maximum", "currencyCode"]);
+// Only meanings without a native Requirement owner may use catalogPreferences.
+// In particular, Property bedroomCount/bathroomCount are facts, not aliases for
+// the Requirement's bedroomsMinimum/bathroomsMinimum.
 const CATALOG_NUMBER_FIELDS = new Set<PropertyDetailField>([
-  "plotAreaSquareMeters", "builtUpAreaSquareMeters", "bathroomCount",
-  "parkingSpaceCount", "floorCount", "unitCount", "roomsPerUnit",
-  "bathroomsPerUnit", "apartmentCount", "shopCount", "officeCount",
-  "elevatorCount", "bedroomCount", "livingRoomCount", "floorNumber",
-  "frontageWidthMeters", "ceilingHeightMeters", "loadingBayCount",
+  "plotAreaSquareMeters", "builtUpAreaSquareMeters", "parkingSpaceCount",
+  "livingRoomCount", "floorNumber",
 ]);
 const CATALOG_COUNT_FIELDS = new Set<PropertyDetailField>([
-  "bathroomCount", "parkingSpaceCount", "floorCount", "unitCount",
-  "roomsPerUnit", "bathroomsPerUnit", "apartmentCount", "shopCount",
-  "officeCount", "elevatorCount", "bedroomCount", "livingRoomCount",
-  "floorNumber", "loadingBayCount",
+  "parkingSpaceCount", "livingRoomCount", "floorNumber",
 ]);
 const CATALOG_FEATURE_FIELDS = new Set<PropertyDetailField>([
   "hasMaidRoom", "hasHeating", "hasBalcony", "hasLaundryRoom",
   "hasSolarHeater", "hasElevator", "hasGarden", "hasSecurityGuard",
-  "hasBBQArea", "hasPool", "hasWaterfront", "hasCentralAC", "hasColdStorage",
+  "hasBBQArea", "hasPool", "hasWaterfront", "hasColdStorage",
 ]);
+const CATALOG_NUMBER_RELATIONS: Partial<Record<PropertyDetailField, "minimum" | "exact">> = {
+  plotAreaSquareMeters: "minimum",
+  builtUpAreaSquareMeters: "minimum",
+  parkingSpaceCount: "minimum",
+  livingRoomCount: "minimum",
+  floorNumber: "exact",
+};
 const CATALOG_CHOICE_VALUES: Partial<Record<PropertyDetailField, readonly string[]>> = {
   apartmentSubtype: APARTMENT_SUBTYPES,
-  floorUse: FLOOR_USES,
   furnishing: FURNISHING_VALUES,
+  // Requirement choices are a closed contract; free-form Property labels are
+  // deliberately not accepted here.
+  intendedUse: ["office", "retail", "warehouse", "residential"],
+  commercialActivity: ["retail", "office", "restaurant", "clinic", "warehouse"],
 };
+const REQUIREMENT_CATALOG_FIELDS = new Set<PropertyDetailField>([
+  ...CATALOG_NUMBER_FIELDS,
+  ...CATALOG_FEATURE_FIELDS,
+  ...(Object.keys(CATALOG_CHOICE_VALUES) as PropertyDetailField[]),
+]);
+const CANONICAL_CATALOG_ALIASES = new Set<PropertyDetailField>([
+  "bedroomCount", "bathroomCount", "hasCentralAC",
+  "hasHeating", "hasBalcony", "hasMaidRoom", "hasLaundryRoom",
+  "hasSolarHeater", "hasElevator", "hasGarden", "hasSecurityGuard",
+  "hasBBQArea",
+]);
 
 function issue(
   code: RequirementValidationIssue["code"],
@@ -272,12 +303,29 @@ export function validateSeekerRequirement(
     issues.push(issue("required", ["notes"], "Broker-readable Notes must be a string."));
   }
 
-  if (!Array.isArray(value.preferredAreaIds) || value.preferredAreaIds.length === 0) {
+  const areaMode = value.preferredAreaMode;
+  if (areaMode !== undefined && !REQUIREMENT_AREA_MODES.includes(areaMode as RequirementAreaMode)) {
+    issues.push(issue(
+      "invalid_area_list",
+      ["preferredAreaMode"],
+      "Area mode must be specific_areas or all_kuwait.",
+    ));
+  }
+  const hasAreaIds = Array.isArray(value.preferredAreaIds) && value.preferredAreaIds.length > 0;
+  if (!Array.isArray(value.preferredAreaIds)) {
     issues.push(issue(
       "invalid_area_list",
       ["preferredAreaIds"],
-      "At least one preferred canonical Area ID is required.",
+      "Preferred Area IDs must be a list.",
     ));
+  } else if (areaMode === "specific_areas" && value.preferredAreaIds.length === 0) {
+    issues.push(issue("invalid_area_list", ["preferredAreaIds"], "Specific areas require at least one canonical Area ID."));
+  } else if (areaMode === undefined && value.preferredAreaIds.length === 0 && !options.allowLegacyEmptyAreaScope) {
+    issues.push(issue("invalid_area_list", ["preferredAreaIds"], "An explicit area scope is required."));
+  } else if (areaMode !== "all_kuwait" && areaMode !== undefined && !hasAreaIds) {
+    issues.push(issue("invalid_area_list", ["preferredAreaIds"], "Specific areas require at least one canonical Area ID."));
+  } else if (areaMode === "all_kuwait" && hasAreaIds) {
+    issues.push(issue("invalid_area_list", ["preferredAreaMode"], "All Kuwait cannot contain specific Area IDs."));
   } else {
     const seen = new Set<string>();
     value.preferredAreaIds.forEach((areaId, index) => {
@@ -312,15 +360,40 @@ export function validateSeekerRequirement(
         }
         seen.add(amenity);
       });
-      if (
-        isPropertyType(value.propertyType) &&
-        !["apartment", "house", "villa", "chalet"].includes(value.propertyType)
-      ) {
+      const residentialAmenityScope = isPropertyType(value.propertyType)
+        && (["apartment", "house", "villa", "chalet"].includes(value.propertyType)
+          || value.propertyType === "floor" && value.floorUse === "residential");
+      if (isPropertyType(value.propertyType) && !residentialAmenityScope) {
         issues.push(issue(
           "amenities_not_allowed",
           ["preferredAmenities"],
           "Preferred amenities are supported only for apartment, house, villa, or chalet Requirements.",
         ));
+      }
+    }
+  }
+  if (value.preferredAmenityExclusions !== undefined) {
+    if (!Array.isArray(value.preferredAmenityExclusions)) {
+      issues.push(issue("invalid_amenity", ["preferredAmenityExclusions"], "Excluded amenities must be a list."));
+    } else {
+      const seen = new Set<string>();
+      value.preferredAmenityExclusions.forEach((amenity, index) => {
+        const path = ["preferredAmenityExclusions", String(index)];
+        if (!isResidentialAmenity(amenity)) {
+          issues.push(issue("invalid_amenity", path, "Excluded amenity is not approved."));
+        } else if (seen.has(amenity)) {
+          issues.push(issue("duplicate_amenity", path, "Excluded amenities must not be duplicated."));
+        }
+        seen.add(amenity);
+        if (Array.isArray(value.preferredAmenities) && value.preferredAmenities.includes(amenity)) {
+          issues.push(issue("invalid_amenity", path, "An amenity cannot be both preferred and excluded."));
+        }
+      });
+      const residentialAmenityScope = isPropertyType(value.propertyType)
+        && (["apartment", "house", "villa", "chalet"].includes(value.propertyType)
+          || value.propertyType === "floor" && value.floorUse === "residential");
+      if (isPropertyType(value.propertyType) && !residentialAmenityScope) {
+        issues.push(issue("amenities_not_allowed", ["preferredAmenityExclusions"], "Excluded amenities are supported only for residential Requirements."));
       }
     }
   }
@@ -366,6 +439,19 @@ export function validateSeekerRequirement(
         }
         seen.add(field);
 
+        if ((CANONICAL_CATALOG_ALIASES.has(field)
+          && !(options.allowLegacyCatalogAliases && preference.kind === "feature"))
+          || (!REQUIREMENT_CATALOG_FIELDS.has(field)
+          && !(options.allowLegacyCatalogAliases && CANONICAL_CATALOG_ALIASES.has(field)
+            && preference.kind === "feature"))) {
+          issues.push(issue(
+            CANONICAL_CATALOG_ALIASES.has(field) ? "invalid_catalog_preference" : "catalog_preference_not_allowed",
+            [...path, "field"],
+            CANONICAL_CATALOG_ALIASES.has(field)
+              ? "This catalog field is already represented by a canonical Requirement field."
+              : "Catalog field is not an approved Requirement preference.",
+          ));
+        }
         if (!isPropertyType(value.propertyType) || !definition.appliesTo.includes(value.propertyType)) {
           issues.push(issue(
             "catalog_preference_not_allowed",
@@ -387,10 +473,13 @@ export function validateSeekerRequirement(
           if (!CATALOG_NUMBER_FIELDS.has(field)
             || (typeof preference.value !== "number"
               || !Number.isFinite(preference.value)
-              || preference.value < 0)
+              || preference.value < 0
+              || preference.value > Number.MAX_SAFE_INTEGER)
             || (CATALOG_COUNT_FIELDS.has(field) && !Number.isSafeInteger(preference.value))
             || (typeof preference.comparison !== "string"
-              || !["exact", "minimum", "maximum"].includes(preference.comparison))) {
+              || !["exact", "minimum", "maximum"].includes(preference.comparison))
+            || (CATALOG_NUMBER_RELATIONS[field] !== undefined
+              && preference.comparison !== CATALOG_NUMBER_RELATIONS[field])) {
             issues.push(issue(
               "invalid_catalog_preference",
               path,
@@ -406,7 +495,8 @@ export function validateSeekerRequirement(
             ));
           }
         } else if (preference.kind === "choice") {
-          if (CATALOG_NUMBER_FIELDS.has(field) || CATALOG_FEATURE_FIELDS.has(field)
+          if (!CATALOG_CHOICE_VALUES[field]
+            || CATALOG_NUMBER_FIELDS.has(field) || CATALOG_FEATURE_FIELDS.has(field)
             || typeof preference.value !== "string") {
             issues.push(issue(
               "invalid_catalog_preference",
@@ -487,16 +577,32 @@ export function validateSeekerRequirement(
     }
   }
 
-  if (value.purpose === "rent") {
-    for (const field of ["bedroomsMinimum", "bathroomsMinimum"] as const) {
-      if (value[field] !== undefined && !isNonNegativeInteger(value[field])) {
-        issues.push(issue(
-          "invalid_rent_field",
-          [field],
-          `${field} must be a non-negative integer when provided.`,
-        ));
-      }
+  const residentialType = ["apartment", "house", "villa", "chalet"].includes(String(value.propertyType))
+    || (value.propertyType === "floor" && value.floorUse === "residential");
+  if (value.bedroomsMinimum !== undefined
+    && (!residentialType || !isNonNegativeInteger(value.bedroomsMinimum))) {
+    issues.push(issue("invalid_requirement", ["bedroomsMinimum"], "Bedrooms must be a non-negative whole number for residential Requirements."));
+  }
+  if (value.bathroomsMinimum !== undefined
+    && (!residentialType || !isNonNegativeInteger(value.bathroomsMinimum))) {
+    issues.push(issue("invalid_requirement", ["bathroomsMinimum"], "Bathrooms must be a non-negative whole number for residential Requirements."));
+  }
+  if (value.masterBedroomsMinimum !== undefined) {
+    if (!residentialType || !isNonNegativeInteger(value.masterBedroomsMinimum)) {
+      issues.push(issue("invalid_requirement", ["masterBedroomsMinimum"], "Master bedrooms must be a non-negative whole number for residential Requirements."));
+    } else if (!isNonNegativeInteger(value.bedroomsMinimum) || value.masterBedroomsMinimum > value.bedroomsMinimum) {
+      issues.push(issue("invalid_requirement", ["masterBedroomsMinimum"], "Master bedrooms cannot exceed total Bedrooms."));
     }
+  }
+  const centralACType = ["whole_building", "apartment", "floor", "house", "villa", "chalet", "commercial_complex", "office", "shop", "warehouse", "other_built_property"].includes(String(value.propertyType));
+  if (value.centralAC !== undefined && (!centralACType || typeof value.centralAC !== "boolean")) {
+    issues.push(issue("invalid_requirement", ["centralAC"], "Central A/C must be a boolean for an applicable Property type."));
+  }
+  if (value.driverRoom !== undefined && (!residentialType || typeof value.driverRoom !== "boolean")) {
+    issues.push(issue("invalid_requirement", ["driverRoom"], "Driver room must be a boolean for residential Requirements."));
+  }
+
+  if (value.purpose === "rent") {
     if (value.rentalPeriodId !== undefined && !isRentalPeriodId(value.rentalPeriodId)) {
       issues.push(issue(
         "invalid_rent_field",
@@ -507,7 +613,7 @@ export function validateSeekerRequirement(
     if (value.occupancy !== undefined && !isRequirementOccupancy(value.occupancy)) {
       issues.push(issue("invalid_occupancy", ["occupancy"], "Occupancy is not approved."));
     }
-    for (const field of ["swimmingPool", "gym", "seaView", "centralAC"] as const) {
+    for (const field of ["swimmingPool", "gym", "seaView"] as const) {
       if (!isBooleanOrMissing(value[field])) {
         issues.push(issue(
           "invalid_rent_field",
@@ -540,34 +646,90 @@ export function normalizeSeekerRequirement(
   value: unknown,
   options: RequirementValidationOptions = {},
 ): RequirementValidationResult<SeekerRequirement> {
-  const validation = validateSeekerRequirement(value, options);
+  let validation = validateSeekerRequirement(value, options);
+  if (!validation.ok && isRecord(value)) {
+    const legacy = validateSeekerRequirement(value, {
+      ...options,
+      allowLegacyCatalogAliases: true,
+      allowLegacyEmptyAreaScope: true,
+    });
+    const onlyLegacyAliases = legacy.ok === true
+      && validation.issues.length > 0
+      && validation.issues.every(item =>
+        (item.code === "invalid_catalog_preference" && item.path[0] === "catalogPreferences")
+        || (item.code === "invalid_area_list" && item.path[0] === "preferredAreaIds"));
+    if (onlyLegacyAliases) validation = legacy;
+  }
   if (!validation.ok) return validation;
 
   const source = validation.value as unknown as Record<string, unknown>;
+  const legacyAmenityByField: Partial<Record<PropertyDetailField, ResidentialAmenity>> = {
+    hasHeating: "heating", hasBalcony: "balcony", hasMaidRoom: "maid_room",
+    hasLaundryRoom: "laundry_room", hasSolarHeater: "solar_heater",
+    hasElevator: "elevator", hasGarden: "garden",
+    hasSecurityGuard: "security_guard", hasBBQArea: "bbq_area",
+  };
+  const legacyAmenities = (validation.value.catalogPreferences ?? [])
+    .flatMap(preference => preference.kind === "feature" && preference.value === true
+      ? (legacyAmenityByField[preference.field] ? [legacyAmenityByField[preference.field]!] : [])
+      : []);
+  const legacyAmenityExclusions = (validation.value.catalogPreferences ?? [])
+    .flatMap(preference => preference.kind === "feature" && preference.value === false
+      ? (legacyAmenityByField[preference.field] ? [legacyAmenityByField[preference.field]!] : [])
+      : []);
+  const preferredAmenities = [
+    ...new Set([...(validation.value.preferredAmenities ?? []), ...legacyAmenities]),
+  ];
+  const excludedAmenities = [
+    ...new Set([...(validation.value.preferredAmenityExclusions ?? []), ...legacyAmenityExclusions]),
+  ];
+  const amenityConflict = preferredAmenities.some(amenity => excludedAmenities.includes(amenity));
+  if (amenityConflict) {
+    return {
+      ok: false,
+      issues: [issue("invalid_amenity", ["preferredAmenities"], "An amenity cannot be both preferred and excluded.")],
+    };
+  }
+  const remainingCatalogPreferences = (validation.value.catalogPreferences ?? [])
+    .filter(preference => !CANONICAL_CATALOG_ALIASES.has(preference.field))
+    .map(preference => ({ ...preference }));
   const base = {
     id: validation.value.id,
     seekerId: validation.value.seekerId,
     purpose: validation.value.purpose,
     propertyType: validation.value.propertyType,
     preferredAreaIds: [...validation.value.preferredAreaIds],
+    ...(source.preferredAreaMode !== undefined
+      ? { preferredAreaMode: validation.value.preferredAreaMode }
+      : {}),
     budget: {
       minimum: validation.value.budget.minimum,
       maximum: validation.value.budget.maximum,
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(source.bedroomsMinimum !== undefined
+      ? { bedroomsMinimum: validation.value.bedroomsMinimum }
+      : {}),
+    ...(source.bathroomsMinimum !== undefined
+      ? { bathroomsMinimum: validation.value.bathroomsMinimum }
+      : {}),
+    ...(source.centralAC !== undefined
+      ? { centralAC: validation.value.centralAC }
+      : {}),
     ...(Object.prototype.hasOwnProperty.call(source, "preferredAmenities")
-      ? { preferredAmenities: RESIDENTIAL_AMENITIES.filter((amenity) =>
-        (validation.value.preferredAmenities ?? []).includes(amenity),
-      ) }
-      : {}),
-    ...(source.catalogPreferences !== undefined
-      ? {
-        catalogPreferences: validation.value.catalogPreferences?.map(preference => ({ ...preference })),
-      }
-      : {}),
+      ? { preferredAmenities: RESIDENTIAL_AMENITIES.filter((amenity) => preferredAmenities.includes(amenity)) }
+      : (legacyAmenities.length ? { preferredAmenities: legacyAmenities } : {})),
+    ...(excludedAmenities.length ? { preferredAmenityExclusions: excludedAmenities } : {}),
+    ...(remainingCatalogPreferences.length ? { catalogPreferences: remainingCatalogPreferences } : {}),
     ...(source.floorUse !== undefined
       ? { floorUse: validation.value.floorUse }
+      : {}),
+    ...(source.masterBedroomsMinimum !== undefined
+      ? { masterBedroomsMinimum: validation.value.masterBedroomsMinimum }
+      : {}),
+    ...(source.driverRoom !== undefined
+      ? { driverRoom: validation.value.driverRoom }
       : {}),
   };
 

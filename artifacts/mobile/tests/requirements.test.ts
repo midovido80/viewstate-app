@@ -171,16 +171,18 @@ test('SeekerRequirement validates canonical structure without Matching semantics
   });
   assert.equal(budgetWithUnknownField.ok, false);
 
-  const buyWithRentField = validateSeekerRequirement({
+  const buyWithCommonSpecs = validateSeekerRequirement({
     ...buyRequirement(),
     bedroomsMinimum: 2,
+    bathroomsMinimum: 1,
+    centralAC: true,
+  });
+  assert.equal(buyWithCommonSpecs.ok, true);
+  const buyWithRentField = validateSeekerRequirement({
+    ...buyRequirement(),
+    occupancy: 'family',
   });
   assert.equal(buyWithRentField.ok, false);
-  if (!buyWithRentField.ok) {
-    assert.ok(buyWithRentField.issues.some(
-      issue => issue.code === 'buy_rent_field_not_allowed',
-    ));
-  }
 
   const yearly = normalizeSeekerRequirement({
     ...rent,
@@ -214,21 +216,25 @@ test('catalog preferences validate applicability and preserve zero and false', (
   const requirement = {
     ...rentRequirement(),
     catalogPreferences: [
-      { field: 'bedroomCount', kind: 'number', comparison: 'minimum', value: 0 },
-      { field: 'hasCentralAC', kind: 'feature', value: false },
+      { field: 'livingRoomCount', kind: 'number', comparison: 'minimum', value: 0 },
+      { field: 'hasHeating', kind: 'feature', value: false },
       { field: 'furnishing', kind: 'choice', value: 'furnished' },
     ],
   };
   const normalized = normalizeSeekerRequirement(requirement);
   assert.equal(normalized.ok, true);
   if (normalized.ok) {
-    assert.deepEqual(normalized.value.catalogPreferences, requirement.catalogPreferences);
+    assert.deepEqual(normalized.value.catalogPreferences, [
+      { field: 'livingRoomCount', kind: 'number', comparison: 'minimum', value: 0 },
+      { field: 'furnishing', kind: 'choice', value: 'furnished' },
+    ]);
+    assert.deepEqual(normalized.value.preferredAmenityExclusions, ['heating']);
   }
 
   const invalid = validateSeekerRequirement({
     ...rentRequirement(),
     catalogPreferences: [
-      { field: 'bedroomCount', kind: 'number', comparison: 'minimum', value: 1.5 },
+      { field: 'livingRoomCount', kind: 'number', comparison: 'minimum', value: 1.5 },
       { field: 'hasPool', kind: 'feature', value: true },
     ],
   });
@@ -242,6 +248,138 @@ test('catalog preferences validate applicability and preserve zero and false', (
     ],
   });
   assert.equal(floorWithoutUse.ok, false);
+});
+
+test('Requirement area scope and typed Founder fields have one authoritative contract', () => {
+  const base = rentRequirement();
+  const allKuwait = normalizeSeekerRequirement({
+    ...base,
+    preferredAreaMode: 'all_kuwait',
+    preferredAreaIds: [],
+    masterBedroomsMinimum: 1,
+    driverRoom: true,
+  });
+  assert.equal(allKuwait.ok, true);
+  if (allKuwait.ok) {
+    assert.equal(allKuwait.value.preferredAreaMode, 'all_kuwait');
+    assert.deepEqual(allKuwait.value.preferredAreaIds, []);
+    assert.equal(allKuwait.value.masterBedroomsMinimum, 1);
+    assert.equal(allKuwait.value.driverRoom, true);
+  }
+  const legacyEmpty = validateSeekerRequirement({ ...base, preferredAreaIds: [] });
+  assert.equal(legacyEmpty.ok, false);
+  const readableLegacyEmpty = normalizeSeekerRequirement({ ...base, preferredAreaIds: [] });
+  assert.equal(readableLegacyEmpty.ok, true);
+  const invalidAll = validateSeekerRequirement({
+    ...base,
+    preferredAreaMode: 'all_kuwait',
+    preferredAreaIds: ['salmiya'],
+  });
+  assert.equal(invalidAll.ok, false);
+  const invalidMaster = validateSeekerRequirement({
+    ...base,
+    masterBedroomsMinimum: 3,
+  });
+  assert.equal(invalidMaster.ok, false);
+  const canonicalAlias = validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [{ field: 'bedroomCount', kind: 'number', comparison: 'minimum', value: 2 }],
+  });
+  assert.equal(canonicalAlias.ok, false);
+});
+
+test('Requirement catalog numeric and choice allowlists reject unsafe or opaque values', () => {
+  const base = rentRequirement();
+  const invalidNumber = validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [{ field: 'floorNumber', kind: 'number', comparison: 'minimum', value: 2 }],
+  });
+  assert.equal(invalidNumber.ok, false);
+  const invalidChoice = validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [{ field: 'commercialActivity', kind: 'choice', value: 'Retail' }],
+  });
+  assert.equal(invalidChoice.ok, false);
+});
+
+test('Requirement residential core and Driver room fields reject commercial or non-residential use', () => {
+  const base = rentRequirement();
+  const commercialFloor = {
+    ...base,
+    propertyType: 'floor' as const,
+    floorUse: 'commercial' as const,
+    bedroomsMinimum: 2,
+    bathroomsMinimum: 1,
+    masterBedroomsMinimum: 1,
+    driverRoom: true,
+  };
+  const invalid = validateSeekerRequirement(commercialFloor);
+  assert.equal(invalid.ok, false);
+  const commercialDriver = validateSeekerRequirement({
+    ...base,
+    propertyType: 'office' as const,
+    driverRoom: true,
+  });
+  assert.equal(commercialDriver.ok, false);
+  const residential = normalizeSeekerRequirement({
+    ...base,
+    propertyType: 'floor' as const,
+    floorUse: 'residential' as const,
+    bedroomsMinimum: 3,
+    bathroomsMinimum: 2,
+    masterBedroomsMinimum: 1,
+    driverRoom: true,
+  });
+  assert.equal(residential.ok, true);
+  if (residential.ok) {
+    assert.equal(residential.value.driverRoom, true);
+    assert.equal(residential.value.masterBedroomsMinimum, 1);
+  }
+  const residentialAmenities = validateSeekerRequirement({
+    ...base,
+    propertyType: 'floor' as const,
+    floorUse: 'residential' as const,
+    preferredAmenities: ['heating'],
+    preferredAmenityExclusions: ['balcony'],
+  });
+  assert.equal(residentialAmenities.ok, true);
+  const commercialAmenities = validateSeekerRequirement({
+    ...base,
+    propertyType: 'floor' as const,
+    floorUse: 'commercial' as const,
+    preferredAmenities: ['heating'],
+  });
+  assert.equal(commercialAmenities.ok, false);
+});
+
+test('canonical amenity aliases reject new candidates but legacy true aliases migrate safely', () => {
+  const base = rentRequirement();
+  const alias = {
+    ...base,
+    catalogPreferences: [{ field: 'hasHeating', kind: 'feature' as const, value: true }],
+  };
+  assert.equal(validateSeekerRequirement(alias).ok, false);
+  const restored = normalizeSeekerRequirement(alias);
+  assert.equal(restored.ok, true);
+  if (restored.ok) {
+    assert.deepEqual(restored.value.preferredAmenities, ['heating']);
+    assert.deepEqual(restored.value.catalogPreferences, undefined);
+  }
+  const explicitFalse = normalizeSeekerRequirement({
+    ...base,
+    catalogPreferences: [{ field: 'hasHeating', kind: 'feature' as const, value: false }],
+  });
+  assert.equal(explicitFalse.ok, true);
+  if (explicitFalse.ok) {
+    assert.deepEqual(explicitFalse.value.catalogPreferences, undefined);
+    assert.deepEqual(explicitFalse.value.preferredAmenityExclusions, ['heating']);
+  }
+  const conflict = normalizeSeekerRequirement({
+    ...base,
+    preferredAmenities: ['heating'],
+    catalogPreferences: [{ field: 'hasHeating', kind: 'feature' as const, value: false }],
+  });
+  assert.equal(conflict.ok, false);
 });
 
 class MemoryStorage {
@@ -538,6 +676,22 @@ test('Native Requirement persistence survives store recreation without lifecycle
   assert.deepEqual(await restarted.getRequirement(ids.rent), rentRequirement());
   assert.equal(db.requirements.get(ids.rent), savedBytes);
   assert.equal(db.chronology.get(ids.rent), createdAt);
+});
+
+test('All Kuwait mode survives native and web store recreation without a fake area ID', async () => {
+  const personReader = { getPerson: async (id: string) => id === 'seeker-1' ? seeker(id) : null };
+  const allKuwait: RentSeekerRequirement = {
+    ...rentRequirement(),
+    preferredAreaMode: 'all_kuwait',
+    preferredAreaIds: [],
+  };
+  const db = new RequirementDatabase();
+  await new SQLiteRequirementStore(() => db, personReader).saveRequirement(allKuwait);
+  assert.deepEqual(await new SQLiteRequirementStore(() => db, personReader).getRequirement(allKuwait.id), allKuwait);
+
+  const storage = new MemoryStorage();
+  await new WebRequirementStore(storage, () => locks, personReader).saveRequirement(allKuwait);
+  assert.deepEqual(await new WebRequirementStore(storage, () => locks, personReader).getRequirement(allKuwait.id), allKuwait);
 });
 
 test('Requirement updates preserve immutable identity and reject stale snapshots', async () => {
