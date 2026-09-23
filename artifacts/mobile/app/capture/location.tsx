@@ -12,7 +12,7 @@ import { KUWAIT_AREAS, Area, getAreaById, searchAreas } from '@/constants/kuwait
 
 export default function LocationScreen() {
   const router = useRouter();
-  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
+  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
@@ -31,7 +31,7 @@ export default function LocationScreen() {
 
   const handleNext = () => {
     if (!isValid) return;
-    router.push({ pathname: '/capture/summary', params: linkPersonId ? { linkPersonId } : {} } as never);
+    router.push({ pathname: '/capture/summary', params: linkPersonId ? { linkPersonId, sourceRole } : {} } as never);
   };
 
   const sections = useMemo(() => {

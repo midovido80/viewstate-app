@@ -33,12 +33,13 @@ test('Person workflow builds valid Rent and Buy M1 requirements without rental p
   for (const field of ['bedroomsMinimum', 'bathroomsMinimum', 'occupancy', 'swimmingPool', 'gym', 'seaView', 'centralAC', 'rentalPeriodId']) assert.equal((buy.value as unknown as Record<string, unknown>)[field], undefined);
 });
 
-test('missing occupancy differs from explicit Any and inactive services remain missing', () => {
+test('missing occupancy and services differ from explicit Any and false', () => {
   const missing = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent' });
   const any = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', occupancy: 'any', gym: false });
   assert.equal(missing.ok && missing.value.purpose === 'rent' ? missing.value.occupancy : 'bad', undefined);
   assert.equal(any.ok && any.value.purpose === 'rent' ? any.value.occupancy : undefined, 'any');
-  assert.equal(any.ok ? (any.value as unknown as Record<string, unknown>).gym : 'bad', undefined);
+  assert.equal(missing.ok ? (missing.value as unknown as Record<string, unknown>).gym : 'bad', undefined);
+  assert.equal(any.ok ? (any.value as unknown as Record<string, unknown>).gym : 'bad', false);
 });
 
 test('M1 rejects duplicate areas and invalid budget order', () => {

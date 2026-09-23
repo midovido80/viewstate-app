@@ -14,3 +14,9 @@ Use an accessible in-flow React Native modal for destructive transition confirma
 **Why:** A transaction control received focus in web Preview, but its `Alert.alert` confirmation never became visible and the requested state change did not complete. The same transition worked after moving confirmation into an app-rendered modal.
 
 **How to apply:** Keep Cancel inert, run stale-state checks again on Confirm, and verify both the visible selected control and dependent fields after the transition.
+
+When adding a new component file while Expo is already running, Metro may keep reporting that its import cannot be resolved even though the file exists and TypeScript resolves it. If the preview stays blank with that specific bundler error, restart the existing Expo workflow once; ordinary source edits should still hot-reload without restarting.
+
+**Why:** During a live Requirement UI addition, Metro retained an unresolved import for a newly created component until the existing Expo workflow restarted.
+
+**How to apply:** Check workflow logs before treating a blank page as a runtime or routing failure. Restart only when logs identify this concrete stale-resolution case, then confirm the root preview renders.

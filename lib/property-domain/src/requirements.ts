@@ -1,6 +1,16 @@
-import type { LocationAreaId, PropertyType } from "./types.ts";
+import type { FloorUse, LocationAreaId, PropertyType } from "./types.ts";
 import type { ResidentialAmenity } from "./types.ts";
-import { RESIDENTIAL_AMENITIES, isResidentialAmenity, isPropertyType } from "./taxonomy.ts";
+import type { PropertyDetailField } from "./taxonomy.ts";
+import {
+  APARTMENT_SUBTYPES,
+  FLOOR_USES,
+  FURNISHING_VALUES,
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
+  RESIDENTIAL_AMENITIES,
+  isFloorUse,
+  isResidentialAmenity,
+  isPropertyType,
+} from "./taxonomy.ts";
 
 export const REQUIREMENT_PURPOSES = ["rent", "buy"] as const;
 export type RequirementPurpose = typeof REQUIREMENT_PURPOSES[number];
@@ -14,6 +24,24 @@ export interface SeekerRequirementBudget {
   readonly currencyCode: string;
 }
 
+export type CatalogPreference =
+  | {
+    readonly field: PropertyDetailField;
+    readonly kind: "number";
+    readonly comparison: "exact" | "minimum" | "maximum";
+    readonly value: number;
+  }
+  | {
+    readonly field: PropertyDetailField;
+    readonly kind: "choice";
+    readonly value: string;
+  }
+  | {
+    readonly field: PropertyDetailField;
+    readonly kind: "feature";
+    readonly value: boolean;
+  };
+
 export interface SeekerRequirementBase {
   readonly id: string;
   readonly seekerId: string;
@@ -22,6 +50,8 @@ export interface SeekerRequirementBase {
   readonly budget: SeekerRequirementBudget;
   readonly notes: string;
   readonly preferredAmenities?: readonly ResidentialAmenity[];
+  readonly catalogPreferences?: readonly CatalogPreference[];
+  readonly floorUse?: FloorUse;
 }
 
 export interface RentSeekerRequirement extends SeekerRequirementBase {
@@ -60,7 +90,11 @@ export interface RequirementValidationIssue {
     | "buy_rent_field_not_allowed"
     | "invalid_amenity"
     | "duplicate_amenity"
-    | "amenities_not_allowed";
+    | "amenities_not_allowed"
+    | "invalid_catalog_preference"
+    | "duplicate_catalog_preference"
+    | "catalog_preference_not_allowed"
+    | "invalid_floor_use";
   readonly path: readonly string[];
   readonly message: string;
 }
@@ -95,10 +129,35 @@ const REQUIREMENT_FIELDS = new Set([
   "budget",
   "notes",
   "preferredAmenities",
+  "catalogPreferences",
+  "floorUse",
   ...RENT_FIELDS,
 ]);
 
 const BUDGET_FIELDS = new Set(["minimum", "maximum", "currencyCode"]);
+const CATALOG_NUMBER_FIELDS = new Set<PropertyDetailField>([
+  "plotAreaSquareMeters", "builtUpAreaSquareMeters", "bathroomCount",
+  "parkingSpaceCount", "floorCount", "unitCount", "roomsPerUnit",
+  "bathroomsPerUnit", "apartmentCount", "shopCount", "officeCount",
+  "elevatorCount", "bedroomCount", "livingRoomCount", "floorNumber",
+  "frontageWidthMeters", "ceilingHeightMeters", "loadingBayCount",
+]);
+const CATALOG_COUNT_FIELDS = new Set<PropertyDetailField>([
+  "bathroomCount", "parkingSpaceCount", "floorCount", "unitCount",
+  "roomsPerUnit", "bathroomsPerUnit", "apartmentCount", "shopCount",
+  "officeCount", "elevatorCount", "bedroomCount", "livingRoomCount",
+  "floorNumber", "loadingBayCount",
+]);
+const CATALOG_FEATURE_FIELDS = new Set<PropertyDetailField>([
+  "hasMaidRoom", "hasHeating", "hasBalcony", "hasLaundryRoom",
+  "hasSolarHeater", "hasElevator", "hasGarden", "hasSecurityGuard",
+  "hasBBQArea", "hasPool", "hasWaterfront", "hasCentralAC", "hasColdStorage",
+]);
+const CATALOG_CHOICE_VALUES: Partial<Record<PropertyDetailField, readonly string[]>> = {
+  apartmentSubtype: APARTMENT_SUBTYPES,
+  floorUse: FLOOR_USES,
+  furnishing: FURNISHING_VALUES,
+};
 
 function issue(
   code: RequirementValidationIssue["code"],
@@ -257,6 +316,111 @@ export function validateSeekerRequirement(
     }
   }
 
+  if (value.floorUse !== undefined) {
+    if (value.propertyType !== "floor" || !isFloorUse(value.floorUse)) {
+      issues.push(issue(
+        "invalid_floor_use",
+        ["floorUse"],
+        "floorUse is only valid for a floor Requirement and must be approved.",
+      ));
+    }
+  }
+
+  if (value.catalogPreferences !== undefined) {
+    if (!Array.isArray(value.catalogPreferences)) {
+      issues.push(issue(
+        "invalid_catalog_preference",
+        ["catalogPreferences"],
+        "Catalog preferences must be a list.",
+      ));
+    } else {
+      const seen = new Set<PropertyDetailField>();
+      value.catalogPreferences.forEach((preference, index) => {
+        const path = ["catalogPreferences", String(index)];
+        if (!isRecord(preference)) {
+          issues.push(issue("invalid_catalog_preference", path, "A catalog preference object is required."));
+          return;
+        }
+        const rawField = preference.field;
+        const definition = PROPERTY_DETAIL_FIELD_DEFINITIONS.find(item => item.field === rawField);
+        if (!definition) {
+          issues.push(issue("invalid_catalog_preference", [...path, "field"], "Catalog field is not approved."));
+          return;
+        }
+        const field = definition.field;
+        if (seen.has(field)) {
+          issues.push(issue(
+            "duplicate_catalog_preference",
+            [...path, "field"],
+            "Catalog preference fields must not be duplicated.",
+          ));
+        }
+        seen.add(field);
+
+        if (!isPropertyType(value.propertyType) || !definition.appliesTo.includes(value.propertyType)) {
+          issues.push(issue(
+            "catalog_preference_not_allowed",
+            [...path, "field"],
+            "Catalog field is not applicable to this Property Type.",
+          ));
+        }
+        if (definition.floorUses && value.propertyType === "floor") {
+          if (!isFloorUse(value.floorUse) || !definition.floorUses.includes(value.floorUse)) {
+            issues.push(issue(
+              "catalog_preference_not_allowed",
+              [...path, "field"],
+              "Catalog field is not applicable to this floor use.",
+            ));
+          }
+        }
+
+        if (preference.kind === "number") {
+          if (!CATALOG_NUMBER_FIELDS.has(field)
+            || (typeof preference.value !== "number"
+              || !Number.isFinite(preference.value)
+              || preference.value < 0)
+            || (CATALOG_COUNT_FIELDS.has(field) && !Number.isSafeInteger(preference.value))
+            || (typeof preference.comparison !== "string"
+              || !["exact", "minimum", "maximum"].includes(preference.comparison))) {
+            issues.push(issue(
+              "invalid_catalog_preference",
+              path,
+              "Numeric catalog preferences must use an approved non-negative value and comparison.",
+            ));
+          }
+        } else if (preference.kind === "feature") {
+          if (!CATALOG_FEATURE_FIELDS.has(field) || typeof preference.value !== "boolean") {
+            issues.push(issue(
+              "invalid_catalog_preference",
+              path,
+              "Feature catalog preferences must use an approved boolean field.",
+            ));
+          }
+        } else if (preference.kind === "choice") {
+          if (CATALOG_NUMBER_FIELDS.has(field) || CATALOG_FEATURE_FIELDS.has(field)
+            || typeof preference.value !== "string") {
+            issues.push(issue(
+              "invalid_catalog_preference",
+              path,
+              "Choice catalog preferences must use an approved choice field.",
+            ));
+          } else {
+            const choices = CATALOG_CHOICE_VALUES[field];
+            if (choices && !choices.includes(preference.value)) {
+              issues.push(issue(
+                "invalid_catalog_preference",
+                [...path, "value"],
+                "Choice value is not approved.",
+              ));
+            }
+          }
+        } else {
+          issues.push(issue("invalid_catalog_preference", path, "Catalog preference kind is not approved."));
+        }
+      });
+    }
+  }
+
   const budget = value.budget;
   if (!isRecord(budget)) {
     issues.push(issue("invalid_budget", ["budget"], "Budget is required."));
@@ -380,6 +544,14 @@ export function normalizeSeekerRequirement(
       ? { preferredAmenities: RESIDENTIAL_AMENITIES.filter((amenity) =>
         (validation.value.preferredAmenities ?? []).includes(amenity),
       ) }
+      : {}),
+    ...(source.catalogPreferences !== undefined
+      ? {
+        catalogPreferences: validation.value.catalogPreferences?.map(preference => ({ ...preference })),
+      }
+      : {}),
+    ...(source.floorUse !== undefined
+      ? { floorUse: validation.value.floorUse }
       : {}),
   };
 

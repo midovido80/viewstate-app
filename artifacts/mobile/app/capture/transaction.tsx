@@ -11,7 +11,7 @@ import { Transaction } from '@workspace/property-domain';
 
 export default function TransactionScreen() {
   const router = useRouter();
-  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
+  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
@@ -21,14 +21,14 @@ export default function TransactionScreen() {
     if (updateDraft({ transaction })) {
       router.push({
         pathname: '/capture/property-type',
-        params: linkPersonId ? { linkPersonId } : {},
+        params: linkPersonId ? { linkPersonId, sourceRole } : {},
       } as never);
     }
   };
 
   const handleNext = () => {
     if (draft.transaction) {
-      router.push({ pathname: '/capture/property-type', params: linkPersonId ? { linkPersonId } : {} } as never);
+      router.push({ pathname: '/capture/property-type', params: linkPersonId ? { linkPersonId, sourceRole } : {} } as never);
     }
   };
 

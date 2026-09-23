@@ -6,6 +6,8 @@ import {
   type RequirementPurpose,
   type RequirementValidationIssue,
   type SeekerRequirement,
+  type CatalogPreference,
+  type FloorUse,
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 
@@ -25,6 +27,8 @@ export interface RequirementFormValues {
   readonly seaView?: boolean;
   readonly centralAC?: boolean;
   readonly preferredAmenities?: readonly ResidentialAmenity[];
+  readonly catalogPreferences?: readonly CatalogPreference[];
+  readonly floorUse?: FloorUse;
 }
 
 export type RequirementFormResult =
@@ -71,16 +75,20 @@ export function buildPersonRequirement(
     ...(values.preferredAmenities !== undefined
       ? { preferredAmenities: [...values.preferredAmenities] }
       : {}),
+    ...(values.catalogPreferences !== undefined
+      ? { catalogPreferences: [...values.catalogPreferences] }
+      : {}),
+    ...(values.floorUse !== undefined ? { floorUse: values.floorUse } : {}),
   };
   const candidate = values.purpose === 'rent' ? {
     ...base,
     ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
     ...(values.bathroomsMinimum !== undefined ? { bathroomsMinimum: values.bathroomsMinimum } : {}),
     ...(values.occupancy !== undefined ? { occupancy: values.occupancy } : {}),
-    ...(values.swimmingPool === true ? { swimmingPool: true } : {}),
-    ...(values.gym === true ? { gym: true } : {}),
-    ...(values.seaView === true ? { seaView: true } : {}),
-    ...(values.centralAC === true ? { centralAC: true } : {}),
+    ...(values.swimmingPool !== undefined ? { swimmingPool: values.swimmingPool } : {}),
+    ...(values.gym !== undefined ? { gym: values.gym } : {}),
+    ...(values.seaView !== undefined ? { seaView: values.seaView } : {}),
+    ...(values.centralAC !== undefined ? { centralAC: values.centralAC } : {}),
   } : base;
   const result = normalizeSeekerRequirement(candidate, {
     isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
@@ -100,14 +108,18 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     ...(requirement.preferredAmenities !== undefined
       ? { preferredAmenities: [...requirement.preferredAmenities] }
       : {}),
+    ...(requirement.catalogPreferences !== undefined
+      ? { catalogPreferences: [...requirement.catalogPreferences] }
+      : {}),
+    ...(requirement.floorUse !== undefined ? { floorUse: requirement.floorUse } : {}),
     ...(requirement.purpose === 'rent' ? {
       ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
       ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),
       ...(requirement.occupancy !== undefined ? { occupancy: requirement.occupancy } : {}),
-      ...(requirement.swimmingPool === true ? { swimmingPool: true } : {}),
-      ...(requirement.gym === true ? { gym: true } : {}),
-      ...(requirement.seaView === true ? { seaView: true } : {}),
-      ...(requirement.centralAC === true ? { centralAC: true } : {}),
+      ...(requirement.swimmingPool !== undefined ? { swimmingPool: requirement.swimmingPool } : {}),
+      ...(requirement.gym !== undefined ? { gym: requirement.gym } : {}),
+      ...(requirement.seaView !== undefined ? { seaView: requirement.seaView } : {}),
+      ...(requirement.centralAC !== undefined ? { centralAC: requirement.centralAC } : {}),
     } : {}),
   };
 }

@@ -11,7 +11,7 @@ import { PROPERTY_TYPES } from '@workspace/property-domain';
 
 export default function PropertyTypeScreen() {
   const router = useRouter();
-  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
+  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
@@ -21,14 +21,14 @@ export default function PropertyTypeScreen() {
     if (updateDraft({ propertyType })) {
       router.push({
         pathname: '/capture/price',
-        params: linkPersonId ? { linkPersonId } : {},
+        params: linkPersonId ? { linkPersonId, sourceRole } : {},
       } as never);
     }
   };
 
   const handleNext = () => {
     if (draft.propertyType) {
-      router.push({ pathname: '/capture/price', params: linkPersonId ? { linkPersonId } : {} } as never);
+      router.push({ pathname: '/capture/price', params: linkPersonId ? { linkPersonId, sourceRole } : {} } as never);
     }
   };
 

@@ -63,10 +63,15 @@ import { getAreaById } from '@/constants/kuwait-areas';
 import type { Transaction, PropertyDetailField } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
 import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
+import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 
+// The capture child routes preserve the person link in their params. Keep the
+// selected source role alongside it for installations where child routes
+// replace (rather than inherit) parent params.
 export default function CaptureWorkflow() {
   const router = useRouter();
-  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
+  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
+  // sourceRole remains on the capture route contract for the summary handoff.
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { t, isRTL, fonts, language } = useI18n();
@@ -457,6 +462,17 @@ export default function CaptureWorkflow() {
     }
     setSubmitting(true);
     try {
+      // Validate the private relationship before creating the property. This
+      // prevents an invalid source selection from leaving an unowned save.
+      if (linkPersonId && sourceRole) {
+        if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) {
+          throw new Error('SOURCE_ROLE_MISMATCH');
+        }
+        const linkedPerson = await store.getPerson(linkPersonId);
+        if (!linkedPerson?.classifications.includes(sourceRole as import('@/services/people').PersonClassification)) {
+          throw new Error('SOURCE_ROLE_MISMATCH');
+        }
+      }
       const candidate = buildPropertyWithCaptureDetails(projection.property, captureDetails, true);
       const evidence = await prepareCapturedDetails(projection.property, candidate);
       const result = await savePropertyWithRecovery(projection.property);
@@ -468,12 +484,24 @@ export default function CaptureWorkflow() {
         await finalizeCapturedDetails(store, evidence);
       }
       if (linkPersonId) {
+        if (sourceRole) {
+          if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) throw new Error('SOURCE_ROLE_MISMATCH');
+          const linkedPerson = await store.getPerson(linkPersonId);
+          if (!linkedPerson?.classifications.includes(sourceRole as import('@/services/people').PersonClassification)) {
+            throw new Error('SOURCE_ROLE_MISMATCH');
+          }
+          await store.setPropertySource({
+            personId: linkPersonId,
+            propertyCoreId: projection.property.core.id,
+            role: sourceRole as import('@/services/people').PropertySourceRole,
+          });
+        }
         await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: projection.property.core.id });
       }
       await clearCaptureDetails(projection.property.core.id);
       router.replace({
         pathname: '/capture/success',
-        params: { propertyCoreId: projection.property.core.id, ...(linkPersonId ? { linkPersonId } : {}) },
+        params: { propertyCoreId: projection.property.core.id, ...(linkPersonId ? { linkPersonId } : {}), ...(sourceRole ? { sourceRole } : {}) },
       } as never);
     } catch (error) {
       console.error('Capture workflow save failed:', error);

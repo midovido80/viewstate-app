@@ -62,6 +62,7 @@ export default function PersonDetailScreen() {
   const [busy, setBusy] = useState(false);
   const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
   const [requirementReturnGuard, setRequirementReturnGuard] = useState(params.requirementSaved === '1');
+  const sourceRoles = PERSON_CLASSIFICATIONS.filter((value): value is PropertySource['role'] => value !== 'seeker' && person?.classifications.includes(value) === true);
 
   useEffect(() => {
     if (params.requirementSaved !== '1') return;
@@ -377,10 +378,15 @@ export default function PersonDetailScreen() {
               </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
-             {params.saved === '1' && person.classifications.includes('seeker') ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
+             {params.saved === '1' ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step">
+               <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('people.saved_next')}</Text>
+               {person.classifications.includes('seeker') ? <Button title={t('requirements.add')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" /> : null}
+               {sourceRoles.map(role => <Button key={role} title={`${t('people.add_property')} · ${t(`source.role.${role}`)}`} onPress={() => router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: role } } as never)} variant="outline" testID={`person-saved-add-property-${role}`} />)}
+               <Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/>
+             </View> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
-              {person.classifications.includes('seeker') ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" accessibilityRole="button" style={[styles.addRequirementButton, { borderColor: colors.primary }]}><Text style={[styles.addRequirementText, { color: colors.primary, fontFamily: fonts.semiBold }]}>{t('requirements.add')}</Text></TouchableOpacity> : null}
+              {person.classifications.includes('seeker') && params.saved !== '1' ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" accessibilityRole="button" style={[styles.addRequirementButton, { borderColor: colors.primary }]}><Text style={[styles.addRequirementText, { color: colors.primary, fontFamily: fonts.semiBold }]}>{t('requirements.add')}</Text></TouchableOpacity> : null}
             </View>
             {!person.classifications.includes('seeker') ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.seeker_required')}</Text> : requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
               <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}</Text>
@@ -388,7 +394,7 @@ export default function PersonDetailScreen() {
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
-              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.flex} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.flex} testID={`requirement-edit-${requirement.id}`}/></View>
+              <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} style={styles.flex} testID={`requirement-view-${requirement.id}`}/><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.flex} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.flex} testID={`requirement-edit-${requirement.id}`}/></View>
             </View>)}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
@@ -451,7 +457,8 @@ export default function PersonDetailScreen() {
                 <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
               </TouchableOpacity>
             ))}
-            <Button title={t('people.quick_add_property')} onPress={() => router.push({ pathname: '/capture', params: { linkPersonId: person.id } } as never)} testID="person-quick-add-property" />
+            {sourceRoles.length === 0 ? <Button title={t('people.quick_add_property')} onPress={() => router.push({ pathname: '/capture', params: { linkPersonId: person.id } } as never)} testID="person-quick-add-property" /> : null}
+            {sourceRoles.map(role => <Button key={role} title={`${t('people.add_property')} · ${t(`source.role.${role}`)}`} onPress={() => router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: role } } as never)} variant="outline" testID={`person-add-property-${role}`} />)}
             <Button title={t('capture.cancel')} onPress={() => setLinkOpen(false)} variant="outline" testID="link-property-cancel" />
           </ScrollView>
         </View>

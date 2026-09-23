@@ -195,6 +195,40 @@ test('SeekerRequirement validates canonical structure without Matching semantics
   }
 });
 
+test('catalog preferences validate applicability and preserve zero and false', () => {
+  const requirement = {
+    ...rentRequirement(),
+    catalogPreferences: [
+      { field: 'bedroomCount', kind: 'number', comparison: 'minimum', value: 0 },
+      { field: 'hasCentralAC', kind: 'feature', value: false },
+      { field: 'furnishing', kind: 'choice', value: 'furnished' },
+    ],
+  };
+  const normalized = normalizeSeekerRequirement(requirement);
+  assert.equal(normalized.ok, true);
+  if (normalized.ok) {
+    assert.deepEqual(normalized.value.catalogPreferences, requirement.catalogPreferences);
+  }
+
+  const invalid = validateSeekerRequirement({
+    ...rentRequirement(),
+    catalogPreferences: [
+      { field: 'bedroomCount', kind: 'number', comparison: 'minimum', value: 1.5 },
+      { field: 'hasPool', kind: 'feature', value: true },
+    ],
+  });
+  assert.equal(invalid.ok, false);
+
+  const floorWithoutUse = validateSeekerRequirement({
+    ...rentRequirement(),
+    propertyType: 'floor',
+    catalogPreferences: [
+      { field: 'bedroomCount', kind: 'number', comparison: 'minimum', value: 2 },
+    ],
+  });
+  assert.equal(floorWithoutUse.ok, false);
+});
+
 class MemoryStorage {
   readonly values = new Map<string, string>();
 

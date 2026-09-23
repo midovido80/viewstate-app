@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,12 +28,17 @@ export default function NewPersonScreen() {
   const [countryOpen, setCountryOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [classifications, setClassifications] = useState<PersonClassification[]>([]);
+  const [entryMode, setEntryMode] = useState<'choose' | 'manual'>('choose');
   const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const saveFlight = useRef(false);
+  const personId = useRef(generateDomainId()).current;
 
-  const toggle = (value: PersonClassification) => setClassifications(current =>
-    current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
+  const toggle = (value: PersonClassification) => setClassifications(current => {
+    const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
+    return PERSON_CLASSIFICATIONS.filter(item => next.includes(item));
+  });
 
   const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
     ?? PHONE_COUNTRIES[0];
@@ -48,12 +53,13 @@ export default function NewPersonScreen() {
   };
 
   const save = async () => {
-    if (saving) return;
+    if (saveFlight.current) return;
     setError('');
+    saveFlight.current = true;
     setSaving(true);
     try {
       const person = createPerson({
-        id: generateDomainId(),
+        id: personId,
         name,
         displayPhone: phone,
         normalizedPhone: normalizePhoneForCountry(phone, phoneCountry),
@@ -69,6 +75,7 @@ export default function NewPersonScreen() {
           : code.includes('CLASSIFICATION') ? t('people.classification_required')
             : t('people.save_failed'));
     } finally {
+      saveFlight.current = false;
       setSaving(false);
     }
   };
@@ -104,6 +111,14 @@ export default function NewPersonScreen() {
             />
           ))}
         </View>
+        {classifications.length > 0 && entryMode === 'choose' ? (
+          <View style={styles.entryChoices}>
+            <Button title={t('people.manual_entry')} onPress={() => setEntryMode('manual')} testID="person-manual-entry" />
+            <Button title={t('people.import_contact')} onPress={importContact} variant="outline" testID="person-import-entry" />
+          </View>
+        ) : null}
+        {entryMode === 'choose' ? null : (
+        <>
         <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} placeholderTextColor={colors.mutedForeground} style={inputStyle} testID="person-name" />
         <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <TouchableOpacity
@@ -119,10 +134,11 @@ export default function NewPersonScreen() {
           </TouchableOpacity>
           <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
         </View>
-        <Button title={t('people.import_contact')} onPress={importContact} variant="outline" testID="person-import-contact" />
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
+        </>
+        )}
       </KeyboardAwareScrollViewCompat>
       {classifications.length === 1 ? (
         <BatchContactImportModal
@@ -177,6 +193,7 @@ const styles = StyleSheet.create({
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   label: { fontSize: 16 },
   choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  entryChoices: { gap: 10 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
   countryPicker: { borderRadius: 14, padding: 16, gap: 4 },
   countryTitle: { fontSize: 20, marginBottom: 8 },

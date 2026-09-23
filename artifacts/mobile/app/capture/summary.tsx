@@ -27,12 +27,14 @@ import {
   prepareCapturedDetails,
 } from '@/services/propertyCaptureSave';
 import type { Property, PropertyDetailField } from '@workspace/property-domain';
+import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
 
 export default function SummaryScreen() {
   const router = useRouter();
-  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
+  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
+  const selectedSourceRole = sourceRole;
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -145,6 +147,20 @@ export default function SummaryScreen() {
           return;
         }
 
+        // Check the selected private relationship before saving the property;
+        // a stale Person or role must not produce an unowned property.
+        if (linkPersonId && sourceRole) {
+          if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) {
+            Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
+            return;
+          }
+          const linkedPerson = await store.getPerson(linkPersonId);
+          if (!linkedPerson?.classifications.includes(sourceRole as import('@/services/people').PersonClassification)) {
+            Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
+            return;
+          }
+        }
+
         const recoveryPropertyCoreId = draft.propertyCoreId;
         let preparedDetails = null;
         if (candidate && projection?.ok) {
@@ -207,6 +223,19 @@ export default function SummaryScreen() {
         const savedId = projection && projection.ok ? projection.property.core.id : draft.propertyCoreId;
         if (linkPersonId && savedId) {
           try {
+            // A source is private metadata, so only apply it when the saved
+            // person still carries the canonical role selected at entry.
+            if (selectedSourceRole && (PROPERTY_SOURCE_ROLES as readonly string[]).includes(selectedSourceRole)) {
+              const linkedPerson = await store.getPerson(linkPersonId);
+              if (!linkedPerson?.classifications.includes(selectedSourceRole as import('@/services/people').PersonClassification)) throw new Error('SOURCE_ROLE_MISMATCH');
+              await store.setPropertySource({
+                personId: linkPersonId,
+                propertyCoreId: savedId,
+                role: selectedSourceRole as typeof PROPERTY_SOURCE_ROLES[number],
+              });
+            } else if (selectedSourceRole) {
+              throw new Error('SOURCE_ROLE_MISMATCH');
+            }
             await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: savedId });
           } catch {
             Alert.alert(t('people.link_failed'), t('people.link_failed_message'));
@@ -215,7 +244,7 @@ export default function SummaryScreen() {
         }
         router.replace({
           pathname: '/capture/success',
-          params: savedId ? { propertyCoreId: savedId, ...(linkPersonId ? { linkPersonId } : {}) } : {},
+          params: savedId ? { propertyCoreId: savedId, ...(linkPersonId ? { linkPersonId } : {}), ...(selectedSourceRole ? { sourceRole: selectedSourceRole } : {}) } : {},
         } as never);
       } finally {
         setSubmitting(false);
