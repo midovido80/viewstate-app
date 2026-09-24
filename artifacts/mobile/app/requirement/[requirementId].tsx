@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,9 +29,19 @@ import {
   buildPersonRequirement,
   formValuesFromRequirement,
   parseOptionalRequirementNumber,
+  toggleRequirementAmenity,
   type RequirementFormValues,
 } from '@/services/personRequirementWorkflow';
 import { localizedRequirementIssue } from '@/services/requirementIssueMessage';
+import {
+  retryRequirementNavigation,
+  retryRequirementReadback,
+  RequirementRouteGeneration,
+  savePersonRequirement,
+  shouldRenderRequirementRecoveryControls,
+  tryStartRequirementSave,
+  verifyUncertainRequirementWrite,
+} from '@/services/requirementSaveOutcome';
 import { getRequirementCatalogFields, getRequirementPresentationFields } from '@/services/requirementFieldMap';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
@@ -40,6 +50,7 @@ const RENT_SERVICES = ['swimmingPool', 'gym', 'seaView'] as const;
 const AMENITY_LABELS: Record<string, { en: string; ar: string }> = {
   swimmingPool: { en: 'Swimming pool', ar: 'مسبح' }, gym: { en: 'Gym', ar: 'جيم' },
   seaView: { en: 'Sea view', ar: 'إطلالة بحرية' }, centralAC: { en: 'Central A/C', ar: 'تكييف مركزي' },
+  private_roof: { en: 'Private roof', ar: 'سطح خاص' },
 };
 for (const [id, en, ar] of [
   ['heating', 'Heating', 'تدفئة'], ['balcony', 'Balcony', 'بلكونة'], ['maid_room', 'Maid room', 'غرفة خادمة'],
@@ -106,9 +117,26 @@ export default function RequirementEditor() {
   const [notes, setNotes] = useState('');
   const draftId = useRef(editing ? requirementId : generateDomainId());
   const saveFlight = useRef(false);
+  const confirmedRequirement = useRef<SeekerRequirement | null>(null);
+  const uncertainRequirement = useRef<SeekerRequirement | null>(null);
+  const editConflictRequirement = useRef<SeekerRequirement | null>(null);
+  const routeGeneration = useRef(new RequirementRouteGeneration());
+  const [recoveryAction, setRecoveryAction] = useState<'readback' | 'navigation' | 'verify' | 'edit_conflict' | null>(null);
+
+  useLayoutEffect(() => {
+    routeGeneration.current.advance();
+    saveFlight.current = false;
+    confirmedRequirement.current = null;
+    uncertainRequirement.current = null;
+    editConflictRequirement.current = null;
+    setRecoveryAction(null);
+    setSaving(false);
+    return () => { routeGeneration.current.advance(); };
+  }, [editing, requirementId, ownerFromRoute]);
 
   useEffect(() => {
     setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(0); setInvalidCatalogFields(new Set());
+    confirmedRequirement.current = null; uncertainRequirement.current = null; editConflictRequirement.current = null; setRecoveryAction(null);
     draftId.current = editing ? requirementId : generateDomainId();
     setPurpose('rent'); setPropertyType('apartment'); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
@@ -241,18 +269,145 @@ export default function RequirementEditor() {
     setStep(value => value + 1);
   };
   const save = async () => {
-    if (saveFlight.current) return;
-    saveFlight.current = true; setError('');
+    if (!tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)) return;
+    const generation = routeGeneration.current.capture();
+    const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
+    setError('');
     try {
       const result = candidate();
       if (!result.ok) { setError(result.message); return; }
       setSaving(true);
-      if (baseline) { if (!await store.updateRequirement(baseline, result.value)) throw new Error('REQUIREMENT_CHANGED'); }
-      else await store.saveRequirement(result.value);
-      router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never);
-    } catch (caught) {
-      setError(caught instanceof Error && caught.message === 'REQUIREMENT_CHANGED' ? localizedRequirementIssue({ code: 'save_conflict' }, language) : t('requirements.save_failed'));
-    } finally { setSaving(false); saveFlight.current = false; }
+      const outcome = await savePersonRequirement({
+        candidate: result.value,
+        baseline,
+        store,
+        navigate: () => isCurrentRoute()
+          ? router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never)
+          : undefined,
+      });
+      if (isCurrentRoute()) applySaveOutcome(outcome, result.value);
+    } finally {
+      if (isCurrentRoute()) {
+        setSaving(false);
+        saveFlight.current = false;
+      }
+    }
+  };
+
+  const personDetailsNavigation = (requirement: SeekerRequirement) =>
+    router.replace({ pathname: '/person/[personId]', params: { personId: requirement.seekerId } } as never);
+  const applySaveOutcome = (
+    outcome: Awaited<ReturnType<typeof savePersonRequirement>>,
+    requirement: SeekerRequirement,
+  ) => {
+    if (outcome.status === 'saved') {
+      confirmedRequirement.current = null;
+      uncertainRequirement.current = null;
+      editConflictRequirement.current = null;
+      setRecoveryAction(null);
+      setError('');
+    } else if (outcome.status === 'missing_person') {
+      setError(localizedRequirementIssue({ code: 'save_missing_person' }, language));
+    } else if (outcome.status === 'non_seeker') {
+      setError(localizedRequirementIssue({ code: 'save_non_seeker' }, language));
+    } else if (outcome.status === 'saved_readback_failed') {
+      confirmedRequirement.current = requirement;
+      setRecoveryAction('readback');
+      setError(localizedRequirementIssue({ code: 'save_readback_failed' }, language));
+    } else if (outcome.status === 'saved_navigation_failed') {
+      confirmedRequirement.current = requirement;
+      setRecoveryAction('navigation');
+      setError(localizedRequirementIssue({ code: 'save_navigation_failed' }, language));
+    } else if (outcome.status === 'edit_conflict') {
+      editConflictRequirement.current = requirement;
+      setRecoveryAction('edit_conflict');
+      setError(localizedRequirementIssue({ code: 'save_edit_conflict' }, language));
+    } else if (outcome.conflict) {
+      if (!outcome.retryAllowed) {
+        uncertainRequirement.current = requirement;
+        setRecoveryAction('verify');
+      }
+      setError(localizedRequirementIssue({ code: 'save_conflict' }, language));
+    } else {
+      if (!outcome.retryAllowed) {
+        uncertainRequirement.current = requirement;
+        setRecoveryAction('verify');
+      }
+      setError(localizedRequirementIssue({ code: outcome.retryAllowed ? 'save_storage_failure' : 'save_storage_uncertain' }, language));
+    }
+  };
+  const retryRecoveryAction = async () => {
+    if (saveFlight.current) return;
+    const confirmed = confirmedRequirement.current;
+    const uncertain = uncertainRequirement.current;
+    const target = confirmed ?? uncertain;
+    if (!target || recoveryAction === 'edit_conflict') return;
+    saveFlight.current = true;
+    const generation = routeGeneration.current.capture();
+    const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
+    setSaving(true);
+    try {
+      const navigate = () => isCurrentRoute() ? personDetailsNavigation(target) : undefined;
+      if (recoveryAction === 'navigation') {
+        const outcome = await retryRequirementNavigation(navigate);
+        if (isCurrentRoute()) applySaveOutcome(outcome, target);
+      } else if (recoveryAction === 'readback' || recoveryAction === 'verify') {
+        const outcome = recoveryAction === 'verify'
+          ? await verifyUncertainRequirementWrite({ candidate: target, store, navigate })
+          : await retryRequirementReadback({ candidate: target, store, navigate });
+        if (outcome.status === 'storage_failure' && outcome.retryAllowed) {
+          if (isCurrentRoute()) {
+            uncertainRequirement.current = null;
+            confirmedRequirement.current = null;
+            setRecoveryAction(null);
+            setError(localizedRequirementIssue({ code: 'save_storage_failure' }, language));
+          }
+        } else if (outcome.status === 'storage_failure' && outcome.conflict) {
+          if (isCurrentRoute()) setError(localizedRequirementIssue({ code: 'save_conflict' }, language));
+        } else if (isCurrentRoute()) {
+          applySaveOutcome(outcome, target);
+        }
+      }
+    } finally {
+      if (isCurrentRoute()) {
+        setSaving(false);
+        saveFlight.current = false;
+      }
+    }
+  };
+  const openPersonDetails = async () => {
+    const target = confirmedRequirement.current ?? editConflictRequirement.current;
+    if (!target || saveFlight.current) return;
+    saveFlight.current = true;
+    const generation = routeGeneration.current.capture();
+    const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
+    try {
+      if (isCurrentRoute()) await personDetailsNavigation(target);
+    } catch {
+      if (isCurrentRoute() && confirmedRequirement.current) {
+        setRecoveryAction('navigation');
+        setError(localizedRequirementIssue({ code: 'save_navigation_failed' }, language));
+      }
+    } finally {
+      if (isCurrentRoute()) saveFlight.current = false;
+    }
+  };
+  const confirmReopenLatest = () => {
+    const message = language === 'ar'
+      ? 'لم تُحفظ تعديلاتك الحالية. ستفقدها إذا فتحت أحدث نسخة من المتطلب. هل تريد المتابعة؟'
+      : 'Your current edits were not saved. Opening the latest Requirement will discard them. Continue?';
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (window.confirm(message)) void openPersonDetails();
+      return;
+    }
+    Alert.alert(
+      language === 'ar' ? 'تعديلات غير محفوظة' : 'Unsaved edits',
+      message,
+      [
+        { text: t('capture.cancel'), style: 'cancel' },
+        { text: language === 'ar' ? 'افتح أحدث نسخة' : 'Open latest', style: 'destructive', onPress: () => void openPersonDetails() },
+      ],
+    );
   };
 
   const coreApplicable = isResidential(propertyType, floorUse);
@@ -302,7 +457,22 @@ export default function RequirementEditor() {
   });
 
   return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}><Text style={{ color: colors.primary }}>{t('capture.cancel')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{step + 1}/{STEPS.length}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
-    {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
+     {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
+       {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
+       {recoveryAction && recoveryAction !== 'edit_conflict' && <View style={styles.recoveryActions}>
+         <TouchableOpacity onPress={() => void retryRecoveryAction()} disabled={saving} testID="requirement-save-recovery">
+           <Text style={{ color: colors.primary }}>{recoveryAction === 'verify' ? label('Check save status', 'تحقق من حالة الحفظ') : recoveryAction === 'readback' ? label('Retry confirmation', 'أعد محاولة التأكيد') : label('Retry opening Person Details', 'أعد محاولة فتح تفاصيل الشخص')}</Text>
+         </TouchableOpacity>
+         {confirmedRequirement.current && <TouchableOpacity onPress={() => void openPersonDetails()} disabled={saving} testID="requirement-open-person-details">
+           <Text style={{ color: colors.primary }}>{label('Open Person Details', 'افتح تفاصيل الشخص')}</Text>
+         </TouchableOpacity>}
+       </View>}
+       {recoveryAction === 'edit_conflict' && <View style={styles.recoveryActions}>
+         <TouchableOpacity onPress={confirmReopenLatest} disabled={saving} testID="requirement-reopen-latest">
+           <Text style={{ color: colors.primary }}>{label('Return to Person Details to reopen latest', 'عُد إلى تفاصيل الشخص لإعادة فتح أحدث نسخة')}</Text>
+         </TouchableOpacity>
+       </View>}
+     </View> : null}
      {step === 0 && <><Text style={styles.heading}>{t('requirements.purpose')}</Text><View style={styles.wrap}>{(['rent', 'buy'] as const).map(value => <ChoiceChip key={value} label={t(`requirements.purpose.${value}`)} selected={purpose === value} onPress={() => changePurpose(value)} testID={`requirement-purpose-${value}`} role="radio" />)}</View></>}
     {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><View style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</View>{propertyType === 'floor' && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><View style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</View></>}</>}
     {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
@@ -330,7 +500,7 @@ export default function RequirementEditor() {
      </View>}
     {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <View style={styles.wrap}>{(['monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{purpose === 'rent' ? label('Rent', 'إيجار') : label('Buy', 'شراء')} · {t(`propertyType.${propertyType}`)}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}
-   </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={() => { setError(''); setStep(value => value - 1); }} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
+   </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={() => { setError(''); setStep(value => value - 1); }} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={!!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
 }
 
 function RequirementCatalogPreferencesProxy({ propertyType, floorUse, values, onChange, amenities, onAmenitiesChange, excluded, onExcludedChange, showAmenities, amenityFields }: { propertyType: PropertyType; floorUse?: FloorUse; values: readonly CatalogPreference[]; onChange: (values: readonly CatalogPreference[]) => void; amenities: readonly ResidentialAmenity[]; onAmenitiesChange: (values: readonly ResidentialAmenity[]) => void; excluded: readonly ResidentialAmenity[]; onExcludedChange: (values: readonly ResidentialAmenity[]) => void; showAmenities: boolean; amenityFields: readonly CatalogPreference['field'][] }) {
@@ -339,25 +509,20 @@ function RequirementCatalogPreferencesProxy({ propertyType, floorUse, values, on
     heating: ['Heating', 'تدفئة'], balcony: ['Balcony', 'بلكونة'], maid_room: ['Maid room', 'غرفة خادمة'],
     laundry_room: ['Laundry room', 'غرفة غسيل'], solar_heater: ['Solar heater', 'سخان شمسي'],
     elevator: ['Elevator', 'مصعد'], garden: ['Garden', 'حديقة'], security_guard: ['Security / Guard', 'أمن / حارس'], bbq_area: ['BBQ area', 'منطقة شواء'],
+    private_roof: ['Private roof', 'سطح خاص'],
   };
   return <>{showAmenities && <View style={styles.wrap}>{RESIDENTIAL_AMENITIES.map(amenity => {
     const required = amenities.includes(amenity);
     const isExcluded = excluded.includes(amenity);
     const state = isExcluded ? (language === 'ar' ? ' · يجب ألا تتوفر' : ' · Must not have') : required ? (language === 'ar' ? ' · مطلوب' : ' · Required') : (language === 'ar' ? ' · غير مهم' : ' · Not important');
     return <ChoiceChip key={amenity} label={`${required || isExcluded ? '✓ ' : ''}${labels[amenity][language === 'ar' ? 1 : 0]}${state}`} selected={required || isExcluded} onPress={() => {
-      if (required) {
-        onAmenitiesChange(amenities.filter(value => value !== amenity));
-        onExcludedChange([...excluded, amenity]);
-      } else if (isExcluded) {
-        onExcludedChange(excluded.filter(value => value !== amenity));
-      } else {
-        onAmenitiesChange([...amenities, amenity]);
-        onExcludedChange(excluded.filter(value => value !== amenity));
-      }
+      const next = toggleRequirementAmenity(amenity, amenities, excluded);
+      onAmenitiesChange(next.preferred);
+      onExcludedChange(next.excluded);
     }} testID={`requirement-preferred-amenity-${amenity}`} role="checkbox" />;
   })}</View>}{amenityFields.length > 0 && <RequirementCatalogPreferences scopeKey={`requirement-catalog:${propertyType}:${floorUse ?? 'none'}`} propertyType={propertyType} floorUse={floorUse} values={values} onChange={onChange} onInvalidChange={catalogInvalidBridge} fields={amenityFields} />}</>;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 }, body: { flex: 1 }, header: { minHeight: 60, padding: 20, alignItems: 'center', justifyContent: 'space-between' }, title: { fontSize: 19 }, content: { padding: 20, gap: 12 }, heading: { fontSize: 20, marginTop: 6, marginBottom: 8 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, input: { minHeight: 50, borderWidth: 1, borderColor: '#999', borderRadius: 12, paddingHorizontal: 14, marginBottom: 8 }, notes: { minHeight: 110, textAlignVertical: 'top', paddingTop: 12 }, summaryTitle: { fontSize: 17, fontWeight: '700' }, summary: { fontSize: 15, lineHeight: 22 }, footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 16 }, actions: { flexDirection: 'row', gap: 10 }, flex: { flex: 1 },
+  container: { flex: 1 }, body: { flex: 1 }, header: { minHeight: 60, padding: 20, alignItems: 'center', justifyContent: 'space-between' }, title: { fontSize: 19 }, content: { padding: 20, gap: 12 }, heading: { fontSize: 20, marginTop: 6, marginBottom: 8 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, input: { minHeight: 50, borderWidth: 1, borderColor: '#999', borderRadius: 12, paddingHorizontal: 14, marginBottom: 8 }, notes: { minHeight: 110, textAlignVertical: 'top', paddingTop: 12 }, summaryTitle: { fontSize: 17, fontWeight: '700' }, summary: { fontSize: 15, lineHeight: 22 }, recoveryActions: { gap: 10, paddingVertical: 8 }, footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 16 }, actions: { flexDirection: 'row', gap: 10 }, flex: { flex: 1 },
 });

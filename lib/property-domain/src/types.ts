@@ -53,7 +53,8 @@ export type ResidentialAmenity =
   | "elevator"
   | "garden"
   | "security_guard"
-  | "bbq_area";
+  | "bbq_area"
+  | "private_roof";
 
 export type PropertyCoreId = string;
 export type OfferId = string;

@@ -46,6 +46,37 @@ export type OptionalRequirementNumberResult =
   | { readonly ok: true; readonly value: number | undefined }
   | { readonly ok: false };
 
+/**
+ * New amenity selections are positive preferences. Clearing one means
+ * unspecified; legacy exclusions remain clearable without converting a new
+ * selection into an exclusion.
+ */
+export function toggleRequirementAmenity(
+  amenity: ResidentialAmenity,
+  preferred: readonly ResidentialAmenity[],
+  excluded: readonly ResidentialAmenity[],
+): {
+  readonly preferred: readonly ResidentialAmenity[];
+  readonly excluded: readonly ResidentialAmenity[];
+} {
+  if (preferred.includes(amenity)) {
+    return {
+      preferred: preferred.filter(value => value !== amenity),
+      excluded,
+    };
+  }
+  if (excluded.includes(amenity)) {
+    return {
+      preferred,
+      excluded: excluded.filter(value => value !== amenity),
+    };
+  }
+  return {
+    preferred: [...preferred, amenity],
+    excluded: excluded.filter(value => value !== amenity),
+  };
+}
+
 /** Distinguishes intentionally missing input from malformed non-empty input. */
 export function parseOptionalRequirementNumber(
   input: string,

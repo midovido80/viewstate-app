@@ -9,7 +9,14 @@ type RequirementIssueAlias =
   | 'master_bedroom_exceeds_bedrooms'
   | 'incompatible_category_preference'
   | 'invalid_requirement_draft'
-  | 'save_conflict';
+  | 'save_conflict'
+  | 'save_missing_person'
+  | 'save_non_seeker'
+  | 'save_edit_conflict'
+  | 'save_storage_failure'
+  | 'save_storage_uncertain'
+  | 'save_readback_failed'
+  | 'save_navigation_failed';
 
 export type LocalizableRequirementIssueCode =
   | RequirementValidationIssue['code']
@@ -51,6 +58,13 @@ const messages: Record<LocalizableRequirementIssueCode, readonly [english: strin
   invalid_floor_use: ['Choose an approved floor use for this Floor Requirement.', 'اختر استخداماً معتمداً لمتطلب الدور.'],
   invalid_requirement_draft: ['The Requirement draft is invalid. Review the highlighted details and try again.', 'مسودة المتطلب غير صالحة. راجع التفاصيل المحددة وحاول مرة أخرى.'],
   save_conflict: ['This Requirement changed before it could be saved. Review it and retry.', 'تغير هذا المتطلب قبل حفظه. راجعه وحاول مرة أخرى.'],
+  save_missing_person: ['This Person is no longer available. Return to People and choose a Person again.', 'هذا الشخص لم يعد متاحاً. عُد إلى قائمة الأشخاص واختر شخصاً مرة أخرى.'],
+  save_non_seeker: ['This Person is not classified as a seeker. Open Person Details and add the seeker classification before saving.', 'هذا الشخص غير مصنف كباحث. افتح تفاصيل الشخص وأضف تصنيف الباحث قبل الحفظ.'],
+  save_edit_conflict: ['This Requirement changed elsewhere. Your edits were not saved. You can review them here; reopening the latest version requires confirming that they will be discarded.', 'تم تغيير هذا المتطلب في مكان آخر. لم تُحفظ تعديلاتك. يمكنك مراجعتها هنا؛ وستحتاج إلى تأكيد فقدانها قبل فتح أحدث نسخة.'],
+  save_storage_failure: ['The Requirement could not be saved. Your entries are still here; you can safely try again.', 'تعذر حفظ المتطلب. ما زالت بياناتك هنا؛ يمكنك المحاولة مرة أخرى بأمان.'],
+  save_storage_uncertain: ['The save result is uncertain. Your entries are still here; check its exact-ID status before retrying.', 'نتيجة الحفظ غير مؤكدة. ما زالت بياناتك هنا؛ تحقق من حالة المتطلب باستخدام هويته المحددة قبل إعادة المحاولة.'],
+  save_readback_failed: ['The Requirement may have been saved, but it could not be confirmed. Your entries are still here; check the saved Requirement or open Person Details. Do not save it again yet.', 'قد يكون المتطلب قد حُفظ، لكن تعذر تأكيده. ما زالت بياناتك هنا؛ تحقق من المتطلب المحفوظ أو افتح تفاصيل الشخص. لا تحفظه مرة أخرى الآن.'],
+  save_navigation_failed: ['The Requirement was saved and confirmed, but Person Details could not be opened. Your entries are still here; retry opening Person Details without saving again.', 'تم حفظ المتطلب وتأكيده، لكن تعذر فتح تفاصيل الشخص. ما زالت بياناتك هنا؛ أعد محاولة فتح تفاصيل الشخص دون الحفظ مرة أخرى.'],
 };
 
 const fallback = {

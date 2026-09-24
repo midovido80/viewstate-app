@@ -55,6 +55,13 @@ test('correction-specific issue aliases and unknown issues use localized safe fa
     'incompatible_category_preference',
     'invalid_requirement_draft',
     'save_conflict',
+    'save_missing_person',
+    'save_non_seeker',
+    'save_edit_conflict',
+    'save_storage_failure',
+    'save_storage_uncertain',
+    'save_readback_failed',
+    'save_navigation_failed',
   ];
   for (const code of aliases) {
     assert.notEqual(localizedRequirementIssue({ code }, 'en'), localizedRequirementIssue({ code }, 'ar'));

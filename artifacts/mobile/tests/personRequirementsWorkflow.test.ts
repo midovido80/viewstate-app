@@ -237,14 +237,13 @@ test('Requirement save serializes direct invocations while preserving sequential
     readFile('app/person/[personId].tsx', 'utf8'),
   ]);
   const saveStart = requirement.indexOf('const save = async () =>');
-  const guard = requirement.indexOf('if (saveFlight.current) return;', saveStart);
-  const acquire = requirement.indexOf('saveFlight.current = true;', guard);
-  const firstStoreAwait = requirement.indexOf('await store.', acquire);
+  const guard = requirement.indexOf('tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart);
+  const firstStoreAwait = requirement.indexOf('await savePersonRequirement(', guard);
   const release = requirement.indexOf('saveFlight.current = false;', firstStoreAwait);
-  assert.ok(saveStart >= 0 && guard > saveStart && acquire > guard);
-  assert.ok(firstStoreAwait > acquire, 'flight must be acquired before the first persistence await');
+  assert.ok(saveStart >= 0 && guard > saveStart);
+  assert.ok(firstStoreAwait > guard, 'single-flight gate must be acquired before persistence');
   assert.ok(release > firstStoreAwait, 'flight must be released after the persistence flight');
-   assert.match(requirement, /finally \{\s*setSaving\(false\);\s*saveFlight\.current = false;\s*\}/);
+  assert.match(requirement, /finally \{\s*if \(isCurrentRoute\(\)\) \{\s*setSaving\(false\);\s*saveFlight\.current = false;/);
   assert.doesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
   assert.doesNotMatch(person, /testID="person-saved-add-requirement"/);
   assert.match(person, /testID="person-add-requirement"/);

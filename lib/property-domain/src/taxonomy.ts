@@ -17,6 +17,7 @@ export const RESIDENTIAL_AMENITIES = [
   "garden",
   "security_guard",
   "bbq_area",
+  "private_roof",
 ] as const satisfies readonly ResidentialAmenity[];
 
 export const PROPERTY_TYPES = [

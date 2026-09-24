@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { getRequirementPresentationFields } from '@/services/requirementFieldMap';
-import { buildPersonRequirement, formValuesFromRequirement } from '@/services/personRequirementWorkflow';
+import { buildPersonRequirement, formValuesFromRequirement, toggleRequirementAmenity } from '@/services/personRequirementWorkflow';
 
 test('Requirement correction has one canonical owner for duplicated meanings', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
@@ -111,6 +111,74 @@ test('one canonical Central A/C, three-value Occupancy, and apartment choices su
     const edit = buildPersonRequirement(excludedAC.value.id, excludedAC.value.seekerId, restored);
     assert.equal(edit.ok && edit.value.centralAC, false);
   }
+});
+
+test('Private roof is typed, localized, residential, and survives Requirement editing', async () => {
+  const domain = await import('@workspace/property-domain');
+  assert.ok(domain.RESIDENTIAL_AMENITIES.includes('private_roof'));
+  assert.equal(domain.isResidentialAmenity('private_roof'), true);
+
+  for (const [propertyType, floorUse] of [
+    ['apartment', undefined],
+    ['house', undefined],
+    ['villa', undefined],
+    ['chalet', undefined],
+    ['floor', 'residential'],
+  ] as const) {
+    const result = buildPersonRequirement('11111111-1111-4111-8111-111111111111', 'seeker', {
+      purpose: 'buy', propertyType, ...(floorUse ? { floorUse } : {}),
+      preferredAreaIds: ['salmiya'], preferredAreaMode: 'specific_areas',
+      minimumBudget: 300, maximumBudget: 600, currencyCode: 'KWD', notes: '',
+      preferredAmenities: ['private_roof'],
+    });
+    assert.equal(result.ok, true, propertyType);
+    if (!result.ok) continue;
+    const restored = formValuesFromRequirement(result.value);
+    assert.deepEqual(restored.preferredAmenities, ['private_roof']);
+    const edited = buildPersonRequirement(result.value.id, result.value.seekerId, restored);
+    assert.equal(edited.ok, true, propertyType);
+    if (edited.ok) assert.deepEqual(edited.value.preferredAmenities, ['private_roof']);
+  }
+
+  const commercial = buildPersonRequirement('11111111-1111-4111-8111-111111111111', 'seeker', {
+    purpose: 'buy', propertyType: 'floor', floorUse: 'commercial',
+    preferredAreaIds: ['salmiya'], preferredAreaMode: 'specific_areas',
+    minimumBudget: 300, maximumBudget: 600, currencyCode: 'KWD', notes: '',
+    preferredAmenities: ['private_roof'],
+  });
+  assert.equal(commercial.ok, false);
+
+  const legacyExcluded = buildPersonRequirement('11111111-1111-4111-8111-111111111111', 'seeker', {
+    purpose: 'buy', propertyType: 'apartment',
+    preferredAreaIds: ['salmiya'], preferredAreaMode: 'specific_areas',
+    minimumBudget: 300, maximumBudget: 600, currencyCode: 'KWD', notes: '',
+    preferredAmenityExclusions: ['balcony'],
+  });
+  assert.equal(legacyExcluded.ok, true);
+  if (legacyExcluded.ok) {
+    const restored = formValuesFromRequirement(legacyExcluded.value);
+    assert.deepEqual(restored.preferredAmenityExclusions, ['balcony']);
+    const edited = buildPersonRequirement(legacyExcluded.value.id, legacyExcluded.value.seekerId, restored);
+    assert.equal(edited.ok, true);
+    if (edited.ok) assert.deepEqual(edited.value.preferredAmenityExclusions, ['balcony']);
+  }
+
+  const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  assert.match(source, /private_roof: \['Private roof', 'سطح خاص'\]/);
+  assert.match(source, /private_roof: \{ en: 'Private roof', ar: 'سطح خاص' \}/);
+});
+
+test('New amenity deselection is unspecified and existing exclusions remain editable', () => {
+  const selected = toggleRequirementAmenity('private_roof', [], []);
+  assert.deepEqual(selected, { preferred: ['private_roof'], excluded: [] });
+
+  const cleared = toggleRequirementAmenity('private_roof', selected.preferred, selected.excluded);
+  assert.deepEqual(cleared, { preferred: [], excluded: [] });
+
+  const legacyExcluded = toggleRequirementAmenity('balcony', [], ['balcony', 'heating']);
+  assert.deepEqual(legacyExcluded, { preferred: [], excluded: ['heating'] });
+  const nextSelection = toggleRequirementAmenity('balcony', legacyExcluded.preferred, legacyExcluded.excluded);
+  assert.deepEqual(nextSelection, { preferred: ['balcony'], excluded: ['heating'] });
 });
 
 test('Requirement form renders the approved labels and one grouped amenity section', async () => {
