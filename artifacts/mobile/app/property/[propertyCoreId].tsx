@@ -37,7 +37,7 @@ import { clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, typ
 import { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, createWebAttachmentFileStore, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment, type WebAttachmentBlobStore } from '@/services/attachments';
 import { reorderAttachments, setAttachmentCover } from '@/services/attachmentOperations';
 import { projectPropertyFacts, isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
-import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates } from '@/services/location';
+import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates, openSavedPropertyMapsLocation } from '@/services/location';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -96,6 +96,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
   const [locationBusy, setLocationBusy] = useState(false);
+  const [mapsActionError, setMapsActionError] = useState('');
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
   const editEntryConsumed = useRef(false);
@@ -838,12 +839,15 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   };
 
   const openDetailMapsLink = async () => {
-    const link = property?.locationEnrichment?.mapsLink?.value?.trim();
-    if (!link) return;
+    const location = property?.locationEnrichment;
     try {
-      await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+      await openSavedPropertyMapsLocation(
+        location?.mapsLink?.value,
+        location?.coordinates,
+      );
+      setMapsActionError('');
     } catch {
-      setError(t('enrich.maps_link_invalid'));
+      setMapsActionError(t('detail.maps_unavailable'));
     }
   };
 
@@ -1085,6 +1089,15 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
                   </Text>
                 </TouchableOpacity>
+                {mapsActionError ? (
+                  <Text
+                    accessibilityRole="alert"
+                    testID="property-maps-error"
+                    style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium, marginTop: 10 }]}
+                  >
+                    {mapsActionError}
+                  </Text>
+                ) : null}
               </View>
 
               {otherFiles.length > 0 && (

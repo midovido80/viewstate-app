@@ -105,6 +105,7 @@ import {
   normalizeGoogleMapsLink,
   openGoogleMapsQuery,
   openPastedGoogleMapsLink,
+  openPropertyMapsLocation,
 } from '../services/mapsLink.ts';
 import { selectWhatsAppScheme } from '../services/whatsappResolution.ts';
 import {
@@ -1782,6 +1783,81 @@ test('Task 6 executable draft simulation: per-property edit drafts are isolated 
   assert.notEqual(propertyEditDraftKey('draft-a'), propertyEditDraftKey('draft-b'));
 });
 
+test('3B behavior: captured property saves, exact-ID reload hydrates edit choices, and preserves location and attachments', async () => {
+  const id = 'ux3b-location-core';
+  const exact = {
+    ...recoveryProperty,
+    core: { ...recoveryProperty.core, id, block: 'Block 4' },
+    activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: id },
+    locationEnrichment: {
+      manualLocationText: createLiteralText(
+        '  Entrance beside the garden  ',
+        createPrivacyMetadata('exact_location', 'explicit_per_share'),
+      ),
+      mapsLink: createLiteralText(
+        'https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z',
+        createPrivacyMetadata('exact_location', 'explicit_per_share'),
+      ),
+      coordinates: {
+        latitude: 29.3,
+        longitude: 48,
+        privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+      },
+    },
+    attachments: [{
+      id: 'ux3b-image-id',
+      kind: 'image' as const,
+      originalName: 'entrance.jpg',
+      mimeType: 'image/jpeg',
+      managedUri: 'mem://ux3b-entrance',
+      order: 0,
+      isCover: true,
+      privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+    }],
+  } as unknown as Property;
+  const sibling = {
+    ...exact,
+    core: { ...exact.core, id: 'ux3b-sibling-core' },
+    activeOffer: { ...exact.activeOffer, propertyCoreId: 'ux3b-sibling-core' },
+  } as Property;
+  const store = new SyntheticPropertyStore([sibling]);
+  await store.saveProperty(exact);
+  assert.equal((await store.getProperty(id))?.core.id, id);
+
+  const restartedStore = new SyntheticPropertyStore(JSON.parse(JSON.stringify(store.properties)) as Property[]);
+  const afterReload = await restartedStore.getProperty(id);
+  assert.ok(afterReload);
+  assert.equal(afterReload.core.id, id, 'readback must target the exact saved property ID');
+
+  const draftStorage = new RecoveryMemoryStorage();
+  const draft = createEditDraft(afterReload);
+  assert.equal(draft.choices.locationAreaId, 'salmiya');
+  assert.equal(draft.choices.block, 'Block 4');
+  assert.equal(draft.choices.manualLocationText, '  Entrance beside the garden  ');
+  assert.equal(draft.choices.mapsLink, 'https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z');
+  assert.deepEqual(draft.choices.coordinates, afterReload.locationEnrichment?.coordinates);
+  assert.deepEqual(draft.choices.attachments, afterReload.attachments);
+  await savePropertyEditDraft(draft, draftStorage);
+  const hydratedAfterRestart = await loadPropertyEditDraft(id, draftStorage);
+  assert.deepEqual(hydratedAfterRestart, draft);
+
+  const candidate = buildPropertyUpdateCandidate(afterReload, {
+    ...hydratedAfterRestart!.choices,
+    priceAmount: 175000,
+  });
+  assert.equal(await restartedStore.compareAndUpdate(afterReload, candidate), true);
+  const updated = await restartedStore.getProperty(id);
+  assert.ok(updated);
+  assert.equal(updated.core.locationArea.id, 'salmiya');
+  assert.equal(updated.core.block, 'Block 4');
+  assert.equal(updated.locationEnrichment?.manualLocationText?.value, '  Entrance beside the garden  ');
+  assert.equal(updated.attachments?.[0].id, 'ux3b-image-id');
+  const readbackAfterEditRestart = new SyntheticPropertyStore(
+    JSON.parse(JSON.stringify(restartedStore.properties)) as Property[],
+  );
+  assert.deepEqual(await readbackAfterEditRestart.getProperty(id), candidate);
+});
+
 test('Task 6 executable draft simulation: newer same-ID generation and discard prevent delayed resurrection', async () => {
   const storage = new RecoveryMemoryStorage();
   const first = createEditDraft({ ...recoveryProperty, core: { ...recoveryProperty.core, id: 'generation-core' }, activeOffer: { ...recoveryProperty.activeOffer, propertyCoreId: 'generation-core' } });
@@ -2457,6 +2533,59 @@ test('Google Maps capture accepts only safe short/full links and prefers native 
   opened.length = 0;
   await openPastedGoogleMapsLink(short, nativeOpener, 'android');
   assert.deepEqual(opened, [short]);
+});
+
+test('Saved detail maps action prefers a validated link, otherwise opens only Kuwait coordinates', async () => {
+  const opened: string[] = [];
+  const opener = { openURL: async (url: string) => { opened.push(url); } };
+  const coordinates = { latitude: 29.3, longitude: 48.0 };
+  const link = 'https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z';
+
+  await openPropertyMapsLocation(link, coordinates, opener, 'android');
+  assert.deepEqual(opened, [link]);
+
+  opened.length = 0;
+  await openPropertyMapsLocation(undefined, coordinates, opener, 'web');
+  assert.deepEqual(opened, [
+    'https://www.google.com/maps/search/?api=1&query=29.3%2C48',
+  ]);
+
+  opened.length = 0;
+  await assert.rejects(
+    openPropertyMapsLocation('https://maps.example.invalid/place', coordinates, opener, 'web'),
+    /INVALID_LOCATION_LINK/,
+  );
+  await assert.rejects(
+    openPropertyMapsLocation('   ', coordinates, opener, 'web'),
+    /INVALID_LOCATION_LINK/,
+  );
+  assert.deepEqual(opened, [], 'an invalid entered link must not fall back to coordinates');
+
+  for (const outOfKuwait of [
+    { latitude: 0, longitude: 0 },
+    { latitude: 31, longitude: 48 },
+    { latitude: 29, longitude: 50 },
+    { latitude: 29.3, longitude: 48.8 },
+    { latitude: 28.4, longitude: 47.7 },
+    { latitude: Number.NaN, longitude: 48 },
+  ]) {
+    await assert.rejects(
+      openPropertyMapsLocation(undefined, outOfKuwait, opener, 'web'),
+      /INVALID_KUWAIT_COORDINATES/,
+    );
+  }
+  assert.deepEqual(opened, []);
+
+  const [detail, i18n] = await Promise.all([
+    readFile(sharedSourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sharedSourcePath('../contexts/I18nContext.tsx'), 'utf8'),
+  ]);
+  assert.match(detail, /openSavedPropertyMapsLocation/);
+  assert.match(detail, /setMapsActionError\(t\('detail\.maps_unavailable'\)\)/);
+  assert.match(detail, /accessibilityRole="alert"[\s\S]*testID="property-maps-error"/);
+  assert.match(detail, /setMapsActionError\(''\)/);
+  assert.match(i18n, /'detail\.maps_unavailable': 'The saved map location could not be opened\.'/);
+  assert.match(i18n, /'detail\.maps_unavailable': 'تعذر فتح الموقع المحفوظ على الخريطة\.'/);
 });
 
 test('V001 selective sharing defaults exclude private notes and injected sharing preserves selected files', async () => {

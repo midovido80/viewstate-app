@@ -3,6 +3,11 @@ export interface LinkOpener {
   openURL(url: string): Promise<unknown>;
 }
 
+export interface MapCoordinates {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
 const GOOGLE_MAPS_HOSTS = new Set([
   'google.com',
   'www.google.com',
@@ -10,6 +15,24 @@ const GOOGLE_MAPS_HOSTS = new Set([
   'goo.gl',
   'maps.app.goo.gl',
 ]);
+
+// Supported Kuwait geographic envelope; non-finite and out-of-envelope values fail closed.
+const KUWAIT_COORDINATE_BOUNDS = {
+  minLatitude: 28.52,
+  maxLatitude: 30.1,
+  minLongitude: 46.55,
+  maxLongitude: 48.43,
+} as const;
+
+export function isKuwaitCoordinates(coordinates: MapCoordinates): boolean {
+  const { latitude, longitude } = coordinates;
+  return Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= KUWAIT_COORDINATE_BOUNDS.minLatitude
+    && latitude <= KUWAIT_COORDINATE_BOUNDS.maxLatitude
+    && longitude >= KUWAIT_COORDINATE_BOUNDS.minLongitude
+    && longitude <= KUWAIT_COORDINATE_BOUNDS.maxLongitude;
+}
 
 export function normalizeGoogleMapsLink(link: string): string {
   const normalized = link.trim();
@@ -91,4 +114,29 @@ export async function openPastedGoogleMapsLink(
   } else {
     await opener.openURL(normalized);
   }
+}
+
+/**
+ * Opens a saved Google Maps link when present, otherwise uses saved coordinates.
+ * A supplied but invalid link is an explicit failure; coordinates must not mask it.
+ */
+export async function openPropertyMapsLocation(
+  link: string | undefined,
+  coordinates: MapCoordinates | undefined,
+  opener: LinkOpener,
+  platform: string,
+): Promise<void> {
+  if (link !== undefined && link.length > 0) {
+    const normalized = normalizeGoogleMapsLink(link);
+    await openPastedGoogleMapsLink(normalized, opener, platform);
+    return;
+  }
+
+  if (!coordinates || !isKuwaitCoordinates(coordinates)) {
+    throw new Error('INVALID_KUWAIT_COORDINATES');
+  }
+
+  const query = `${coordinates.latitude},${coordinates.longitude}`;
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  await opener.openURL(url);
 }
