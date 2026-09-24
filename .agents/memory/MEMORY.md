@@ -2,4 +2,4 @@
 - [Incompatible property detail transitions](incompatible-property-detail-transitions.md) — confirm before removing incompatible draft values; never silently clear or auto-persist them.
 - [Expo Preview verification](expo-preview-navigation.md) — use normal in-app entry; destructive confirmations need in-flow UI because web Alert can fail silently.
 - [Property fact convergence](property-fact-convergence.md) — mapped legacy metadata is fallback-only; a canonical edit snapshot, including deletion, is authoritative.
-- [Requirement save evidence boundary](requirement-save-evidence-boundary.md) — a successful isolated web save cannot prove or repair an earlier failure in another runtime or storage instance.
+- [Requirement save evidence boundary](requirement-save-evidence-boundary.md) — separate unrecoverable historical exceptions from independently verified current save gates.
