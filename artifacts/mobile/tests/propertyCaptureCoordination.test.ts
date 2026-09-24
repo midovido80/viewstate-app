@@ -24,6 +24,7 @@ import {
 import { persistAttachmentsThenDeleteRemoved, persistNewAttachmentsOrDeleteOnFailure, type LocalAttachment } from '@/services/attachmentOperations';
 import { readFile } from 'node:fs/promises';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
+import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -59,6 +60,22 @@ test('BEHAVIOR: missing area stays attached through picker cancellation and clea
   assert.deepEqual(validation, { required: false });
   validation = transitionCaptureAreaValidation(validation, { type: 'preview', selected: true });
   assert.deepEqual(validation, { required: false });
+});
+
+test('BEHAVIOR: capture preview rejects invalid Maps URLs without discarding draft values', () => {
+  const invalidLinks = ['https://maps.google.com/', '   '];
+  for (const link of invalidLinks) {
+    const draftValue = link;
+    assert.equal(getCaptureMapsLinkValidationError(link), 'INVALID_LOCATION_LINK');
+    assert.equal(draftValue, link, 'validation must not rewrite or clear the captured value');
+  }
+
+  assert.equal(
+    getCaptureMapsLinkValidationError('https://www.google.com/maps/search/?api=1&query=29.33%2C48.01'),
+    null,
+  );
+  assert.equal(getCaptureMapsLinkValidationError(''), null);
+  assert.equal(getCaptureMapsLinkValidationError(undefined), null);
 });
 
 test('BEHAVIOR: BASIC projection rejects missing required capture data', () => {
@@ -258,6 +275,10 @@ test('SOURCE ASSERTION: web attachment controls and native media filters are exp
   assert.match(capture, /capture-save-validation-error/);
   assert.match(capture, /accessibilityRole="alert"/);
   assert.match(capture, /setSaveError\(message\)/);
+  assert.match(capture, /if \(getCaptureMapsLinkValidationError\(captureDetails\.mapsLink\)\) return;/);
+  assert.match(capture, /onChangeText=\{value => updateCaptureDetails\(\{ mapsLink: value \|\| undefined \}\)\}/);
+  assert.match(capture, /capture-maps-link-error/);
+  assert.match(capture, /error\.message === 'INVALID_LOCATION_LINK'[\s\S]*t\('enrich\.maps_link_invalid'\)/);
 });
 
 test('BEHAVIOR: Floor transition scopes are record-owned for stale protection', () => {

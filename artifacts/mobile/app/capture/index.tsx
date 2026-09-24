@@ -65,6 +65,7 @@ import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@wo
 import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
 import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
+import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
 
 // The capture child routes preserve the person link in their params. Keep the
 // selected source role alongside it for installations where child routes
@@ -133,6 +134,9 @@ export default function CaptureWorkflow() {
 
 
   const scopeKey = captureDetailsScopeKey(draft.propertyCoreId);
+  const mapsLinkError = getCaptureMapsLinkValidationError(captureDetails.mapsLink)
+    ? t('enrich.maps_link_invalid')
+    : null;
   const applicable = useMemo(
     () => draft.propertyType
       ? getApplicablePropertyFormFields(draft.propertyType, captureDetails.floorUse as 'residential' | 'commercial' | undefined)
@@ -446,6 +450,7 @@ export default function CaptureWorkflow() {
       return;
     }
     if (!draft.locationAreaId) return;
+    if (getCaptureMapsLinkValidationError(captureDetails.mapsLink)) return;
     if (Object.keys(quickErrors).length > 0) {
       Alert.alert(t('errors.validation_title'), language === 'ar' ? 'صحح القيم غير الصالحة أولاً.' : 'Correct the invalid numeric values first.');
       return;
@@ -514,7 +519,9 @@ export default function CaptureWorkflow() {
       } as never);
     } catch (error) {
       console.error('Capture workflow save failed:', error);
-      const message = error instanceof Error && error.message.startsWith('INVALID_CAPTURE_DETAILS:')
+      const message = error instanceof Error && error.message === 'INVALID_LOCATION_LINK'
+        ? t('enrich.maps_link_invalid')
+        : error instanceof Error && error.message.startsWith('INVALID_CAPTURE_DETAILS:')
         ? (language === 'ar'
           ? 'تحقق من أعداد الوحدات: يجب ألا يتجاوز مجموع الشقق والمحلات والمكاتب عدد الوحدات، ثم أعد المحاولة.'
           : 'Check the unit totals: apartments, shops, and offices together cannot exceed the unit count. Correct the details and try again.')
@@ -701,8 +708,20 @@ export default function CaptureWorkflow() {
                 value={captureDetails.mapsLink ?? ''}
                 onChangeText={value => updateCaptureDetails({ mapsLink: value || undefined })}
                 style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                accessibilityLabel={t('enrich.maps_link')}
+                accessibilityHint={mapsLinkError ?? undefined}
                 testID="capture-maps-link"
               />
+              {mapsLinkError ? (
+                <Text
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="polite"
+                  testID="capture-maps-link-error"
+                  style={{ color: colors.destructive, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}
+                >
+                  {mapsLinkError}
+                </Text>
+              ) : null}
               <View style={styles.chips}>
                 <Choice selected={Boolean(captureDetails.coordinates)} label={t('enrich.current_location')} onPress={() => void captureCurrentCoordinates()} colors={colors} fonts={fonts} />
                 <Choice selected={false} label={t('enrich.open_maps')} onPress={() => void openCaptureMapsLink()} colors={colors} fonts={fonts} />
