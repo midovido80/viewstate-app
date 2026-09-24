@@ -41,6 +41,7 @@ export function PropertyEnrichmentFields({
   onChange,
   onInvalidQuickPickChange,
   amenityRenderExtra,
+  requireExactValue = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -48,6 +49,7 @@ export function PropertyEnrichmentFields({
   onChange: (field: PropertyDetailField, value: string) => void;
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
   amenityRenderExtra?: React.ReactNode;
+  requireExactValue?: boolean;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -93,6 +95,7 @@ export function PropertyEnrichmentFields({
           onPendingValidityChange={(sourceScopeKey, invalid) =>
             onInvalidQuickPickChange?.(field, sourceScopeKey, invalid)}
           testID={`enrich-${field}-quick-pick`}
+          requireExactValue={requireExactValue}
         />
       );
     }

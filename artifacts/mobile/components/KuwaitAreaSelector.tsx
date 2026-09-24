@@ -14,6 +14,7 @@ import { useI18n } from '@/contexts/I18nContext';
 interface KuwaitAreaSelectorProps {
   readonly selectedIds: readonly string[];
   readonly onChange: (ids: string[]) => void;
+  readonly onCancel?: () => void;
   readonly multiSelect?: boolean;
   readonly testID?: string;
 }
@@ -21,6 +22,7 @@ interface KuwaitAreaSelectorProps {
 export function KuwaitAreaSelector({
   selectedIds,
   onChange,
+  onCancel,
   multiSelect = true,
   testID = 'kuwait-area-selector',
 }: KuwaitAreaSelectorProps) {
@@ -118,14 +120,14 @@ export function KuwaitAreaSelector({
         <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
       </TouchableOpacity>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => { onCancel?.(); setOpen(false); }}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalSheet, { backgroundColor: colors.background }]}>
             <View style={[styles.modalHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>
                 {placeholder}
               </Text>
-              <TouchableOpacity testID={`${testID}-cancel`} accessibilityRole="button" onPress={() => setOpen(false)}>
+              <TouchableOpacity testID={`${testID}-cancel`} accessibilityRole="button" onPress={() => { onCancel?.(); setOpen(false); }}>
                 <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>
                   {language === 'ar' ? 'إلغاء' : 'Cancel'}
                 </Text>

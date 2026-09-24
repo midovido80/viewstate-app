@@ -17,6 +17,7 @@ import {
   updateInvalidQuickPickFields,
   updateScopedInvalidQuickPickFields,
   hasPendingInvalidQuickPickForScope,
+  openRequiredNumericExactEntry,
 } from '../services/numericQuickPick.ts';
 
 test('BEHAVIOR: quick values set the intended exact numeric value', () => {
@@ -27,6 +28,27 @@ test('BEHAVIOR: quick values set the intended exact numeric value', () => {
 
 test('BEHAVIOR: opening +6 preserves the current value until exact entry changes it', () => {
   assert.deepEqual(openNumericExactEntry('3'), { expanded: true, value: '3' });
+});
+
+test('BEHAVIOR: demo exact-entry opens blocked for blank and quick values until Arabic exact correction', () => {
+  assert.deepEqual(createNumericQuickPickLocalState('capture:bedrooms', ''), {
+    scopeKey: 'capture:bedrooms',
+    pending: '',
+    invalid: false,
+    expanded: false,
+  });
+  for (const value of ['', '1', '5']) {
+    const opened = openRequiredNumericExactEntry(value);
+    assert.deepEqual(opened, { expanded: true, value, invalid: true });
+
+    let invalidFields = updateInvalidQuickPickFields(new Set<string>(), 'bedrooms', opened.invalid);
+    assert.equal(hasPendingInvalidQuickPick(invalidFields), true);
+
+    const correction = resolveExactIntegerInput('٦', opened.value, true);
+    assert.deepEqual(correction, { pending: '6', committedValue: '6', invalid: false });
+    invalidFields = updateInvalidQuickPickFields(invalidFields, 'bedrooms', correction.invalid);
+    assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
+  }
 });
 
 test('BEHAVIOR: exact 6 remains exactly 6 and opens exact-entry mode', () => {
@@ -73,6 +95,37 @@ test('BEHAVIOR: valid pending input replaces the committed value without range c
   assert.deepEqual(resolveExactIntegerInput('12', '8'), {
     pending: '12',
     committedValue: '12',
+    invalid: false,
+  });
+});
+
+test('BEHAVIOR: blank exact-entry input remains a blocker instead of clearing the pending value', () => {
+  assert.deepEqual(resolveExactIntegerInput('', '8'), {
+    pending: '',
+    committedValue: '',
+    invalid: false,
+  });
+  const blank = resolveExactIntegerInput('', '8', true);
+  assert.deepEqual(blank, {
+    pending: '',
+    committedValue: '8',
+    invalid: true,
+  });
+  let invalidFields = updateInvalidQuickPickFields(new Set<string>(), 'bedrooms', blank.invalid);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), true);
+
+  const arabic = resolveExactIntegerInput('١٢', blank.committedValue, true);
+  assert.deepEqual(arabic, {
+    pending: '12',
+    committedValue: '12',
+    invalid: false,
+  });
+  invalidFields = updateInvalidQuickPickFields(invalidFields, 'bedrooms', arabic.invalid);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
+
+  assert.deepEqual(resolveExactIntegerInput('۶', '8', true), {
+    pending: '6',
+    committedValue: '6',
     invalid: false,
   });
 });
@@ -189,6 +242,15 @@ test('SOURCE ASSERTION: Property applies quick picks only to the three authorize
   const source = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
   assert.match(source, /definition\.control === 'numeric_quick_pick'/);
   assert.match(source, /isPropertyNumericQuickPickSurface\(propertyType, floorUse\)/);
+  assert.match(source, /requireExactValue=\{requireExactValue\}/);
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(capture, /<ModernPropertyForm[\s\S]{0,250}requireExactValue/);
+  const [form, fields] = await Promise.all([
+    readFile('components/ModernPropertyForm.tsx', 'utf8'),
+    readFile('components/ModernPropertyFields.tsx', 'utf8'),
+  ]);
+  assert.match(form, /<ModernPropertyFields[\s\S]{0,350}requireExactValue=\{requireExactValue\}/);
+  assert.match(fields, /<PropertyEnrichmentFields[\s\S]{0,250}requireExactValue=\{requireExactValue\}/);
 });
 
 test('SOURCE ASSERTION: Requirement keeps ambiguous surfaces on current inputs and Buy without Rent details', async () => {
@@ -200,5 +262,5 @@ test('SOURCE ASSERTION: Requirement keeps ambiguous surfaces on current inputs a
   assert.match(source, /parseOptionalRequirementNumber\(value\)\.ok/);
   assert.match(source, /\.\.\.\(purpose === 'rent' \? \{ rentalPeriodId: cadence/);
   const quickPick = await readFile('components/NumericQuickPick.tsx', 'utf8');
-  assert.match(quickPick, /onChangeText\(transition\.invalid \? transition\.pending : transition\.committedValue\)/);
+  assert.match(quickPick, /onChangeText\(transition\.invalid && transition\.pending !== ''[\s\S]*transition\.committedValue\)/);
 });

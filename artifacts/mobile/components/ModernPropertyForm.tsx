@@ -22,9 +22,10 @@ export interface ModernPropertyFormProps {
   onDemoChange?: (changes: Partial<PropertyDemoCaptureMetadata>) => void;
   onNearbyChange?: (nearby: readonly string[]) => void;
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
+  requireExactValue?: boolean;
 }
 
-export function ModernPropertyForm({ recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange }: ModernPropertyFormProps) {
+export function ModernPropertyForm({ recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false }: ModernPropertyFormProps) {
   return (
     <View>
       <ModernPropertyFields
@@ -33,6 +34,7 @@ export function ModernPropertyForm({ recordScopeKey, propertyType, values, onCha
         values={values}
         onChange={(field, value) => onChange(field, value)}
         onInvalidQuickPickChange={onInvalidQuickPickChange}
+        requireExactValue={requireExactValue}
         amenityRenderExtra={
           category && onDemoChange ? (
             <View style={{ gap: 10, marginTop: 8 }}>
@@ -72,7 +74,7 @@ export function ModernPropertyForm({ recordScopeKey, propertyType, values, onCha
               }
             }} keyboardType="decimal-pad" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} /></View>;
           }
-          return <NumericQuickPick key={item.id} scopeKey={`${recordScopeKey}:demo:${item.id}`} label={item.label[language === 'ar' ? 1 : 0]} value={current === undefined ? '' : String(current)} onChangeText={value => {
+          return <NumericQuickPick key={item.id} scopeKey={`${recordScopeKey}:demo:${item.id}`} label={item.label[language === 'ar' ? 1 : 0]} value={current === undefined ? '' : String(current)} requireExactValue onChangeText={value => {
             const numericValues = { ...(metadata?.numericValues ?? {}) };
             if (value.trim() === '') delete numericValues[item.id]; else numericValues[item.id] = Number(value);
             onDemoChange({ numericValues });

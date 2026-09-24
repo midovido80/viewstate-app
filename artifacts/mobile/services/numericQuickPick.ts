@@ -91,12 +91,28 @@ export function openNumericExactEntry(value: string): {
   return { expanded: true, value };
 }
 
+export function openRequiredNumericExactEntry(value: string): {
+  readonly expanded: true;
+  readonly value: string;
+  readonly invalid: boolean;
+} {
+  const parsed = parseExactIntegerInput(value);
+  return {
+    ...openNumericExactEntry(value),
+    invalid: parsed.kind !== 'valid' || parsed.value < 6,
+  };
+}
+
 export function resolveExactIntegerInput(
   input: string,
   committedValue: string,
+  required = false,
 ): ExactIntegerTransition {
   const parsed = parseExactIntegerInput(input);
-  if (parsed.kind === 'invalid') {
+  if (
+    parsed.kind === 'invalid'
+    || required && (parsed.kind === 'blank' || parsed.value < 6)
+  ) {
     return {
       pending: parsed.normalized,
       committedValue,

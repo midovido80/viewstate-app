@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { PropertyDetailField } from '@workspace/property-domain';
+import { APARTMENT_SUBTYPES, type PropertyDetailField } from '@workspace/property-domain';
 import {
   formatPropertyDetailValue,
   propertyDetailLabels,
@@ -38,5 +38,20 @@ test('unrelated Property Boolean formatting remains unchanged', () => {
     assert.equal(formatPropertyDetailValue(field, false, 'en'), 'No');
     assert.equal(formatPropertyDetailValue(field, true, 'ar'), 'نعم');
     assert.equal(formatPropertyDetailValue(field, false, 'ar'), 'لا');
+  }
+});
+
+test('Property apartment subtypes use the existing bilingual translation keys', () => {
+  for (const subtype of APARTMENT_SUBTYPES) {
+    for (const language of ['en', 'ar'] as const) {
+      const requestedKeys: string[] = [];
+      const value = formatPropertyDetailValue('apartmentSubtype', subtype, language, key => {
+        requestedKeys.push(key);
+        return `${language} translated label`;
+      });
+      assert.equal(value, `${language} translated label`);
+      assert.deepEqual(requestedKeys, [`enrich.apartment_subtype.${subtype}`]);
+      assert.notEqual(value, subtype);
+    }
   }
 });

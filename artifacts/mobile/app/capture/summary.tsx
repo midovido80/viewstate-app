@@ -83,7 +83,7 @@ export default function SummaryScreen() {
           ? false
           : item.value;
       return `${propertyDetailLabels[item.field][language === 'ar' ? 1 : 0]}: ${
-        formatPropertyDetailValue(item.field, rawValue, language)
+         formatPropertyDetailValue(item.field, rawValue, language, key => t(key as keyof Translations))
       }`;
     }).join('\n');
     Alert.alert(
@@ -303,6 +303,7 @@ export default function SummaryScreen() {
                   ? String((value as { value: unknown }).value)
                   : String(value),
                 language,
+                key => t(key as keyof Translations),
               )}
             />
           ))}

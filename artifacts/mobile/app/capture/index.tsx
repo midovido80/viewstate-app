@@ -64,6 +64,7 @@ import type { Transaction, PropertyDetailField } from '@workspace/property-domai
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
 import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
 import { PROPERTY_SOURCE_ROLES } from '@/services/people';
+import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 
 // The capture child routes preserve the person link in their params. Keep the
 // selected source role alongside it for installations where child routes
@@ -104,6 +105,7 @@ export default function CaptureWorkflow() {
   const saveFlight = useRef(false);
   const [pendingFloorTransition, setPendingFloorTransition] = useState<FloorTransitionProposal | null>(null);
   const [quickErrors, setQuickErrors] = useState<Record<string, string>>({});
+  const [areaValidation, setAreaValidation] = useState({ required: false });
   const [locationBusy, setLocationBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -433,10 +435,17 @@ export default function CaptureWorkflow() {
   };
 
   const openPreview = () => {
-    if (!draft.transaction || !draft.propertyType || !draft.locationAreaId) {
+    if (!draft.locationAreaId) {
+      setAreaValidation(current => transitionCaptureAreaValidation(current, {
+        type: 'preview',
+        selected: false,
+      }));
+    }
+    if (!draft.transaction || !draft.propertyType) {
       Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
       return;
     }
+    if (!draft.locationAreaId) return;
     if (Object.keys(quickErrors).length > 0) {
       Alert.alert(t('errors.validation_title'), language === 'ar' ? 'صحح القيم غير الصالحة أولاً.' : 'Correct the invalid numeric values first.');
       return;
@@ -610,10 +619,25 @@ export default function CaptureWorkflow() {
                <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
                <KuwaitAreaSelector
                  selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
-                 onChange={ids => updateDraft({ locationAreaId: ids[0] })}
+                  onCancel={() => setAreaValidation(current => transitionCaptureAreaValidation(current, { type: 'cancel' }))}
+                  onChange={ids => {
+                    updateDraft({ locationAreaId: ids[0] });
+                    if (ids[0]) {
+                      setAreaValidation(current => transitionCaptureAreaValidation(current, { type: 'select' }));
+                    }
+                  }}
                  multiSelect={false}
                  testID="capture-area"
                />
+                {areaValidation.required ? (
+                  <Text
+                    testID="capture-area-error"
+                    accessibilityRole="alert"
+                    style={{ color: colors.destructive, fontFamily: fonts.medium, marginTop: 6 }}
+                  >
+                    {language === 'ar' ? 'اختر المنطقة للمتابعة.' : 'Select an area to continue.'}
+                  </Text>
+                ) : null}
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
               <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
@@ -643,6 +667,7 @@ export default function CaptureWorkflow() {
                 recordScopeKey={scopeKey}
                 propertyType={draft.propertyType ?? 'other_built_property'}
                 values={captureDetails}
+                requireExactValue
                 category={demoCategory}
                 metadata={demoMetadata}
                 nearby={nearby}
@@ -743,7 +768,7 @@ export default function CaptureWorkflow() {
             <PreviewRow label={draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')} value={String((draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount) ?? '')} colors={colors} fonts={fonts} />
             {draft.transaction === 'rent' && <PreviewRow label={language === 'ar' ? 'الدورية' : 'Cadence'} value={draft.rentalPeriodId === 'yearly' ? (language === 'ar' ? 'سنوياً' : 'Yearly') : (language === 'ar' ? 'شهرياً' : 'Monthly')} colors={colors} fonts={fonts} />}
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
-             {applicable.filter(definition => definition.group !== 'amenity' && captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language)} colors={colors} fonts={fonts} />)}
+             {applicable.filter(definition => definition.group !== 'amenity' && captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
              {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (

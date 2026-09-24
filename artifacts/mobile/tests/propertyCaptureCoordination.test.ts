@@ -23,6 +23,7 @@ import {
 } from '@/services/captureDetailsStorage';
 import { persistAttachmentsThenDeleteRemoved, persistNewAttachmentsOrDeleteOnFailure, type LocalAttachment } from '@/services/attachmentOperations';
 import { readFile } from 'node:fs/promises';
+import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -45,6 +46,20 @@ const baseline = {
     rentalPeriodId: 'monthly',
   },
 };
+
+test('BEHAVIOR: missing area stays attached through picker cancellation and clears on selection', () => {
+  let validation = { required: false };
+  validation = transitionCaptureAreaValidation(validation, { type: 'preview', selected: false });
+  assert.deepEqual(validation, { required: true });
+
+  validation = transitionCaptureAreaValidation(validation, { type: 'cancel' });
+  assert.deepEqual(validation, { required: true });
+
+  validation = transitionCaptureAreaValidation(validation, { type: 'select' });
+  assert.deepEqual(validation, { required: false });
+  validation = transitionCaptureAreaValidation(validation, { type: 'preview', selected: true });
+  assert.deepEqual(validation, { required: false });
+});
 
 test('BEHAVIOR: BASIC projection rejects missing required capture data', () => {
   const result = projectDraftToProperty({

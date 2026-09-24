@@ -7,6 +7,7 @@ import {
   NUMERIC_QUICK_PICK_VALUES,
   createNumericQuickPickLocalState,
   openNumericExactEntry,
+  openRequiredNumericExactEntry,
   parseExactIntegerInput,
   reconcileNumericQuickPickScope,
   resolveExactIntegerInput,
@@ -22,6 +23,7 @@ export interface NumericQuickPickProps {
   readonly onPendingValidityChange?: (scopeKey: string, invalid: boolean) => void;
   readonly testID: string;
   readonly quickPickValues?: readonly number[];
+  readonly requireExactValue?: boolean;
 }
 
 export function NumericQuickPick({
@@ -32,6 +34,7 @@ export function NumericQuickPick({
   onPendingValidityChange,
   testID,
   quickPickValues = NUMERIC_QUICK_PICK_VALUES,
+  requireExactValue = false,
 }: NumericQuickPickProps) {
   const colors = useColors();
   const { language, isRTL, fonts } = useI18n();
@@ -52,9 +55,9 @@ export function NumericQuickPick({
   const parsedValue = parseExactIntegerInput(value);
   const exactActionLabel = language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
   const exactInputLabel = language === 'ar' ? `${label}: قيمة دقيقة` : `${label}: exact value`;
-  const invalidLabel = language === 'ar'
-    ? 'أدخل عددًا صحيحًا غير سالب'
-    : 'Enter a non-negative whole number';
+  const invalidLabel = requireExactValue
+    ? language === 'ar' ? 'أدخل عددًا صحيحًا لا يقل عن ٦' : 'Enter a whole number of 6 or more'
+    : language === 'ar' ? 'أدخل عددًا صحيحًا غير سالب' : 'Enter a non-negative whole number';
 
   const setValidity = (nextInvalid: boolean) => {
     setLocalState(current => current.scopeKey === scopeKey
@@ -92,11 +95,13 @@ export function NumericQuickPick({
           accessibilityLabel={language === 'ar' ? 'إدخال قيمة دقيقة ستة أو أكثر' : 'Enter an exact value of six or more'}
           selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
           onPress={() => {
-            const transition = openNumericExactEntry(value);
+            const transition = requireExactValue
+              ? openRequiredNumericExactEntry(value)
+              : { ...openNumericExactEntry(value), invalid: false };
             setLocalState(current => current.scopeKey === scopeKey
-              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: false }
+              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
               : current);
-            setValidity(false);
+            setValidity(transition.invalid);
           }}
           testID={`${testID}-6-plus`}
           role="button"
@@ -109,11 +114,13 @@ export function NumericQuickPick({
           accessibilityLabel={exactActionLabel}
           style={styles.exactActionButton}
           onPress={() => {
-            const transition = openNumericExactEntry(value);
+            const transition = requireExactValue
+              ? openRequiredNumericExactEntry(value)
+              : { ...openNumericExactEntry(value), invalid: false };
             setLocalState(current => current.scopeKey === scopeKey
-              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: false }
+              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
               : current);
-            setValidity(false);
+            setValidity(transition.invalid);
           }}
           testID={`${testID}-exact-open`}
         >
@@ -126,7 +133,7 @@ export function NumericQuickPick({
           <TextInput
             value={pending}
             onChangeText={input => {
-              const transition = resolveExactIntegerInput(input, value);
+              const transition = resolveExactIntegerInput(input, value, requireExactValue);
               setLocalState(current => current.scopeKey === scopeKey
                 ? { ...current, pending: transition.pending, invalid: transition.invalid }
                 : current);
@@ -135,7 +142,9 @@ export function NumericQuickPick({
               // Review/Save validate the same candidate instead of silently
               // retaining a previous valid value while an invalid exact entry
               // is visible.
-              onChangeText(transition.invalid ? transition.pending : transition.committedValue);
+              onChangeText(transition.invalid && transition.pending !== ''
+                ? transition.pending
+                : transition.committedValue);
             }}
             keyboardType="number-pad"
             accessibilityLabel={exactInputLabel}
