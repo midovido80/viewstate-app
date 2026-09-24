@@ -32,3 +32,9 @@ Do not assume that a new browser tester sees people or Requirements created in a
 **Why:** A UX-2 browser pass initially stopped at an empty People screen even though earlier passes had saved Seeker records. Reusing the presumed fixture would have hidden the fact that this browser had its own local state.
 
 **How to apply:** Let the tester seed and record its own Person and Requirement IDs through visible UI, then reopen those exact records to verify persistence and edit identity.
+
+In Expo web Preview, a browser automation pointer click may fail silently even on a visible native HTML anchor with a valid destination; a DOM-dispatched click can still activate that same route. Treat this as an unresolved interaction-verification gap, not proof that navigation works for users or proof that the handler is broken.
+
+**Why:** A Property detail verification reproduced inert pointer clicks after a hard reload and workflow restart. The control had no disabled or inert ancestor, and replacing a touchable control with a native anchor did not change the observed pointer result; a DOM-dispatched click opened the same-ID editor.
+
+**How to apply:** Compare pointer input with a direct DOM click and normal in-app entry, inspect overlays and browser focus, then confirm on a physical device or independent browser context before attributing the failure to product code. Do not keep rewriting controls solely to satisfy an inconclusive automated session.

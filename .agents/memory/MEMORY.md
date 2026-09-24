@@ -3,3 +3,4 @@
 - [Expo Preview verification](expo-preview-navigation.md) — use normal in-app entry; destructive confirmations need in-flow UI because web Alert can fail silently.
 - [Property fact convergence](property-fact-convergence.md) — mapped legacy metadata is fallback-only; a canonical edit snapshot, including deletion, is authoritative.
 - [Requirement save evidence boundary](requirement-save-evidence-boundary.md) — separate unrecoverable historical exceptions from independently verified current save gates.
+- [Property list ordering](property-list-ordering.md) — retain deterministic creation chronology until an updated-order storage change is authorized.
