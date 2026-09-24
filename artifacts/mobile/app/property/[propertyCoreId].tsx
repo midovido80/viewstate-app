@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -11,7 +11,7 @@ import {
   Dimensions,
   View,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -35,9 +35,10 @@ import {
 import { deleteSavedProperty } from '@/services/propertyDeletion';
 import { clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, type PropertyEnrichmentDraftV1 } from '@/services/propertyEnrichmentRecovery';
 import { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, createWebAttachmentFileStore, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment, type WebAttachmentBlobStore } from '@/services/attachments';
-import { reorderAttachments, setAttachmentCover } from '@/services/attachmentOperations';
+import { reorderAttachments, resolveWebAttachmentImageSources, setAttachmentCover } from '@/services/attachmentOperations';
 import { projectPropertyFacts, isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
 import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates, openSavedPropertyMapsLocation } from '@/services/location';
+import { getPropertyMapsWebHref } from '@/services/mapsLink';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -58,6 +59,7 @@ import {
 import { Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
+import { getGalleryIndexFromScrollOffset, getPropertyDetailActionHref, getPropertyDetailBackAction, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent } from '@/services/propertyDetailPresentation';
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
   const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string }>();
@@ -97,6 +99,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
   const [locationBusy, setLocationBusy] = useState(false);
   const [mapsActionError, setMapsActionError] = useState('');
+  const [galleryImageSources, setGalleryImageSources] = useState<Readonly<Record<string, string>>>({});
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
   const editEntryConsumed = useRef(false);
@@ -200,6 +204,38 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   useFocusEffect(useCallback(() => {
     void load();
   }, [load]));
+
+  useEffect(() => {
+    let active = true;
+    let revokeSources = () => {};
+    const images = (property?.attachments ?? [])
+      .filter(attachment => attachment.kind === 'image')
+      .map(({ id: attachmentId, kind, managedUri }) => ({ id: attachmentId, kind, uri: managedUri }));
+    setGalleryImageSources({});
+    setActiveGalleryIndex(0);
+    if (Platform.OS !== 'web' || images.length === 0) {
+      return () => { active = false; };
+    }
+    void resolveWebAttachmentImageSources(images, webBlobStore.current!)
+      .then(resolved => {
+        if (!active) {
+          resolved.revoke();
+          return;
+        }
+        revokeSources = resolved.revoke;
+        setGalleryImageSources(resolved.sources);
+      })
+      .catch(cause => {
+        if (!active) return;
+        setError(cause instanceof Error && cause.message === 'ATTACHMENT_FILE_MISSING'
+          ? t('enrich.attachment_missing')
+          : t('enrich.attachment_failed'));
+      });
+    return () => {
+      active = false;
+      revokeSources();
+    };
+  }, [property?.core.id, property?.attachments, t]);
 
   const areaName = (areaId: string) => {
     const area = getAreaById(areaId);
@@ -821,8 +857,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       : undefined;
   const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
   const propertyFacts = projectPropertyFacts(property);
+  const visibleContent = getPropertyDetailVisibleContent(property);
 
   const galleryImages = (property?.attachments ?? []).filter(a => a.kind === 'image');
+  const galleryPageWidth = Dimensions.get('window').width - 32;
   const otherFiles = (property?.attachments ?? []).filter(a => a.kind !== 'image');
 
   const handleShare = () => {
@@ -850,6 +888,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       setMapsActionError(t('detail.maps_unavailable'));
     }
   };
+  const detailMapsHref = getPropertyMapsWebHref(
+    property.locationEnrichment?.mapsLink?.value,
+    property.locationEnrichment?.coordinates,
+  );
 
   const numericSpecTiles: { fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons', label: string }[] = [];
   const addSpec = (fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons') => {
@@ -862,7 +904,15 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   if (propertyFacts.templateFacts.floorNumber !== undefined) addSpec('floorNumber', propertyFacts.templateFacts.floorNumber, 'stairs', 'MaterialCommunityIcons');
   if (propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square', 'MaterialCommunityIcons');
 
-  const detailValues = (property.typeDetails ?? {}) as Record<string, unknown>;
+  const detailValues = visibleContent.typeDetails as Record<string, unknown>;
+  const locationArea = getAreaById(property.core.locationArea.id);
+  const locationDisplay = getPropertyDetailLocationDisplay({
+    governorate: locationArea ? (language === 'ar' ? locationArea.governorateAr : locationArea.governorateEn) : undefined,
+    area: areaName(property.core.locationArea.id),
+    block: property.core.block,
+    address: property.locationEnrichment?.manualLocationText?.value,
+    description: visibleContent.description,
+  });
   const availableFeatures = Array.from(new Set([
     ...propertyDetailDisplayDefinitions
       .filter(definition => definition.group === 'amenity' && detailValues[definition.field] === true)
@@ -881,7 +931,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     .map(definition => ({
       field: definition.field,
       label: definition.label[language === 'ar' ? 1 : 0],
-      value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language),
+      value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language, t),
     }));
   const nearbyServicesTextList = property.nearbyServices?.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id) ?? [];
 
@@ -904,9 +954,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   <Text style={{ display: 'none' }}>{t('detail.delete')}</Text>
                 </TouchableOpacity>
               ) : null}
-              <TouchableOpacity onPress={handleShare} testID="property-share-action">
-                <Feather name="share-2" size={24} color={colors.foreground} />
-              </TouchableOpacity>
             </View>
           </View>
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingHorizontal: 20 }}>
@@ -914,9 +961,26 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <Text style={{ flex: 4, fontFamily: fonts.bold, fontSize: 20, color: colors.foreground, textAlign: 'center' }}>
               {t('detail.title')}
             </Text>
-            <TouchableOpacity onPress={() => router.back()} style={{ flex: 1, alignItems: isRTL ? 'flex-start' : 'flex-end' }} testID="property-detail-back">
-              <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <a
+                href="/"
+                onClick={event => {
+                  if (getPropertyDetailBackAction(router.canGoBack()) === 'back') {
+                    event.preventDefault();
+                    router.back();
+                  }
+                }}
+                aria-label={t('capture.back')}
+                data-testid="property-detail-back"
+                style={{ flex: 1, display: 'flex', justifyContent: isRTL ? 'flex-start' : 'flex-end', color: colors.foreground, textDecoration: 'none' }}
+              >
+                <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
+              </a>
+            ) : (
+              <TouchableOpacity onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/' as never); }} style={{ flex: 1, alignItems: isRTL ? 'flex-start' : 'flex-end' }} testID="property-detail-back">
+                <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       ) : (
@@ -945,17 +1009,56 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
               {galleryImages.length > 0 ? (
                 <View style={{ height: 260, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
-                  <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onScroll={event => {
+                      const nextIndex = getGalleryIndexFromScrollOffset(
+                        event.nativeEvent.contentOffset.x,
+                        galleryPageWidth,
+                        galleryImages.length,
+                      );
+                      setActiveGalleryIndex(current => current === nextIndex ? current : nextIndex);
+                    }}
+                    onScrollEndDrag={event => setActiveGalleryIndex(getGalleryIndexFromScrollOffset(
+                      event.nativeEvent.contentOffset.x,
+                      galleryPageWidth,
+                      galleryImages.length,
+                    ))}
+                    onMomentumScrollEnd={event => setActiveGalleryIndex(getGalleryIndexFromScrollOffset(
+                      event.nativeEvent.contentOffset.x,
+                      galleryPageWidth,
+                      galleryImages.length,
+                    ))}
+                  >
                     {galleryImages.map(img => (
-                      <Image key={img.id} source={{ uri: img.managedUri }} style={{ width: Dimensions.get('window').width - 32, height: 260, resizeMode: 'cover' }} />
+                      (Platform.OS !== 'web' || galleryImageSources[img.id]) ? (
+                        <Image key={img.id} source={{ uri: Platform.OS === 'web' ? galleryImageSources[img.id] : img.managedUri }} style={{ width: galleryPageWidth, height: 260, resizeMode: 'cover' }} />
+                      ) : (
+                        <View key={img.id} style={{ width: galleryPageWidth, height: 260, backgroundColor: colors.card }} />
+                      )
                     ))}
                   </ScrollView>
                   <View style={{ position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
-                    <Text style={{ color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 }}>1 / {galleryImages.length}</Text>
+                    <Text testID="property-gallery-counter" style={{ color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 }}>
+                      {activeGalleryIndex + 1} / {galleryImages.length}
+                    </Text>
                   </View>
-                  <View style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const image = galleryImages[activeGalleryIndex];
+                      if (image) void openPropertyAttachment(image);
+                    }}
+                    disabled={openingAttachmentId !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('detail.expand_photo')}
+                    testID="property-gallery-expand"
+                    style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 16 }}
+                  >
                     <Feather name="maximize" size={20} color="#fff" />
-                  </View>
+                  </TouchableOpacity>
                 </View>
               ) : (
                 <View style={{ height: 260, borderRadius: 20, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }}>
@@ -964,6 +1067,35 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               )}
             </View>
 
+            {otherFiles.length > 0 && (
+              <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <Feather name="paperclip" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
+                      {t('enrich.media')}
+                    </Text>
+                  </View>
+                  <View style={{ gap: 12 }}>
+                    {otherFiles.map(attachment => (
+                      <TouchableOpacity
+                        key={attachment.id}
+                        onPress={() => void openPropertyAttachment(attachment as any)}
+                        disabled={openingAttachmentId !== null}
+                        testID={`property-attachment-open-${attachment.id}`}
+                        style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 12, backgroundColor: colors.background, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}
+                      >
+                        <Feather name={attachment.kind === 'pdf' ? "file-text" : "video"} size={24} color={colors.primary} />
+                        <Text style={{ flex: 1, color: colors.foreground, fontFamily: fonts.medium, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>
+                          {attachment.originalName}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
             <View style={{ paddingHorizontal: 16, gap: 16 }}>
               <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                 <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -971,12 +1103,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 24, textAlign: isRTL ? 'right' : 'left' }}>
                       {t(`propertyType.${property.core.propertyType}`)}
                     </Text>
-                    <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', marginTop: 8, gap: 6 }}>
-                      <Feather name="map-pin" size={16} color={colors.mutedForeground} />
-                      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 15 }}>
-                        {areaName(property.core.locationArea.id)}
-                      </Text>
-                    </View>
                   </View>
                   <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6 }}>
                     <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, fontSize: 14 }}>
@@ -996,6 +1122,33 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                       {formatRentalCadence(shownRentalPeriodId, t)}
                     </Text>
                   )}
+                </View>
+              </View>
+
+              <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+                <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <Feather name="map-pin" size={20} color={colors.primary} />
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
+                    {language === 'ar' ? 'الموقع' : 'Location'}
+                  </Text>
+                </View>
+                <View style={{ gap: 10 }}>
+                  {locationDisplay.map(item => item.field === 'description' ? (
+                    <View key={item.field} style={{ gap: 6 }}>
+                      <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+                        {t('enrich.description')}
+                      </Text>
+                      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 15, lineHeight: 24, textAlign: isRTL ? 'right' : 'left' }}>
+                        {item.value}
+                      </Text>
+                    </View>
+                  ) : (
+                    <DetailRow
+                      key={item.field}
+                      label={t(`detail.${item.field}` as keyof Translations)}
+                      value={item.value}
+                    />
+                  ))}
                 </View>
               </View>
 
@@ -1041,93 +1194,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 </View>
               )}
 
-              {nearbyServicesTextList.length > 0 && (
-                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <Feather name="map" size={20} color={colors.primary} />
-                    <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
-                      {language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {nearbyServicesTextList.map(srv => (
-                      <View key={srv} style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
-                        <Text style={{ color: colors.foreground, fontFamily: fonts.medium, fontSize: 15 }}>{srv}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {property.core.description ? (
-                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <Feather name="file-text" size={20} color={colors.primary} />
-                    <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
-                      {t('enrich.description')}
-                    </Text>
-                  </View>
-                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 16, lineHeight: 26, textAlign: isRTL ? 'right' : 'left' }}>
-                    {property.core.description.value}
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <Feather name="map-pin" size={20} color={colors.primary} />
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
-                    {language === 'ar' ? 'الموقع' : 'Location'}
-                  </Text>
-                </View>
-                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 16, textAlign: isRTL ? 'right' : 'left', marginBottom: 16 }}>
-                  {areaName(property.core.locationArea.id)}
-                </Text>
-                <TouchableOpacity onPress={openDetailMapsLink} style={{ backgroundColor: colors.foreground, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
-                  <Feather name="map" size={20} color={colors.background} />
-                  <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
-                    {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
-                  </Text>
-                </TouchableOpacity>
-                {mapsActionError ? (
-                  <Text
-                    accessibilityRole="alert"
-                    testID="property-maps-error"
-                    style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium, marginTop: 10 }]}
-                  >
-                    {mapsActionError}
-                  </Text>
-                ) : null}
-              </View>
-
-              {otherFiles.length > 0 && (
-                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <Feather name="paperclip" size={20} color={colors.primary} />
-                    <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
-                      {t('enrich.media')}
-                    </Text>
-                  </View>
-                  <View style={{ gap: 12 }}>
-                    {otherFiles.map(attachment => (
-                      <TouchableOpacity
-                        key={attachment.id}
-                        onPress={() => void openPropertyAttachment(attachment as any)}
-                        disabled={openingAttachmentId !== null}
-                        testID={`property-attachment-open-${attachment.id}`}
-                        style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 12, backgroundColor: colors.background, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}
-                      >
-                        <Feather name={attachment.kind === 'pdf' ? "file-text" : "video"} size={24} color={colors.primary} />
-                        <Text style={{ flex: 1, color: colors.foreground, fontFamily: fonts.medium, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>
-                          {attachment.originalName}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-
               <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                 <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 16 }}>
                   <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10 }}>
@@ -1152,6 +1218,74 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 ) : (
                   <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none')}</Text>
                 )}
+              </View>
+
+              {nearbyServicesTextList.length > 0 && (
+                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <Feather name="map" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18 }}>
+                      {language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {nearbyServicesTextList.map(srv => (
+                      <View key={srv} style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
+                        <Text style={{ color: colors.foreground, fontFamily: fonts.medium, fontSize: 15 }}>{srv}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+                {Platform.OS === 'web' ? detailMapsHref ? (
+                  <a
+                    href={detailMapsHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="property-maps-action"
+                    aria-label={language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
+                    style={{ backgroundColor: colors.foreground, borderRadius: 16, padding: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, color: colors.background, textDecoration: 'none' }}
+                  >
+                    <Feather name="map" size={20} color={colors.background} />
+                    <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
+                      {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
+                    </Text>
+                  </a>
+                ) : (
+                  <View
+                    testID="property-maps-action"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: true }}
+                    style={{ backgroundColor: colors.foreground, borderRadius: 16, padding: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, opacity: 0.55 }}
+                  >
+                    <Feather name="map" size={20} color={colors.background} />
+                    <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
+                      {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
+                    </Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={openDetailMapsLink}
+                    testID="property-maps-action"
+                    style={{ backgroundColor: colors.foreground, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }}
+                  >
+                    <Feather name="map" size={20} color={colors.background} />
+                    <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
+                      {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {(mapsActionError || (Platform.OS === 'web' && !detailMapsHref)) ? (
+                  <Text
+                    accessibilityRole="alert"
+                    testID="property-maps-error"
+                    style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium, marginTop: 10 }]}
+                  >
+                    {mapsActionError || t('detail.maps_unavailable')}
+                  </Text>
+                ) : null}
               </View>
 
             </View>
@@ -1561,18 +1695,46 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
       {mode === 'detail' && (
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }}>
-          <TouchableOpacity onPress={handleShare} style={{ flex: 2, backgroundColor: colors.turquoise, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
-            <Feather name="share-2" size={20} color="#fff" />
-            <Text style={{ color: '#fff', fontFamily: fonts.bold, fontSize: 16 }}>
-              {t('detail.share')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => { if (actionFlight.current) return; actionFlight.current = true; router.push(`/property/${encodeURIComponent(property.core.id)}/edit` as never); setTimeout(() => { actionFlight.current = false; }, 1000); }} testID="property-edit-action" style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border }}>
-            <Feather name="edit-2" size={20} color={colors.foreground} />
-            <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }}>
-              {t('detail.edit')}
-            </Text>
-          </TouchableOpacity>
+          {Platform.OS === 'web' ? (
+            <Link
+              href={getPropertyDetailActionHref(property.core.id, 'share') as never}
+              testID="property-share-action"
+              accessibilityRole="link"
+              style={{ flex: 2, backgroundColor: colors.turquoise, borderRadius: 16, paddingVertical: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, textDecorationLine: 'none' }}
+            >
+              <Feather name="share-2" size={20} color="#fff" />
+              <Text style={{ color: '#fff', fontFamily: fonts.bold, fontSize: 16 }}>
+                {t('detail.share')}
+              </Text>
+            </Link>
+          ) : (
+            <TouchableOpacity onPress={handleShare} testID="property-share-action" style={{ flex: 2, backgroundColor: colors.turquoise, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
+              <Feather name="share-2" size={20} color="#fff" />
+              <Text style={{ color: '#fff', fontFamily: fonts.bold, fontSize: 16 }}>
+                {t('detail.share')}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {Platform.OS === 'web' ? (
+            <Link
+              href={getPropertyDetailActionHref(property.core.id, 'edit') as never}
+              testID="property-edit-action"
+              accessibilityRole="link"
+              style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, textDecorationLine: 'none' }}
+            >
+              <Feather name="edit-2" size={20} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }}>
+                {t('detail.edit')}
+              </Text>
+            </Link>
+          ) : (
+            <TouchableOpacity onPress={handleEdit} testID="property-edit-action" style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border }}>
+              <Feather name="edit-2" size={20} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }}>
+                {t('detail.edit')}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>

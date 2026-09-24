@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -11,9 +11,13 @@ import { Button } from '@/components/Button';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
+import { prioritizeHighlightedProperty } from '@/services/propertyDetailPresentation';
 
 export default function PropertiesScreen() {
   const router = useRouter();
+  const { highlight } = useLocalSearchParams<{ highlight?: string | string[] }>();
+  const highlightedId = Array.isArray(highlight) ? highlight[0] : highlight;
+  const listRef = useRef<FlatList<Property> | null>(null);
   const colors = useColors();
   const { t, isRTL, language, fonts } = useI18n();
   const insets = useSafeAreaInsets();
@@ -24,22 +28,29 @@ export default function PropertiesScreen() {
   const loadProperties = async (query = '') => {
     try {
       if (query.trim().length > 0) {
-        setProperties(await store.searchProperties(query));
+        setProperties(prioritizeHighlightedProperty(await store.searchProperties(query), highlightedId));
       } else {
-        setProperties(await store.getProperties());
+        setProperties(prioritizeHighlightedProperty(await store.getProperties(), highlightedId));
       }
     } catch (e) {
       console.error(e);
     }
   };
 
+  useEffect(() => {
+    if (highlightedId && properties.some(item => item.core.id === highlightedId)) {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }
+  }, [highlightedId, properties]);
+
   useFocusEffect(
     useCallback(() => {
       loadProperties(search);
-    }, [search])
+    }, [search, highlightedId])
   );
 
   const renderItem = ({ item }: { item: Property }) => {
+    const isHighlighted = item.core.id === highlightedId;
     const price = item.activeOffer.transaction === 'sale'
       ? item.activeOffer.salePrice
       : item.activeOffer.rentalPrice;
@@ -50,15 +61,22 @@ export default function PropertiesScreen() {
     return (
       <TouchableOpacity
         onPress={() => router.push(`/property/${encodeURIComponent(item.core.id)}` as any)}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
         testID={`property-card-${item.core.id}`}
         accessibilityRole="button"
         accessibilityLabel={`${t(`propertyType.${item.core.propertyType}` as keyof Translations)}, ${areaName}`}
       >
         <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-            {t(`propertyType.${item.core.propertyType}` as keyof Translations)}
-          </Text>
+          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+              {t(`propertyType.${item.core.propertyType}` as keyof Translations)}
+            </Text>
+            {isHighlighted ? (
+              <View testID={`property-just-saved-${item.core.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
+              </View>
+            ) : null}
+          </View>
           <View style={[styles.badge, { backgroundColor: colors.accent + '1A' }]}>
             <Text style={[styles.badgeText, { color: colors.accent, fontFamily: fonts.medium }]}>
               {t(`transaction.${item.activeOffer.transaction}` as keyof Translations)}
@@ -120,6 +138,7 @@ export default function PropertiesScreen() {
       </View>
 
       <FlatList
+        ref={listRef}
         data={properties}
         keyExtractor={item => item.core.id}
         renderItem={renderItem}

@@ -7,6 +7,7 @@ import './globalSearch.test.ts';
 import './vapp50DeviceUi.test.ts';
 import './package3aNumericQuickPicks.test.ts';
 import './propertyFactProjection.test.ts';
+import './propertyDetailUx3c.test.ts';
 
 import {
   buildPropertySharePreview,
@@ -325,15 +326,17 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
   assert.match(successSource, /btn-view-property/);
-  assert.doesNotMatch(successSource, /btn-view-properties/);
+  assert.match(successSource, /btn-view-properties/);
   assert.doesNotMatch(successSource, /btn-add-details-now|summary\.add_details/);
   assert.match(successSource, /btn-later/);
   assert.match(successSource, /summary\.done/);
   assert.match(successSource, /navigationStartedRef/);
-  assert.match(successSource, /replaceOnce/);
+  assert.match(successSource, /navigateOnce/);
+  assert.match(successSource, /getPropertySuccessRoutes/);
+  assert.match(successSource, /router\.push/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
   assert.match(detailSource, /property-edit-action/);
-  assert.match(detailSource, /property\.typeDetails \?\? \{\}/);
+  assert.match(detailSource, /getPropertyDetailVisibleContent/);
   assert.doesNotMatch(detailSource, /property-enrich-action|detail\.add_details/);
   assert.match(translations, /'summary\.done': 'Done'/);
   assert.match(translations, /'summary\.done': 'تم'/);

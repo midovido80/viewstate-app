@@ -10,6 +10,46 @@ export interface LocalAttachment {
   readonly isCover?: true;
 }
 
+export interface WebAttachmentObjectUrlApi {
+  createObjectURL(blob: Blob): string;
+  revokeObjectURL(url: string): void;
+}
+
+export async function resolveWebAttachmentImageSources(
+  attachments: readonly Pick<LocalAttachment, 'id' | 'kind' | 'uri'>[],
+  blobStore: { get(reference: string): Promise<Blob | null> },
+  objectUrls: WebAttachmentObjectUrlApi = URL,
+): Promise<{ readonly sources: Readonly<Record<string, string>>; readonly revoke: () => void }> {
+  const sources: Record<string, string> = {};
+  const transientUrls: string[] = [];
+  try {
+    for (const attachment of attachments) {
+      if (attachment.kind !== 'image') continue;
+      if (!attachment.uri.startsWith('viewstate-web-attachment:')) {
+        sources[attachment.id] = attachment.uri;
+        continue;
+      }
+      const blob = await blobStore.get(attachment.uri);
+      if (!blob) throw new Error('ATTACHMENT_FILE_MISSING');
+      const objectUrl = objectUrls.createObjectURL(blob);
+      transientUrls.push(objectUrl);
+      sources[attachment.id] = objectUrl;
+    }
+  } catch (error) {
+    transientUrls.forEach(url => objectUrls.revokeObjectURL(url));
+    throw error;
+  }
+  let revoked = false;
+  return {
+    sources,
+    revoke: () => {
+      if (revoked) return;
+      revoked = true;
+      transientUrls.forEach(url => objectUrls.revokeObjectURL(url));
+    },
+  };
+}
+
 export interface AttachmentFileStore {
   copyToProperty(
     propertyId: string,

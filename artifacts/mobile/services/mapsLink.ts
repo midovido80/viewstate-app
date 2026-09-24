@@ -34,6 +34,26 @@ export function isKuwaitCoordinates(coordinates: MapCoordinates): boolean {
     && longitude <= KUWAIT_COORDINATE_BOUNDS.maxLongitude;
 }
 
+/**
+ * Returns a browser-safe Maps URL for saved property data. Invalid explicit
+ * links fail closed instead of silently falling back to precise coordinates.
+ */
+export function getPropertyMapsWebHref(
+  link: string | undefined,
+  coordinates: MapCoordinates | undefined,
+): string | null {
+  if (link !== undefined && link.length > 0) {
+    try {
+      return normalizeGoogleMapsLink(link);
+    } catch {
+      return null;
+    }
+  }
+  if (!coordinates || !isKuwaitCoordinates(coordinates)) return null;
+  const query = `${coordinates.latitude},${coordinates.longitude}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 export function normalizeGoogleMapsLink(link: string): string {
   const normalized = link.trim();
   if (

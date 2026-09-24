@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
+import { getPropertySuccessRoutes } from '@/services/propertyDetailPresentation';
 
 export default function SuccessScreen() {
   const router = useRouter();
@@ -14,11 +15,13 @@ export default function SuccessScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
-  const replaceOnce = (destination: string) => {
+  const navigateOnce = (destination: string, replace = false) => {
     if (navigationStartedRef.current) return;
     navigationStartedRef.current = true;
-    router.replace(destination as never);
+    if (replace) router.replace(destination as never);
+    else router.push(destination as never);
   };
+  const destinations = getPropertySuccessRoutes(propertyCoreId);
 
   return (
     <View
@@ -54,15 +57,24 @@ export default function SuccessScreen() {
       {propertyCoreId ? (
         <Button
           title={t('summary.view_property')}
-          onPress={() => replaceOnce(`/property/${encodeURIComponent(propertyCoreId)}`)}
+          onPress={() => destinations.detail && navigateOnce(destinations.detail)}
           size="large"
           testID="btn-view-property"
         />
       ) : null}
+      {propertyCoreId ? (
+        <Button
+          title={t('summary.view_properties')}
+          onPress={() => destinations.properties && navigateOnce(destinations.properties)}
+          variant="outline"
+          size="large"
+          testID="btn-view-properties"
+        />
+      ) : null}
       <Button
         title={t('summary.done')}
-        onPress={() => replaceOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/')}
-        variant={propertyCoreId ? 'outline' : undefined}
+        onPress={() => navigateOnce(linkPersonId && !propertyCoreId ? `/person/${encodeURIComponent(linkPersonId)}` : '/', true)}
+        variant="outline"
         size="large"
         testID="btn-later"
       />
