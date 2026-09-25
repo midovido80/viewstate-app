@@ -2,6 +2,7 @@ import type { PropertyType } from '@workspace/property-domain';
 import { toEnglishDigits } from '@/constants/market';
 
 export const NUMERIC_QUICK_PICK_VALUES = [1, 2, 3, 4, 5] as const;
+export const FLOOR_NUMBER_QUICK_PICK_VALUES = [0, ...NUMERIC_QUICK_PICK_VALUES] as const;
 
 const UNAMBIGUOUS_RESIDENTIAL_TYPES = new Set<PropertyType>([
   'apartment',
@@ -42,21 +43,26 @@ export function parseExactIntegerInput(input: string): ExactIntegerInput {
   return { kind: 'valid', normalized, value };
 }
 
-export function shouldOpenExactEntry(value: string): boolean {
+export function shouldOpenExactEntry(
+  value: string,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
+): boolean {
   const parsed = parseExactIntegerInput(value);
   return parsed.kind === 'invalid'
-    || parsed.kind === 'valid' && (parsed.value === 0 || parsed.value >= 6);
+    || parsed.kind === 'valid'
+      && (parsed.value === 0 && !quickPickValues.includes(0) || parsed.value >= 6);
 }
 
 export function createNumericQuickPickLocalState(
   scopeKey: string,
   value: string,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
 ): NumericQuickPickLocalState {
   return {
     scopeKey,
     pending: value,
     invalid: false,
-    expanded: shouldOpenExactEntry(value),
+    expanded: shouldOpenExactEntry(value, quickPickValues),
   };
 }
 
@@ -64,23 +70,25 @@ export function reconcileNumericQuickPickScope(
   current: NumericQuickPickLocalState,
   scopeKey: string,
   value: string,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
 ): NumericQuickPickLocalState {
   return current.scopeKey === scopeKey
     ? current
-    : createNumericQuickPickLocalState(scopeKey, value);
+    : createNumericQuickPickLocalState(scopeKey, value, quickPickValues);
 }
 
 export function synchronizeNumericQuickPickValue(
   current: NumericQuickPickLocalState,
   scopeKey: string,
   value: string,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
 ): NumericQuickPickLocalState {
-  const scoped = reconcileNumericQuickPickScope(current, scopeKey, value);
+  const scoped = reconcileNumericQuickPickScope(current, scopeKey, value, quickPickValues);
   if (scoped.scopeKey !== current.scopeKey || scoped.invalid) return scoped;
   return {
     ...scoped,
     pending: value,
-    expanded: scoped.expanded || shouldOpenExactEntry(value),
+    expanded: scoped.expanded || shouldOpenExactEntry(value, quickPickValues),
   };
 }
 
@@ -91,7 +99,10 @@ export function openNumericExactEntry(value: string): {
   return { expanded: true, value };
 }
 
-export function openRequiredNumericExactEntry(value: string): {
+export function openRequiredNumericExactEntry(
+  value: string,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
+): {
   readonly expanded: true;
   readonly value: string;
   readonly invalid: boolean;
@@ -99,7 +110,8 @@ export function openRequiredNumericExactEntry(value: string): {
   const parsed = parseExactIntegerInput(value);
   return {
     ...openNumericExactEntry(value),
-    invalid: parsed.kind !== 'valid' || parsed.value < 6,
+    invalid: parsed.kind !== 'valid'
+      || parsed.value < 6 && !(parsed.value === 0 && quickPickValues.includes(0)),
   };
 }
 
@@ -107,11 +119,15 @@ export function resolveExactIntegerInput(
   input: string,
   committedValue: string,
   required = false,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
 ): ExactIntegerTransition {
   const parsed = parseExactIntegerInput(input);
   if (
     parsed.kind === 'invalid'
-    || required && (parsed.kind === 'blank' || parsed.value < 6)
+    || required && (
+      parsed.kind === 'blank'
+      || parsed.value < 6 && !(parsed.kind === 'valid' && parsed.value === 0 && quickPickValues.includes(0))
+    )
   ) {
     return {
       pending: parsed.normalized,
@@ -172,8 +188,11 @@ export function hasPendingInvalidQuickPick(fields: ReadonlySet<unknown>): boolea
   return fields.size > 0;
 }
 
-export function selectNumericQuickPick(value: number): string {
-  if (!(NUMERIC_QUICK_PICK_VALUES as readonly number[]).includes(value)) {
+export function selectNumericQuickPick(
+  value: number,
+  quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
+): string {
+  if (!quickPickValues.includes(value)) {
     throw new Error('INVALID_NUMERIC_QUICK_PICK');
   }
   return String(value);

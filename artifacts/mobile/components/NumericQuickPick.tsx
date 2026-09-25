@@ -38,25 +38,27 @@ export function NumericQuickPick({
 }: NumericQuickPickProps) {
   const colors = useColors();
   const { language, isRTL, fonts } = useI18n();
-  const [localState, setLocalState] = useState(() => createNumericQuickPickLocalState(scopeKey, value));
+  const [localState, setLocalState] = useState(() => createNumericQuickPickLocalState(scopeKey, value, quickPickValues));
   const validityCallbackRef = useRef(onPendingValidityChange);
 
   validityCallbackRef.current = onPendingValidityChange;
 
   useEffect(() => {
-    setLocalState(current => synchronizeNumericQuickPickValue(current, scopeKey, value));
-  }, [scopeKey, value]);
+    setLocalState(current => synchronizeNumericQuickPickValue(current, scopeKey, value, quickPickValues));
+  }, [scopeKey, value, quickPickValues]);
 
   useEffect(() => () => validityCallbackRef.current?.(localState.scopeKey, false), [localState.scopeKey]);
 
-  const visibleState = reconcileNumericQuickPickScope(localState, scopeKey, value);
+  const visibleState = reconcileNumericQuickPickScope(localState, scopeKey, value, quickPickValues);
   const { expanded, pending, invalid } = visibleState;
 
   const parsedValue = parseExactIntegerInput(value);
   const exactActionLabel = language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
   const exactInputLabel = language === 'ar' ? `${label}: قيمة دقيقة` : `${label}: exact value`;
   const invalidLabel = requireExactValue
-    ? language === 'ar' ? 'أدخل عددًا صحيحًا لا يقل عن ٦' : 'Enter a whole number of 6 or more'
+    ? quickPickValues.includes(0)
+      ? language === 'ar' ? 'أدخل ٠ أو عددًا صحيحًا لا يقل عن ٦' : 'Enter 0 or a whole number of 6 or more'
+      : language === 'ar' ? 'أدخل عددًا صحيحًا لا يقل عن ٦' : 'Enter a whole number of 6 or more'
     : language === 'ar' ? 'أدخل عددًا صحيحًا غير سالب' : 'Enter a non-negative whole number';
 
   const setValidity = (nextInvalid: boolean) => {
@@ -78,7 +80,7 @@ export function NumericQuickPick({
             label={String(option)}
             selected={parsedValue.kind === 'valid' && parsedValue.value === option}
             onPress={() => {
-              const next = selectNumericQuickPick(option);
+              const next = selectNumericQuickPick(option, quickPickValues);
               setLocalState(current => current.scopeKey === scopeKey
                 ? { ...current, pending: next, expanded: false, invalid: false }
                 : current);
@@ -96,7 +98,7 @@ export function NumericQuickPick({
           selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
           onPress={() => {
             const transition = requireExactValue
-              ? openRequiredNumericExactEntry(value)
+              ? openRequiredNumericExactEntry(value, quickPickValues)
               : { ...openNumericExactEntry(value), invalid: false };
             setLocalState(current => current.scopeKey === scopeKey
               ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
@@ -115,7 +117,7 @@ export function NumericQuickPick({
           style={styles.exactActionButton}
           onPress={() => {
             const transition = requireExactValue
-              ? openRequiredNumericExactEntry(value)
+              ? openRequiredNumericExactEntry(value, quickPickValues)
               : { ...openNumericExactEntry(value), invalid: false };
             setLocalState(current => current.scopeKey === scopeKey
               ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
@@ -133,7 +135,7 @@ export function NumericQuickPick({
           <TextInput
             value={pending}
             onChangeText={input => {
-              const transition = resolveExactIntegerInput(input, value, requireExactValue);
+              const transition = resolveExactIntegerInput(input, value, requireExactValue, quickPickValues);
               setLocalState(current => current.scopeKey === scopeKey
                 ? { ...current, pending: transition.pending, invalid: transition.invalid }
                 : current);

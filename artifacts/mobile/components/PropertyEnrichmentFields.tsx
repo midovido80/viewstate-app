@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
-import { isPropertyNumericQuickPickSurface } from '@/services/numericQuickPick';
+import { FLOOR_NUMBER_QUICK_PICK_VALUES, isPropertyNumericQuickPickSurface } from '@/services/numericQuickPick';
 import { propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import {
   getApplicablePropertyFormFields,
@@ -95,6 +95,7 @@ export function PropertyEnrichmentFields({
           onPendingValidityChange={(sourceScopeKey, invalid) =>
             onInvalidQuickPickChange?.(field, sourceScopeKey, invalid)}
           testID={`enrich-${field}-quick-pick`}
+          quickPickValues={field === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined}
           requireExactValue={requireExactValue}
         />
       );

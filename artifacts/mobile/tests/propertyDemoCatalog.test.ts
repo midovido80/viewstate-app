@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   DEMO_NEARBY_SERVICES,
   PROPERTY_DEMO_CATALOG,
+  getGenericCaptureTypesForTransaction,
   parseDemoNumericInput,
   hasPopulatedCategoryCapture,
   createDemoCategoryTransitionProposal,
@@ -37,6 +38,13 @@ test('BEHAVIOR: apartment categories map to canonical subtypes without a top-lev
   assert.equal(canonicalApartmentSubtypeForCategory('studio_apartment'), 'studio');
   assert.equal(canonicalApartmentSubtypeForCategory('duplex'), 'duplex');
   assert.equal(PROPERTY_DEMO_CATALOG.find(item => item.id === 'duplex')?.canonicalType, 'apartment');
+});
+
+test('BEHAVIOR: a standard apartment sale remains selectable without relabeling a duplex or widening other generic types', () => {
+  const types = ['apartment', 'villa', 'floor', 'shop'] as const;
+  assert.deepEqual(getGenericCaptureTypesForTransaction(types, 'sale'), ['apartment', 'floor', 'shop']);
+  assert.deepEqual(getGenericCaptureTypesForTransaction(types, 'rent'), ['floor', 'shop']);
+  assert.deepEqual(getGenericCaptureTypesForTransaction(types, undefined), ['floor', 'shop']);
 });
 
 test('BEHAVIOR: numeric parser preserves zero and normalizes Western Arabic Persian digits', () => {

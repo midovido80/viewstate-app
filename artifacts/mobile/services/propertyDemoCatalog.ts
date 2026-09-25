@@ -129,6 +129,19 @@ export const PROPERTY_DEMO_CATALOG: readonly DemoCategoryDefinition[] = [
   },
 ];
 
+// The curated apartment categories cover rent and a sale duplex, but not a
+// standard apartment sale. Keep that canonical Property type available as a
+// generic sale choice rather than mislabeling it as a duplex.
+export function getGenericCaptureTypesForTransaction(
+  types: readonly PropertyType[],
+  transaction: Transaction | undefined,
+): PropertyType[] {
+  return types.filter(type =>
+    !PROPERTY_DEMO_CATALOG.some(category => category.canonicalType === type)
+    || (type === 'apartment' && transaction === 'sale'),
+  );
+}
+
 export function canonicalApartmentSubtypeForCategory(categoryId: PropertyCaptureCategoryId): 'studio' | 'standard_apartment' | 'duplex' | undefined {
   if (categoryId === 'duplex') return 'duplex';
   if (categoryId === 'studio_apartment') return 'studio';

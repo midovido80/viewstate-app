@@ -7,6 +7,7 @@ import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentField
 import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
+import { FLOOR_NUMBER_QUICK_PICK_VALUES } from '@/services/numericQuickPick';
 
 export interface ModernPropertyFormProps {
   recordScopeKey: string;
@@ -74,7 +75,7 @@ export function ModernPropertyForm({ recordScopeKey, propertyType, values, onCha
               }
             }} keyboardType="decimal-pad" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} /></View>;
           }
-          return <NumericQuickPick key={item.id} scopeKey={`${recordScopeKey}:demo:${item.id}`} label={item.label[language === 'ar' ? 1 : 0]} value={current === undefined ? '' : String(current)} requireExactValue onChangeText={value => {
+          return <NumericQuickPick key={item.id} scopeKey={`${recordScopeKey}:demo:${item.id}`} label={item.label[language === 'ar' ? 1 : 0]} value={current === undefined ? '' : String(current)} quickPickValues={item.id === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined} requireExactValue onChangeText={value => {
             const numericValues = { ...(metadata?.numericValues ?? {}) };
             if (value.trim() === '') delete numericValues[item.id]; else numericValues[item.id] = Number(value);
             onDemoChange({ numericValues });

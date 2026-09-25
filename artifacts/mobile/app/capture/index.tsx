@@ -62,7 +62,7 @@ import { requestCurrentCoordinates, normalizeGoogleMapsLink, pastedMapLocation, 
 import { getAreaById } from '@/constants/kuwait-areas';
 import type { Transaction, PropertyDetailField } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
-import { PROPERTY_DEMO_CATALOG, getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
+import { PROPERTY_DEMO_CATALOG, getDemoCategory, getGenericCaptureTypesForTransaction, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
 import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
@@ -606,7 +606,7 @@ export default function CaptureWorkflow() {
                     <Text style={[styles.categorySubtitle, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{category.subtitle[language === 'ar' ? 1 : 0]}</Text>
                   </TouchableOpacity>
                 ))}
-                {PROPERTY_FORM_TYPES.filter(type => !PROPERTY_DEMO_CATALOG.some(category => category.canonicalType === type)).map(type => (
+                {getGenericCaptureTypesForTransaction(PROPERTY_FORM_TYPES, draft.transaction).map(type => (
                   <TouchableOpacity key={type} onPress={() => selectType(type)} accessibilityRole="radio" accessibilityState={{ selected: draft.propertyType === type }} style={[styles.category, { backgroundColor: colors.card, borderColor: draft.propertyType === type ? colors.primary : colors.border }]}>
                     <Check selected={draft.propertyType === type} colors={colors} />
                     <Text style={[styles.categoryLabel, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t(`propertyType.${type}` as keyof Translations)}</Text>
