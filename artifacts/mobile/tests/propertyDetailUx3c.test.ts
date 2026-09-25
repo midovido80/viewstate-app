@@ -8,7 +8,8 @@ import {
 import {
   formatPropertyDetailValue,
   getPropertyDetailActionHref,
-  getPropertyDetailBackAction,
+  getPropertyDetailBackRoute,
+  getPropertyDetailCategoryRows,
   getGalleryIndexFromScrollOffset,
   getPropertyDetailLocationDisplay,
   getPropertyDetailVisibleContent,
@@ -21,8 +22,7 @@ import { getPropertyMapsWebHref } from '../services/mapsLink.ts';
 test('Property detail web navigation resolves same-ID action routes and a safe Home fallback', () => {
   assert.equal(getPropertyDetailActionHref('property /exact', 'edit'), '/property/property%20%2Fexact/edit');
   assert.equal(getPropertyDetailActionHref('property /exact', 'share'), '/property/property%20%2Fexact/share');
-  assert.equal(getPropertyDetailBackAction(true), 'back');
-  assert.equal(getPropertyDetailBackAction(false), 'home');
+  assert.equal(getPropertyDetailBackRoute(), '/properties');
 });
 
 test('Property detail web Maps href accepts only validated Google links or bounded coordinates', () => {
@@ -108,6 +108,65 @@ test('Approved apartment subtype detail values use the localized translator', ()
     ),
     'استوديو',
   );
+});
+
+test('Approved Villa category details are localized, canonical-first, and public-only', () => {
+  const metadata = {
+    categoryId: 'villa',
+    numericValues: {
+      masterBedroomCount: 1,
+      bedroomCount: 2,
+      floorCount: 0,
+      privateNotes: 99,
+      latitude: 29,
+    },
+    choices: {
+      furnishing: 'furnished',
+      privateNotes: 'secret',
+    },
+  } as Property['demoCapture'];
+  const canonicalDetails = {
+    bedroomCount: { value: 4 },
+  };
+  const englishRows = getPropertyDetailCategoryRows(metadata, canonicalDetails, 'en', 'villa');
+  const arabicRows = getPropertyDetailCategoryRows(metadata, canonicalDetails, 'ar', 'villa');
+
+  assert.deepEqual(englishRows, [
+    { field: 'floorCount', label: 'Floors', value: '0' },
+    { field: 'masterBedroomCount', label: 'Master bedrooms', value: '1' },
+    { field: 'furnishing', label: 'Furnishing', value: 'Furnished' },
+  ]);
+  assert.deepEqual(arabicRows, [
+    { field: 'floorCount', label: 'عدد الأدوار', value: '0' },
+    { field: 'masterBedroomCount', label: 'غرف ماستر', value: '1' },
+    { field: 'furnishing', label: 'التأثيث', value: 'مفروشة' },
+  ]);
+
+  // The saved category value is omitted when a canonical value exists.
+  assert.equal(englishRows.some(row => row.field === 'bedroomCount'), false);
+  assert.equal(formatPropertyDetailValue('bedroomCount', canonicalDetails.bedroomCount, 'en'), '4');
+  // A validated canonical type snapshot prevents deleted mapped values from
+  // being resurrected, while Villa-only master-bedroom data stays available.
+  assert.deepEqual(
+    getPropertyDetailCategoryRows(metadata, { propertyType: 'villa' }, 'en', 'villa'),
+    [{ field: 'masterBedroomCount', label: 'Master bedrooms', value: '1' }],
+  );
+  assert.deepEqual(
+    getPropertyDetailCategoryRows(metadata, {}, 'en', 'shop'),
+    [],
+  );
+  // Falsy canonical values are still authoritative; absent fields remain absent.
+  assert.equal(
+    getPropertyDetailCategoryRows(metadata, { propertyType: 'villa', furnishing: false }, 'en', 'villa')
+      .some(row => row.field === 'furnishing'),
+    false,
+  );
+  assert.equal(
+    getPropertyDetailCategoryRows({ categoryId: 'villa' }, {}, 'en', 'villa').length,
+    0,
+  );
+  assert.equal(formatPropertyDetailValue('hasPool', false, 'en'), 'No');
+  assert.doesNotMatch(JSON.stringify([...englishRows, ...arabicRows]), /privateNotes|secret|latitude|29/);
 });
 
 test('Gallery page offsets select the visible image and clamp to valid indices', () => {

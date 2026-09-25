@@ -46,6 +46,13 @@ export const EQUIVALENT_TEMPLATE_FIELDS: Readonly<Record<string, PropertyDetailF
   central_ac: 'hasCentralAC',
 };
 
+export function hasCanonicalTypeDetailsSnapshot(
+  typeDetails: Readonly<Record<string, unknown>>,
+  propertyType: Property['core']['propertyType'],
+): boolean {
+  return typeDetails.propertyType === propertyType;
+}
+
 export function isDemoFeatureSuppressed(
   featureId: string,
   propertyType: Property['core']['propertyType'],
@@ -96,11 +103,14 @@ export function projectPropertyFacts(property: Property): PropertyFactProjection
   }
   const templateFacts: Record<string, number | string | boolean> = {};
   const details = (property.typeDetails ?? {}) as Record<string, unknown>;
-  const category = getDemoCategory(property.demoCapture?.categoryId);
+  const hasCanonicalSnapshot = hasCanonicalTypeDetailsSnapshot(details, property.core.propertyType);
+  const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
+  const category = demoCategory?.canonicalType === property.core.propertyType ? demoCategory : undefined;
   for (const field of category?.numericFields ?? []) {
     const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[field.id];
     const legacy = property.demoCapture?.numericValues?.[field.id];
     if (canonicalField && legacy !== undefined) {
+      if (hasCanonicalSnapshot) continue;
       const canonical = unwrap(details[canonicalField]);
       if (canonical === undefined) templateFacts[canonicalField] = legacy;
       else if (canonical !== legacy) conflicts.push({ key: canonicalField, canonicalValue: canonical as number, legacyValue: legacy });
@@ -110,6 +120,7 @@ export function projectPropertyFacts(property: Property): PropertyFactProjection
     const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[field.id];
     const legacy = property.demoCapture?.choices?.[field.id];
     if (canonicalField && legacy !== undefined) {
+      if (hasCanonicalSnapshot) continue;
       const canonical = unwrap(details[canonicalField]);
       if (canonical === undefined) templateFacts[canonicalField] = legacy;
       else if (canonical !== legacy) conflicts.push({ key: canonicalField, canonicalValue: canonical as string, legacyValue: legacy });
@@ -118,6 +129,7 @@ export function projectPropertyFacts(property: Property): PropertyFactProjection
   for (const feature of category?.features ?? []) {
     const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[feature.id];
     if (!canonicalField || !canonicalField.startsWith('has') || !property.demoCapture?.selectedFeatures?.includes(feature.id)) continue;
+    if (hasCanonicalSnapshot) continue;
     const definition = PROPERTY_DETAIL_FIELD_DEFINITIONS.find(item => item.field === canonicalField);
     const floorUse = typeof details.floorUse === 'string' ? details.floorUse : undefined;
     if (

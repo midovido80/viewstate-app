@@ -1,8 +1,13 @@
-import { APARTMENT_SUBTYPES, type Property, type PropertyDetailField } from '@workspace/property-domain';
-import { toEnglishDigits } from '@/constants/market';
 import {
-  PROPERTY_FORM_CATALOG,
-} from '@/services/propertyFormCatalog';
+  APARTMENT_SUBTYPES,
+  type Property,
+  type PropertyDemoCaptureMetadata,
+  type PropertyDetailField,
+} from '@workspace/property-domain';
+import { toEnglishDigits } from '@/constants/market';
+import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
+import { EQUIVALENT_TEMPLATE_FIELDS, hasCanonicalTypeDetailsSnapshot } from '@/services/propertyFactProjection';
+import { getDemoCategory } from '@/services/propertyDemoCatalog';
 
 const coreFieldOrder: readonly PropertyDetailField[] = [
   'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
@@ -47,6 +52,75 @@ export function formatPropertyDetailValue(
   return toEnglishDigits(String(value));
 }
 
+export interface PropertyDetailCategoryRow {
+  readonly field: string;
+  readonly label: string;
+  readonly value: string;
+}
+
+function unwrapDetailValue(value: unknown): unknown {
+  return typeof value === 'object' && value !== null && 'value' in value
+    ? (value as { value: unknown }).value
+    : value;
+}
+
+/**
+ * Projects only approved numeric and choice fields from legacy demoCapture.
+ * Canonical values remain authoritative; arbitrary metadata (including
+ * private notes and precise location) is never considered for display.
+ */
+export function getPropertyDetailCategoryRows(
+  metadata: PropertyDemoCaptureMetadata | undefined,
+  canonicalDetails: Readonly<Record<string, unknown>>,
+  language: 'en' | 'ar',
+  propertyType: Property['core']['propertyType'],
+): PropertyDetailCategoryRow[] {
+  const category = getDemoCategory(metadata?.categoryId);
+  if (!category || category.canonicalType !== propertyType || !metadata) return [];
+  const rows: PropertyDetailCategoryRow[] = [];
+  const localizedIndex = language === 'ar' ? 1 : 0;
+  const hasCanonicalSnapshot = hasCanonicalTypeDetailsSnapshot(canonicalDetails, propertyType);
+
+  for (const numericField of category.numericFields) {
+    const value = metadata.numericValues?.[numericField.id];
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[numericField.id];
+    if (canonicalField && hasCanonicalSnapshot) continue;
+    if (canonicalField && unwrapDetailValue(canonicalDetails[canonicalField]) !== undefined
+      && unwrapDetailValue(canonicalDetails[canonicalField]) !== null) continue;
+    const displayField = canonicalField ?? numericField.id;
+    const canonicalDefinition = canonicalField
+      ? PROPERTY_FORM_CATALOG.find(definition => definition.field === canonicalField)
+      : undefined;
+    rows.push({
+      field: displayField,
+      label: (canonicalDefinition?.label ?? numericField.label)[localizedIndex],
+      value: toEnglishDigits(String(value)),
+    });
+  }
+
+  for (const choiceField of category.choices) {
+    const value = metadata.choices?.[choiceField.id];
+    if (value === undefined) continue;
+    const option = choiceField.options.find(item => item.id === value);
+    if (!option) continue;
+    const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[choiceField.id];
+    if (canonicalField && hasCanonicalSnapshot) continue;
+    if (canonicalField && unwrapDetailValue(canonicalDetails[canonicalField]) !== undefined
+      && unwrapDetailValue(canonicalDetails[canonicalField]) !== null) continue;
+    const canonicalDefinition = canonicalField
+      ? PROPERTY_FORM_CATALOG.find(definition => definition.field === canonicalField)
+      : undefined;
+    rows.push({
+      field: canonicalField ?? choiceField.id,
+      label: (canonicalDefinition?.label ?? choiceField.label)[localizedIndex],
+      value: option.label[localizedIndex],
+    });
+  }
+
+  return rows;
+}
+
 export const RESIDENTIAL_AMENITY_PROPERTY_FIELDS = [
   'hasHeating',
   'hasBalcony',
@@ -89,8 +163,10 @@ export function getPropertyDetailActionHref(
   return `/property/${encodeURIComponent(propertyCoreId)}/${action}`;
 }
 
-export function getPropertyDetailBackAction(canGoBack: boolean): 'back' | 'home' {
-  return canGoBack ? 'back' : 'home';
+export function getPropertyDetailBackRoute(): '/properties' {
+  // Edit/Share can leave a second entry for this same Detail in browser history.
+  // Going to the list is deterministic even when there is no history at all.
+  return '/properties';
 }
 
 export function prioritizeHighlightedProperty<T extends { readonly core: { readonly id: string } }>(

@@ -59,7 +59,7 @@ import {
 import { Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
-import { getGalleryIndexFromScrollOffset, getPropertyDetailActionHref, getPropertyDetailBackAction, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent } from '@/services/propertyDetailPresentation';
+import { getGalleryIndexFromScrollOffset, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent } from '@/services/propertyDetailPresentation';
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
   const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string }>();
@@ -933,6 +933,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       label: definition.label[language === 'ar' ? 1 : 0],
       value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language, t),
     }));
+  const existingSupplementalFields = new Set<string>(supplementalDetails.map(item => item.field));
+  const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
+    .filter(item =>
+      !numericSpecTiles.some(tile => tile.fieldId === item.field)
+      && !existingSupplementalFields.has(item.field))
+  const propertySupplementalDetails = [...supplementalDetails, ...categoryDetails];
   const nearbyServicesTextList = property.nearbyServices?.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id) ?? [];
 
   return (
@@ -963,13 +969,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             </Text>
             {Platform.OS === 'web' ? (
               <a
-                href="/"
-                onClick={event => {
-                  if (getPropertyDetailBackAction(router.canGoBack()) === 'back') {
-                    event.preventDefault();
-                    router.back();
-                  }
-                }}
+                href={getPropertyDetailBackRoute()}
                 aria-label={t('capture.back')}
                 data-testid="property-detail-back"
                 style={{ flex: 1, display: 'flex', justifyContent: isRTL ? 'flex-start' : 'flex-end', color: colors.foreground, textDecoration: 'none' }}
@@ -977,7 +977,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
               </a>
             ) : (
-              <TouchableOpacity onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/' as never); }} style={{ flex: 1, alignItems: isRTL ? 'flex-start' : 'flex-end' }} testID="property-detail-back">
+              <TouchableOpacity onPress={() => router.replace(getPropertyDetailBackRoute() as never)} style={{ flex: 1, alignItems: isRTL ? 'flex-start' : 'flex-end' }} testID="property-detail-back">
                 <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
               </TouchableOpacity>
             )}
@@ -1167,12 +1167,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 </View>
               )}
 
-              {supplementalDetails.length > 0 && (
+              {propertySupplementalDetails.length > 0 && (
                 <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                   <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 18, marginBottom: 8, textAlign: isRTL ? 'right' : 'left' }}>
                     {language === 'ar' ? 'تفاصيل العقار' : 'Property details'}
                   </Text>
-                  {supplementalDetails.map(item => <DetailRow key={item.field} label={item.label} value={item.value} />)}
+                  {propertySupplementalDetails.map(item => <DetailRow key={item.field} label={item.label} value={item.value} />)}
                 </View>
               )}
 

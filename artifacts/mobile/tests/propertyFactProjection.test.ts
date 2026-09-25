@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Property } from '@workspace/property-domain';
+import { validateTypeDetails, type Property } from '@workspace/property-domain';
 import {
   hasUnresolvedPropertyFactConflicts,
   projectPropertyFacts,
@@ -66,6 +66,78 @@ test('legacy chalet Pool projects into one canonical detail when typeDetails is 
   }));
   assert.equal(result.templateFacts.hasPool, true);
   assert.equal(result.templateFacts.privatePool, undefined);
+});
+
+test('canonical type-details snapshot prevents mapped legacy resurrection while legacy-only Villa facts fall back', () => {
+  const demoCapture = {
+    categoryId: 'villa',
+    numericValues: { bedroomCount: 2, masterBedroomCount: 1 },
+    choices: { furnishing: 'furnished' },
+    selectedFeatures: ['garden'],
+  } as const;
+  const legacyVilla = property({
+    core: { id: 'property-1', propertyType: 'villa', locationArea: { id: 'salmiya' } },
+    demoCapture,
+  });
+  const legacyFacts = projectPropertyFacts(legacyVilla).templateFacts;
+  assert.equal(legacyFacts.bedroomCount, 2);
+  assert.equal(legacyFacts.furnishing, 'furnished');
+  assert.equal(legacyFacts.hasGarden, true);
+
+  const canonicalBaseline = property({
+    core: { id: 'property-1', propertyType: 'villa', locationArea: { id: 'salmiya' } },
+    typeDetails: {
+      propertyType: 'villa',
+      bedroomCount: 2,
+      furnishing: 'furnished',
+      hasGarden: true,
+    },
+    demoCapture,
+  });
+  const draft = createEditDraft(canonicalBaseline);
+  const deletedCandidate = buildPropertyUpdateCandidate(canonicalBaseline, {
+    ...draft.choices,
+    canonicalDetails: {},
+  });
+  assert.equal(deletedCandidate.typeDetails?.propertyType, 'villa');
+  assert.equal(
+    validateTypeDetails(deletedCandidate.typeDetails!, deletedCandidate.core).ok,
+    true,
+  );
+  assert.deepEqual(projectPropertyFacts(deletedCandidate).templateFacts, {});
+
+  const candidate = buildPropertyUpdateCandidate(canonicalBaseline, {
+    ...draft.choices,
+    // Bedroom count remains explicitly zero, furnishing is deleted, and Garden
+    // remains explicitly false; the type discriminator marks the snapshot.
+    canonicalDetails: { bedroomCount: '0', furnishing: '', hasGarden: 'false' },
+  });
+
+  assert.equal(candidate.typeDetails?.propertyType, 'villa');
+  assert.equal(
+    validateTypeDetails(candidate.typeDetails!, candidate.core).ok,
+    true,
+    'the saved propertyType discriminator is a valid canonical snapshot marker',
+  );
+  assert.equal((candidate.typeDetails as { bedroomCount?: number }).bedroomCount, 0);
+  assert.equal((candidate.typeDetails as { hasGarden?: boolean }).hasGarden, false);
+  assert.equal((candidate.typeDetails as { furnishing?: string }).furnishing, undefined);
+
+  const projected = projectPropertyFacts(candidate);
+  assert.deepEqual(projected.templateFacts, {});
+});
+
+test('mismatched demo category does not project legacy facts onto another property type', () => {
+  const result = projectPropertyFacts(property({
+    core: { id: 'property-1', propertyType: 'shop', locationArea: { id: 'salmiya' } },
+    demoCapture: {
+      categoryId: 'villa',
+      numericValues: { bedroomCount: 3, masterBedroomCount: 1 },
+      choices: { furnishing: 'furnished' },
+      selectedFeatures: ['garden'],
+    },
+  }));
+  assert.deepEqual(result.templateFacts, {});
 });
 
 test('canonical area wins when values are equal and conflicts when they differ', () => {
