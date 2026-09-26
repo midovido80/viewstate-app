@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import {
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
+  validateProperty,
+} from '@workspace/property-domain';
+import {
   persistCapturedDetails,
   loadPreparedCapturedDetails,
   recoverPreparedCapturedDetails,
@@ -46,29 +50,66 @@ export function basicStudioProperty(property: Property): Property {
   return { core: property.core, activeOffer: property.activeOffer };
 }
 
+function studioTypeDetailsRecord(
+  typeDetails: Property['typeDetails'],
+): Record<string, unknown> {
+  return typeDetails ? Object.fromEntries(Object.entries(typeDetails)) : {};
+}
+
+function studioCompatibleTypeDetails(property: Property): Property {
+  if (!property.typeDetails) return property;
+  const details = studioTypeDetailsRecord(property.typeDetails);
+  for (const key of Object.keys(details)) {
+    if (
+      PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition => definition.field === key)
+      && !PROPERTY_DETAIL_FIELD_DEFINITIONS.some(
+        definition => definition.field === key && definition.appliesTo.includes('apartment'),
+      )
+    ) delete details[key];
+  }
+  return {
+    ...property,
+    typeDetails: Object.keys(details).length
+      ? details as unknown as Property['typeDetails']
+      : undefined,
+  };
+}
+
 /** Preserve edit-only metadata while keeping legacy top-level area canonical. */
 export function prepareStudioPropertyEditCandidate(
   baseline: Property,
   candidate: Property,
 ): Property {
-  const details = { ...((baseline.typeDetails ?? {}) as Record<string, unknown>) };
+  const compatibleBaseline = studioCompatibleTypeDetails(baseline);
+  const details = studioTypeDetailsRecord(compatibleBaseline.typeDetails);
+  const studioCompatibleFields = new Set(
+    PROPERTY_DETAIL_FIELD_DEFINITIONS
+      .filter(definition => definition.appliesTo.includes('apartment'))
+      .map(definition => definition.field),
+  );
   for (const key of [
     'propertyType', 'apartmentSubtype', 'studioRoomCount', 'builtUpAreaSquareMeters',
     'bathroomCount', 'floorNumber', 'hasKitchen', 'hasHall', 'hasParking',
     'hasBalcony', 'hasElevator',
   ]) delete details[key];
-  Object.assign(details, candidate.typeDetails ?? {});
-  const locationEnrichment = { ...(baseline.locationEnrichment ?? {}) };
+  for (const [key, value] of Object.entries(candidate.typeDetails ?? {})) {
+    if (
+      key === 'propertyType'
+      || !PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition => definition.field === key)
+      || studioCompatibleFields.has(key as typeof PROPERTY_DETAIL_FIELD_DEFINITIONS[number]['field'])
+    ) details[key] = value;
+  }
+  const locationEnrichment = { ...(compatibleBaseline.locationEnrichment ?? {}) };
   delete locationEnrichment.mapsLink;
   if (candidate.locationEnrichment?.mapsLink) {
     locationEnrichment.mapsLink = candidate.locationEnrichment.mapsLink;
   }
-  const core = { ...baseline.core, ...candidate.core };
+  const core = { ...compatibleBaseline.core, ...candidate.core };
   if (!candidate.core.description) delete (core as { description?: Property['core']['description'] }).description;
-  const hasCanonicalTopLevelArea = baseline.areaSquareMeters !== undefined;
+  const hasCanonicalTopLevelArea = compatibleBaseline.areaSquareMeters !== undefined;
   if (hasCanonicalTopLevelArea) delete details.builtUpAreaSquareMeters;
   const merged: Property = {
-    ...baseline,
+    ...compatibleBaseline,
     ...candidate,
     core,
     activeOffer: candidate.activeOffer,
@@ -77,7 +118,7 @@ export function prepareStudioPropertyEditCandidate(
     ...(!Object.keys(locationEnrichment).length ? { locationEnrichment: undefined } : {}),
   };
   if (hasCanonicalTopLevelArea) {
-    const area = ((candidate.typeDetails ?? {}) as Record<string, unknown>).builtUpAreaSquareMeters;
+    const area = studioTypeDetailsRecord(candidate.typeDetails).builtUpAreaSquareMeters;
     const mutable = merged as unknown as { areaSquareMeters?: number; areaUnit?: 'square_meter' | 'square_foot' };
     if (typeof area !== 'number') {
       delete mutable.areaSquareMeters;
@@ -170,6 +211,7 @@ async function saveStudioPropertyEdit(options: {
 }): Promise<StudioPropertySaveResult> {
   const { candidate, baseline, store, storage } = options;
   const id = baseline.core.id;
+  if (!validateProperty(candidate).ok) return { status: 'conflict', propertyId: id };
   let newlyPreparedDraft: ReturnType<typeof createEditDraft> | null = null;
   try {
     let operation = await loadPropertyUpdateOperation(storage);
@@ -179,14 +221,20 @@ async function saveStudioPropertyEdit(options: {
         return { status: 'recovery_required', propertyId: id, reason: 'another_update_pending' };
       }
     } else {
-      const draft = createEditDraft(baseline);
+      const editBaseline = await prepareSafeStudioEditBaseline(baseline, store);
+      if ('status' in editBaseline) {
+        return editBaseline.status === 'conflict'
+          ? { status: 'conflict', propertyId: id }
+          : { status: 'recovery_required', propertyId: id, reason: editBaseline.reason };
+      }
+      const draft = createEditDraft(editBaseline.baseline);
       if (!await savePropertyEditDraft(draft, null, storage)) {
         return { status: 'recovery_required', propertyId: id, reason: 'edit_draft_conflict' };
       }
       newlyPreparedDraft = draft;
       operation = createPropertyUpdateOperation({
         operationId: `${id}:studio:${Date.now()}`,
-        baseline,
+        baseline: editBaseline.baseline,
         candidate,
         draftSnapshot: draft,
         preparedAt: new Date().toISOString(),
@@ -223,6 +271,49 @@ async function saveStudioPropertyEdit(options: {
       // Preserve unreadable or uncertain evidence and keep edits blocked.
     }
     return { status: 'recovery_required', propertyId: id, reason: 'update_operation_pending' };
+  }
+}
+
+async function prepareSafeStudioEditBaseline(
+  baseline: Property,
+  store: StudioPropertyStore,
+): Promise<
+  | { readonly baseline: Property }
+  | { readonly status: 'conflict' }
+  | { readonly status: 'recovery_required'; readonly reason: string }
+> {
+  const normalized = studioCompatibleTypeDetails(baseline);
+  if (exactPropertyEqual(normalized, baseline)) return { baseline };
+  if (!validateProperty(normalized).ok) return { status: 'conflict' };
+
+  let didUpdate = false;
+  try {
+    didUpdate = await store.compareAndUpdate(baseline, normalized);
+  } catch {
+    // Resolve a rejected CAS by exact-ID readback. Do not continue on a
+    // different record or assume that the normalization did not commit.
+    try {
+      const readback = await store.getProperty(baseline.core.id);
+      if (readback && exactPropertyEqual(readback, normalized)) return { baseline: normalized };
+      return readback !== null && exactPropertyEqual(readback, baseline)
+        ? { status: 'recovery_required', reason: 'legacy_details_normalization_unconfirmed' }
+        : { status: 'conflict' };
+    } catch {
+      return { status: 'recovery_required', reason: 'legacy_details_normalization_unconfirmed' };
+    }
+  }
+
+  try {
+    const readback = await store.getProperty(baseline.core.id);
+    if (readback && exactPropertyEqual(readback, normalized)) return { baseline: normalized };
+    if (!didUpdate && readback && !exactPropertyEqual(readback, baseline)) {
+      return { status: 'conflict' };
+    }
+    return didUpdate
+      ? { status: 'recovery_required', reason: 'legacy_details_normalization_readback_failed' }
+      : { status: 'conflict' };
+  } catch {
+    return { status: 'recovery_required', reason: 'legacy_details_normalization_readback_failed' };
   }
 }
 
@@ -323,6 +414,7 @@ export async function saveStudioRequirement(options: {
   try {
     const person = await options.store.getPerson(options.candidate.seekerId);
     if (!person) return { status: 'missing_person' };
+    if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
   } catch {
     return { status: 'storage_failure', retryAllowed: false };
   }

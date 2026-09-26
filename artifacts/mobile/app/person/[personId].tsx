@@ -18,6 +18,7 @@ import { ChoiceChip } from '@/components/ChoiceChip';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, toEnglishDigits } from '@/constants/market';
+import { isWantedStudio } from '@/services/propertyDetailPresentation';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import {
@@ -36,6 +37,13 @@ import {
 } from '@/services/phoneEntry';
 import { store } from '@/services/persistence';
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
+
+export function getPersonWantedStudioRoute(personId: string) {
+  return {
+    pathname: '/capture/studio',
+    params: { mode: 'wanted', seekerId: personId, transaction: 'rent' },
+  } as const;
+}
 
 export default function PersonDetailScreen() {
   const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string }>();
@@ -372,15 +380,14 @@ export default function PersonDetailScreen() {
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            <Button
-              title={language === 'ar' ? 'إضافة طلب استوديو' : 'Add Wanted Studio'}
-              onPress={() => router.push({
-                pathname: '/capture/transaction',
-                params: { mode: 'wanted', seekerId: person.id },
-              } as never)}
-              variant="outline"
-              testID="person-add-wanted-studio"
-            />
+            {person.classifications.includes('seeker') ? (
+              <Button
+                title={language === 'ar' ? 'إضافة طلب استوديو' : 'Add Wanted Studio'}
+                onPress={() => router.push(getPersonWantedStudioRoute(person.id) as never)}
+                variant="outline"
+                testID="person-add-wanted-studio"
+              />
+            ) : null}
             <View style={styles.actions}>
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 <Button title={t('people.whatsapp')} onPress={() => void openWhatsApp()} variant="whatsapp" testID="person-whatsapp" style={styles.flex} />
@@ -399,7 +406,7 @@ export default function PersonDetailScreen() {
               {params.saved !== '1' ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" accessibilityRole="button" style={[styles.addRequirementButton, { borderColor: colors.primary }]}><Text style={[styles.addRequirementText, { color: colors.primary, fontFamily: fonts.semiBold }]}>{t('requirements.add')}</Text></TouchableOpacity> : null}
             </View>
             {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
-              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}</Text>
+              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}{isWantedStudio(requirement) ? ` · ${t('enrich.apartment_subtype.studio')}` : ''}</Text>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
                 {requirement.preferredAreaMode === 'all_kuwait'
                   ? (language === 'ar' ? 'كل مناطق الكويت' : 'All Kuwait')

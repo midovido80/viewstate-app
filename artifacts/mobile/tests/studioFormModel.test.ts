@@ -9,14 +9,77 @@ import {
   readStudioProperty,
   readStudioRequirement,
   validateStudioForm,
+  getStudioBathroomConfirmationCase,
 } from '@/services/studioFormModel';
 import { isPropertyFormFieldApplicable } from '@/services/propertyFormCatalog';
+import {
+  getStudioCatalogField,
+  getStudioCatalogChoiceLabel,
+  isStudioCatalogFieldApplicable,
+  STUDIO_FORM_CATALOG,
+  STUDIO_FORM_FIELD_ORDER,
+} from '@/services/studioCatalog';
 
 test('STRUCTURAL: Studio-only facts are hidden from generic apartments without a Studio subtype', () => {
   for (const field of ['studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking'] as const) {
     assert.equal(isPropertyFormFieldApplicable(field, 'apartment'), false);
     assert.equal(isPropertyFormFieldApplicable(field, 'apartment', undefined, 'studio'), true);
   }
+});
+
+test('STRUCTURAL: the shared Studio catalog bounds applicability, order, labels, and mode-specific quick picks', () => {
+  assert.deepEqual(STUDIO_FORM_FIELD_ORDER.offered.slice(0, 5), [
+    'transaction',
+    'locationAreaId',
+    'mapsLink',
+    'price',
+    'rentalPeriodId',
+  ]);
+  assert.deepEqual(STUDIO_FORM_FIELD_ORDER.wanted.slice(0, 5), [
+    'locationAreaId',
+    'transaction',
+    'budgetMinimum',
+    'budgetMaximum',
+    'rentalPeriodId',
+  ]);
+  assert.equal(isStudioCatalogFieldApplicable('price', 'offered'), true);
+  assert.equal(isStudioCatalogFieldApplicable('price', 'wanted'), false);
+  assert.equal(isStudioCatalogFieldApplicable('budgetMinimum', 'offered'), false);
+  assert.equal(isStudioCatalogFieldApplicable('budgetMinimum', 'wanted'), true);
+  assert.equal(isStudioCatalogFieldApplicable('bathrooms', 'offered'), true);
+  assert.equal(isStudioCatalogFieldApplicable('mapsLink', 'wanted'), false);
+  assert.equal(getStudioCatalogField('studioRoomCount').fixedValue, '1');
+  assert.equal(isStudioCatalogFieldApplicable('rentalPeriodId', 'offered', 'rent'), true);
+  assert.equal(isStudioCatalogFieldApplicable('rentalPeriodId', 'offered', 'sale'), false);
+  assert.deepEqual(getStudioCatalogField('bathrooms').fixedValue, '1');
+  assert.equal(STUDIO_FORM_CATALOG.some(field =>
+    [
+      'bedroomCount',
+      'masterBedroomsMinimum',
+      'unitCount',
+      'apartmentCount',
+      'shopCount',
+      'officeCount',
+    ].includes(field.id),
+  ), false);
+
+  for (const field of ['kitchen', 'hall', 'parking'] as const) {
+    const definition = getStudioCatalogField(field);
+    assert.equal(definition.quickPicks?.length, 2);
+    assert.equal(definition.untouchedValues?.offered, 'unknown');
+    assert.equal(definition.untouchedValues?.wanted, 'not_important');
+    assert.deepEqual(definition.quickPicks?.map(choice => choice.modeValues.offered), ['yes', 'no']);
+    assert.deepEqual(definition.quickPicks?.map(choice => choice.modeValues.wanted), ['required', 'must_not_have']);
+  }
+  const transactionPicks = getStudioCatalogField('transaction').quickPicks!;
+  assert.deepEqual(
+    getStudioCatalogChoiceLabel(transactionPicks[1], 'offered'),
+    ['Sale', 'للبيع'],
+  );
+  assert.deepEqual(
+    getStudioCatalogChoiceLabel(transactionPicks[1], 'wanted'),
+    ['Buy', 'للشراء'],
+  );
 });
 
 test('BEHAVIOR: offered Studio builder writes canonical facts, private map metadata, and reads back', () => {
@@ -173,7 +236,7 @@ test('BEHAVIOR: Wanted Studio buy and rent combinations round-trip both area sco
           budgetMaximum: '0',
           rentalPeriodId,
           areaSquareMeters: '',
-          bathrooms: '',
+          bathrooms: '1',
           floorNumber: '',
           kitchen: 'not_important' as const,
           hall: 'must_not_have' as const,
@@ -203,13 +266,13 @@ test('BEHAVIOR: Wanted Studio buy and rent combinations round-trip both area sco
   }
 });
 
-test('BEHAVIOR: blank optional physical inputs omit facts while zero and explicit false keep their meanings', () => {
+test('BEHAVIOR: Studio bathroom is fixed at one while explicit false and zero floor remain distinct', () => {
   const base = {
     ...createStudioFormValues('offered', 'sale'),
     locationAreaId: 'salmiya',
     price: '1',
     areaSquareMeters: '',
-    bathrooms: '0',
+    bathrooms: '1',
     floorNumber: '0',
     kitchen: 'no' as const,
     hall: 'unknown' as const,
@@ -221,7 +284,7 @@ test('BEHAVIOR: blank optional physical inputs omit facts while zero and explici
     propertyType: 'apartment',
     apartmentSubtype: 'studio',
     studioRoomCount: 1,
-    bathroomCount: 0,
+    bathroomCount: 1,
     floorNumber: 0,
     hasKitchen: false,
     hasParking: false,
@@ -230,7 +293,67 @@ test('BEHAVIOR: blank optional physical inputs omit facts while zero and explici
 
   assert.equal(validateStudioForm({ ...base, price: '0' }).ok, false, 'Offered price zero is invalid');
   assert.equal(validateStudioForm({ ...base, areaSquareMeters: '0' }).ok, false, 'A supplied zero area is invalid');
-  assert.equal(validateStudioForm({ ...base, bathrooms: '' }).ok, true, 'Blank optional bathrooms stay omitted');
+  assert.equal(validateStudioForm({ ...base, bathrooms: '' }).ok, false, 'New Studio forms require the fixed one-bathroom template');
+});
+
+test('BEHAVIOR: read/edit preserves legacy missing, zero, and explicit false bathroom/kitchen facts', () => {
+  const legacyProperty = (bathroomCount: number | undefined, hasKitchen: boolean | undefined) => ({
+    core: { id: 'legacy-bathroom', propertyType: 'apartment' as const, locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'legacy-bathroom-offer',
+      propertyCoreId: 'legacy-bathroom',
+      transaction: 'sale' as const,
+      salePrice: { amount: 100, currencyCode: 'KWD' },
+    },
+    typeDetails: {
+      propertyType: 'apartment' as const,
+      apartmentSubtype: 'studio' as const,
+      studioRoomCount: 1 as const,
+      ...(bathroomCount !== undefined ? { bathroomCount } : {}),
+      ...(hasKitchen !== undefined ? { hasKitchen } : {}),
+    },
+  });
+
+  for (const [bathroomCount, expectedText, confirmationCase] of [
+    [undefined, '', 'missing'],
+    [0, '0', 'zero'],
+  ] as const) {
+    const property = legacyProperty(bathroomCount, false);
+    const values = readStudioProperty(property);
+    assert.equal(values.bathrooms, expectedText);
+    assert.equal(values.kitchen, 'no');
+    assert.equal(getStudioBathroomConfirmationCase(values), confirmationCase);
+    const saved = buildStudioProperty({
+      ...values,
+      description: 'Edited without changing the legacy bathroom value',
+    }, 'legacy-bathroom', 'legacy-bathroom-offer');
+    assert.equal(saved.typeDetails?.propertyType === 'apartment'
+      ? saved.typeDetails.bathroomCount
+      : undefined, bathroomCount);
+    assert.equal(saved.typeDetails?.propertyType === 'apartment'
+      ? saved.typeDetails.hasKitchen
+      : undefined, false);
+    const replacingWithoutConfirmation = { ...values, bathrooms: '1' };
+    assert.equal(validateStudioForm(replacingWithoutConfirmation).errors
+      .some(error => error.field === 'bathrooms'), true);
+    const confirmedReplacement = {
+      ...replacingWithoutConfirmation,
+      legacyBathroomConfirmed: true,
+    };
+    assert.equal(validateStudioForm(confirmedReplacement).ok, true);
+    const replaced = buildStudioProperty(
+      confirmedReplacement,
+      'legacy-bathroom',
+      'legacy-bathroom-offer',
+    );
+    assert.equal(replaced.typeDetails?.propertyType === 'apartment'
+      ? replaced.typeDetails.bathroomCount
+      : undefined, 1);
+  }
+
+  const unknownKitchen = readStudioProperty(legacyProperty(undefined, undefined));
+  assert.equal(unknownKitchen.kitchen, 'unknown');
+  assert.equal(unknownKitchen.bathrooms, '');
 });
 
 test('BEHAVIOR: wanted budgets and blank optional criteria distinguish valid zero from invalid ranges', () => {
@@ -245,7 +368,7 @@ test('BEHAVIOR: wanted budgets and blank optional criteria distinguish valid zer
   const zeroBudget = buildStudioRequirement(base, '33333333-3333-4333-8333-333333333333', 'seeker-zero-budget');
   assert.deepEqual(zeroBudget.budget, { minimum: 0, maximum: 0, currencyCode: 'KWD' });
   assert.equal(readStudioRequirement(zeroBudget).areaSquareMeters, '');
-  assert.equal(readStudioRequirement(zeroBudget).bathrooms, '');
+  assert.equal(readStudioRequirement(zeroBudget).bathrooms, '1');
   assert.equal(readStudioRequirement(zeroBudget).floorNumber, '');
   assert.equal('preferredAmenities' in zeroBudget, false);
   assert.equal('amenities' in readStudioRequirement(zeroBudget), false);
@@ -347,4 +470,95 @@ test('STRUCTURAL: Studio builders persist exactly one Studio room without bedroo
     comparison: 'exact',
     value: 3,
   });
+});
+
+test('STRUCTURAL: Studio projections exclude building aggregates and reject unsupported legacy fields', () => {
+  const property = buildStudioProperty({
+    ...createStudioFormValues('offered', 'sale'),
+    locationAreaId: 'salmiya',
+    price: '100',
+    kitchen: 'unknown',
+    hall: 'no',
+    parking: 'yes',
+  }, 'studio-no-building-facts', 'offer-no-building-facts');
+  const propertyDetails = property.typeDetails as unknown as Record<string, unknown>;
+  for (const field of [
+    'bedroomCount',
+    'unitCount',
+    'apartmentCount',
+    'shopCount',
+    'officeCount',
+    'floorCount',
+    'bedroomsPerUnit',
+    'bathroomsPerUnit',
+  ]) {
+    assert.equal(field in propertyDetails, false, `Studio Property must not persist ${field}`);
+  }
+  assert.equal(propertyDetails.bathroomCount, 1);
+  assert.equal(propertyDetails.hasHall, false);
+  assert.equal(propertyDetails.hasParking, true);
+  assert.equal('hasKitchen' in propertyDetails, false, 'untouched offered kitchen remains unspecified');
+
+  const requirement = buildStudioRequirement({
+    ...createStudioFormValues('wanted', 'sale'),
+    preferredAreaMode: 'all_kuwait',
+    budgetMinimum: '1',
+    budgetMaximum: '10',
+    kitchen: 'not_important',
+  }, '66666666-6666-4666-8666-666666666666', 'seeker-no-building-facts');
+  const requirementRecord = requirement as unknown as Record<string, unknown>;
+  for (const field of [
+    'bedroomsMinimum',
+    'unitCount',
+    'apartmentCount',
+    'shopCount',
+    'officeCount',
+    'floorCount',
+    'bedroomsPerUnit',
+    'bathroomsPerUnit',
+  ]) {
+    assert.equal(field in requirementRecord, false, `Studio Requirement must not persist ${field}`);
+  }
+  assert.equal(requirement.bathroomsMinimum, 1);
+  assert.equal(requirement.catalogPreferences?.some(preference => preference.field === 'hasKitchen'), false);
+
+  const legacyZeroBathRequirement = { ...requirement, bathroomsMinimum: 0 };
+  const zeroRequirementValues = readStudioRequirement(legacyZeroBathRequirement);
+  assert.equal(zeroRequirementValues.bathrooms, '0');
+  assert.equal(getStudioBathroomConfirmationCase(zeroRequirementValues), 'zero');
+  const editedZeroRequirement = buildStudioRequirement({
+    ...zeroRequirementValues,
+    description: 'Keep historical zero until confirmed',
+  }, requirement.id, requirement.seekerId);
+  assert.equal(editedZeroRequirement.bathroomsMinimum, 0);
+
+  const { bathroomsMinimum: _removedBathrooms, ...missingBathRequirement } = requirement;
+  const missingRequirementValues = readStudioRequirement(
+    missingBathRequirement as unknown as Parameters<typeof readStudioRequirement>[0],
+  );
+  assert.equal(missingRequirementValues.bathrooms, '');
+  assert.equal(getStudioBathroomConfirmationCase(missingRequirementValues), 'missing');
+
+  const aggregateProperty = {
+    ...property,
+    typeDetails: { ...property.typeDetails, unitCount: 1 },
+  } as unknown as Parameters<typeof isStudioProperty>[0];
+  assert.equal(isStudioProperty(aggregateProperty), false, 'legacy Studio records with building aggregates cannot enter the dedicated editor');
+  const aggregateRequirement = {
+    ...requirement,
+    unitCount: 1,
+  } as unknown as Parameters<typeof isStudioRequirement>[0];
+  assert.equal(isStudioRequirement(aggregateRequirement), false, 'building aggregate requirement fields are unsupported');
+  const unknownPreferenceRequirement = {
+    ...requirement,
+    catalogPreferences: [
+      ...(requirement.catalogPreferences ?? []),
+      { field: 'unknownLegacyStudioPreference', kind: 'choice', value: 'legacy' },
+    ],
+  } as unknown as Parameters<typeof isStudioRequirement>[0];
+  assert.equal(
+    isStudioRequirement(unknownPreferenceRequirement),
+    false,
+    'unknown legacy catalog preferences cannot be silently discarded',
+  );
 });

@@ -16,7 +16,6 @@ import type { Property, PropertySourceRole, SeekerRequirement, Transaction } fro
 import { Button } from '@/components/Button';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
-import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -32,12 +31,20 @@ import {
   isStudioRequirement,
   readStudioProperty,
   readStudioRequirement,
+  getStudioBathroomConfirmationCase,
   validateStudioForm,
   type StudioFormError,
   type StudioFormMode,
   type StudioFormValues,
   type StudioSelection,
 } from '@/services/studioFormModel';
+import {
+  getStudioCatalogChoiceLabel,
+  getStudioCatalogField,
+  getStudioCatalogFieldLabel,
+  STUDIO_FORM_FIELD_ORDER,
+  type StudioCatalogFieldId,
+} from '@/services/studioCatalog';
 import {
   prepareStudioPropertyEditCandidate,
   retryStudioPropertyRecovery,
@@ -145,10 +152,10 @@ export default function StudioCaptureRoute() {
     void (async () => {
       try {
         const result = await store.getPeople();
-        let options = result;
-        if (seekerParam && !result.some(person => person.id === seekerParam)) {
+        let options = result.filter(person => person.classifications.includes('seeker'));
+        if (seekerParam && !options.some(person => person.id === seekerParam)) {
           const directPerson = await store.getPerson(seekerParam);
-          if (directPerson) options = [directPerson, ...result];
+          if (directPerson?.classifications.includes('seeker')) options = [directPerson, ...options];
         }
         if (!cancelled) setPeople(options);
       } catch {
@@ -157,7 +164,7 @@ export default function StudioCaptureRoute() {
         if (seekerParam) {
           try {
             const directPerson = await store.getPerson(seekerParam);
-            if (!cancelled && directPerson) setPeople([directPerson]);
+            if (!cancelled && directPerson?.classifications.includes('seeker')) setPeople([directPerson]);
           } catch {
             // Keep the explicit people-load failure visible.
           }
@@ -253,6 +260,7 @@ export default function StudioCaptureRoute() {
   const wantedIdentityReady = mode !== 'wanted'
     || (!!selectedPerson
       && selectedPerson.id === selectedPersonId
+      && selectedPerson.classifications.includes('seeker')
       && (!seekerParam || selectedPerson.id === seekerParam));
   const showingReview = step === 'review' && wantedIdentityReady;
   const areaTitle = (id: string) => {
@@ -295,6 +303,11 @@ export default function StudioCaptureRoute() {
     return issue ? t(`studio.error.${issue.code}`) : undefined;
   };
   const choosePerson = (personId: string) => {
+    if (!people.some(person => person.id === personId && person.classifications.includes('seeker'))) {
+      setPersonError(t('studio.person_missing'));
+      setError(t('studio.person_missing'));
+      return;
+    }
     setSelectedPersonId(personId);
     setPersonError('');
     setError('');
@@ -304,7 +317,7 @@ export default function StudioCaptureRoute() {
     <View ref={setFocusTarget('person')} style={styles.field} testID="studio-person-field">
       <Text style={[styles.label, labelStyle]}>{t('studio.person')}</Text>
       {seekerParam ? (
-        selectedPerson?.id === seekerParam ? (
+        selectedPerson?.id === seekerParam && selectedPerson.classifications.includes('seeker') ? (
           <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
             <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selectedPerson.name}</Text>
           </View>
@@ -315,7 +328,7 @@ export default function StudioCaptureRoute() {
         )
       ) : peopleLoading ? (
         <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('studio.choose_person')}</Text>
-      ) : peopleError && !selectedPerson ? (
+      ) : peopleError && (!selectedPerson || !selectedPerson.classifications.includes('seeker')) ? (
         <FieldError message={t('people.load_failed')} />
       ) : people.length === 0 ? (
         <>
@@ -370,21 +383,32 @@ export default function StudioCaptureRoute() {
     if (mode === 'wanted' && !selectedPersonId) {
       setError(t('studio.person_required'));
       setPersonError(t('studio.person_required'));
-    } else if (mode === 'wanted' && selectedPersonId && !selectedPerson) {
+    } else if (mode === 'wanted' && selectedPersonId
+      && (!selectedPerson || !selectedPerson.classifications.includes('seeker'))) {
       setError(t('studio.person_missing'));
       setPersonError(t('studio.person_missing'));
-    } else if (mode === 'wanted' && seekerParam && selectedPerson?.id !== seekerParam) {
+    } else if (mode === 'wanted' && seekerParam
+      && (selectedPerson?.id !== seekerParam || !selectedPerson.classifications.includes('seeker'))) {
       setError(t('studio.person_missing'));
       setPersonError(t('studio.person_missing'));
     } else if (!result.ok) {
-      setError(t('studio.validation'));
+      const firstIssue = result.errors[0];
+      setError(firstIssue
+        ? firstIssue.field === 'bathrooms' && getStudioBathroomConfirmationCase(values)
+          ? (language === 'ar'
+            ? 'يجب تأكيد استبدال قيمة الحمام القديمة قبل المتابعة.'
+            : 'Confirm replacing the saved bathroom value before continuing.')
+          : t(`studio.error.${firstIssue.code}`)
+        : t('studio.validation'));
       setPersonError('');
     } else {
       setError('');
       setPersonError('');
     }
     setFieldErrors(next);
-    if (mode === 'wanted' && (!selectedPerson || (seekerParam && selectedPerson.id !== seekerParam))) {
+    if (mode === 'wanted' && (!selectedPerson
+      || !selectedPerson.classifications.includes('seeker')
+      || (seekerParam && selectedPerson.id !== seekerParam))) {
       focusField('person');
     } else if (!result.ok && result.errors.length) {
       const first = next.keys().next().value as string;
@@ -603,84 +627,159 @@ export default function StudioCaptureRoute() {
     </View>
   );
 
+  const catalogLabel = (id: StudioCatalogFieldId) => {
+    const labels = getStudioCatalogFieldLabel(id, mode);
+    return labels[language === 'ar' ? 1 : 0];
+  };
+
   const binaryPreference = (field: 'kitchen' | 'hall' | 'parking') => {
-    const label = t(`studio.${field}`);
-    const selections: readonly StudioSelection[] = mode === 'offered'
-      ? ['yes', 'no', 'unknown']
-      : ['required', 'not_important', 'must_not_have'];
+    const catalogField = getStudioCatalogField(field);
+    const choices = catalogField.quickPicks ?? [];
     return (
-      <View key={field} style={styles.field}>
-        <Text style={[styles.label, labelStyle]}>{label}</Text>
+      <View key={field} style={styles.field} testID={`studio-${field}-field`}>
+        <Text style={[styles.label, labelStyle]}>{catalogLabel(field)}</Text>
         <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          {selections.map(selection => (
-            <ChoiceChip
-              key={selection}
-              label={t(`studio.${selection}`)}
-              selected={values[field] === selection}
-              onPress={() => update(field, selection)}
-              testID={`studio-${field}-${selection}`}
-              role="radio"
-              style={styles.flexChip}
-            />
-          ))}
+          {choices.map((choice, index) => {
+            const semanticValue = choice.modeValues[mode] as StudioSelection | undefined;
+            if (!semanticValue) return null;
+            const choiceLabel = getStudioCatalogChoiceLabel(choice, mode);
+            return (
+              <ChoiceChip
+                key={`${field}-${semanticValue}`}
+                label={choiceLabel[language === 'ar' ? 1 : 0]}
+                selected={values[field] === semanticValue}
+                onPress={() => update(field, semanticValue)}
+                testID={`studio-${field}-${index === 0 ? 'positive' : 'negative'}`}
+                role="radio"
+                style={styles.flexChip}
+              />
+            );
+          })}
         </View>
         {getError(field) ? <FieldError message={localizedFieldError(field)!} /> : null}
       </View>
     );
   };
 
-  const renderForm = () => (
-    <>
-      {mode === 'wanted' ? renderPersonSelector() : null}
-      {mode === 'wanted' && !wantedIdentityReady ? null : (
-      <>
-      <View style={styles.field}>
-        <Text style={[styles.label, labelStyle]}>{t('studio.property_type')}</Text>
+  const renderBathroomField = () => {
+    const legacyCase = getStudioBathroomConfirmationCase(values);
+    const legacyValue = values.legacyBathroomCount;
+    const legacyValueLabel = legacyValue === null || legacyValue === undefined
+      ? (language === 'ar' ? 'غير مسجل' : 'not recorded')
+      : String(legacyValue);
+    return (
+      <View ref={setFocusTarget('bathrooms')} style={styles.field} testID="studio-bathrooms-field">
+        <Text style={[styles.label, labelStyle]}>{catalogLabel('bathrooms')}</Text>
         <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
-            {t('propertyType.apartment')}
+          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
+            {getStudioCatalogField('bathrooms').fixedValue}
           </Text>
         </View>
-      </View>
-      <View style={styles.field}>
-        <Text style={[styles.label, labelStyle]}>{t('studio.apartment_subtype')}</Text>
-        <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
-            {t('enrich.apartment_subtype.studio')}
+        {getStudioCatalogField('bathrooms').helpText ? (
+          <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>
+            {getStudioCatalogField('bathrooms').helpText![language === 'ar' ? 1 : 0]}
           </Text>
-        </View>
+        ) : null}
+        {legacyCase ? (
+          <View style={[styles.recovery, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
+              {language === 'ar'
+                ? `القيمة المحفوظة للحمامات: ${legacyValueLabel}. ستبقى كما هي ما لم تؤكد استبدالها بواحد.`
+                : `Saved bathroom value: ${legacyValueLabel}. It will remain unchanged unless you confirm replacing it with one.`}
+            </Text>
+            <Button
+              title={language === 'ar' ? 'تأكيد الاستبدال بواحد' : 'Confirm replacing with one'}
+              onPress={() => {
+                setValues(current => ({ ...current, bathrooms: '1', legacyBathroomConfirmed: true }));
+                setFieldErrors(current => {
+                  const next = new Map(current);
+                  next.delete('bathrooms');
+                  return next;
+                });
+                setError('');
+              }}
+              testID="studio-confirm-bathroom-replacement"
+            />
+          </View>
+        ) : null}
+        {getError('bathrooms') ? (
+          <FieldError message={legacyCase
+            ? (language === 'ar'
+              ? 'أكد استبدال قيمة الحمام القديمة قبل المتابعة.'
+              : 'Confirm replacing the saved bathroom value before continuing.')
+            : localizedFieldError('bathrooms')!}
+          />
+        ) : null}
       </View>
-      <View style={styles.field}>
-        <Text style={[styles.label, labelStyle]}>{t('studio.transaction')}</Text>
-        <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          {(['sale', 'rent'] as const).map(transaction => (
+    );
+  };
+
+  const renderCadence = () => values.transaction === 'rent' ? (
+    <View ref={setFocusTarget('cadence')} style={styles.field} testID="studio-cadence-field">
+      <Text style={[styles.label, labelStyle]}>{catalogLabel('rentalPeriodId')}</Text>
+      <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        {getStudioCatalogField('rentalPeriodId').quickPicks?.map(choice => {
+          const period = choice.modeValues[mode];
+          if (!period) return null;
+          const choiceLabel = getStudioCatalogChoiceLabel(choice, mode);
+          return (
             <ChoiceChip
-              key={transaction}
-              label={t(`studio.${transaction}`)}
-              selected={values.transaction === transaction}
-              onPress={() => update('transaction', transaction)}
-              testID={`studio-transaction-${transaction}`}
+              key={period}
+              label={choiceLabel[language === 'ar' ? 1 : 0]}
+              selected={values.rentalPeriodId === period}
+              onPress={() => update('rentalPeriodId', period as StudioFormValues['rentalPeriodId'])}
+              testID={`studio-cadence-${period}`}
               role="radio"
               style={styles.flexChip}
             />
-          ))}
-        </View>
+          );
+        })}
       </View>
-      {mode === 'offered' ? (
-        <View ref={setFocusTarget('locationAreaId')} style={styles.field}>
-          <Text style={[styles.label, labelStyle]}>{t('studio.location')}</Text>
-          <KuwaitAreaSelector
-            selectedIds={values.locationAreaId ? [values.locationAreaId] : []}
-            multiSelect={false}
-            onChange={ids => update('locationAreaId', ids[0] ?? '')}
-            testID="studio-area"
-          />
-          {getError('locationAreaId') ? <FieldError message={localizedFieldError('locationAreaId')!} /> : null}
-        </View>
-      ) : (
-        <>
-          <View ref={setFocusTarget('preferredAreaIds')} style={styles.field} testID="studio-preferred-area-field">
-            <Text style={[styles.label, labelStyle]}>{t('studio.location')}</Text>
+      {getError('rentalPeriodId') ? <FieldError message={localizedFieldError('rentalPeriodId')!} /> : null}
+    </View>
+  ) : null;
+
+  const renderCatalogField = (fieldId: StudioCatalogFieldId) => {
+    switch (fieldId) {
+      case 'transaction':
+        return (
+          <View key={fieldId} style={styles.field} testID="studio-transaction-field">
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+            <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              {getStudioCatalogField(fieldId).quickPicks?.map(choice => {
+                const transaction = choice.modeValues[mode];
+                if (!transaction) return null;
+                const choiceLabel = getStudioCatalogChoiceLabel(choice, mode);
+                return (
+                  <ChoiceChip
+                    key={transaction}
+                    label={choiceLabel[language === 'ar' ? 1 : 0]}
+                    selected={values.transaction === transaction}
+                    onPress={() => update('transaction', transaction as Transaction)}
+                    testID={`studio-transaction-${transaction}`}
+                    role="radio"
+                    style={styles.flexChip}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        );
+      case 'locationAreaId':
+        return mode === 'offered' ? (
+          <View key={fieldId} ref={setFocusTarget('locationAreaId')} style={styles.field}>
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+            <KuwaitAreaSelector
+              selectedIds={values.locationAreaId ? [values.locationAreaId] : []}
+              multiSelect={false}
+              onChange={ids => update('locationAreaId', ids[0] ?? '')}
+              testID="studio-area"
+            />
+            {getError('locationAreaId') ? <FieldError message={localizedFieldError('locationAreaId')!} /> : null}
+          </View>
+        ) : (
+          <View key={fieldId} ref={setFocusTarget('preferredAreaIds')} style={styles.field} testID="studio-preferred-area-field">
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
             <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {(['specific_areas', 'all_kuwait'] as const).map(scope => (
                 <ChoiceChip
@@ -706,63 +805,52 @@ export default function StudioCaptureRoute() {
             ) : null}
             {getError('preferredAreaIds') ? <FieldError message={localizedFieldError('preferredAreaIds')!} /> : null}
           </View>
-        </>
-      )}
-      {mode === 'offered'
-        ? textInput('price', t('studio.price'), { keyboardType: 'decimal-pad' })
-        : (
-          <View style={styles.field}>
-            <Text style={[styles.label, labelStyle]}>{t('studio.budget')}</Text>
-            <View style={[styles.row, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <View style={styles.half}>{textInput('budgetMinimum', t('studio.minimum'), { keyboardType: 'decimal-pad' })}</View>
-              <View style={styles.half}>{textInput('budgetMaximum', t('studio.maximum'), { keyboardType: 'decimal-pad' })}</View>
+        );
+      case 'mapsLink':
+        return <View key={fieldId}>{textInput('mapsLink', catalogLabel(fieldId))}</View>;
+      case 'price':
+        return <View key={fieldId}>{textInput('price', catalogLabel(fieldId), { keyboardType: 'decimal-pad' })}</View>;
+      case 'budgetMinimum':
+        return (
+          <View key={fieldId} style={styles.row}>
+            <View style={styles.half}>{textInput('budgetMinimum', catalogLabel('budgetMinimum'), { keyboardType: 'decimal-pad' })}</View>
+            <View style={styles.half}>{textInput('budgetMaximum', catalogLabel('budgetMaximum'), { keyboardType: 'decimal-pad' })}</View>
+          </View>
+        );
+      case 'budgetMaximum':
+        return null;
+      case 'rentalPeriodId':
+        return <View key={fieldId}>{renderCadence()}</View>;
+      case 'areaSquareMeters':
+        return <View key={fieldId} ref={setFocusTarget('areaSquareMeters')}>{textInput('areaSquareMeters', catalogLabel(fieldId), { keyboardType: 'decimal-pad' })}</View>;
+      case 'studioRoomCount':
+        return (
+          <View key={fieldId} style={styles.field}>
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+            <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+              <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{getStudioCatalogField(fieldId).fixedValue}</Text>
             </View>
-            {getError('budget') ? <FieldError message={localizedFieldError('budget')!} /> : null}
+            <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{t('studio.room_fixed')}</Text>
           </View>
-        )}
-      {values.transaction === 'rent' ? (
-        <View ref={setFocusTarget('cadence')} style={styles.field} testID="studio-cadence-field">
-          <Text style={[styles.label, labelStyle]}>{t('studio.cadence')}</Text>
-          <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            {(['daily', 'monthly', 'yearly'] as const).map(period => (
-              <ChoiceChip
-                key={period}
-                label={t(`studio.${period}`)}
-                selected={values.rentalPeriodId === period}
-                onPress={() => update('rentalPeriodId', period)}
-                testID={`studio-cadence-${period}`}
-                role="radio"
-                style={styles.flexChip}
-              />
-            ))}
-          </View>
-          {getError('rentalPeriodId') ? <FieldError message={localizedFieldError('rentalPeriodId')!} /> : null}
-        </View>
-      ) : null}
-      {mode === 'offered' ? textInput('mapsLink', t('studio.map_link')) : null}
-      <View ref={setFocusTarget('areaSquareMeters')} style={styles.field}>
-        {textInput('areaSquareMeters', t('studio.area'), { keyboardType: 'decimal-pad' })}
-      </View>
-      <View style={styles.field}>
-        <Text style={[styles.label, labelStyle]}>{t('studio.rooms')}</Text>
-        <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>1</Text>
-        </View>
-        <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{t('studio.room_fixed')}</Text>
-      </View>
-      <NumericQuickPick
-        scopeKey={`studio:${mode}:${editPropertyId ?? editRequirementId ?? 'new'}:bathrooms`}
-        label={t('studio.bathrooms')}
-        value={values.bathrooms}
-        onChangeText={value => update('bathrooms', value)}
-        testID="studio-bathrooms"
-      />
-      {binaryPreference('kitchen')}
-      {binaryPreference('hall')}
-      {binaryPreference('parking')}
-      {textInput('floorNumber', t('studio.floor'), { keyboardType: 'numeric' })}
-      {textInput('description', t('studio.description_optional'), { multiline: true })}
-      </>
+        );
+      case 'bathrooms':
+        return <View key={fieldId}>{renderBathroomField()}</View>;
+      case 'kitchen':
+      case 'hall':
+      case 'parking':
+        return binaryPreference(fieldId);
+      case 'floorNumber':
+        return <View key={fieldId}>{textInput('floorNumber', catalogLabel(fieldId), { keyboardType: 'numeric' })}</View>;
+      case 'description':
+        return <View key={fieldId}>{textInput('description', catalogLabel(fieldId), { multiline: true })}</View>;
+    }
+  };
+
+  const renderForm = () => (
+    <>
+      {mode === 'wanted' ? renderPersonSelector() : null}
+      {mode === 'wanted' && !wantedIdentityReady ? null : (
+        <>{STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}</>
       )}
     </>
   );
@@ -773,28 +861,78 @@ export default function StudioCaptureRoute() {
       <Text style={{ color: colors.foreground, fontFamily: fonts.medium, flex: 1, textAlign: isRTL ? 'left' : 'right' }}>{value}</Text>
     </View>
   );
+
+  const renderReviewCatalogField = (fieldId: StudioCatalogFieldId) => {
+    switch (fieldId) {
+      case 'transaction': {
+        const choice = getStudioCatalogField(fieldId).quickPicks?.find(
+          candidate => candidate.modeValues[mode] === values.transaction,
+        );
+        const label = choice ? getStudioCatalogChoiceLabel(choice, mode) : undefined;
+        return reviewItem(
+          catalogLabel(fieldId),
+          label ? label[language === 'ar' ? 1 : 0] : t(`studio.${values.transaction}`),
+        );
+      }
+      case 'locationAreaId':
+        return reviewItem(catalogLabel(fieldId), mode === 'offered'
+          ? areaTitle(values.locationAreaId)
+          : values.preferredAreaMode === 'all_kuwait'
+            ? t('properties.all_kuwait')
+            : values.preferredAreaIds.map(areaTitle).join(', '));
+      case 'mapsLink':
+        return reviewItem(catalogLabel(fieldId), values.mapsLink || '—');
+      case 'price':
+        return reviewItem(catalogLabel(fieldId),
+          `${values.price} KWD${values.transaction === 'rent' ? ` / ${t(`studio.${values.rentalPeriodId}`)}` : ''}`);
+      case 'budgetMinimum':
+        return reviewItem(
+          `${catalogLabel('budgetMinimum')} – ${catalogLabel('budgetMaximum')}`,
+          `${values.budgetMinimum} – ${values.budgetMaximum} KWD${values.transaction === 'rent' ? ` / ${t(`studio.${values.rentalPeriodId}`)}` : ''}`,
+        );
+      case 'budgetMaximum':
+      case 'rentalPeriodId':
+        return null;
+      case 'areaSquareMeters':
+        return reviewItem(catalogLabel(fieldId), values.areaSquareMeters ? `${values.areaSquareMeters} m²` : '—');
+      case 'studioRoomCount':
+        return reviewItem(catalogLabel(fieldId), getStudioCatalogField(fieldId).fixedValue!);
+      case 'bathrooms':
+        return (
+          <View key={fieldId}>
+            {reviewItem(catalogLabel(fieldId), getStudioCatalogField(fieldId).fixedValue!)}
+            {getStudioBathroomConfirmationCase(values) ? reviewItem(
+              language === 'ar' ? 'القيمة القديمة المحفوظة' : 'Saved legacy value',
+              language === 'ar'
+                ? `ستبقى ${values.legacyBathroomCount ?? 'غير مسجل'} ما لم تؤكد الاستبدال.`
+                : `${values.legacyBathroomCount ?? 'not recorded'} remains unchanged unless you confirm replacement.`,
+            ) : null}
+          </View>
+        );
+      case 'kitchen':
+      case 'hall':
+      case 'parking':
+        return reviewItem(
+          catalogLabel(fieldId),
+          values[fieldId] === 'unknown'
+            ? '—'
+            : values[fieldId] === 'required' || values[fieldId] === 'must_not_have'
+              ? t(`studio.${values[fieldId]}`)
+              : values[fieldId] === 'yes' || values[fieldId] === 'no'
+                ? t(`studio.${values[fieldId]}`)
+                : t('studio.not_important'),
+        );
+      case 'floorNumber':
+        return reviewItem(catalogLabel(fieldId), values.floorNumber || '—');
+      case 'description':
+        return reviewItem(catalogLabel(fieldId), values.description || '—');
+    }
+  };
+
   const renderReview = () => (
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
-      {reviewItem(t('studio.transaction'), t(`studio.${values.transaction}`))}
-      {reviewItem(t('studio.location'), mode === 'offered'
-        ? areaTitle(values.locationAreaId)
-        : values.preferredAreaMode === 'all_kuwait'
-          ? t('properties.all_kuwait')
-          : values.preferredAreaIds.map(areaTitle).join(', '))}
-      {reviewItem(mode === 'offered' ? t('studio.price') : t('studio.budget'),
-        mode === 'offered'
-          ? `${values.price} KWD${values.transaction === 'rent' ? ` / ${t(`studio.${values.rentalPeriodId}`)}` : ''}`
-          : `${values.budgetMinimum} – ${values.budgetMaximum} KWD`)}
-      {reviewItem(t('studio.area'), values.areaSquareMeters ? `${values.areaSquareMeters} m²` : '—')}
-      {reviewItem(t('studio.rooms'), '1')}
-      {reviewItem(t('studio.bathrooms'), values.bathrooms || '—')}
-      {reviewItem(t('studio.floor'), values.floorNumber || '—')}
-      {(['kitchen', 'hall', 'parking'] as const).map(field => reviewItem(
-        t(`studio.${field}`),
-        t(`studio.${values[field]}`),
-      ))}
-      {reviewItem(t('studio.description'), values.description || '—')}
+      {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderReviewCatalogField(fieldId))}
       {mode === 'wanted' && selectedPerson ? reviewItem(t('studio.person'), selectedPerson.name) : null}
     </View>
   );

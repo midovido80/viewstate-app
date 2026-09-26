@@ -50,6 +50,28 @@ test('Offered Studio is recognized from canonical apartment subtype and omits ge
   }), false);
 });
 
+test('Offered Studio details keep zero and false distinct from absent legacy facts', () => {
+  const details = getOfferedStudioDetailValues({
+    propertyType: 'apartment',
+    apartmentSubtype: 'studio',
+    studioRoomCount: 1,
+    bathroomCount: 0,
+    hasKitchen: false,
+    unitCount: 1,
+    apartmentCount: 1,
+    floorCount: 1,
+    bathroomsPerUnit: 1,
+  });
+
+  assert.equal(details.bathroomCount, 0);
+  assert.equal(details.hasKitchen, false);
+  assert.equal('hasHall' in details, false);
+  assert.equal(details.unitCount, undefined);
+  assert.equal(details.apartmentCount, undefined);
+  assert.equal(details.floorCount, undefined);
+  assert.equal(details.bathroomsPerUnit, undefined);
+});
+
 test('Wanted Studio presents a single open-room row and each wanted canonical preference once', () => {
   const requirement = {
     id: 'wanted-studio',

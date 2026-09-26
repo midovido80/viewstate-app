@@ -333,6 +333,38 @@ test("Studio has a fixed canonical open-room fact and subtype-only feature facts
   } as TypeDetails, core("apartment")).ok, false, "Open-room count requires the Studio subtype");
 });
 
+test("building aggregate counts validate only for whole buildings and commercial complexes", () => {
+  const invalidBuildingCounts = {
+    unitCount: 2,
+    apartmentCount: 1,
+    shopCount: 1,
+    officeCount: 1,
+  };
+  for (const propertyType of ["whole_building", "commercial_complex"] as const) {
+    const result = validateTypeDetails(
+      { propertyType, ...invalidBuildingCounts } as TypeDetails,
+      core(propertyType),
+    );
+    assertEqual(result.ok, false, `${propertyType} aggregate over-count must fail`);
+    assert(
+      !result.ok && result.issues.some(item => item.message === "Known apartment, shop, and office counts cannot exceed unitCount."),
+      `${propertyType} must retain its aggregate validation`,
+    );
+  }
+
+  const legacyStudio = validateTypeDetails({
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    studioRoomCount: 1,
+    ...invalidBuildingCounts,
+  } as unknown as TypeDetails, core("apartment"));
+  assertEqual(legacyStudio.ok, false, "Building-only fields remain inapplicable to Studio");
+  assert(
+    !legacyStudio.ok && !legacyStudio.issues.some(item => item.message === "Known apartment, shop, and office counts cannot exceed unitCount."),
+    "Studio must not receive the building aggregate error",
+  );
+});
+
 test("Requirement Studio feature preferences require the Studio subtype and allow daily rent", () => {
   const base = {
     id: "11111111-1111-4111-8111-111111111111",

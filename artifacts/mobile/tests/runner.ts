@@ -379,7 +379,9 @@ test('Synthetic enrichment recovery and detail/share routes are wired fail-close
   ]);
   assert.match(recovery, /writeGeneration/);
   assert.match(recovery, /clearConfirmedPropertyEnrichmentDraft/);
-  assert.match(detail, /property\/\$\{encodeURIComponent\(property\.core\.id\)\}\/edit/);
+  assert.match(detail, /getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
+  assert.match(detail, /\/capture\/studio\?editPropertyId=\$\{encodeURIComponent\(propertyCoreId\)\}/);
+  assert.match(detail, /\/property\/\$\{encodeURIComponent\(propertyCoreId\)\}\/edit/);
   assert.match(detail, /property-share-action/);
   assert.match(share, /createPropertyShareSelection/);
   assert.match(share, /buildPropertySharePreview/);

@@ -14,6 +14,9 @@ import {
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
+import {
+  getStudioCatalogField,
+} from '@/services/studioCatalog';
 
 export type StudioFormMode = 'offered' | 'wanted';
 export type StudioAmenity = Extract<ResidentialAmenity, 'balcony' | 'elevator'>;
@@ -34,6 +37,10 @@ export interface StudioFormValues {
   readonly rentalPeriodId: RequirementRentalPeriodId;
   readonly areaSquareMeters: string;
   readonly bathrooms: string;
+  /** Original non-template bathroom value, retained only when hydrating legacy records. */
+  readonly legacyBathroomCount?: number | null;
+  /** Set only after the editor explicitly confirms replacing a legacy bathroom value. */
+  readonly legacyBathroomConfirmed?: boolean;
   readonly floorNumber: string;
   readonly kitchen: StudioSelection;
   readonly hall: StudioSelection;
@@ -65,6 +72,9 @@ export const STUDIO_AMENITIES = ['balcony', 'elevator'] as const satisfies reado
 const RENTAL_PERIODS = ['daily', 'monthly', 'yearly'] as const;
 const PRIVACY_NORMAL = createPrivacyMetadata('normal', 'normal');
 const PRIVACY_EXACT_LOCATION = createPrivacyMetadata('exact_location', 'explicit_per_share');
+const STUDIO_OPEN_ROOM_COUNT = Number(getStudioCatalogField('studioRoomCount').fixedValue) as 1;
+const STUDIO_BATHROOM_FIXED_VALUE = getStudioCatalogField('bathrooms').fixedValue!;
+const STUDIO_BATHROOM_FIXED_COUNT = Number(STUDIO_BATHROOM_FIXED_VALUE);
 
 export function createStudioFormValues(
   mode: StudioFormMode,
@@ -82,7 +92,7 @@ export function createStudioFormValues(
     budgetMaximum: '',
     rentalPeriodId: 'monthly',
     areaSquareMeters: '',
-    bathrooms: '',
+    bathrooms: STUDIO_BATHROOM_FIXED_VALUE,
     floorNumber: '',
     kitchen: mode === 'offered' ? 'unknown' : 'not_important',
     hall: mode === 'offered' ? 'unknown' : 'not_important',
@@ -117,7 +127,7 @@ function parseIntegerInput(value: string): number | null {
 
 function addOptionalNumberError(
   errors: StudioFormError[],
-  field: 'areaSquareMeters' | 'bathrooms' | 'floorNumber',
+  field: 'areaSquareMeters' | 'floorNumber',
   value: string,
   integer: boolean,
   positive: boolean,
@@ -127,6 +137,24 @@ function addOptionalNumberError(
   if (number === null || (positive ? number <= 0 : number < 0)) {
     errors.push(formError(field, 'invalid_number', `${field} must be a valid ${positive ? 'positive' : 'non-negative'} ${integer ? 'whole number' : 'number'}.`));
   }
+}
+
+function legacyBathroomValueIsUntouched(values: StudioFormValues): boolean {
+  if (values.legacyBathroomCount === undefined) return false;
+  if (values.legacyBathroomCount === null) return values.bathrooms === '';
+  return parseIntegerInput(values.bathrooms) === values.legacyBathroomCount;
+}
+
+/**
+ * Returns the legacy incompatibility that the editor must surface for
+ * confirmation before replacing it with the one-bathroom Studio template.
+ */
+export function getStudioBathroomConfirmationCase(
+  values: StudioFormValues,
+): 'missing' | 'zero' | 'non_one' | undefined {
+  if (values.legacyBathroomCount === undefined || values.legacyBathroomConfirmed === true) return undefined;
+  if (values.legacyBathroomCount === null) return 'missing';
+  return values.legacyBathroomCount === 0 ? 'zero' : 'non_one';
 }
 
 export function validateStudioForm(values: StudioFormValues): StudioFormValidation {
@@ -203,14 +231,24 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
   }
 
   addOptionalNumberError(errors, 'areaSquareMeters', values.areaSquareMeters, false, true);
-  addOptionalNumberError(errors, 'bathrooms', values.bathrooms, true, false);
   addOptionalNumberError(errors, 'floorNumber', values.floorNumber, true, false);
+  const legacyBathroomIsUnconfirmed = values.legacyBathroomCount !== undefined
+    && values.legacyBathroomConfirmed !== true
+    && !legacyBathroomValueIsUntouched(values);
+  if ((values.bathrooms !== STUDIO_BATHROOM_FIXED_VALUE
+      && !legacyBathroomValueIsUntouched(values))
+    || legacyBathroomIsUnconfirmed) {
+    errors.push(formError('bathrooms', 'invalid_choice', 'Studio bathroom count is fixed at one; confirm a legacy value before replacing it.'));
+  }
 
-  const offeredChoices: readonly StudioSelection[] = ['yes', 'no', 'unknown'];
-  const wantedChoices: readonly StudioSelection[] = ['required', 'not_important', 'must_not_have'];
-  const choices = values.mode === 'offered' ? offeredChoices : wantedChoices;
   for (const field of ['kitchen', 'hall', 'parking'] as const) {
-    if (!choices.includes(values[field])) {
+    const definition = getStudioCatalogField(field);
+    const quickPickValues = definition.quickPicks?.flatMap(choice => {
+      const value = choice.modeValues[values.mode];
+      return value === undefined ? [] : [value];
+    }) ?? [];
+    const untouchedValue = definition.untouchedValues?.[values.mode];
+    if (!quickPickValues.includes(values[field]) && values[field] !== untouchedValue) {
       errors.push(formError(field, 'invalid_choice', `Selection for ${field} is not valid for ${values.mode} Studio forms.`));
     }
   }
@@ -276,7 +314,7 @@ export function buildStudioProperty(
   const details = {
     propertyType: 'apartment' as const,
     apartmentSubtype: 'studio' as const,
-    studioRoomCount: 1 as const,
+    studioRoomCount: STUDIO_OPEN_ROOM_COUNT,
     ...(numberValue(values.areaSquareMeters) !== undefined
       ? { builtUpAreaSquareMeters: numberValue(values.areaSquareMeters) }
       : {}),
@@ -378,10 +416,22 @@ export type StudioProperty = Property & {
 };
 
 export function isStudioProperty(property: Property): property is StudioProperty {
-  return property.core.propertyType === 'apartment'
+  const details = property.typeDetails as (ApartmentTypeDetails & Readonly<Record<string, unknown>>) | undefined;
+  const hasBuildingAggregate = [
+    'unitCount',
+    'apartmentCount',
+    'shopCount',
+    'officeCount',
+    'floorCount',
+    'bedroomsPerUnit',
+    'bathroomsPerUnit',
+  ].some(field => details && field in details);
+  return !hasBuildingAggregate
+    && property.core.propertyType === 'apartment'
     && property.typeDetails?.propertyType === 'apartment'
     && property.typeDetails.apartmentSubtype === 'studio'
-    && (property.typeDetails.studioRoomCount === undefined || property.typeDetails.studioRoomCount === 1)
+    && (property.typeDetails.studioRoomCount === undefined
+      || property.typeDetails.studioRoomCount === STUDIO_OPEN_ROOM_COUNT)
     && getAreaById(property.core.locationArea.id) !== undefined
     && validateProperty(property).ok;
 }
@@ -406,6 +456,9 @@ export function readStudioProperty(property: Property): StudioFormValues {
       : 'monthly',
     areaSquareMeters: parseStudioField(details.builtUpAreaSquareMeters),
     bathrooms: parseStudioField(details.bathroomCount),
+    ...(details.bathroomCount !== STUDIO_BATHROOM_FIXED_COUNT
+      ? { legacyBathroomCount: details.bathroomCount ?? null }
+      : {}),
     floorNumber: parseStudioField(details.floorNumber),
     kitchen: details.hasKitchen === true ? 'yes' : details.hasKitchen === false ? 'no' : 'unknown',
     hall: details.hasHall === true ? 'yes' : details.hasHall === false ? 'no' : 'unknown',
@@ -416,6 +469,16 @@ export function readStudioProperty(property: Property): StudioFormValues {
 
 export function isStudioRequirement(requirement: SeekerRequirement): boolean {
   if (requirement.propertyType !== 'apartment') return false;
+  const rawRequirement = requirement as SeekerRequirement & Readonly<Record<string, unknown>>;
+  if ([
+    'unitCount',
+    'apartmentCount',
+    'shopCount',
+    'officeCount',
+    'floorCount',
+    'bedroomsPerUnit',
+    'bathroomsPerUnit',
+  ].some(field => field in rawRequirement)) return false;
   if ((requirement.preferredAmenities ?? []).some(amenity =>
     !(STUDIO_AMENITIES as readonly string[]).includes(amenity))) return false;
   if ((requirement.preferredAmenityExclusions ?? []).length > 0) return false;
@@ -490,6 +553,9 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
       : 'monthly',
     areaSquareMeters: area?.kind === 'number' ? String(area.value) : '',
     bathrooms: requirement.bathroomsMinimum === undefined ? '' : String(requirement.bathroomsMinimum),
+    ...(requirement.bathroomsMinimum !== STUDIO_BATHROOM_FIXED_COUNT
+      ? { legacyBathroomCount: requirement.bathroomsMinimum ?? null }
+      : {}),
     floorNumber: floor?.kind === 'number' ? String(floor.value) : '',
     kitchen: wantedSelection(requirement, 'hasKitchen'),
     hall: wantedSelection(requirement, 'hasHall'),

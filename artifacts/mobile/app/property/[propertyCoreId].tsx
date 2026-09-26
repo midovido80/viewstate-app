@@ -59,10 +59,16 @@ import {
 import { Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
-import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, getStudioPropertyEditHref, isOfferedStudio } from '@/services/propertyDetailPresentation';
+import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, isOfferedStudio } from '@/services/propertyDetailPresentation';
+
+export function getPropertyEditRouteHref(propertyCoreId: string, offeredStudio: boolean): string {
+  return offeredStudio
+    ? `/capture/studio?editPropertyId=${encodeURIComponent(propertyCoreId)}`
+    : `/property/${encodeURIComponent(propertyCoreId)}/edit`;
+}
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
-  const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string }>();
+  const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string | string[] }>();
   const id = Array.isArray(propertyCoreId) ? propertyCoreId[0] : propertyCoreId;
   const router = useRouter();
   const colors = useColors();
@@ -104,6 +110,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
   const editEntryConsumed = useRef(false);
+  const studioEditForwardedId = useRef<string | null>(null);
   const actionFlight = useRef(false);
   const canPermanentlyDelete = store.canPermanentlyDelete();
   const webBlobStore = useRef<WebAttachmentBlobStore | null>(null);
@@ -330,11 +337,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   };
 
   useFocusEffect(useCallback(() => {
-    if ((edit === '1' || forceEdit) && status === 'ready' && mode === 'detail' && !editEntryConsumed.current) {
+    const editRequested = (Array.isArray(edit) ? edit[0] : edit) === '1' || forceEdit;
+    if (editRequested && status === 'ready' && property && isOfferedStudio(property)) {
+      if (studioEditForwardedId.current !== property.core.id) {
+        studioEditForwardedId.current = property.core.id;
+        router.replace(getPropertyEditRouteHref(property.core.id, true) as never);
+      }
+      return;
+    }
+    if (editRequested && status === 'ready' && mode === 'detail' && !editEntryConsumed.current) {
       editEntryConsumed.current = true;
       void beginEdit();
     }
-  }, [edit, forceEdit, status, mode]));
+  }, [edit, forceEdit, status, mode, property, router]));
 
   const updateChoices = (
     changesOrUpdater: Partial<PropertyEditDraftV1['choices']>
@@ -873,9 +888,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const handleEdit = () => {
     if (actionFlight.current) return;
     actionFlight.current = true;
-    router.push((offeredStudio
-      ? getStudioPropertyEditHref(property.core.id)
-      : `/property/${encodeURIComponent(property.core.id)}/edit`) as never);
+    router.push(getPropertyEditRouteHref(property.core.id, offeredStudio) as never);
     setTimeout(() => { actionFlight.current = false; }, 1000);
   };
 
@@ -1743,9 +1756,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           )}
           {Platform.OS === 'web' ? (
             <Link
-              href={(offeredStudio
-                ? getStudioPropertyEditHref(property.core.id)
-                : getPropertyDetailActionHref(property.core.id, 'edit')) as never}
+              href={getPropertyEditRouteHref(property.core.id, offeredStudio) as never}
               testID="property-edit-action"
               accessibilityRole="link"
               style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, textDecorationLine: 'none' }}

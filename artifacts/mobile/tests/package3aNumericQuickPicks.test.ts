@@ -312,7 +312,7 @@ test('SOURCE ASSERTION: Property applies quick picks only to the three authorize
 
 test('SOURCE ASSERTION: Requirement keeps ambiguous surfaces on current inputs and Buy without Rent details', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  assert.match(source, /const scopeKey = editing \? `requirement:\$\{requirementId\}` : `requirement:new:\$\{ownerFromRoute/);
+  assert.match(source, /const scopeKey = editing \? `requirement:\$\{routeRequirementId\}` : `requirement:new:\$\{ownerFromRoute/);
   assert.match(source, /const coreApplicable = isResidential\(propertyType, floorUse\)/);
   assert.match(source, /scopeKey=\{scopeKey\} label=\{label\('Bedrooms'/);
   assert.match(source, /scopeKey=\{scopeKey\} label=\{label\('Bathrooms'/);

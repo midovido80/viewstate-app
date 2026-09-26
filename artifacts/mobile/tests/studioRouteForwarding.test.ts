@@ -1,0 +1,68 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+import { resolveSourcePath } from './sourcePath.ts';
+
+const source = async (path: string) =>
+  readFile(resolveSourcePath(path, import.meta.url), 'utf8');
+
+async function productionFunction(path: string, name: string) {
+  const text = await source(path);
+  const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let declaration: ts.FunctionDeclaration | undefined;
+  const visit = (node: ts.Node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) declaration = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  assert.ok(declaration, `Expected production route function ${name}`);
+  const compiled = ts.transpileModule(declaration.getText(file).replace(/^export\s+/, ''), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText;
+  return new Function(`${compiled}; return ${name};`)() as (...args: never[]) => unknown;
+}
+
+test('Person Details route binds the exact eligible seeker and defaults to Rent', async () => {
+  const route = await productionFunction('../app/person/[personId].tsx', 'getPersonWantedStudioRoute');
+  const personId = 'seeker / typed β?ref=exact';
+  assert.deepEqual(route(personId as never), {
+    pathname: '/capture/studio',
+    params: { mode: 'wanted', seekerId: personId, transaction: 'rent' },
+  });
+
+  const screen = await source('../app/person/[personId].tsx');
+  assert.match(screen, /onPress=\{\(\) => router\.push\(getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(screen, /person\.classifications\.includes\('seeker'\)/);
+});
+
+test('legacy and normal Property edit URLs forward Studio by same ID; other properties remain generic', async () => {
+  const route = await productionFunction('../app/property/[propertyCoreId].tsx', 'getPropertyEditRouteHref');
+  const propertyId = 'property / typed β?ref=exact';
+  const encoded = encodeURIComponent(propertyId);
+  assert.equal(route(propertyId as never, true as never), `/capture/studio?editPropertyId=${encoded}`);
+  assert.equal(route(propertyId as never, false as never), `/property/${encoded}/edit`);
+
+  const screen = await source('../app/property/[propertyCoreId].tsx');
+  assert.match(screen, /router\.replace\(getPropertyEditRouteHref\(property\.core\.id, true\)/);
+  assert.match(screen, /const editRequested = .*forceEdit/);
+  assert.match(screen, /router\.push\(getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
+});
+
+test('generic Requirement edit forwards only hydratable Studio IDs and fails closed otherwise', async () => {
+  const route = await productionFunction('../app/requirement/[requirementId].tsx', 'getStudioRequirementRouteTarget');
+  const requirementId = 'requirement / typed β?ref=exact';
+  const encoded = encodeURIComponent(requirementId);
+  assert.deepEqual(route(requirementId as never, true as never, true as never), {
+    kind: 'studio',
+    href: `/capture/studio?editRequirementId=${encoded}`,
+  });
+  assert.deepEqual(route(requirementId as never, true as never, false as never), { kind: 'blocked' });
+  assert.deepEqual(route(requirementId as never, false as never, true as never), { kind: 'generic' });
+
+  const screen = await source('../app/requirement/[requirementId].tsx');
+  assert.match(screen, /if \(!editRequested \|\| !recordLoaded \|\| !baseline \|\| !isWantedStudio\(baseline\)\) return/);
+  assert.match(screen, /router\.replace\(target\.href as never\)/);
+  assert.match(screen, /testID="studio-requirement-unavailable"/);
+  assert.doesNotMatch(screen, /getStudioRequirementFallbackEditHref/);
+});

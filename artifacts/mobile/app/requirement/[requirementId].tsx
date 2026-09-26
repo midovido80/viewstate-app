@@ -46,7 +46,7 @@ import {
 import { getRequirementCatalogFields, getRequirementPresentationFields } from '@/services/requirementFieldMap';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
-import { canHydrateStudioRequirement, getStudioRequirementEditHref, getStudioRequirementFallbackEditHref, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
+import { canHydrateStudioRequirement, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
 
 const RENT_SERVICES = ['swimmingPool', 'gym', 'seaView'] as const;
 const AMENITY_LABELS: Record<string, { en: string; ar: string }> = {
@@ -75,19 +75,33 @@ type Extension = {
 };
 type NumberField = 'bedroomsMinimum' | 'bathroomsMinimum' | 'masterBedroomsMinimum' | 'livingRoomCount' | 'parkingSpaceCount' | 'floorNumber' | 'builtUpAreaSquareMeters';
 
+export function getStudioRequirementRouteTarget(
+  requirementId: string,
+  studio: boolean,
+  hydratable: boolean,
+): { readonly kind: 'studio'; readonly href: string } | { readonly kind: 'blocked' } | { readonly kind: 'generic' } {
+  if (!studio) return { kind: 'generic' };
+  if (!hydratable) return { kind: 'blocked' };
+  return {
+    kind: 'studio',
+    href: `/capture/studio?editRequirementId=${encodeURIComponent(requirementId)}`,
+  };
+}
+
 const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
   ['apartment', 'house', 'villa', 'chalet'].includes(type) || (type === 'floor' && floorUse === 'residential');
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
-  const { requirementId, seekerId, edit } = useLocalSearchParams<{ requirementId: string; seekerId?: string; edit?: string }>();
-  const editing = requirementId !== 'new';
+  const { requirementId, seekerId, edit } = useLocalSearchParams<{ requirementId: string | string[]; seekerId?: string | string[]; edit?: string | string[] }>();
+  const routeRequirementId = Array.isArray(requirementId) ? requirementId[0] : requirementId;
+  const editing = routeRequirementId !== 'new';
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const ownerFromRoute = Array.isArray(seekerId) ? seekerId[0] : seekerId;
-  const scopeKey = editing ? `requirement:${requirementId}` : `requirement:new:${ownerFromRoute ?? 'missing'}`;
+  const scopeKey = editing ? `requirement:${routeRequirementId}` : `requirement:new:${ownerFromRoute ?? 'missing'}`;
   const [baseline, setBaseline] = useState<SeekerRequirement | null>(null);
   const [recordLoaded, setRecordLoaded] = useState(!editing);
   const [step, setStep] = useState(0);
@@ -117,7 +131,8 @@ export default function RequirementEditor() {
   const [maximum, setMaximum] = useState('');
   const [cadence, setCadence] = useState<RequirementRentalPeriodId>('monthly');
   const [notes, setNotes] = useState('');
-  const draftId = useRef(editing ? requirementId : generateDomainId());
+  const draftId = useRef(editing ? routeRequirementId : generateDomainId());
+  const studioForwardedId = useRef<string | null>(null);
   const saveFlight = useRef(false);
   const confirmedRequirement = useRef<SeekerRequirement | null>(null);
   const uncertainRequirement = useRef<SeekerRequirement | null>(null);
@@ -134,19 +149,23 @@ export default function RequirementEditor() {
     setRecoveryAction(null);
     setSaving(false);
     return () => { routeGeneration.current.advance(); };
-  }, [editing, requirementId, ownerFromRoute]);
+  }, [editing, routeRequirementId, ownerFromRoute]);
 
   useEffect(() => {
     setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(0); setInvalidCatalogFields(new Set());
     confirmedRequirement.current = null; uncertainRequirement.current = null; editConflictRequirement.current = null; setRecoveryAction(null);
-    draftId.current = editing ? requirementId : generateDomainId();
+    draftId.current = editing ? routeRequirementId : generateDomainId();
     setPurpose('rent'); setPropertyType('apartment'); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
     setDriverRoom(false); setCatalog([]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
     if (!editing) return;
     let cancelled = false;
-    void store.getRequirement(requirementId).then(record => {
-      if (cancelled || !record) return;
+    void store.getRequirement(routeRequirementId).then(record => {
+      if (cancelled) return;
+      if (!record) {
+        setRecordLoaded(true);
+        return;
+      }
       setBaseline(record);
       setRecordLoaded(true);
       const form = formValuesFromRequirement(record) as RequirementFormValues & Extension;
@@ -168,9 +187,27 @@ export default function RequirementEditor() {
       setExcludedAmenities([...(record as SeekerRequirement & Extension).preferredAmenityExclusions ?? []]);
       setOccupancy(form.occupancy); setCadence(form.rentalPeriodId ?? 'monthly');
       setMinimum(form.minimumBudget === undefined ? '' : String(form.minimumBudget)); setMaximum(form.maximumBudget === undefined ? '' : String(form.maximumBudget)); setNotes(form.notes);
+    }).catch(() => {
+      if (cancelled) return;
+      setError(language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.');
+      setRecordLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [editing, requirementId, ownerFromRoute]);
+  }, [editing, routeRequirementId, ownerFromRoute, language]);
+
+  const editRequested = (Array.isArray(edit) ? edit[0] : edit) === '1';
+  useEffect(() => {
+    if (!editRequested || !recordLoaded || !baseline || !isWantedStudio(baseline)) return;
+    const target = getStudioRequirementRouteTarget(
+      baseline.id,
+      true,
+      canHydrateStudioRequirement(baseline),
+    );
+    if (target.kind === 'studio' && studioForwardedId.current !== baseline.id) {
+      studioForwardedId.current = baseline.id;
+      router.replace(target.href as never);
+    }
+  }, [editRequested, recordLoaded, baseline, router]);
 
   const catalogWithCore = useMemo(() => {
     const applicable = new Set(getApplicablePropertyFormFields(propertyType, floorUse).map(field => field.field));
@@ -183,7 +220,7 @@ export default function RequirementEditor() {
   }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse]);
 
   const candidate = () => {
-    if (editing && (!recordLoaded || !baseline || baseline.id !== requirementId)) return { ok: false as const, message: language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.' };
+    if (editing && (!recordLoaded || !baseline || baseline.id !== routeRequirementId)) return { ok: false as const, message: language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.' };
     const ownerId = baseline?.seekerId ?? ownerFromRoute;
     if (!ownerId) return { ok: false as const, message: t('requirements.invalid_owner') };
     const parse = (value: string, integer = true) => parseOptionalRequirementNumber(value, { integer });
@@ -458,7 +495,79 @@ export default function RequirementEditor() {
     return next;
   });
 
-  if (editing && recordLoaded && baseline && isWantedStudio(baseline) && edit !== '1') {
+  if (editing && editRequested && !recordLoaded) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <View style={styles.content}>
+          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }} testID="studio-requirement-forwarding">
+            {language === 'ar' ? 'جارٍ تحميل المتطلب…' : 'Loading Requirement…'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+  if (editing && editRequested && recordLoaded && !baseline) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <View style={styles.content}>
+          <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="studio-requirement-unavailable">
+            {language === 'ar'
+              ? 'تعذر تحميل متطلب الاستوديو هذا بأمان للتعديل.'
+              : 'This Studio Requirement cannot be safely loaded for editing.'}
+          </Text>
+          <Button
+            title={t('capture.back')}
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}
+            variant="outline"
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (editing && recordLoaded && baseline && isWantedStudio(baseline)) {
+    const studioTarget = getStudioRequirementRouteTarget(
+      baseline.id,
+      true,
+      canHydrateStudioRequirement(baseline),
+    );
+    if (studioTarget.kind !== 'studio') {
+      return (
+        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+          <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <TouchableOpacity
+              onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}
+              testID="studio-requirement-back"
+            >
+              <Text style={{ color: colors.primary }}>{t('capture.back')}</Text>
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>
+              {label('Studio Requirement', 'متطلب استوديو')}
+            </Text>
+            <View />
+          </View>
+          <View style={styles.content}>
+            <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="studio-requirement-unavailable">
+              {label(
+                'This Studio Requirement cannot be safely opened for editing.',
+                'لا يمكن فتح متطلب الاستوديو هذا بأمان للتعديل.',
+              )}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    if (editRequested) {
+      return (
+        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+          <View style={styles.content}>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.medium }} testID="studio-requirement-forwarding">
+              {label('Opening Studio Requirement editor…', 'جارٍ فتح محرر متطلب الاستوديو…')}
+            </Text>
+          </View>
+        </View>
+      );
+    }
     const studioRows = getWantedStudioDisplayRows(baseline, language);
     const contextRows = getWantedStudioContextRows(baseline, language);
     const areaText = baseline.preferredAreaMode === 'all_kuwait'
@@ -468,9 +577,7 @@ export default function RequirementEditor() {
         return area ? (language === 'ar' ? area.ar : area.en) : id;
       }).join(', ');
     const budgetText = `${baseline.budget.minimum}–${baseline.budget.maximum} ${baseline.budget.currencyCode}`;
-    const editStudio = () => router.push((canHydrateStudioRequirement(baseline)
-      ? getStudioRequirementEditHref(baseline.id)
-      : getStudioRequirementFallbackEditHref(baseline.id, baseline.seekerId)) as never);
+    const editStudio = () => router.push(studioTarget.href as never);
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>

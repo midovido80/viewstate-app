@@ -38,8 +38,10 @@ test('Apartment subtype route structurally preserves dedicated and existing dest
   assert.match(subtype, /router\.navigate\(\{\s*pathname: '\/capture\/property-type'/);
 });
 
-test('Person Details starts a wanted capture for the existing seeker record', async () => {
+test('Person Details starts the dedicated wanted Studio form for the existing seeker', async () => {
   const person = await source('../app/person/[personId].tsx');
   assert.match(person, /testID="person-add-wanted-studio"/);
-  assert.match(person, /pathname: '\/capture\/transaction',\s*params: \{ mode: 'wanted', seekerId: person\.id \}/);
+  assert.match(person, /router\.push\(getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(person, /person\.classifications\.includes\('seeker'\)/);
+  assert.match(person, /params: \{ mode: 'wanted', seekerId: personId, transaction: 'rent' \}/);
 });

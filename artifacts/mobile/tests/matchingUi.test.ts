@@ -369,6 +369,7 @@ test('post-save state offers Requirement capture for any existing Person without
   assert.match(personScreen, /<Button title=\{t\('requirements\.add'\)\} onPress=/);
   assert.match(personScreen, /params\.saved !== '1' \? <TouchableOpacity onPress=/);
   assert.match(personScreen, /testID="person-add-requirement"/);
-  assert.doesNotMatch(personScreen, /person\.classifications\.includes\('seeker'\)/);
+  // Studio has a seeker-only action; the separate generic Requirement action stays available.
+  assert.match(personScreen, /<Button title=\{t\('requirements\.add'\)\} onPress=\{\(\) => router\.push\(\{ pathname: '\/requirement\/new'/);
   assert.doesNotMatch(personScreen, /testID="person-saved-add-requirement"[^>]*disabled=/);
 });

@@ -293,6 +293,7 @@ export function validateTypeDetails(
   }
 
   if (
+    (details.propertyType === "whole_building" || details.propertyType === "commercial_complex") &&
     typeof candidate.unitCount === "number" &&
     ["apartmentCount", "shopCount", "officeCount"].reduce(
       (sum, field) => sum + (typeof candidate[field] === "number" ? candidate[field] as number : 0),

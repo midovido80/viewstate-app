@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Property, SeekerRequirement } from '@workspace/property-domain';
+import {
+  createLiteralText,
+  createPrivacyMetadata,
+  validateProperty,
+  type Property,
+  type SeekerRequirement,
+} from '@workspace/property-domain';
 import './platformModuleStubs.ts';
 import {
   buildStudioProperty,
@@ -35,10 +41,11 @@ const storage = () => {
   };
 };
 
-const offeredCandidate = (id: string, offerId: string, price = '125') => {
+const offeredCandidate = (id: string, offerId: string, price = '125', mapsLink = '') => {
   const values = {
     ...createStudioFormValues('offered', 'rent'),
     locationAreaId: 'salmiya',
+    mapsLink,
     price,
     areaSquareMeters: '35',
     bathrooms: '1',
@@ -273,6 +280,91 @@ test('Studio edit reconciles legacy top-level area and reads back one canonical 
   assert.deepEqual(memory.properties.get(baseline.core.id), outcome.property);
 });
 
+test('Studio edit isolates legacy building fields without losing opaque metadata or property evidence', async () => {
+  const basic = offeredCandidate('studio-property-legacy-building', 'studio-offer-legacy-building');
+  const ownerSource = createLiteralText(
+    'Introduced by the building guard',
+    createPrivacyMetadata('owner_source', 'explicit_per_share'),
+  );
+  const privateNotes = createLiteralText(
+    'Do not disclose',
+    createPrivacyMetadata('private_notes', 'never'),
+  );
+  const attachment = {
+    id: 'studio-legacy-cover',
+    kind: 'image' as const,
+    originalName: 'cover.jpg',
+    mimeType: 'image/jpeg',
+    order: 0,
+    managedUri: 'file:///managed/studio-cover.jpg',
+    isCover: true,
+    privacy: createPrivacyMetadata('normal', 'normal'),
+  };
+  const baseline = {
+    ...basic,
+    core: { ...basic.core, ownerSource, privateNotes },
+    typeDetails: {
+      ...basic.typeDetails!,
+      unitCount: 12,
+      apartmentCount: 8,
+      shopCount: 2,
+      officeCount: 2,
+      roomsPerUnit: 3,
+      bathroomsPerUnit: 2,
+      floorCount: 4,
+      elevatorCount: 2,
+      opaqueLegacyMetadata: { preserve: 'without interpretation' },
+    },
+    attachments: [attachment],
+    locationEnrichment: {
+      mapsLink: createLiteralText(
+        'https://www.google.com/maps/place/Kuwait',
+        createPrivacyMetadata('exact_location', 'explicit_per_share'),
+      ),
+    },
+    createdAt: '2025-01-01T00:00:00.000Z',
+  } as unknown as Property;
+  const built = offeredCandidate(
+    'studio-property-legacy-building',
+    'studio-offer-legacy-building',
+    '150',
+    'https://www.google.com/maps/place/Kuwait',
+  );
+  const candidate = prepareStudioPropertyEditCandidate(baseline, built);
+
+  assert(validateProperty(candidate).ok, 'Sanitized Studio edit candidate must pass production Property validation');
+  const details = candidate.typeDetails as unknown as Record<string, unknown>;
+  for (const field of [
+    'unitCount', 'apartmentCount', 'shopCount', 'officeCount',
+    'roomsPerUnit', 'bathroomsPerUnit', 'floorCount', 'elevatorCount',
+  ]) {
+    assert.equal(details[field], undefined, `${field} must not enter the Studio candidate`);
+  }
+  assert.deepEqual(details.opaqueLegacyMetadata, { preserve: 'without interpretation' });
+
+  const memory = propertyStore([baseline]);
+  const outcome = await saveStudioProperty({
+    candidate,
+    baseline,
+    store: memory.store,
+    storage: storage(),
+  });
+  assert.equal(outcome.status, 'saved');
+  if (outcome.status !== 'saved') return;
+  assert.deepEqual(await memory.store.getProperty(baseline.core.id), candidate);
+  assert.deepEqual(outcome.property.attachments, baseline.attachments);
+  assert.equal(outcome.property.core.ownerSource?.value, ownerSource.value);
+  assert.equal(outcome.property.core.privateNotes?.value, privateNotes.value);
+  assert.deepEqual(outcome.property.locationEnrichment, baseline.locationEnrichment);
+  assert.equal(
+    (outcome.property as Property & { createdAt?: string }).createdAt,
+    (baseline as Property & { createdAt?: string }).createdAt,
+  );
+  assert.deepEqual(details.opaqueLegacyMetadata, { preserve: 'without interpretation' });
+  assert.deepEqual(memory.writes, ['cas', 'cas']);
+  assert.equal(memory.properties.size, 1);
+});
+
 test('Studio wanted save validates an existing Person and confirms the exact Requirement', async () => {
   const values = {
     ...createStudioFormValues('wanted', 'sale'),
@@ -349,9 +441,9 @@ test('Studio wanted save validates an existing Person and confirms the exact Req
     store: ownerStore.store,
     navigate: () => undefined,
   });
-  assert.equal(ownerOutcome.status, 'saved');
-  assert.deepEqual(ownerStore.writes, ['save']);
-  assert.deepEqual(ownerStore.requirements.get(ownerRequirement.id), ownerRequirement);
+  assert.equal(ownerOutcome.status, 'non_seeker');
+  assert.deepEqual(ownerStore.writes, []);
+  assert.equal(ownerStore.requirements.has(ownerRequirement.id), false);
 
   const missing = await saveStudioRequirement({
     candidate: { ...candidate, seekerId: 'missing-person' },
@@ -360,5 +452,47 @@ test('Studio wanted save validates an existing Person and confirms the exact Req
     navigate: () => undefined,
   });
   assert.equal(missing.status, 'missing_person');
-  assert.deepEqual(ownerStore.writes, ['save']);
+  assert.deepEqual(ownerStore.writes, []);
+});
+
+test('Studio Requirement duplicate-ID collision is rejected after exact-ID readback', async () => {
+  const values = {
+    ...createStudioFormValues('wanted', 'rent'),
+    preferredAreaMode: 'all_kuwait' as const,
+    budgetMinimum: '100',
+    budgetMaximum: '300',
+    description: 'Original Studio request',
+  };
+  const candidate = buildStudioRequirement(values, '55555555-5555-4555-8555-555555555555', seeker.id);
+  const memory = requirementStore(seeker);
+  const first = await saveStudioRequirement({
+    candidate,
+    baseline: null,
+    store: memory.store,
+    navigate: () => undefined,
+  });
+  assert.equal(first.status, 'saved');
+  assert.deepEqual(await memory.store.getRequirement(candidate.id), candidate);
+
+  const collision = buildStudioRequirement(
+    { ...values, description: 'Different payload under the same identity' },
+    candidate.id,
+    seeker.id,
+  );
+  const navigationCount = { value: 0 };
+  const duplicate = await saveStudioRequirement({
+    candidate: collision,
+    baseline: null,
+    store: memory.store,
+    navigate: () => { navigationCount.value += 1; },
+  });
+  assert.deepEqual(duplicate, {
+    status: 'storage_failure',
+    retryAllowed: false,
+    conflict: true,
+  });
+  assert.deepEqual(await memory.store.getRequirement(candidate.id), candidate);
+  assert.deepEqual(memory.writes, ['save', 'save']);
+  assert.equal(memory.requirements.size, 1);
+  assert.equal(navigationCount.value, 0);
 });
