@@ -140,6 +140,9 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify Android JavaScript bundle
+        run: pnpm --filter @workspace/mobile exec expo export --platform android --output-dir /tmp/viewstate-android-bundle
+
       - name: Generate Android project without modifying the repository
         run: pnpm --filter @workspace/mobile exec expo prebuild --platform android --non-interactive --no-install
 
