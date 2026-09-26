@@ -4,4 +4,5 @@
 - [Property fact convergence](property-fact-convergence.md) — mapped legacy metadata is fallback-only; a canonical edit snapshot, including deletion, is authoritative.
 - [Requirement save evidence boundary](requirement-save-evidence-boundary.md) — separate unrecoverable historical exceptions from independently verified current save gates.
 - [Property list ordering](property-list-ordering.md) — retain deterministic creation chronology until an updated-order storage change is authorized.
-- [Release isolation](release-isolation.md) — preserve the source branch in a separate worktree and report verified changes before asking to build an APK.
+- [Release isolation](release-isolation.md) — test-branch APK builds are authorized; preserve the source branch and wait for device review before merging.
+- [Android GitHub build](android-github-build.md) — dispatch experimental builds through an existing default-branch workflow; use hosted SDK and early bundle checks.
