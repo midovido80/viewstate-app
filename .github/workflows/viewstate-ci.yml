@@ -130,8 +130,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Verify runner Android SDK
+        shell: bash
+        run: |
+          test -n "$ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+          echo "Using the Android SDK already installed on the GitHub-hosted runner."
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
