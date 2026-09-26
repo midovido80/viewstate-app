@@ -96,9 +96,6 @@ async function assertSeekerOwnership(
 ): Promise<void> {
   const person = await personStore.getPerson(seekerId);
   if (!person) throw new Error('REQUIREMENT_SEEKER_NOT_FOUND');
-  if (!person.classifications.includes('seeker')) {
-    throw new Error('REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED');
-  }
 }
 
 function parseRequirement(raw: string): SeekerRequirement {

@@ -20,7 +20,7 @@ const seekerId = 'ux2-seeker';
 const rentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const buyId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-test('UX-2 uses canonical Person roles and restricts Property source ownership', () => {
+test('UX-2 keeps Property source roles independent from Person classifications', () => {
   assert.deepEqual(PERSON_CLASSIFICATIONS, ['seeker', 'owner', 'broker', 'real_estate_company', 'building_guard']);
   const person = createPerson({
     id: seekerId, classifications: ['seeker', 'broker'], name: '  Contact Name  ',
@@ -29,7 +29,7 @@ test('UX-2 uses canonical Person roles and restricts Property source ownership',
   assert.equal(person.name, '  Contact Name  ');
   assert.equal(person.displayPhone, '50000000');
   assert.equal(personCanBePropertySource(person, 'broker'), true);
-  assert.equal(personCanBePropertySource(person, 'owner'), false);
+  assert.equal(personCanBePropertySource(person, 'owner'), true);
 });
 
 test('UX-2 Rent preferences preserve zero, false, absence, and exact/custom values after reopening', () => {
@@ -96,7 +96,7 @@ test('UX-2 source role travels with the Person through every existing capture ro
   }
 });
 
-test('UX-2 save outcomes distinguish unavailable and non-seeker People before writing', async () => {
+test('UX-2 Requirement save requires an existing Person, not seeker classification', async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
     purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
     minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
@@ -115,13 +115,17 @@ test('UX-2 save outcomes distinguish unavailable and non-seeker People before wr
     navigate: () => assert.fail('must not navigate'),
   });
   assert.deepEqual(missing, { status: 'missing_person' });
-  const nonSeeker = await savePersonRequirement({
+  const ownerRequirement = await savePersonRequirement({
     candidate: built.value, baseline: null,
-    store: { ...baseStore, getPerson: async () => ({ classifications: ['owner'] }) },
-    navigate: () => assert.fail('must not navigate'),
+    store: {
+      ...baseStore,
+      getPerson: async () => ({ classifications: ['owner'] }),
+      getRequirement: async () => built.value,
+    },
+    navigate: () => undefined,
   });
-  assert.deepEqual(nonSeeker, { status: 'non_seeker' });
-  assert.equal(writes, 0);
+  assert.deepEqual(ownerRequirement, { status: 'saved' });
+  assert.equal(writes, 1);
 });
 
 test('UX-2 storage and readback failures keep writes bounded and allow confirmation-only recovery', async () => {

@@ -503,13 +503,12 @@ test('Web Requirement persistence survives recreation and isolates Seekers', asy
     )),
     /REQUIREMENT_SEEKER_NOT_FOUND/,
   );
-  await assert.rejects(
-    first.saveRequirement(rentRequirement(
-      '55555555-5555-4555-8555-555555555555',
-      'owner-1',
-    )),
-    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
+  const ownerRequirement = rentRequirement(
+    '55555555-5555-4555-8555-555555555555',
+    'owner-1',
   );
+  await first.saveRequirement(ownerRequirement);
+  assert.deepEqual(await first.getRequirement(ownerRequirement.id), ownerRequirement);
 });
 
 class RequirementDatabase {
@@ -830,14 +829,11 @@ test('Integrated Native store serializes Requirement ownership against Person mu
     owner(reclassifiedSeeker.id),
   );
   await updateGate.started;
-  const rejectedUpdate = assert.rejects(
-    store.updateRequirement(original, replacement),
-    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
-  );
+  const acceptedUpdate = store.updateRequirement(original, replacement);
   updateGate.release();
   assert.equal(await reclassifying, true);
-  await rejectedUpdate;
-  assert.deepEqual(await store.getRequirement(original.id), original);
+  assert.equal(await acceptedUpdate, true);
+  assert.deepEqual(await store.getRequirement(original.id), replacement);
 });
 
 test('Integrated Web store serializes Requirement ownership against Person mutations', async () => {
@@ -883,14 +879,11 @@ test('Integrated Web store serializes Requirement ownership against Person mutat
     owner(reclassifiedSeeker.id),
   );
   await updateGate.started;
-  const rejectedUpdate = assert.rejects(
-    store.updateRequirement(original, replacement),
-    /REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED/,
-  );
+  const acceptedUpdate = store.updateRequirement(original, replacement);
   updateGate.release();
   assert.equal(await reclassifying, true);
-  await rejectedUpdate;
-  assert.deepEqual(await store.getRequirement(original.id), original);
+  assert.equal(await acceptedUpdate, true);
+  assert.deepEqual(await store.getRequirement(original.id), replacement);
 });
 
 test('Integrated Native and Web stores preserve Requirement data while disabled and re-enable it', async () => {

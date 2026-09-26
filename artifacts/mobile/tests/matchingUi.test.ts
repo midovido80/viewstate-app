@@ -363,10 +363,12 @@ test('Person entry opens the saved Match All mode without selecting one Requirem
   assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
 });
 
-test('non-seeker post-save state does not render a disabled Requirement CTA', async () => {
+test('post-save state offers Requirement capture for any existing Person without a disabled CTA', async () => {
   const personScreen = await readFile('app/person/[personId].tsx', 'utf8');
   assert.match(personScreen, /params\.saved === '1' \? <View/);
-  assert.match(personScreen, /person\.classifications\.includes\('seeker'\) \? <Button title=\{t\('requirements\.add'\)\}/);
-  assert.match(personScreen, /person\.classifications\.includes\('seeker'\) && params\.saved !== '1'/);
+  assert.match(personScreen, /<Button title=\{t\('requirements\.add'\)\} onPress=/);
+  assert.match(personScreen, /params\.saved !== '1' \? <TouchableOpacity onPress=/);
+  assert.match(personScreen, /testID="person-add-requirement"/);
+  assert.doesNotMatch(personScreen, /person\.classifications\.includes\('seeker'\)/);
   assert.doesNotMatch(personScreen, /testID="person-saved-add-requirement"[^>]*disabled=/);
 });

@@ -1,7 +1,8 @@
 import type { SeekerRequirement } from '@workspace/property-domain';
 
 export interface RequirementSavePerson {
-  readonly classifications: readonly string[];
+  readonly id?: string;
+  readonly classifications?: readonly string[];
 }
 
 export interface RequirementSaveStore {
@@ -96,7 +97,6 @@ export async function savePersonRequirement(options: {
     return { status: 'storage_failure', retryAllowed: true };
   }
   if (!person) return { status: 'missing_person' };
-  if (!person.classifications.includes('seeker')) return { status: 'non_seeker' };
 
   try {
     if (baseline) {
@@ -115,10 +115,6 @@ export async function savePersonRequirement(options: {
     if (error instanceof Error && error.message === 'REQUIREMENT_SEEKER_NOT_FOUND') {
       return { status: 'missing_person' };
     }
-    if (error instanceof Error && error.message === 'REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED') {
-      return { status: 'non_seeker' };
-    }
-
     // A rejected write can still have committed. Resolve it by the candidate's
     // exact ID before making another write available to the user.
     try {

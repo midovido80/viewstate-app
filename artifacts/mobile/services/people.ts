@@ -143,12 +143,12 @@ export interface PersonStore {
   getPropertySourcesForPerson(personId: string): Promise<PropertySource[]>;
 }
 
-/** Source roles are deliberately a subset of the people classifications. */
+/** A source role describes the relationship, not the Person's classifications. */
 export function personCanBePropertySource(
-  person: Person,
+  _person: Person,
   role: PropertySourceRole,
 ): boolean {
-  return person.classifications.includes(role);
+  return PROPERTY_SOURCE_ROLES.includes(role);
 }
 
 /**

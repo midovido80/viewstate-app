@@ -24,7 +24,6 @@ import {
   assertValidPerson,
   enrichPersonIdentity,
   getPersonSearchText,
-  personCanBePropertySource,
   personMatchesSearch,
 } from '@/services/people';
 import {
@@ -504,8 +503,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         if (!source || !validatePropertySource(source).ok) return true;
         const person = readablePeople.get(source.personId);
         return !person
-          || !readablePropertyIds.has(source.propertyCoreId)
-          || !personCanBePropertySource(person, source.role);
+          || !readablePropertyIds.has(source.propertyCoreId);
       } catch {
         return true;
       }
@@ -698,9 +696,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         ]);
         if (!person || !property) throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
         const sourcePerson = this.parsePersonRow(person);
-        if (!sourcePerson || !personCanBePropertySource(sourcePerson, source.role)) {
-          throw new Error('PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED');
-        }
+        if (!sourcePerson) throw new Error('UNREADABLE_PERSON_STORAGE');
         await this.db!.runAsync(
           `INSERT INTO property_sources (property_core_id, person_id, role) VALUES (?, ?, ?)
            ON CONFLICT(property_core_id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role`,
@@ -1193,8 +1189,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     if (sources.some(source => {
       const sourcePerson = people.find(person => person.id === source.personId);
       return !propertyIds.has(source.propertyCoreId)
-        || !sourcePerson
-        || !personCanBePropertySource(sourcePerson, source.role);
+        || !sourcePerson;
     })) {
       throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
     }
@@ -1341,9 +1336,6 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       const sourcePerson = people.find(person => person.id === source.personId);
       if (!sourcePerson || !property) {
         throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
-      }
-      if (!personCanBePropertySource(sourcePerson, source.role)) {
-        throw new Error('PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED');
       }
       const next = [
         ...sources.filter(item => item.propertyCoreId !== source.propertyCoreId),

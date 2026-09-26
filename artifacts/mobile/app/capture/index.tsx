@@ -483,7 +483,7 @@ export default function CaptureWorkflow() {
           throw new Error('SOURCE_ROLE_MISMATCH');
         }
         const linkedPerson = await store.getPerson(linkPersonId);
-        if (!linkedPerson?.classifications.includes(sourceRole as import('@/services/people').PersonClassification)) {
+        if (!linkedPerson) {
           throw new Error('SOURCE_ROLE_MISMATCH');
         }
       }
@@ -501,7 +501,7 @@ export default function CaptureWorkflow() {
         if (sourceRole) {
           if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) throw new Error('SOURCE_ROLE_MISMATCH');
           const linkedPerson = await store.getPerson(linkPersonId);
-          if (!linkedPerson?.classifications.includes(sourceRole as import('@/services/people').PersonClassification)) {
+          if (!linkedPerson) {
             throw new Error('SOURCE_ROLE_MISMATCH');
           }
           await store.setPropertySource({

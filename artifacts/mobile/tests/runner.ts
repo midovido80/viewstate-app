@@ -2073,7 +2073,7 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
     readFile(sourcePath('../app/capture/price.tsx'), 'utf8'),
     readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
   ]);
-  assert.match(home, /property-card-\$\{item\.core\.id\}/);
+  assert.match(home, /testID=\{`\$\{item\.kind === 'offered' \? 'property' : 'requirement'\}-card-\$\{item\.id\}`\}/);
   assert.match(home, /accessibilityRole="button"/);
   assert.match(detail, /status === 'missing'/);
   assert.match(detail, /property-edit-action/);

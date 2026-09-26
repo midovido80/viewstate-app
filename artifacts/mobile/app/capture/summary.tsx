@@ -155,7 +155,7 @@ export default function SummaryScreen() {
             return;
           }
           const linkedPerson = await store.getPerson(linkPersonId);
-          if (!linkedPerson?.classifications.includes(sourceRole as import('@/services/people').PersonClassification)) {
+          if (!linkedPerson) {
             Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
             return;
           }
@@ -223,11 +223,11 @@ export default function SummaryScreen() {
         const savedId = projection && projection.ok ? projection.property.core.id : draft.propertyCoreId;
         if (linkPersonId && savedId) {
           try {
-            // A source is private metadata, so only apply it when the saved
-            // person still carries the canonical role selected at entry.
+            // A source is private metadata; preserve its selected role and
+            // require that the referenced Person still exists.
             if (selectedSourceRole && (PROPERTY_SOURCE_ROLES as readonly string[]).includes(selectedSourceRole)) {
               const linkedPerson = await store.getPerson(linkPersonId);
-              if (!linkedPerson?.classifications.includes(selectedSourceRole as import('@/services/people').PersonClassification)) throw new Error('SOURCE_ROLE_MISMATCH');
+              if (!linkedPerson) throw new Error('SOURCE_ROLE_MISMATCH');
               await store.setPropertySource({
                 personId: linkPersonId,
                 propertyCoreId: savedId,

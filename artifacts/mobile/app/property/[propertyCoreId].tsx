@@ -1531,19 +1531,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Choice
                   key={role}
                   selected={sourceRole === role}
-                  onPress={() => {
-                    setSourceRole(role);
-                    if (!sourcePeople.some(person =>
-                      person.id === sourcePersonId && person.classifications.includes(role)
-                    )) setSourcePersonId('');
-                  }}
+                  onPress={() => setSourceRole(role)}
                   title={t(`source.role.${role}`)}
                   testID={`property-source-role-${role}`}
                 />
               ))}
             </View>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.person')}</Text>
-            {sourcePeople.filter(person => person.classifications.includes(sourceRole)).map(person => (
+            {sourcePeople.map(person => (
               <TouchableOpacity
                 key={person.id}
                 onPress={() => setSourcePersonId(person.id)}
@@ -1558,7 +1553,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{person.name}</Text>
               </TouchableOpacity>
             ))}
-            {!sourcePeople.some(person => person.classifications.includes(sourceRole)) ? (
+            {sourcePeople.length === 0 ? (
               <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.people_empty')}</Text>
             ) : null}
             <Button title={t('source.save')} onPress={() => void saveSource()} disabled={!sourcePersonId} loading={sourceBusy} testID="property-source-save" />

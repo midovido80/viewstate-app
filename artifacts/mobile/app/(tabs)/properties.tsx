@@ -5,102 +5,152 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { store } from '@/services/persistence';
-import { Property } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { Button } from '@/components/Button';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
-import { prioritizeHighlightedProperty } from '@/services/propertyDetailPresentation';
+import {
+  filterOfferedWantedRows,
+  formatWantedBudget,
+  getOfferedWantedHref,
+  getOfferedWantedTransactionLabelKey,
+  getWantedAreaDisplayValues,
+  loadOfferedWantedPresentation,
+} from '@/services/offeredWantedPresentation';
+import type { OfferedWantedFilter, OfferedWantedRow } from '@/services/offeredWantedPresentation';
+import type { OfferedWantedLoadResult } from '@/services/offeredWantedPresentation';
 
 export default function PropertiesScreen() {
   const router = useRouter();
   const { highlight } = useLocalSearchParams<{ highlight?: string | string[] }>();
   const highlightedId = Array.isArray(highlight) ? highlight[0] : highlight;
-  const listRef = useRef<FlatList<Property> | null>(null);
+  const listRef = useRef<FlatList<OfferedWantedRow> | null>(null);
   const colors = useColors();
   const { t, isRTL, language, fonts } = useI18n();
   const insets = useSafeAreaInsets();
+  const loadSequenceRef = useRef(0);
 
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
   const [search, setSearch] = useState('');
-
-  const loadProperties = async (query = '') => {
-    try {
-      if (query.trim().length > 0) {
-        setProperties(prioritizeHighlightedProperty(await store.searchProperties(query), highlightedId));
-      } else {
-        setProperties(prioritizeHighlightedProperty(await store.getProperties(), highlightedId));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const [filter, setFilter] = useState<OfferedWantedFilter>('all');
+  const rows = loadResult?.rows ?? [];
 
   useEffect(() => {
-    if (highlightedId && properties.some(item => item.core.id === highlightedId)) {
+    if (highlightedId && rows.some(item => item.kind === 'offered' && item.id === highlightedId)) {
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
     }
-  }, [highlightedId, properties]);
+  }, [highlightedId, rows]);
 
   useFocusEffect(
     useCallback(() => {
-      loadProperties(search);
-    }, [search, highlightedId])
+      const requestSequence = ++loadSequenceRef.current;
+      void loadOfferedWantedPresentation(store, search).then(result => {
+        if (requestSequence === loadSequenceRef.current) setLoadResult(result);
+      });
+      return () => {
+        if (requestSequence === loadSequenceRef.current) loadSequenceRef.current += 1;
+      };
+    }, [highlightedId, search])
   );
 
-  const renderItem = ({ item }: { item: Property }) => {
-    const isHighlighted = item.core.id === highlightedId;
-    const price = item.activeOffer.transaction === 'sale'
-      ? item.activeOffer.salePrice
-      : item.activeOffer.rentalPrice;
+  const visibleRows = filterOfferedWantedRows(rows, filter, search, {
+    offeredPropertySearchIds: search.trim()
+      ? new Set(loadResult?.matchingPropertyIds ?? [])
+      : undefined,
+  });
+  const prioritizedRows = highlightedId
+    ? [
+      ...visibleRows.filter(row => row.kind === 'offered' && row.id === highlightedId),
+      ...visibleRows.filter(row => row.kind !== 'offered' || row.id !== highlightedId),
+    ]
+    : visibleRows;
 
-    const area = getAreaById(item.core.locationArea.id);
-    const areaName = area ? (language === 'ar' ? area.ar : area.en) : item.core.locationArea.id;
+  const renderItem = ({ item }: { item: OfferedWantedRow }) => {
+    const property = item.kind === 'offered' ? item.property : null;
+    const requirement = item.kind === 'wanted' ? item.requirement : null;
+    const isHighlighted = item.kind === 'offered' && item.id === highlightedId;
+    const type = property?.core.propertyType ?? requirement?.propertyType;
+    const transaction = item.transaction;
+    const propertyArea = property ? getAreaById(property.core.locationArea.id) : undefined;
+    const areaNames = property
+      ? [propertyArea ? (language === 'ar' ? propertyArea.ar : propertyArea.en) : property.core.locationArea.id]
+      : requirement
+        ? getWantedAreaDisplayValues(requirement, language, t('properties.all_kuwait'))
+        : [];
+    const propertyPrice = property
+      ? property.activeOffer.transaction === 'sale'
+        ? property.activeOffer.salePrice
+        : property.activeOffer.rentalPrice
+      : undefined;
+    const priceLabel = propertyPrice
+      ? property?.activeOffer.transaction === 'rent'
+        ? formatRentalPrice(propertyPrice.amount, propertyPrice.currencyCode, property.activeOffer.rentalPeriodId, language, t)
+        : formatPrice(propertyPrice.amount, propertyPrice.currencyCode, language)
+      : requirement
+        ? formatWantedBudget(
+          requirement.budget,
+          amount => formatPrice(amount, requirement.budget.currencyCode, language),
+        ) ?? ''
+        : '';
 
     return (
       <TouchableOpacity
-        onPress={() => router.push(`/property/${encodeURIComponent(item.core.id)}` as any)}
+        onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
         style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
-        testID={`property-card-${item.core.id}`}
+        testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
         accessibilityRole="button"
-        accessibilityLabel={`${t(`propertyType.${item.core.propertyType}` as keyof Translations)}, ${areaName}`}
+        accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${type ? t(`propertyType.${type}` as keyof Translations) : ''}, ${areaNames.join(', ')}`}
       >
         <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
             <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-              {t(`propertyType.${item.core.propertyType}` as keyof Translations)}
+              {type ? t(`propertyType.${type}` as keyof Translations) : ''}
             </Text>
             {isHighlighted ? (
-              <View testID={`property-just-saved-${item.core.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
               </View>
             ) : null}
           </View>
-          <View style={[styles.badge, { backgroundColor: colors.accent + '1A' }]}>
-            <Text style={[styles.badgeText, { color: colors.accent, fontFamily: fonts.medium }]}>
-              {t(`transaction.${item.activeOffer.transaction}` as keyof Translations)}
-            </Text>
+          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: 6 }}>
+            <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]}>
+              <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
+                {t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}
+              </Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: colors.accent + '1A' }]}>
+              <Text style={[styles.badgeText, { color: colors.accent, fontFamily: fonts.medium }]}>
+                {t(getOfferedWantedTransactionLabelKey(item) as keyof Translations)}
+              </Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.cardBody}>
           <Text style={[styles.price, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {price
-              ? item.activeOffer.transaction === 'rent'
-                ? formatRentalPrice(
-                    price.amount,
-                    price.currencyCode,
-                    item.activeOffer.rentalPeriodId,
-                    language,
-                    t,
-                  )
-                : formatPrice(price.amount, price.currencyCode, language)
-              : ''}
+            {priceLabel}
           </Text>
           <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-            {areaName}
+            {areaNames.join(' · ')}
           </Text>
+          {item.person ? (
+            <TouchableOpacity
+              onPress={event => {
+                event.stopPropagation();
+                router.push(`/person/${encodeURIComponent(item.person!.id)}` as any);
+              }}
+              style={[styles.personTarget, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]}
+              testID={`person-target-${item.kind}-${item.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('properties.person_target')}: ${item.person.name}`}
+            >
+              <Feather name="user" size={14} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontFamily: fonts.medium, fontSize: 13 }}>
+                {item.person.name}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -109,6 +159,22 @@ export default function PropertiesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <PrimaryTabHeader title={t('properties.title')} />
+
+      {loadResult ? (
+        Object.entries(loadResult.errors).filter(([, failed]) => failed).length > 0 ? (
+          <View
+            style={[styles.errorBanner, { backgroundColor: colors.accent + '1A', borderColor: colors.accent }]}
+            testID="properties-load-warnings"
+            accessibilityRole="alert"
+          >
+            {loadResult.errors.properties ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.medium }]}>{t('properties.load_failed')}</Text> : null}
+            {loadResult.errors.requirements ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.requirements_unavailable')}</Text> : null}
+            {loadResult.errors.people ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.people_unavailable')}</Text> : null}
+            {loadResult.errors.sources ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.sources_unavailable')}</Text> : null}
+            {loadResult.errors.search ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.search_failed')}</Text> : null}
+          </View>
+        ) : null
+      ) : null}
 
       <View style={styles.searchContainer}>
         <Feather
@@ -119,7 +185,12 @@ export default function PropertiesScreen() {
         />
         <TextInput
           value={search}
-          onChangeText={setSearch}
+          onChangeText={query => {
+            setSearch(query);
+            setLoadResult(previous => previous
+              ? { ...previous, matchingPropertyIds: query.trim() ? [] : null }
+              : previous);
+          }}
           placeholder={t('properties.search')}
           placeholderTextColor={colors.mutedForeground}
           style={[
@@ -137,10 +208,33 @@ export default function PropertiesScreen() {
         />
       </View>
 
+      <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        {(['all', 'offered', 'wanted', 'sale', 'rent'] as const).map(value => {
+          const selected = filter === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              onPress={() => setFilter(value)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
+              ]}
+              testID={`properties-filter-${value}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+                {t(`properties.filter.${value}` as keyof Translations)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       <FlatList
         ref={listRef}
-        data={properties}
-        keyExtractor={item => item.core.id}
+        data={prioritizedRows}
+        keyExtractor={item => item.key}
         renderItem={renderItem}
         contentContainerStyle={[
           styles.listContent,
@@ -149,7 +243,7 @@ export default function PropertiesScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('properties.empty')}</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('properties.empty_all')}</Text>
           </View>
         }
       />
@@ -177,6 +271,29 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     position: 'relative',
     justifyContent: 'center',
+  },
+  errorBanner: {
+    marginHorizontal: 20,
+    marginTop: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    gap: 4,
+  },
+  errorText: {
+    fontSize: 13,
+  },
+  filters: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   searchIcon: {
     position: 'absolute',
@@ -221,6 +338,12 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     gap: 4,
+  },
+  personTarget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
   },
   price: {
     fontSize: 20,
