@@ -19,14 +19,23 @@ test('Add entry requires both Offered/Wanted and transaction choices without aut
   assert.doesNotMatch(transaction, /onSelect=\{\(\) => \{[^}]*router\.push/s);
 });
 
-test('Apartment Studio selection routes to dedicated Studio capture with flow context', async () => {
+test('Apartment selection structurally enables Next before choosing a subtype', async () => {
   const propertyType = await source('../app/capture/property-type.tsx');
-  assert.match(propertyType, /select-apartment-studio/);
-  assert.match(propertyType, /apartmentSubtype === 'studio'/);
-  assert.match(propertyType, /pathname: '\/capture\/studio'/);
-  assert.match(propertyType, /params: \{ \.\.\.routeParams, propertyType: 'apartment', apartmentSubtype: 'studio' \}/);
-  assert.match(propertyType, /pathname: '\/requirement\/new'/);
-  assert.match(propertyType, /purpose: transaction === 'sale' \? 'buy' : 'rent'/);
+  assert.match(propertyType, /disabled=\{!propertyType\}/);
+  assert.match(propertyType, /pathname: '\/capture\/apartment-subtype'/);
+  assert.doesNotMatch(propertyType, /select-apartment-studio|select-apartment-standard/);
+  assert.doesNotMatch(propertyType, /propertyType === 'apartment' && !apartmentSubtype/);
+});
+
+test('Apartment subtype route structurally preserves dedicated and existing destinations', async () => {
+  const subtype = await source('../app/capture/apartment-subtype.tsx');
+  assert.match(subtype, /select-apartment-studio/);
+  assert.match(subtype, /select-apartment-standard/);
+  assert.match(subtype, /pathname: '\/capture\/studio'/);
+  assert.match(subtype, /pathname: '\/requirement\/new'/);
+  assert.match(subtype, /purpose: transaction === 'sale' \? 'buy' : 'rent'/);
+  assert.match(subtype, /pathname: '\/capture\/price'/);
+  assert.match(subtype, /router\.navigate\(\{\s*pathname: '\/capture\/property-type'/);
 });
 
 test('Person Details starts a wanted capture for the existing seeker record', async () => {

@@ -38,7 +38,6 @@ export interface StudioFormValues {
   readonly kitchen: StudioSelection;
   readonly hall: StudioSelection;
   readonly parking: StudioSelection;
-  readonly amenities: readonly StudioAmenity[];
   readonly description: string;
 }
 
@@ -48,8 +47,7 @@ export type StudioFormErrorCode =
   | 'invalid_choice'
   | 'invalid_area'
   | 'invalid_location_link'
-  | 'invalid_budget'
-  | 'unsupported_amenity';
+  | 'invalid_budget';
 
 export interface StudioFormError {
   readonly field: keyof StudioFormValues | 'preferredAreaIds';
@@ -62,6 +60,7 @@ export interface StudioFormValidation {
   readonly errors: readonly StudioFormError[];
 }
 
+/** @deprecated Legacy allowlist used only to recognize stored requirements. */
 export const STUDIO_AMENITIES = ['balcony', 'elevator'] as const satisfies readonly StudioAmenity[];
 const RENTAL_PERIODS = ['daily', 'monthly', 'yearly'] as const;
 const PRIVACY_NORMAL = createPrivacyMetadata('normal', 'normal');
@@ -88,7 +87,6 @@ export function createStudioFormValues(
     kitchen: mode === 'offered' ? 'unknown' : 'not_important',
     hall: mode === 'offered' ? 'unknown' : 'not_important',
     parking: mode === 'offered' ? 'unknown' : 'not_important',
-    amenities: [],
     description: '',
   };
 }
@@ -216,15 +214,6 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
       errors.push(formError(field, 'invalid_choice', `Selection for ${field} is not valid for ${values.mode} Studio forms.`));
     }
   }
-  const amenitySet = new Set<string>();
-  values.amenities.forEach(amenity => {
-    if (!(STUDIO_AMENITIES as readonly string[]).includes(amenity)) {
-      errors.push(formError('amenities', 'unsupported_amenity', 'Amenity is not supported for Studio forms.'));
-    } else if (amenitySet.has(amenity)) {
-      errors.push(formError('amenities', 'unsupported_amenity', 'Studio amenities must not be duplicated.'));
-    }
-    amenitySet.add(amenity);
-  });
   if (values.mapsLink !== '' && getCaptureMapsLinkValidationError(values.mapsLink)) {
     errors.push(formError('mapsLink', 'invalid_location_link', 'Enter a supported Google Maps link.'));
   }
@@ -306,8 +295,6 @@ export function buildStudioProperty(
     ...(booleanFromOffered(values.parking) !== undefined
       ? { hasParking: booleanFromOffered(values.parking) }
       : {}),
-    ...(values.amenities.includes('balcony') ? { hasBalcony: true } : {}),
-    ...(values.amenities.includes('elevator') ? { hasElevator: true } : {}),
   };
   const property: Property = {
     core,
@@ -371,7 +358,6 @@ export function buildStudioRequirement(
     ...(numberValue(values.bathrooms) !== undefined
       ? { bathroomsMinimum: numberValue(values.bathrooms) }
       : {}),
-    ...(values.amenities.length > 0 ? { preferredAmenities: [...values.amenities] } : {}),
     ...(preferences.length > 0 ? { catalogPreferences: preferences } : {}),
     ...(values.transaction === 'rent' ? { rentalPeriodId: values.rentalPeriodId } : {}),
   };
@@ -408,9 +394,6 @@ export function readStudioProperty(property: Property): StudioFormValues {
     && !(RENTAL_PERIODS as readonly string[]).includes(property.activeOffer.rentalPeriodId)) {
     throw new Error('UNSUPPORTED_STUDIO_RENTAL_PERIOD');
   }
-  const amenityValues: StudioAmenity[] = [];
-  if (details.hasBalcony === true) amenityValues.push('balcony');
-  if (details.hasElevator === true) amenityValues.push('elevator');
   return {
     ...createStudioFormValues('offered', transaction),
     locationAreaId: property.core.locationArea.id,
@@ -427,7 +410,6 @@ export function readStudioProperty(property: Property): StudioFormValues {
     kitchen: details.hasKitchen === true ? 'yes' : details.hasKitchen === false ? 'no' : 'unknown',
     hall: details.hasHall === true ? 'yes' : details.hasHall === false ? 'no' : 'unknown',
     parking: details.hasParking === true ? 'yes' : details.hasParking === false ? 'no' : 'unknown',
-    amenities: amenityValues,
     description: property.core.description?.value ?? '',
   };
 }
@@ -495,8 +477,6 @@ function wantedSelection(requirement: SeekerRequirement, field: 'hasKitchen' | '
 export function readStudioRequirement(requirement: SeekerRequirement): StudioFormValues {
   if (!isStudioRequirement(requirement)) throw new Error('NOT_A_STUDIO_REQUIREMENT');
   const transaction: Transaction = requirement.purpose === 'buy' ? 'sale' : 'rent';
-  const amenities = (requirement.preferredAmenities ?? [])
-    .filter((amenity): amenity is StudioAmenity => (STUDIO_AMENITIES as readonly string[]).includes(amenity));
   const area = studioPreference(requirement, 'builtUpAreaSquareMeters');
   const floor = studioPreference(requirement, 'floorNumber');
   return {
@@ -514,7 +494,6 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
     kitchen: wantedSelection(requirement, 'hasKitchen'),
     hall: wantedSelection(requirement, 'hasHall'),
     parking: wantedSelection(requirement, 'hasParking'),
-    amenities,
     description: requirement.notes,
   };
 }

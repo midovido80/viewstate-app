@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Text, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,17 +31,16 @@ export default function PropertyTypeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft } = useCapture();
-  const { t, fonts, isRTL, language } = useI18n();
+  const { t, fonts, isRTL } = useI18n();
   const initialType = firstParam(params.propertyType);
   const [propertyType, setPropertyType] = useState<typeof PROPERTY_TYPES[number] | undefined>(
     PROPERTY_TYPES.includes(initialType as typeof PROPERTY_TYPES[number])
       ? initialType as typeof PROPERTY_TYPES[number]
       : firstParam(params.mode) ? undefined : draft.propertyType,
   );
-  const initialSubtype = firstParam(params.apartmentSubtype);
-  const [apartmentSubtype, setApartmentSubtype] = useState<ApartmentSubtypeChoice | undefined>(
-    initialSubtype === 'studio' || initialSubtype === 'standard' ? initialSubtype : undefined,
-  );
+  const rawSubtype = firstParam(params.apartmentSubtype);
+  const apartmentSubtype: ApartmentSubtypeChoice | undefined =
+    rawSubtype === 'studio' || rawSubtype === 'standard' ? rawSubtype : undefined;
   const rawMode = firstParam(params.mode);
   const mode: OfferMode = rawMode === 'wanted' ? 'wanted' : 'offered';
   const rawTransaction = firstParam(params.transaction);
@@ -51,8 +50,6 @@ export default function PropertyTypeScreen() {
   const seekerId = firstParam(params.seekerId);
   const linkPersonId = firstParam(params.linkPersonId);
   const sourceRole = firstParam(params.sourceRole);
-  const languageLabel = (english: string, arabic: string) => language === 'ar' ? arabic : english;
-
   const routeParams = {
     mode,
     ...(transaction ? { transaction } : {}),
@@ -64,7 +61,6 @@ export default function PropertyTypeScreen() {
   const choosePropertyType = (nextType: typeof PROPERTY_TYPES[number]) => {
     setPropertyType(nextType);
     if (nextType !== 'apartment') {
-      setApartmentSubtype(undefined);
       router.setParams({ propertyType: nextType, apartmentSubtype: undefined });
     } else {
       router.setParams({ propertyType: nextType });
@@ -72,11 +68,15 @@ export default function PropertyTypeScreen() {
   };
 
   const handleNext = () => {
-    if (!propertyType || (propertyType === 'apartment' && !apartmentSubtype)) return;
-    if (propertyType === 'apartment' && apartmentSubtype === 'studio') {
+    if (!propertyType) return;
+    if (propertyType === 'apartment') {
       router.push({
-        pathname: '/capture/studio',
-        params: { ...routeParams, propertyType: 'apartment', apartmentSubtype: 'studio' },
+        pathname: '/capture/apartment-subtype',
+        params: {
+          ...routeParams,
+          propertyType: 'apartment',
+          ...(apartmentSubtype ? { apartmentSubtype } : {}),
+        },
       } as never);
       return;
     }
@@ -96,10 +96,7 @@ export default function PropertyTypeScreen() {
     if (!updateDraft({ propertyType, ...(transaction ? { transaction } : {}) })) return;
     router.push({
       pathname: '/capture/price',
-      params: {
-        ...routeParams,
-        ...(propertyType === 'apartment' && apartmentSubtype ? { apartmentSubtype } : {}),
-      },
+      params: routeParams,
     } as never);
   };
 
@@ -119,37 +116,12 @@ export default function PropertyTypeScreen() {
             testID={`select-type-${type}`}
           />
         ))}
-        {propertyType === 'apartment' ? (
-          <View style={styles.subtypeGroup}>
-            <Text style={[styles.subtypeTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {languageLabel('Apartment type', 'نوع الشقة')}
-            </Text>
-            <SelectCard
-              title={languageLabel('Studio apartment', 'شقة استوديو')}
-              selected={apartmentSubtype === 'studio'}
-              onSelect={() => {
-                setApartmentSubtype('studio');
-                router.setParams({ apartmentSubtype: 'studio' });
-              }}
-              testID="select-apartment-studio"
-            />
-            <SelectCard
-              title={languageLabel('Standard apartment', 'شقة عادية')}
-              selected={apartmentSubtype === 'standard'}
-              onSelect={() => {
-                setApartmentSubtype('standard');
-                router.setParams({ apartmentSubtype: 'standard' });
-              }}
-              testID="select-apartment-standard"
-            />
-          </View>
-        ) : null}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }]}>
         <Button
           title={t('capture.next')}
           onPress={handleNext}
-          disabled={!propertyType || (propertyType === 'apartment' && !apartmentSubtype)}
+          disabled={!propertyType}
           size="large"
           testID="btn-next"
         />
@@ -163,7 +135,5 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
   title: { fontSize: 28, marginBottom: 32 },
-  subtypeGroup: { gap: 8, marginTop: 12 },
-  subtypeTitle: { fontSize: 17, marginBottom: 4 },
   footer: { paddingHorizontal: 20, paddingTop: 16 },
 });

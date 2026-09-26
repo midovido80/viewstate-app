@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -32,7 +33,6 @@ import {
   readStudioProperty,
   readStudioRequirement,
   validateStudioForm,
-  STUDIO_AMENITIES,
   type StudioFormError,
   type StudioFormMode,
   type StudioFormValues,
@@ -97,11 +97,13 @@ export default function StudioCaptureRoute() {
   const [editOwnerPerson, setEditOwnerPerson] = useState<Person | null>(null);
   const [recordLoaded, setRecordLoaded] = useState(!editing);
   const [people, setPeople] = useState<Person[]>([]);
+  const [peopleLoading, setPeopleLoading] = useState(true);
   const [selectedPersonId, setSelectedPersonId] = useState(seekerParam ?? '');
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<string, StudioFormError>>(new Map());
+  const [personError, setPersonError] = useState('');
   const [propertyRecovery, setPropertyRecovery] = useState<{
     id: string;
     candidate: Property;
@@ -114,6 +116,8 @@ export default function StudioCaptureRoute() {
   const committedRequirement = useRef<SeekerRequirement | null>(null);
   const uncertainRequirement = useRef<SeekerRequirement | null>(null);
   const inputRefs = useRef<Record<string, InputRef>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const focusTargets = useRef<Record<string, View | null>>({});
   const draftPropertyId = useRef(generateDomainId());
   const draftOfferId = useRef(generateDomainId());
   const draftRequirementId = useRef(generateDomainId());
@@ -137,6 +141,7 @@ export default function StudioCaptureRoute() {
   useEffect(() => {
     let cancelled = false;
     setPeopleError(false);
+    setPeopleLoading(true);
     void (async () => {
       try {
         const result = await store.getPeople();
@@ -157,6 +162,8 @@ export default function StudioCaptureRoute() {
             // Keep the explicit people-load failure visible.
           }
         }
+      } finally {
+        if (!cancelled) setPeopleLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -243,12 +250,39 @@ export default function StudioCaptureRoute() {
       ?? (editOwnerPerson?.id === selectedPersonId ? editOwnerPerson : null),
     [editOwnerPerson, people, selectedPersonId],
   );
+  const wantedIdentityReady = mode !== 'wanted'
+    || (!!selectedPerson
+      && selectedPerson.id === selectedPersonId
+      && (!seekerParam || selectedPerson.id === seekerParam));
+  const showingReview = step === 'review' && wantedIdentityReady;
   const areaTitle = (id: string) => {
     const area = getAreaById(id);
     return area ? (language === 'ar' ? area.ar : area.en) : id;
   };
   const setFieldRef = (field: string) => (ref: TextInput | null) => {
     inputRefs.current[field] = { current: ref };
+  };
+  const setFocusTarget = (field: string) => (ref: View | null) => {
+    focusTargets.current[field] = ref;
+  };
+  const focusField = (field: string) => {
+    const input = inputRefs.current[field]?.current;
+    const target = (input ?? focusTargets.current[field]) as unknown as {
+      focus?: () => void;
+      measureLayout?: (
+        relativeTo: unknown,
+        onSuccess: (x: number, y: number) => void,
+        onFail?: () => void,
+      ) => void;
+    } | null;
+    target?.focus?.();
+    if (target?.measureLayout && scrollRef.current) {
+      target.measureLayout(
+        scrollRef.current as never,
+        (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true }),
+        () => undefined,
+      );
+    }
   };
   const labelStyle = {
     color: colors.foreground,
@@ -260,6 +294,72 @@ export default function StudioCaptureRoute() {
     const issue = getError(field);
     return issue ? t(`studio.error.${issue.code}`) : undefined;
   };
+  const choosePerson = (personId: string) => {
+    setSelectedPersonId(personId);
+    setPersonError('');
+    setError('');
+  };
+
+  const renderPersonSelector = () => (
+    <View ref={setFocusTarget('person')} style={styles.field} testID="studio-person-field">
+      <Text style={[styles.label, labelStyle]}>{t('studio.person')}</Text>
+      {seekerParam ? (
+        selectedPerson?.id === seekerParam ? (
+          <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selectedPerson.name}</Text>
+          </View>
+        ) : peopleLoading ? (
+          <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('studio.choose_person')}</Text>
+        ) : (
+          <FieldError message={t('studio.person_missing')} />
+        )
+      ) : peopleLoading ? (
+        <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('studio.choose_person')}</Text>
+      ) : peopleError && !selectedPerson ? (
+        <FieldError message={t('people.load_failed')} />
+      ) : people.length === 0 ? (
+        <>
+          <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('people.empty')}</Text>
+          <Button
+            title={t('people.add')}
+            onPress={() => router.push('/person/new' as never)}
+            testID="studio-add-person"
+          />
+          <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
+            {language === 'ar'
+              ? 'بعد حفظ الشخص، افتح تفاصيله واختر «إضافة طلب استوديو» للمتابعة.'
+              : 'After saving, open Person Details and choose “Add Wanted Studio” to continue.'}
+          </Text>
+        </>
+      ) : (
+        <>
+          {peopleError ? <FieldError message={t('people.load_failed')} /> : null}
+          <View style={styles.personList}>
+            {people.map(person => (
+              <TouchableOpacity
+                key={person.id}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selectedPersonId === person.id }}
+                testID={`studio-seeker-${person.id}`}
+                onPress={() => choosePerson(person.id)}
+                style={[
+                  styles.personChoice,
+                  {
+                    borderColor: selectedPersonId === person.id ? colors.primary : colors.border,
+                    backgroundColor: colors.card,
+                  },
+                ]}
+              >
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, flex: 1 }}>{person.name}</Text>
+                {selectedPersonId === person.id ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
+      {personError ? <FieldError message={personError} /> : null}
+    </View>
+  );
 
   const validate = () => {
     const result = validateStudioForm(values);
@@ -269,19 +369,32 @@ export default function StudioCaptureRoute() {
     });
     if (mode === 'wanted' && !selectedPersonId) {
       setError(t('studio.person_required'));
+      setPersonError(t('studio.person_required'));
     } else if (mode === 'wanted' && selectedPersonId && !selectedPerson) {
       setError(t('studio.person_missing'));
+      setPersonError(t('studio.person_missing'));
+    } else if (mode === 'wanted' && seekerParam && selectedPerson?.id !== seekerParam) {
+      setError(t('studio.person_missing'));
+      setPersonError(t('studio.person_missing'));
     } else if (!result.ok) {
       setError(t('studio.validation'));
+      setPersonError('');
     } else {
       setError('');
+      setPersonError('');
     }
     setFieldErrors(next);
-    if (next.size) {
+    if (mode === 'wanted' && (!selectedPerson || (seekerParam && selectedPerson.id !== seekerParam))) {
+      focusField('person');
+    } else if (!result.ok && result.errors.length) {
       const first = next.keys().next().value as string;
-      inputRefs.current[first === 'budget' ? 'budgetMinimum' : first]?.current?.focus();
+      const target = first === 'budget' ? 'budgetMinimum'
+        : first === 'preferredAreaMode' ? 'preferredAreaIds'
+          : first === 'rentalPeriodId' ? 'cadence'
+            : first;
+      focusField(target);
     }
-    return result.ok && (mode !== 'wanted' || (!!selectedPersonId && !!selectedPerson));
+    return result.ok && wantedIdentityReady;
   };
 
   const navigateAfterPropertySave = async (property: Property) => {
@@ -518,6 +631,9 @@ export default function StudioCaptureRoute() {
 
   const renderForm = () => (
     <>
+      {mode === 'wanted' ? renderPersonSelector() : null}
+      {mode === 'wanted' && !wantedIdentityReady ? null : (
+      <>
       <View style={styles.field}>
         <Text style={[styles.label, labelStyle]}>{t('studio.property_type')}</Text>
         <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
@@ -551,7 +667,7 @@ export default function StudioCaptureRoute() {
         </View>
       </View>
       {mode === 'offered' ? (
-        <View style={styles.field}>
+        <View ref={setFocusTarget('locationAreaId')} style={styles.field}>
           <Text style={[styles.label, labelStyle]}>{t('studio.location')}</Text>
           <KuwaitAreaSelector
             selectedIds={values.locationAreaId ? [values.locationAreaId] : []}
@@ -563,7 +679,7 @@ export default function StudioCaptureRoute() {
         </View>
       ) : (
         <>
-          <View style={styles.field}>
+          <View ref={setFocusTarget('preferredAreaIds')} style={styles.field} testID="studio-preferred-area-field">
             <Text style={[styles.label, labelStyle]}>{t('studio.location')}</Text>
             <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {(['specific_areas', 'all_kuwait'] as const).map(scope => (
@@ -588,47 +704,6 @@ export default function StudioCaptureRoute() {
                 testID="studio-preferred-areas"
               />
             ) : null}
-          </View>
-          <View style={styles.field}>
-            <Text style={[styles.label, labelStyle]}>{t('studio.person')}</Text>
-            {baselineRequirement ? (
-              selectedPerson ? (
-                <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{selectedPerson.name}</Text>
-                </View>
-              ) : (
-                <FieldError message={t('studio.person_missing')} />
-              )
-            ) : peopleError && !selectedPerson ? (
-              <FieldError message={t('people.load_failed')} />
-            ) : people.length === 0 ? (
-              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('studio.choose_person')}</Text>
-            ) : (
-              <>
-                {peopleError ? <FieldError message={t('people.load_failed')} /> : null}
-                <View style={styles.personList}>
-                  {people.map(person => (
-                    <TouchableOpacity
-                      key={person.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: selectedPersonId === person.id }}
-                      testID={`studio-seeker-${person.id}`}
-                      onPress={() => setSelectedPersonId(person.id)}
-                      style={[
-                        styles.personChoice,
-                        {
-                          borderColor: selectedPersonId === person.id ? colors.primary : colors.border,
-                          backgroundColor: colors.card,
-                        },
-                      ]}
-                    >
-                      <Text style={{ color: colors.foreground, fontFamily: fonts.medium, flex: 1 }}>{person.name}</Text>
-                      {selectedPersonId === person.id ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
             {getError('preferredAreaIds') ? <FieldError message={localizedFieldError('preferredAreaIds')!} /> : null}
           </View>
         </>
@@ -646,7 +721,7 @@ export default function StudioCaptureRoute() {
           </View>
         )}
       {values.transaction === 'rent' ? (
-        <View style={styles.field}>
+        <View ref={setFocusTarget('cadence')} style={styles.field} testID="studio-cadence-field">
           <Text style={[styles.label, labelStyle]}>{t('studio.cadence')}</Text>
           <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             {(['daily', 'monthly', 'yearly'] as const).map(period => (
@@ -661,10 +736,11 @@ export default function StudioCaptureRoute() {
               />
             ))}
           </View>
+          {getError('rentalPeriodId') ? <FieldError message={localizedFieldError('rentalPeriodId')!} /> : null}
         </View>
       ) : null}
       {mode === 'offered' ? textInput('mapsLink', t('studio.map_link')) : null}
-      <View style={styles.field}>
+      <View ref={setFocusTarget('areaSquareMeters')} style={styles.field}>
         {textInput('areaSquareMeters', t('studio.area'), { keyboardType: 'decimal-pad' })}
       </View>
       <View style={styles.field}>
@@ -685,30 +761,9 @@ export default function StudioCaptureRoute() {
       {binaryPreference('hall')}
       {binaryPreference('parking')}
       {textInput('floorNumber', t('studio.floor'), { keyboardType: 'numeric' })}
-      <View style={styles.field}>
-        <Text style={[styles.label, labelStyle]}>{t('studio.amenities')}</Text>
-        <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          {STUDIO_AMENITIES.map(amenity => (
-            <ChoiceChip
-              key={amenity}
-              label={amenity === 'balcony'
-                ? t('studio.balcony')
-                : t('studio.elevator')}
-              selected={values.amenities.includes(amenity)}
-              onPress={() => update(
-                'amenities',
-                values.amenities.includes(amenity)
-                  ? values.amenities.filter(item => item !== amenity)
-                  : [...values.amenities, amenity],
-              )}
-              testID={`studio-amenity-${amenity}`}
-              role="checkbox"
-              style={styles.flexChip}
-            />
-          ))}
-        </View>
-      </View>
       {textInput('description', t('studio.description_optional'), { multiline: true })}
+      </>
+      )}
     </>
   );
 
@@ -739,9 +794,6 @@ export default function StudioCaptureRoute() {
         t(`studio.${field}`),
         t(`studio.${values[field]}`),
       ))}
-      {reviewItem(t('studio.amenities'), values.amenities.length
-        ? values.amenities.map(value => value === 'balcony' ? t('studio.balcony') : t('studio.elevator')).join(', ')
-        : '—')}
       {reviewItem(t('studio.description'), values.description || '—')}
       {mode === 'wanted' && selectedPerson ? reviewItem(t('studio.person'), selectedPerson.name) : null}
     </View>
@@ -778,13 +830,14 @@ export default function StudioCaptureRoute() {
       ) : (
         <>
           <KeyboardAwareScrollViewCompat
+            ref={scrollRef}
             style={styles.scroll}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: bottomInset + 28, gap: 16 }}
             keyboardShouldPersistTaps="handled"
             bottomOffset={86}
             testID="studio-scroll"
           >
-            {step === 'form' ? renderForm() : (
+            {!showingReview ? renderForm() : (
               <>
                 <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('studio.review')}</Text>
                 {renderReview()}
@@ -826,10 +879,10 @@ export default function StudioCaptureRoute() {
               />
             ) : null}
             <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              {step === 'review' ? (
+              {showingReview ? (
                 <Button title={t('studio.back')} onPress={() => { setError(''); setStep('form'); }} disabled={saving} />
               ) : null}
-              {step === 'form' ? (
+              {!showingReview ? (
                 <Button
                   title={t('studio.next')}
                   onPress={() => { if (validate()) setStep('review'); }}

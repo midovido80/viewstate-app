@@ -31,12 +31,13 @@ test('BEHAVIOR: offered Studio builder writes canonical facts, private map metad
     kitchen: 'yes' as const,
     hall: 'no' as const,
     parking: 'unknown' as const,
-    amenities: ['balcony'] as const,
     mapsLink: 'https://www.google.com/maps/place/Kuwait',
     description: 'Bright studio',
   };
   assert.equal(validateStudioForm(values).ok, true);
   const property = buildStudioProperty(values, 'property-1', 'offer-1');
+  assert.equal(property.core.id, 'property-1');
+  assert.equal(property.activeOffer.id, 'offer-1');
   assert.equal(isStudioProperty(property), true);
   assert.deepEqual(property.typeDetails, {
     propertyType: 'apartment',
@@ -47,7 +48,6 @@ test('BEHAVIOR: offered Studio builder writes canonical facts, private map metad
     floorNumber: 4,
     hasKitchen: true,
     hasHall: false,
-    hasBalcony: true,
   });
   assert.equal(property.activeOffer.transaction, 'rent');
   assert.equal(property.activeOffer.transaction === 'rent' ? property.activeOffer.rentalPeriodId : '', 'daily');
@@ -67,7 +67,6 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
     kitchen: 'must_not_have' as const,
     hall: 'required' as const,
     parking: 'not_important' as const,
-    amenities: ['elevator'] as const,
     description: 'Near work',
   };
   assert.equal(validateStudioForm(values).ok, true);
@@ -92,19 +91,17 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
   assert.deepEqual(readStudioRequirement(requirement), values);
 });
 
-test('BEHAVIOR: Studio validation rejects noncanonical locations, invalid map links, and unsupported amenities', () => {
+test('BEHAVIOR: Studio validation rejects noncanonical locations and invalid map links', () => {
   const values = {
     ...createStudioFormValues('offered', 'sale'),
     locationAreaId: 'not-an-area',
     price: '0',
     mapsLink: 'https://maps.example/private',
-    amenities: ['pool'] as unknown as readonly ('balcony' | 'elevator')[],
   };
   const validation = validateStudioForm(values);
   assert.equal(validation.ok, false);
   assert.ok(validation.errors.some(error => error.field === 'locationAreaId' && error.code === 'invalid_area'));
   assert.ok(validation.errors.some(error => error.field === 'mapsLink' && error.code === 'invalid_location_link'));
-  assert.ok(validation.errors.some(error => error.field === 'amenities' && error.code === 'unsupported_amenity'));
 });
 
 test('BEHAVIOR: legacy Studio records are recognized without treating bedroomCount as open-room count', () => {
@@ -120,10 +117,15 @@ test('BEHAVIOR: legacy Studio records are recognized without treating bedroomCou
       propertyType: 'apartment' as const,
       apartmentSubtype: 'studio' as const,
       bedroomCount: 1,
+      hasBalcony: true,
+      hasElevator: true,
     },
   };
   assert.equal(isStudioProperty(property), true);
-  assert.equal(readStudioProperty(property).areaSquareMeters, '');
+  const values = readStudioProperty(property);
+  assert.equal(values.areaSquareMeters, '');
+  assert.equal('amenities' in values, false);
+  assert.equal(values.kitchen, 'unknown');
 });
 
 test('BEHAVIOR: Offered Studio sale and rent combinations build and read back', () => {
@@ -142,7 +144,6 @@ test('BEHAVIOR: Offered Studio sale and rent combinations build and read back', 
         kitchen: 'yes' as const,
         hall: 'no' as const,
         parking: 'unknown' as const,
-        amenities: ['balcony', 'elevator'] as const,
       };
       const property = buildStudioProperty(values, `studio-${transaction}-${rentalPeriodId}`, `offer-${transaction}-${rentalPeriodId}`);
       assert.equal(property.activeOffer.transaction, transaction);
@@ -152,6 +153,8 @@ test('BEHAVIOR: Offered Studio sale and rent combinations build and read back', 
         assert.equal('rentalPeriodId' in property.activeOffer, false);
       }
       assert.deepEqual(readStudioProperty(property), values);
+      assert.equal('hasBalcony' in (property.typeDetails ?? {}), false);
+      assert.equal('hasElevator' in (property.typeDetails ?? {}), false);
     }
   }
 });
@@ -181,6 +184,8 @@ test('BEHAVIOR: Wanted Studio buy and rent combinations round-trip both area sco
           '22222222-2222-4222-8222-222222222222',
           'seeker-studio-matrix',
         );
+        assert.equal(requirement.id, '22222222-2222-4222-8222-222222222222');
+        assert.equal(requirement.seekerId, 'seeker-studio-matrix');
         assert.equal(requirement.purpose, transaction === 'sale' ? 'buy' : 'rent');
         assert.equal(requirement.preferredAreaMode, preferredAreaMode);
         assert.deepEqual(
@@ -242,9 +247,35 @@ test('BEHAVIOR: wanted budgets and blank optional criteria distinguish valid zer
   assert.equal(readStudioRequirement(zeroBudget).areaSquareMeters, '');
   assert.equal(readStudioRequirement(zeroBudget).bathrooms, '');
   assert.equal(readStudioRequirement(zeroBudget).floorNumber, '');
+  assert.equal('preferredAmenities' in zeroBudget, false);
+  assert.equal('amenities' in readStudioRequirement(zeroBudget), false);
   assert.equal(validateStudioForm({ ...base, budgetMinimum: '', budgetMaximum: '0' }).ok, false);
   assert.equal(validateStudioForm({ ...base, budgetMinimum: '10', budgetMaximum: '9' }).ok, false);
   assert.equal(validateStudioForm({ ...base, areaSquareMeters: '0' }).ok, false);
+});
+
+test('BEHAVIOR: legacy Balcony and Elevator criteria are read invisibly and omitted from new saves', () => {
+  const legacyRequirement = {
+    id: '55555555-5555-4555-8555-555555555555',
+    seekerId: 'seeker-legacy',
+    propertyType: 'apartment' as const,
+    purpose: 'buy' as const,
+    preferredAreaIds: [],
+    preferredAreaMode: 'all_kuwait' as const,
+    budget: { minimum: 10, maximum: 20, currencyCode: 'KWD' },
+    notes: '',
+    preferredAmenities: ['balcony', 'elevator'] as const,
+    catalogPreferences: [{ field: 'apartmentSubtype', kind: 'choice', value: 'studio' }] as const,
+  };
+  assert.equal(isStudioRequirement(legacyRequirement), true);
+  const values = readStudioRequirement(legacyRequirement);
+  assert.equal('amenities' in values, false);
+
+  const saved = buildStudioRequirement({
+    ...values,
+    description: 'Updated without unrelated amenities',
+  }, legacyRequirement.id, legacyRequirement.seekerId);
+  assert.equal('preferredAmenities' in saved, false);
 });
 
 test('BEHAVIOR: invalid canonical areas and Maps links produce field-specific validation codes', () => {

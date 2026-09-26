@@ -79,6 +79,11 @@ const STUDIO_NON_APPLICABLE_TOTALS = new Set([
   'bathroomsPerUnit',
 ]);
 
+const STUDIO_HIDDEN_LEGACY_AMENITIES = new Set([
+  'hasBalcony',
+  'hasElevator',
+]);
+
 export function isOfferedStudio(property: Pick<Property, 'core' | 'typeDetails'>): boolean {
   const details = property.typeDetails as Readonly<Record<string, unknown>> | undefined;
   return property.core.propertyType === 'apartment'
@@ -89,7 +94,9 @@ export function getOfferedStudioDetailValues(
   details: Readonly<Record<string, unknown>>,
 ): Readonly<Record<string, unknown>> {
   return Object.fromEntries(
-    Object.entries(details).filter(([field]) => !STUDIO_NON_APPLICABLE_TOTALS.has(field)),
+    Object.entries(details).filter(([field]) =>
+      !STUDIO_NON_APPLICABLE_TOTALS.has(field)
+      && !STUDIO_HIDDEN_LEGACY_AMENITIES.has(field)),
   );
 }
 
@@ -147,11 +154,9 @@ export function getWantedStudioContextRows(
 
 const STUDIO_AMENITY_LABELS: Record<string, readonly [string, string]> = {
   heating: ['Heating', 'تدفئة'],
-  balcony: ['Balcony', 'بلكونة'],
   maid_room: ['Maid room', 'غرفة خادمة'],
   laundry_room: ['Laundry room', 'غرفة غسيل'],
   solar_heater: ['Solar heater', 'سخان شمسي'],
-  elevator: ['Elevator', 'مصعد'],
   garden: ['Garden', 'حديقة'],
   security_guard: ['Security / Guard', 'أمن / حارس'],
   bbq_area: ['BBQ area', 'منطقة شواء'],
@@ -185,7 +190,9 @@ export function getWantedStudioDisplayRows(
     });
   }
   for (const preference of requirement.catalogPreferences ?? []) {
-    if (preference.field === 'apartmentSubtype') continue;
+    if (preference.field === 'apartmentSubtype'
+      || preference.field === 'hasBalcony'
+      || preference.field === 'hasElevator') continue;
     const label = getPropertyFormField(preference.field).label[locale];
     let value: string;
     if (preference.kind === 'number') {
@@ -215,10 +222,6 @@ export function getWantedStudioDisplayRows(
     });
   }
   const amenities = [
-    ...(requirement.preferredAmenities ?? []).map(value => STUDIO_AMENITY_LABELS[value]?.[locale] ?? value),
-    ...(requirement.preferredAmenityExclusions ?? []).map(value =>
-      `${STUDIO_AMENITY_LABELS[value]?.[locale] ?? value} (${language === 'ar' ? 'غير مطلوب' : 'Must not have'})`,
-    ),
     ...(requirement.purpose === 'rent'
       ? [requirement.swimmingPool && 'swimmingPool', requirement.gym && 'gym', requirement.seaView && 'seaView']
         .filter((value): value is string => !!value)

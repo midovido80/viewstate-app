@@ -27,6 +27,8 @@ test('Offered Studio is recognized from canonical apartment subtype and omits ge
       apartmentCount: 6,
       builtUpAreaSquareMeters: 42,
       hasKitchen: true,
+      hasBalcony: true,
+      hasElevator: true,
     },
   } as unknown as Property;
 
@@ -40,6 +42,8 @@ test('Offered Studio is recognized from canonical apartment subtype and omits ge
   assert.equal(details.bathroomCount, 1);
   assert.equal(details.builtUpAreaSquareMeters, 42);
   assert.equal(details.hasKitchen, true);
+  assert.equal(details.hasBalcony, undefined);
+  assert.equal(details.hasElevator, undefined);
   assert.equal(isOfferedStudio({
     ...property,
     core: { ...property.core, propertyType: 'house' },
@@ -55,12 +59,15 @@ test('Wanted Studio presents a single open-room row and each wanted canonical pr
     preferredAreaIds: [],
     budget: { minimum: 100, maximum: 250, currencyCode: 'KWD' },
     notes: '',
+    preferredAmenities: ['balcony', 'elevator'],
     bathroomsMinimum: 1,
     catalogPreferences: [
       { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
       { field: 'builtUpAreaSquareMeters', kind: 'number', comparison: 'minimum', value: 35 },
       { field: 'floorNumber', kind: 'number', comparison: 'exact', value: 2 },
       { field: 'hasKitchen', kind: 'feature', value: true },
+      { field: 'hasBalcony', kind: 'feature', value: true },
+      { field: 'hasElevator', kind: 'feature', value: true },
     ],
   } as SeekerRequirement;
 
@@ -75,6 +82,8 @@ test('Wanted Studio presents a single open-room row and each wanted canonical pr
   ]);
   assert.equal(rows.some(row => row.field === 'bedroomsMinimum'), false);
   assert.equal(rows.filter(row => row.field === 'apartmentSubtype').length, 0);
+  assert.equal(rows.some(row => row.field === 'preferredAmenities'), false);
+  assert.equal(rows.some(row => row.value.includes('Balcony') || row.value.includes('Elevator')), false);
 
   const arabicRows = getWantedStudioDisplayRows(requirement, 'ar');
   assert.equal(arabicRows[0].label, 'غرفة مفتوحة');

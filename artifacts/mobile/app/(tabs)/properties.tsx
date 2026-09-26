@@ -97,13 +97,15 @@ export default function PropertiesScreen() {
         : '';
 
     return (
-      <TouchableOpacity
-        onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
+      <View
         style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
-        testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
-        accessibilityRole="button"
-        accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${isStudio ? t('enrich.apartment_subtype.studio') : type ? t(`propertyType.${type}` as keyof Translations) : ''}, ${areaNames.join(', ')}`}
       >
+        <TouchableOpacity
+          onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
+          testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${isStudio ? t('enrich.apartment_subtype.studio') : type ? t(`propertyType.${type}` as keyof Translations) : ''}, ${areaNames.join(', ')}`}
+        >
         <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
             <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
@@ -143,7 +145,9 @@ export default function PropertiesScreen() {
           <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
             {areaNames.join(' · ')}
           </Text>
-          {item.person ? (
+        </View>
+        </TouchableOpacity>
+        {item.person ? (
             <TouchableOpacity
               onPress={event => {
                 event.stopPropagation();
@@ -159,9 +163,8 @@ export default function PropertiesScreen() {
                 {item.person.name}
               </Text>
             </TouchableOpacity>
-          ) : null}
-        </View>
-      </TouchableOpacity>
+        ) : null}
+      </View>
     );
   };
 
