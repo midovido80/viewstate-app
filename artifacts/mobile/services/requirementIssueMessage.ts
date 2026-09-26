@@ -56,6 +56,7 @@ const messages: Record<LocalizableRequirementIssueCode, readonly [english: strin
   catalog_preference_not_allowed: ['This property preference is not available for the selected category or floor use.', 'تفضيل العقار غير متاح للفئة أو استخدام الدور المختار.'],
   incompatible_category_preference: ['Remove or change the preference that is not supported by this category.', 'أزل أو غيّر التفضيل غير المدعوم لهذه الفئة.'],
   invalid_floor_use: ['Choose an approved floor use for this Floor Requirement.', 'اختر استخداماً معتمداً لمتطلب الدور.'],
+  invalid_constraint_strength: ['Choose Required or Preference for each structured criterion.', 'اختر مطلوب أو تفضيل لكل معيار منظم.'],
   invalid_requirement_draft: ['The Requirement draft is invalid. Review the highlighted details and try again.', 'مسودة المتطلب غير صالحة. راجع التفاصيل المحددة وحاول مرة أخرى.'],
   save_conflict: ['This Requirement changed before it could be saved. Review it and retry.', 'تغير هذا المتطلب قبل حفظه. راجعه وحاول مرة أخرى.'],
   save_missing_person: ['This Person is no longer available. Return to People and choose a Person again.', 'هذا الشخص لم يعد متاحاً. عُد إلى قائمة الأشخاص واختر شخصاً مرة أخرى.'],

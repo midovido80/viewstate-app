@@ -32,14 +32,20 @@ test('BEHAVIOR: opening +6 preserves the current value until exact entry changes
   assert.deepEqual(openNumericExactEntry('3'), { expanded: true, value: '3' });
 });
 
-test('BEHAVIOR: demo exact-entry opens blocked for blank and quick values until Arabic exact correction', () => {
+test('BEHAVIOR: demo exact-entry explains the minimum without flagging untouched blank input', () => {
   assert.deepEqual(createNumericQuickPickLocalState('capture:bedrooms', ''), {
     scopeKey: 'capture:bedrooms',
     pending: '',
     invalid: false,
     expanded: false,
   });
-  for (const value of ['', '1', '5']) {
+  assert.deepEqual(openRequiredNumericExactEntry(''), {
+    expanded: true, value: '', invalid: false,
+  });
+  assert.deepEqual(resolveExactIntegerInput('', '', true), {
+    pending: '', committedValue: '', invalid: false,
+  });
+  for (const value of ['1', '5']) {
     const opened = openRequiredNumericExactEntry(value);
     assert.deepEqual(opened, { expanded: true, value, invalid: true });
 
@@ -115,6 +121,7 @@ test('BEHAVIOR: floor zero remains distinct from blank and does not change defau
   });
   assert.deepEqual(FLOOR_NUMBER_QUICK_PICK_VALUES, [0, 1, 2, 3, 4, 5]);
   assert.deepEqual(NUMERIC_QUICK_PICK_VALUES, [1, 2, 3, 4, 5]);
+  assert.equal(openRequiredNumericExactEntry('').invalid, false);
   assert.equal(openRequiredNumericExactEntry('0').invalid, true);
   assert.equal(resolveExactIntegerInput('0', '6', true).invalid, true);
   assert.deepEqual(createNumericQuickPickLocalState('default:zero', '0'), {
@@ -149,7 +156,7 @@ test('BEHAVIOR: valid pending input replaces the committed value without range c
   });
 });
 
-test('BEHAVIOR: blank exact-entry input remains a blocker instead of clearing the pending value', () => {
+test('BEHAVIOR: blank exact-entry input clears the optional value without an error', () => {
   assert.deepEqual(resolveExactIntegerInput('', '8'), {
     pending: '',
     committedValue: '',
@@ -158,11 +165,11 @@ test('BEHAVIOR: blank exact-entry input remains a blocker instead of clearing th
   const blank = resolveExactIntegerInput('', '8', true);
   assert.deepEqual(blank, {
     pending: '',
-    committedValue: '8',
-    invalid: true,
+    committedValue: '',
+    invalid: false,
   });
   let invalidFields = updateInvalidQuickPickFields(new Set<string>(), 'bedrooms', blank.invalid);
-  assert.equal(hasPendingInvalidQuickPick(invalidFields), true);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
 
   const arabic = resolveExactIntegerInput('١٢', blank.committedValue, true);
   assert.deepEqual(arabic, {

@@ -7,6 +7,7 @@ import {
   createLiteralText,
   createPriceValue,
   createPrivacyMetadata,
+  getStudioStandardWarnings,
   isPropertyType,
   projectDraftToProperty,
   updatePropertyDraft,
@@ -273,6 +274,7 @@ test("supports discriminated enrichment details for all eleven Property Types", 
     { propertyType: "shop", builtUpAreaSquareMeters: 75, floorNumber: 0 },
     { propertyType: "warehouse", ceilingHeightMeters: 8, builtUpAreaSquareMeters: 1_200 },
     { propertyType: "chalet", bedroomCount: 5, bathroomCount: 4 },
+    { propertyType: "commercial_plot", plotAreaSquareMeters: 600 },
     { propertyType: "other_built_property", clarification: normalText("Farm building") },
   ];
 
@@ -280,6 +282,35 @@ test("supports discriminated enrichment details for all eleven Property Types", 
   for (const item of details) {
     assert(validateTypeDetails(item, core(item.propertyType)).ok, `Expected valid ${item.propertyType} details`);
   }
+});
+
+test("commercial plot is a separate compatible type and studio deviations warn without rewriting", () => {
+  assert(PROPERTY_TYPES.includes("commercial_plot"), "Commercial plot must be selectable");
+  assert(validateTypeDetails({ propertyType: "commercial_plot", plotAreaSquareMeters: 600 }, core("commercial_plot")).ok, "Commercial plot details must validate");
+  assertEqual(validateTypeDetails({ propertyType: "commercial_plot", builtUpAreaSquareMeters: 100 } as TypeDetails, core("commercial_plot")).ok, false, "A vacant commercial plot cannot be assigned built-up area");
+
+  const studio: TypeDetails = {
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    roomCount: 2,
+    bathroomCount: 2,
+    livingRoomCount: 2,
+  };
+  const before = JSON.stringify(studio);
+  const warnings = getStudioStandardWarnings(studio);
+  assertEqual(warnings.length, 3, "Nonstandard room, bathroom, and hall counts must be reported");
+  assertEqual(JSON.stringify(studio), before, "Warning inspection must not overwrite entered values");
+  assertEqual(getStudioStandardWarnings({
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    roomCount: 1,
+    bathroomCount: 1,
+    livingRoomCount: 1,
+  }).length, 0, "A standard studio may have one optional hall");
+  assertEqual(getStudioStandardWarnings({
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+  }).length, 0, "Missing studio facts remain unknown rather than becoming false or zero");
 });
 
 test("residential amenity facts preserve unknown, false, and true without deriving elevator availability", () => {
@@ -318,9 +349,10 @@ test("uses one canonical detail field applicability definition", () => {
   assert(
     PROPERTY_DETAIL_FIELD_DEFINITIONS.some(
       (definition) => definition.field === "builtUpAreaSquareMeters" &&
-        definition.appliesTo.length === PROPERTY_TYPES.length,
+        definition.appliesTo.length === PROPERTY_TYPES.length - 1 &&
+        !definition.appliesTo.includes("commercial_plot"),
     ),
-    "Built-up area must apply to all Property Types",
+    "Built-up area applies to all built property types, but not an undeveloped plot",
   );
   assertEqual(FLOOR_USES.length, 2, "Floor has exactly the Residential and Commercial uses");
 });
@@ -393,6 +425,46 @@ test("validates private location enrichment without changing BASIC Area", () => 
   const result = validateProperty(candidate);
   assert(result.ok, "Correctly classified private location enrichment must validate");
   assertEqual(result.value.core.locationArea.id, "area-1", "Enrichment must preserve BASIC Area");
+});
+
+test("validates labeled PACI unit numbers as explicitly shareable exact-location data", () => {
+  const base = property({
+    id: "offer-1",
+    propertyCoreId: "property-1",
+    transaction: "sale",
+    salePrice: price(),
+  }, "apartment");
+  const valid = validateProperty({
+    ...base,
+    locationEnrichment: {
+      paciNumber: createLiteralText("LEGACY-PACI", createPrivacyMetadata("exact_location", "explicit_per_share")),
+      paciUnitNumbers: [{
+        unitLabel: "Floor 2 · Unit 4",
+        paciNumber: createLiteralText("UNIT-PACI-4", createPrivacyMetadata("exact_location", "explicit_per_share")),
+      }],
+    },
+  });
+  assert(valid.ok, "Unit PACI rows with exact-location opt-in privacy must validate");
+  const invalidPrivacy = validateProperty({
+    ...base,
+    locationEnrichment: {
+      paciUnitNumbers: [{
+        unitLabel: "Shop 1",
+        paciNumber: createLiteralText("UNIT-PACI-1", createPrivacyMetadata("normal", "normal")),
+      }],
+    },
+  });
+  assert(!invalidPrivacy.ok, "Unit PACI rows with normal privacy must be rejected");
+  const emptyLabel = validateProperty({
+    ...base,
+    locationEnrichment: {
+      paciUnitNumbers: [{
+        unitLabel: "   ",
+        paciNumber: createLiteralText("UNIT-PACI-1", createPrivacyMetadata("exact_location", "explicit_per_share")),
+      }],
+    },
+  });
+  assert(!emptyLabel.ok, "A unit PACI row requires a meaningful label");
 });
 
 test("attachment metadata has stable identity, order, normal privacy, and one image cover", () => {
@@ -739,6 +811,64 @@ test("share preview fail-closes exact locations and maps while never exposing pr
     false,
     "Private notes must never enter the preview, even with other disclosures",
   );
+});
+
+test("share preview keeps all PACI numbers private until explicit PACI opt-in", () => {
+  const sharedProperty: Property = {
+    core: core(),
+    activeOffer: {
+      id: "offer-1",
+      propertyCoreId: "property-1",
+      transaction: "sale",
+      salePrice: price(),
+    },
+    locationEnrichment: {
+      paciNumber: createLiteralText("LEGACY-PACI-SECRET", createPrivacyMetadata("exact_location", "explicit_per_share")),
+      paciUnitNumbers: [{
+        unitLabel: "Floor 2 · Unit 4",
+        paciNumber: createLiteralText("UNIT-PACI-SECRET", createPrivacyMetadata("exact_location", "explicit_per_share")),
+      }],
+    },
+  };
+  const selection = {
+    normalFields: [] as const,
+    attachmentIds: [],
+    discloseOwnerSource: false,
+    discloseExactLocation: false,
+    disclosePaci: false,
+    discloseManualLocation: false,
+    discloseMapsLink: false,
+    personContactIds: [],
+  };
+  const privateLocation = {
+    paci: sharedProperty.locationEnrichment?.paciNumber?.value,
+    paciUnitNumbers: sharedProperty.locationEnrichment?.paciUnitNumbers?.map(item => ({
+      unitLabel: item.unitLabel,
+      paciNumber: item.paciNumber.value,
+    })),
+  };
+  const hidden = buildPropertySharePreview({
+    property: sharedProperty,
+    selection,
+    availableAttachments: [],
+    privateLocation,
+    rentalCadence: "",
+    attribution: "",
+  });
+  assertEqual(hidden.text.includes("LEGACY-PACI-SECRET"), false, "Legacy PACI must remain private by default");
+  assertEqual(hidden.text.includes("UNIT-PACI-SECRET"), false, "Unit PACI must remain private by default");
+
+  const explicit = buildPropertySharePreview({
+    property: sharedProperty,
+    selection: { ...selection, disclosePaci: true },
+    availableAttachments: [],
+    privateLocation,
+    labels: { paci: "PACI" },
+    rentalCadence: "",
+    attribution: "",
+  });
+  assert(explicit.text.includes("PACI: \u2068LEGACY-PACI-SECRET\u2069"), "Explicit PACI opt-in includes the legacy PACI number");
+  assert(explicit.text.includes("PACI: \u2068Floor 2 · Unit 4: UNIT-PACI-SECRET\u2069"), "Explicit PACI opt-in includes labeled unit PACI numbers");
 });
 
 const failures: string[] = [];

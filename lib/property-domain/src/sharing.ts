@@ -35,6 +35,7 @@ export interface PropertyShareContact {
 
 export interface PropertySharePrivateLocation {
   readonly paci?: string;
+  readonly paciUnitNumbers?: readonly { readonly unitLabel: string; readonly paciNumber: string }[];
   readonly manualLocation?: string;
   readonly mapsLink?: string;
 }
@@ -319,14 +320,23 @@ export function buildPropertySharePreview(
       labels.exactLocation,
     ), "📍",
   );
-  add(
-    labels.paci,
-    requireDisclosure(
-      selection.disclosePaci,
-      request.privateLocation?.paci,
-      labels.paci,
-    ), "📌",
-  );
+  if (selection.disclosePaci) {
+    const paciUnitNumbers = request.privateLocation?.paciUnitNumbers ?? [];
+    let includedPaciValue = false;
+    if (request.privateLocation?.paci !== undefined) {
+      add(labels.paci, requireDisclosure(true, request.privateLocation.paci, labels.paci), "📌");
+      includedPaciValue = true;
+    }
+    for (const item of paciUnitNumbers) {
+      add(
+        labels.paci,
+        `${item.unitLabel}: ${requireDisclosure(true, item.paciNumber, labels.paci)}`,
+        "📌",
+      );
+      includedPaciValue = true;
+    }
+    if (!includedPaciValue) requireDisclosure(true, undefined, labels.paci);
+  }
   add(
     labels.manualLocation,
     requireDisclosure(

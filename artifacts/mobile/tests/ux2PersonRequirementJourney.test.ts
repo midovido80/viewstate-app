@@ -21,7 +21,7 @@ const rentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const buyId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 test('UX-2 uses canonical Person roles and restricts Property source ownership', () => {
-  assert.deepEqual(PERSON_CLASSIFICATIONS, ['seeker', 'owner', 'broker', 'real_estate_company', 'building_guard']);
+  assert.deepEqual(PERSON_CLASSIFICATIONS, ['seeker', 'owner', 'broker', 'real_estate_company', 'building_guard', 'investor']);
   const person = createPerson({
     id: seekerId, classifications: ['seeker', 'broker'], name: '  Contact Name  ',
     displayPhone: '50000000', notes: 'private note',
@@ -287,7 +287,7 @@ test('UX-2 competing edit is a non-retryable conflict and preserves the draft fo
   assert.match(route, /if \(window\.confirm\(message\)\) void openPersonDetails\(\)/);
   assert.match(route, /style: 'cancel'/);
   assert.match(route, /will discard them/);
-  assert.match(route, /disabled=\{!!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.match(route, /disabled=\{!!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current(?: \|\| savingDraft)?\}/);
   assert.doesNotMatch(route, /outcome\.status === 'edit_conflict'[\s\S]{0,180}setNotes\(/);
 });
 
@@ -412,7 +412,7 @@ test('UX-2 failed navigation offers navigation-only recovery and route displays 
   assert.equal(shouldRenderRequirementRecoveryControls(false, null), false);
   assert.equal(tryStartRequirementSave({ current: false }, true, false), false, 'dismissing the error cannot unlock a confirmed save');
   assert.match(route, /tryStartRequirementSave\(saveFlight, !!confirmedRequirement\.current, !!uncertainRequirement\.current, !!editConflictRequirement\.current\)/);
-  assert.match(route, /disabled=\{!!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.match(route, /disabled=\{!!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current(?: \|\| savingDraft)?\}/);
   const saveStart = route.indexOf('const save = async () =>');
   assert.ok(route.indexOf('tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart) < route.indexOf('const result = candidate();', saveStart));
   for (const code of ['save_missing_person', 'save_non_seeker', 'save_edit_conflict', 'save_storage_failure', 'save_readback_failed', 'save_navigation_failed']) {

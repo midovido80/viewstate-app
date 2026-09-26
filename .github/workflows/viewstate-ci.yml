@@ -99,3 +99,71 @@ jobs:
 
       - name: Full workspace typecheck
         run: pnpm typecheck
+
+  android-test-apk:
+    name: Isolated Android test APK
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/viewstate-broker-workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the selected test branch
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Android project without modifying the repository
+        run: pnpm --filter @workspace/mobile exec expo prebuild --platform android --non-interactive --no-install
+
+      - name: Require test-only signing
+        shell: bash
+        run: |
+          grep -q 'signingConfig signingConfigs.debug' artifacts/mobile/android/app/build.gradle
+          echo "The generated release APK uses the temporary Android debug signing key."
+
+      - name: Assemble standalone test APK
+        working-directory: artifacts/mobile/android
+        env:
+          GRADLE_OPTS: -Xmx3g -XX:MaxMetaspaceSize=1g -Dorg.gradle.workers.max=2
+          NODE_ENV: production
+        run: ./gradlew :app:assembleRelease --no-daemon --max-workers=2
+
+      - name: Record branch and APK checksum
+        shell: bash
+        run: |
+          APK=artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          printf 'Branch: %s\nCommit: %s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
+          sha256sum "$APK"
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewstate-android-test-apk
+          path: artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

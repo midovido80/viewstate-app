@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import {
   DEMO_NEARBY_SERVICES,
   PROPERTY_DEMO_CATALOG,
   getGenericCaptureTypesForTransaction,
+  getDemoCategoriesForTransaction,
+  createDemoTransactionTransitionProposal,
   parseDemoNumericInput,
   hasPopulatedCategoryCapture,
   createDemoCategoryTransitionProposal,
   applyDemoCategoryTransition,
-  createDemoTransactionTransitionProposal,
   applyDemoTransactionTransition,
   canonicalApartmentSubtypeForCategory,
 } from '@/services/propertyDemoCatalog';
@@ -40,11 +42,85 @@ test('BEHAVIOR: apartment categories map to canonical subtypes without a top-lev
   assert.equal(PROPERTY_DEMO_CATALOG.find(item => item.id === 'duplex')?.canonicalType, 'apartment');
 });
 
-test('BEHAVIOR: a standard apartment sale remains selectable without relabeling a duplex or widening other generic types', () => {
+test('BEHAVIOR: transaction-aware generic fallbacks include types preset only for the opposite transaction', () => {
   const types = ['apartment', 'villa', 'floor', 'shop'] as const;
   assert.deepEqual(getGenericCaptureTypesForTransaction(types, 'sale'), ['apartment', 'floor', 'shop']);
-  assert.deepEqual(getGenericCaptureTypesForTransaction(types, 'rent'), ['floor', 'shop']);
+  assert.deepEqual(getGenericCaptureTypesForTransaction(types, 'rent'), ['villa', 'floor', 'shop']);
   assert.deepEqual(getGenericCaptureTypesForTransaction(types, undefined), ['floor', 'shop']);
+});
+
+test('BEHAVIOR: studio sale and duplex rent are selectable apartment presets with stable subtype', () => {
+  const saleCategoryIds = getDemoCategoriesForTransaction(PROPERTY_DEMO_CATALOG, 'sale').map(item => item.id);
+  const rentCategoryIds = getDemoCategoriesForTransaction(PROPERTY_DEMO_CATALOG, 'rent').map(item => item.id);
+  assert.ok(saleCategoryIds.includes('studio_apartment'));
+  assert.ok(rentCategoryIds.includes('duplex'));
+  assert.equal(canonicalApartmentSubtypeForCategory('studio_apartment'), 'studio');
+  assert.equal(canonicalApartmentSubtypeForCategory('duplex'), 'duplex');
+
+  const studioMetadata = { categoryId: 'studio_apartment' as const };
+  const saleStudioToRent = createDemoTransactionTransitionProposal(
+    { propertyCoreId: 'p', offerId: 'o', propertyType: 'apartment', transaction: 'sale' },
+    studioMetadata,
+    'rent',
+  );
+  const duplexMetadata = { categoryId: 'duplex' as const };
+  const rentDuplexToSale = createDemoTransactionTransitionProposal(
+    { propertyCoreId: 'p', offerId: 'o', propertyType: 'apartment', transaction: 'rent' },
+    duplexMetadata,
+    'sale',
+  );
+  assert.equal(saleStudioToRent?.clearCategory, false);
+  assert.equal(rentDuplexToSale?.clearCategory, false);
+  const studioTransition = applyDemoTransactionTransition(
+    { propertyCoreId: 'p', offerId: 'o', propertyType: 'apartment', transaction: 'sale' },
+    studioMetadata,
+    saleStudioToRent!,
+  );
+  const duplexTransition = applyDemoTransactionTransition(
+    { propertyCoreId: 'p', offerId: 'o', propertyType: 'apartment', transaction: 'rent' },
+    duplexMetadata,
+    rentDuplexToSale!,
+  );
+  assert.equal(studioTransition?.metadata?.categoryId, 'studio_apartment');
+  assert.equal(studioTransition?.draft.propertyType, 'apartment');
+  assert.equal(duplexTransition?.metadata?.categoryId, 'duplex');
+  assert.equal(duplexTransition?.draft.propertyType, 'apartment');
+});
+
+test('BEHAVIOR: every non-legacy approved property type is reachable for either transaction', () => {
+  const types = [
+    'whole_building', 'commercial_complex', 'apartment', 'floor', 'house', 'villa',
+    'office', 'shop', 'warehouse', 'chalet', 'commercial_plot', 'other_built_property',
+  ] as const;
+  for (const transaction of ['sale', 'rent'] as const) {
+    const availableThroughPresets = new Set(
+      getDemoCategoriesForTransaction(PROPERTY_DEMO_CATALOG, transaction).map(category => category.canonicalType),
+    );
+    for (const type of getGenericCaptureTypesForTransaction(types, transaction)) availableThroughPresets.add(type);
+    assert.deepEqual(
+      [...availableThroughPresets].filter(type => type !== 'other_built_property').sort(),
+      types.filter(type => type !== 'other_built_property').slice().sort(),
+    );
+  }
+  assert.equal(getGenericCaptureTypesForTransaction(types, 'sale').includes('other_built_property'), false);
+  assert.equal(getGenericCaptureTypesForTransaction(types, 'rent').includes('commercial_plot'), true);
+  assert.equal(getGenericCaptureTypesForTransaction(types, 'sale').includes('commercial_plot'), true);
+});
+
+test('SOURCE ASSERTION: capture exposes transaction-aware categories and studio warnings', async () => {
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  const translations = await readFile('contexts/I18nContext.tsx', 'utf8');
+  assert.match(capture, /getDemoCategoriesForTransaction\(PROPERTY_DEMO_CATALOG, draft\.transaction\)/);
+  assert.match(capture, /canUseDemoCategoryForTransaction\(category, draft\.transaction\)/);
+  assert.match(capture, /canUseDemoCategoryForTransaction\(demoCategory, draft\.transaction\)/);
+  assert.match(capture, /transaction: draft\.transaction \?\? category\.transaction/);
+  assert.match(capture, /t\(`propertyType\.\$\{type\}/);
+  assert.match(translations, /'propertyType\.commercial_plot': 'Commercial plot'/);
+  assert.match(translations, /'propertyType\.commercial_plot': 'أرض تجارية'/);
+  assert.match(capture, /getStudioStandardWarnings\(candidate\.typeDetails\)/);
+  assert.match(capture, /capture-studio-guidance/);
+  assert.match(capture, /capture-studio-standard-warning/);
+  assert.match(capture, /optional hall and no kitchen/);
 });
 
 test('BEHAVIOR: numeric parser preserves zero and normalizes Western Arabic Persian digits', () => {

@@ -1,8 +1,10 @@
 import type { Property } from "./types.ts";
 import type {
+  RequirementConstraintField,
   RequirementOccupancy,
   SeekerRequirement,
 } from "./requirements.ts";
+import { getRequirementConstraintStrength } from "./requirements.ts";
 
 export const MATCH_QUALIFICATION_THRESHOLD = 70;
 
@@ -87,7 +89,11 @@ export interface MatchExplanation {
     | "occupancy_not_compatible"
     | "service_present"
     | "service_absent"
-    | "unknown_property_evidence";
+      | "unknown_property_evidence"
+      | "required_evidence_unknown"
+      | "outside_budget"
+      | "outside_required_areas"
+      | "required_criterion_not_met";
   readonly message: string;
 }
 
@@ -96,7 +102,8 @@ export type MatchIneligibilityReason =
   | "transaction"
   | "currency"
   | "price"
-  | "location";
+  | "location"
+  | "required_criterion";
 
 export interface MatchResult {
   readonly requirementId: string;
@@ -110,12 +117,18 @@ export interface MatchResult {
   readonly propertyChronology?: number;
   readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
   readonly explanations: readonly MatchExplanation[];
+  /** True only when hard-required evidence is missing and confirmation is needed. */
+  readonly potentialMatch?: boolean;
+  readonly needsConfirmationReasons?: readonly MatchCriterion[];
+  readonly failedRequiredCriteria?: readonly MatchCriterion[];
 }
 
 export interface MatchEligibilityResult {
   readonly eligible: boolean;
   readonly locationRank: number | null;
   readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
+  readonly needsConfirmationReasons?: readonly MatchCriterion[];
+  readonly failedRequiredCriteria?: readonly MatchCriterion[];
 }
 
 interface CriterionPoints {
@@ -225,36 +238,30 @@ function evaluateService(
   service: MatchingService,
   evidence: MatchingPropertyEvidence,
   possible: number,
+  options: { readonly expected?: boolean; readonly required?: boolean } = {},
 ): CriterionPoints {
   const value = evidence[service];
   const name = serviceCriterionName(service);
+  const expected = options.expected ?? true;
   if (value === undefined) {
     return criterion(
       name,
       "unknown",
       0,
       possible,
-      "unknown_property_evidence",
-      `${service} evidence is Unknown.`,
-    );
-  }
-  if (value) {
-    return criterion(
-      name,
-      "matched",
-      possible,
-      possible,
-      "service_present",
-      `${service} is present in structured Property evidence.`,
+      options.required ? "required_evidence_unknown" : "unknown_property_evidence",
+      options.required
+        ? `Required ${service} evidence is Unknown; confirmation is needed.`
+        : `${service} evidence is Unknown.`,
     );
   }
   return criterion(
     name,
-    "not_met",
-    0,
+    value === expected ? "matched" : "not_met",
+    value === expected ? possible : 0,
     possible,
-    "service_absent",
-    `${service} is explicitly absent in structured Property evidence.`,
+    value ? "service_present" : "service_absent",
+    `${service} is explicitly ${value ? "present" : "absent"}; the Requirement prefers it ${expected ? "present" : "absent"}.`,
   );
 }
 
@@ -280,7 +287,7 @@ function hardEligibility(
   candidate: MatchingPropertyCandidate,
   price: { readonly amount: number; readonly currencyCode: string } | null,
 ): {
-  readonly reasons: readonly MatchIneligibilityReason[];
+  readonly reasons: MatchIneligibilityReason[];
   readonly locationRank: number | null;
 } {
   const reasons: MatchIneligibilityReason[] = [];
@@ -302,10 +309,19 @@ function hardEligibility(
   ) {
     reasons.push("currency");
   } else if (
+    getRequirementConstraintStrength(requirement, "budget") === "required" && (
     price.amount < requirement.budget.minimum
     || price.amount > requirement.budget.maximum
+    )
   ) {
     reasons.push("price");
+  }
+  if (
+    getRequirementConstraintStrength(requirement, "preferredAreas") === "required"
+    && requirement.preferredAreaMode !== "all_kuwait"
+    && locationRank < 0
+  ) {
+    reasons.push("location");
   }
   return {
     reasons,
@@ -315,6 +331,7 @@ function hardEligibility(
 
 function ineligibleExplanation(
   reasons: readonly MatchIneligibilityReason[],
+  failedRequiredCriteria: readonly MatchCriterion[],
 ): MatchExplanation {
   const code = reasons.includes("property_type")
     ? "ineligible_property_type"
@@ -322,16 +339,20 @@ function ineligibleExplanation(
       ? "ineligible_transaction"
       : reasons.includes("currency")
         ? "ineligible_currency"
-        : reasons.includes("price")
-          ? "ineligible_price"
-          : "ineligible_location";
+          : reasons.includes("price")
+            ? "ineligible_price"
+            : reasons.includes("location")
+              ? "ineligible_location"
+              : "required_criterion_not_met";
   return {
     criterion: "eligibility",
     status: "ineligible",
     awardedPoints: 0,
     possiblePoints: 0,
     code,
-    message: `Hard eligibility failed: ${reasons.join(", ")}.`,
+    message: failedRequiredCriteria.length
+      ? `Required structured criteria are not met: ${failedRequiredCriteria.join(", ")}.`
+      : `Required constraints are not met: ${reasons.join(", ")}.`,
   };
 }
 
@@ -351,6 +372,8 @@ interface HardEligibilityAssessment extends MatchEligibilityResult {
     readonly amount: number;
     readonly currencyCode: string;
   } | null;
+  readonly evidence: MatchingPropertyEvidence;
+  readonly failedRequiredCriteria: readonly MatchCriterion[];
 }
 
 function assessHardEligibility(
@@ -359,10 +382,57 @@ function assessHardEligibility(
 ): HardEligibilityAssessment {
   const price = extractPrice(candidate.property);
   const eligibility = hardEligibility(requirement, candidate, price);
+  const evidence = mergeEvidence(candidate.property, candidate.evidence);
+  const failedRequiredCriteria: MatchCriterion[] = [];
+  const needsConfirmationReasons: MatchCriterion[] = [];
+  const checkRequired = (
+    field: RequirementConstraintField,
+    criterionName: MatchCriterion,
+    actual: unknown,
+    matches: (value: unknown) => boolean,
+  ) => {
+    if (getRequirementConstraintStrength(requirement, field) !== "required") return;
+    if (actual === undefined) {
+      needsConfirmationReasons.push(criterionName);
+    } else if (!matches(actual)) {
+      failedRequiredCriteria.push(criterionName);
+    }
+  };
+  if (requirement.bedroomsMinimum !== undefined) {
+    checkRequired("bedroomsMinimum", "bedrooms", evidence.bedrooms, actual =>
+      typeof actual === "number" && actual >= requirement.bedroomsMinimum!);
+  }
+  if (requirement.bathroomsMinimum !== undefined) {
+    checkRequired("bathroomsMinimum", "bathrooms", evidence.bathrooms, actual =>
+      typeof actual === "number" && actual >= requirement.bathroomsMinimum!);
+  }
+  if (requirement.purpose === "rent") {
+    checkRequired("occupancy", "occupancy", requirement.occupancy === undefined ? undefined : evidence.occupancy, actual =>
+      isOccupancy(actual) && requirement.occupancy !== undefined && (
+        requirement.occupancy === "any" || actual === "any" || actual === requirement.occupancy
+      ));
+    for (const service of ["swimmingPool", "gym", "seaView"] as const) {
+      const requested = requirement[service];
+      if (requested !== undefined) {
+        checkRequired(service, service === "swimmingPool" ? "swimming_pool" : service === "seaView" ? "sea_view" : "gym", evidence[service], actual =>
+          typeof actual === "boolean" && actual === requested);
+      }
+    }
+  }
+  if (requirement.centralAC !== undefined) {
+    checkRequired("centralAC", "central_ac", evidence.centralAC, actual =>
+      typeof actual === "boolean" && actual === requirement.centralAC);
+  }
+  if (failedRequiredCriteria.length) eligibility.reasons.push("required_criterion");
   return {
     eligible: eligibility.reasons.length === 0,
     locationRank: eligibility.locationRank,
     ineligibilityReasons: eligibility.reasons,
+    ...(needsConfirmationReasons.length
+      ? { needsConfirmationReasons: [...new Set(needsConfirmationReasons)] }
+      : {}),
+    failedRequiredCriteria: [...new Set(failedRequiredCriteria)],
+    evidence,
     price,
   };
 }
@@ -380,6 +450,12 @@ export function checkMatchEligibility(
     eligible: assessment.eligible,
     locationRank: assessment.locationRank,
     ineligibilityReasons: assessment.ineligibilityReasons,
+    ...(assessment.needsConfirmationReasons
+      ? { needsConfirmationReasons: assessment.needsConfirmationReasons }
+      : {}),
+    ...(assessment.failedRequiredCriteria.length
+      ? { failedRequiredCriteria: assessment.failedRequiredCriteria }
+      : {}),
   };
 }
 
@@ -409,28 +485,40 @@ export function evaluateMatch(
       priceDistanceFromBudgetMidpoint: midpointDistance,
       propertyChronology: candidate.propertyChronology,
       ineligibilityReasons: assessment.ineligibilityReasons,
-      explanations: [ineligibleExplanation(assessment.ineligibilityReasons)],
+      ...(assessment.failedRequiredCriteria.length
+        ? { failedRequiredCriteria: assessment.failedRequiredCriteria }
+        : {}),
+      explanations: [ineligibleExplanation(
+        assessment.ineligibilityReasons,
+        assessment.failedRequiredCriteria,
+      )],
     };
   }
 
-  const evidence = mergeEvidence(property, candidate.evidence);
+  const evidence = assessment.evidence;
   const explanations: MatchExplanation[] = [];
   const points: CriterionPoints[] = [];
   const weights = requirement.purpose === "rent"
     ? MATCH_SCORING_WEIGHTS.rent
     : MATCH_SCORING_WEIGHTS.buy;
 
+  const withinBudget = assessment.price !== null
+    && assessment.price.amount >= requirement.budget.minimum
+    && assessment.price.amount <= requirement.budget.maximum;
   points.push(criterion(
     "budget",
-    "matched",
+    withinBudget ? "matched" : "not_met",
+    withinBudget ? weights.budget : 0,
     weights.budget,
-    weights.budget,
-    "within_budget",
-    "Price is within the explicit Requirement budget.",
+    withinBudget ? "within_budget" : "outside_budget",
+    withinBudget
+      ? "Price is within the explicit Requirement budget."
+      : "Price is outside the preferred budget range.",
   ));
 
   const rank = assessment.locationRank;
-  if (rank === null) {
+  const allKuwait = requirement.preferredAreaMode === "all_kuwait";
+  if (rank === null && !allKuwait) {
     const locationPoints = weights.orderedLocation * locationFraction(rank);
     points.push(criterion(
       "ordered_location",
@@ -441,14 +529,17 @@ export function evaluateMatch(
       "Property is outside the preferred locations; location receives 20% of its points.",
     ));
   } else {
-    const locationPoints = weights.orderedLocation * locationFraction(rank);
+    const locationShare = allKuwait ? 1 : locationFraction(rank);
+    const locationPoints = weights.orderedLocation * locationShare;
     points.push(criterion(
       "ordered_location",
       "matched",
       locationPoints,
       weights.orderedLocation,
       "ordered_location_rank",
-      `Property is the ${rank} preference; location receives ${locationFraction(rank) * 100}% of its points.`,
+      allKuwait
+        ? "Property is within the all-Kuwait area scope."
+        : `Property is the ${rank} preference; location receives ${locationShare * 100}% of its points.`,
     ));
   }
 
@@ -457,14 +548,15 @@ export function evaluateMatch(
     if (requirement.bedroomsMinimum !== undefined) {
       const possible = rentWeights.bedrooms;
       const bedrooms = evidence.bedrooms;
+      const required = getRequirementConstraintStrength(requirement, "bedroomsMinimum") === "required";
       points.push(bedrooms === undefined
         ? criterion(
           "bedrooms",
           "unknown",
           0,
           possible,
-          "unknown_property_evidence",
-          "Bedroom evidence is Unknown.",
+          required ? "required_evidence_unknown" : "unknown_property_evidence",
+          required ? "Required bedroom evidence is Unknown; confirmation is needed." : "Bedroom evidence is Unknown.",
         )
         : criterion(
           "bedrooms",
@@ -481,14 +573,15 @@ export function evaluateMatch(
     if (requirement.bathroomsMinimum !== undefined) {
       const possible = rentWeights.bathrooms;
       const bathrooms = evidence.bathrooms;
+      const required = getRequirementConstraintStrength(requirement, "bathroomsMinimum") === "required";
       points.push(bathrooms === undefined
         ? criterion(
           "bathrooms",
           "unknown",
           0,
           possible,
-          "unknown_property_evidence",
-          "Bathroom evidence is Unknown.",
+          required ? "required_evidence_unknown" : "unknown_property_evidence",
+          required ? "Required bathroom evidence is Unknown; confirmation is needed." : "Bathroom evidence is Unknown.",
         )
         : criterion(
           "bathrooms",
@@ -506,13 +599,14 @@ export function evaluateMatch(
       const possible = rentWeights.occupancy;
       const propertyOccupancy = evidence.occupancy;
       if (propertyOccupancy === undefined) {
+        const required = getRequirementConstraintStrength(requirement, "occupancy") === "required";
         points.push(criterion(
           "occupancy",
           "unknown",
           0,
           possible,
-          "unknown_property_evidence",
-          "Occupancy evidence is Unknown.",
+          required ? "required_evidence_unknown" : "unknown_property_evidence",
+          required ? "Required occupancy evidence is Unknown; confirmation is needed." : "Occupancy evidence is Unknown.",
         ));
       } else {
         const compatible = requirement.occupancy === "any"
@@ -533,12 +627,73 @@ export function evaluateMatch(
 
     const requestedServices = (
       ["swimmingPool", "gym", "seaView", "centralAC"] as const
-    ).filter(service => requirement[service] === true);
+    ).filter(service => requirement[service] === true
+      || (requirement[service] === false
+        && requirement.constraintStrengths?.[service] !== undefined));
     if (requestedServices.length > 0) {
       const possible = rentWeights.services / requestedServices.length;
       for (const service of requestedServices) {
-        points.push(evaluateService(service, evidence, possible));
+        points.push(evaluateService(
+          service,
+          evidence,
+          possible,
+          {
+            expected: requirement[service] !== false,
+            required: getRequirementConstraintStrength(requirement, service) === "required",
+          },
+        ));
       }
+    }
+  }
+  if (requirement.purpose === "buy") {
+    for (const [field, criterionName, actual, minimum] of [
+      ["bedroomsMinimum", "bedrooms", evidence.bedrooms, requirement.bedroomsMinimum],
+      ["bathroomsMinimum", "bathrooms", evidence.bathrooms, requirement.bathroomsMinimum],
+    ] as const) {
+      if (
+        minimum === undefined
+        || requirement.constraintStrengths?.[field] === undefined
+      ) continue;
+      const required = getRequirementConstraintStrength(requirement, field) === "required";
+      const possible = 10;
+      if (actual === undefined) {
+        points.push(criterion(
+          criterionName,
+          "unknown",
+          0,
+          possible,
+          required ? "required_evidence_unknown" : "unknown_property_evidence",
+          required
+            ? `Required ${criterionName} evidence is Unknown; confirmation is needed.`
+            : `${criterionName} evidence is Unknown.`,
+        ));
+      } else {
+        const matched = actual >= minimum;
+        points.push(criterion(
+          criterionName,
+          matched ? "matched" : "not_met",
+          matched ? possible : 0,
+          possible,
+          matched ? "meets_minimum" : "below_minimum",
+          matched
+            ? `Property meets the minimum ${criterionName}.`
+            : `Property is below the minimum ${criterionName}.`,
+        ));
+      }
+    }
+    if (
+      requirement.centralAC !== undefined
+      && requirement.constraintStrengths?.centralAC !== undefined
+    ) {
+      points.push(evaluateService(
+        "centralAC",
+        evidence,
+        10,
+        {
+          expected: requirement.centralAC !== false,
+          required: getRequirementConstraintStrength(requirement, "centralAC") === "required",
+        },
+      ));
     }
   }
 
@@ -550,18 +705,33 @@ export function evaluateMatch(
     explanations.push(item.explanation);
   }
   const score = roundScore((earned / denominator) * 100);
+  const optimisticScore = roundScore((
+    earned + points.reduce(
+      (possible, item) => possible + (item.explanation.status === "unknown" ? item.possible : 0),
+      0,
+    )
+  ) / denominator * 100);
+  const potentialMatch = (assessment.needsConfirmationReasons?.length ?? 0) > 0
+    && optimisticScore >= MATCH_QUALIFICATION_THRESHOLD;
 
   return {
     requirementId: requirement.id,
     propertyId: property.core.id,
     eligible: true,
     score,
-    qualifies: score >= MATCH_QUALIFICATION_THRESHOLD,
+    qualifies: score >= MATCH_QUALIFICATION_THRESHOLD
+      && (assessment.needsConfirmationReasons?.length ?? 0) === 0,
     includedWeight: denominator,
     locationRank: assessment.locationRank,
     priceDistanceFromBudgetMidpoint: midpointDistance,
     propertyChronology: candidate.propertyChronology,
     ineligibilityReasons: [],
+    ...(assessment.needsConfirmationReasons
+      ? {
+        needsConfirmationReasons: assessment.needsConfirmationReasons,
+      }
+      : {}),
+    ...(potentialMatch ? { potentialMatch: true } : {}),
     explanations: [
       {
         criterion: "eligibility",

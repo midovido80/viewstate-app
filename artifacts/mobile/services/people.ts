@@ -9,6 +9,7 @@ export const PERSON_CLASSIFICATIONS = [
   'broker',
   'real_estate_company',
   'building_guard',
+  'investor',
 ] as const;
 
 export type PersonClassification = typeof PERSON_CLASSIFICATIONS[number];

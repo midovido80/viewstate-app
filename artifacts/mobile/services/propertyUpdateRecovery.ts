@@ -5,6 +5,7 @@ import {
   Transaction,
   PropertyDemoCaptureMetadata,
   CoordinatesMetadata,
+  type PaciUnitNumberMetadata,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   validateProperty,
 } from '@workspace/property-domain';
@@ -42,6 +43,7 @@ export interface PropertyEditChoices {
   description?: string;
   privateNotes?: string;
   paciNumber?: string;
+  paciUnitNumbers?: readonly { readonly unitLabel: string; readonly paciNumber: string }[];
   manualLocationText?: string;
   mapsLink?: string;
   coordinates?: CoordinatesMetadata;
@@ -180,6 +182,12 @@ export function migratePropertyEditDraft(draft: PropertyEditDraftV1): PropertyEd
       ...(Object.prototype.hasOwnProperty.call(choices, 'description') ? {} : { description: baseline.core.description?.value ?? '' }),
       ...(Object.prototype.hasOwnProperty.call(choices, 'privateNotes') ? {} : { privateNotes: baseline.core.privateNotes?.value ?? '' }),
       ...(Object.prototype.hasOwnProperty.call(choices, 'paciNumber') ? {} : { paciNumber: baseline.locationEnrichment?.paciNumber?.value ?? '' }),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'paciUnitNumbers') ? {} : {
+        paciUnitNumbers: (baseline.locationEnrichment?.paciUnitNumbers ?? []).map(item => ({
+          unitLabel: item.unitLabel,
+          paciNumber: item.paciNumber.value,
+        })),
+      }),
       ...(Object.prototype.hasOwnProperty.call(choices, 'manualLocationText') ? {} : { manualLocationText: baseline.locationEnrichment?.manualLocationText?.value ?? '' }),
       ...(Object.prototype.hasOwnProperty.call(choices, 'mapsLink') ? {} : { mapsLink: baseline.locationEnrichment?.mapsLink?.value ?? '' }),
       ...(Object.prototype.hasOwnProperty.call(choices, 'attachments') ? {} : (baseline.attachments ? { attachments: clone(baseline.attachments) } : {})),
@@ -340,6 +348,10 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
       description: baseline.core.description?.value ?? '',
       privateNotes: baseline.core.privateNotes?.value ?? '',
       paciNumber: baseline.locationEnrichment?.paciNumber?.value ?? '',
+      paciUnitNumbers: (baseline.locationEnrichment?.paciUnitNumbers ?? []).map(item => ({
+        unitLabel: item.unitLabel,
+        paciNumber: item.paciNumber.value,
+      })),
       manualLocationText: baseline.locationEnrichment?.manualLocationText?.value ?? '',
       mapsLink: baseline.locationEnrichment?.mapsLink?.value ?? '',
       ...(baseline.locationEnrichment?.coordinates ? { coordinates: clone(baseline.locationEnrichment.coordinates) } : {}),
@@ -443,6 +455,17 @@ export function buildPropertyUpdateCandidate(
       : value;
     const literal = optionalClassifiedLiteral(normalizedValue ?? '', exactPrivacy);
     if (literal) locationEnrichment[key] = literal; else delete locationEnrichment[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(choices, 'paciUnitNumbers')) {
+    const paciUnitNumbers: PaciUnitNumberMetadata[] = (choices.paciUnitNumbers ?? []).map(item => ({
+      unitLabel: item.unitLabel,
+      paciNumber: {
+        value: item.paciNumber,
+        privacy: exactPrivacy,
+      },
+    }));
+    if (paciUnitNumbers.length) locationEnrichment.paciUnitNumbers = paciUnitNumbers;
+    else delete locationEnrichment.paciUnitNumbers;
   }
   if (Object.prototype.hasOwnProperty.call(choices, 'coordinates')) {
     if (choices.coordinates) locationEnrichment.coordinates = clone(choices.coordinates);

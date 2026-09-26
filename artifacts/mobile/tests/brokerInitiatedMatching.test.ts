@@ -185,6 +185,46 @@ test('delegates eligibility, scoring, ranking, and qualification filtering to M2
   assert.equal(result.matches[1]?.qualifies, true);
 });
 
+test('returns eligible potential matches with confirmation reasons after confirmed results', async () => {
+  const storedRequirement = requirement({
+    propertyType: 'chalet',
+    swimmingPool: true,
+    constraintStrengths: { swimmingPool: 'required' },
+  });
+  const potential = {
+    property: property({
+      id: 'potential-at-preferred',
+      area: 'area-1',
+      propertyType: 'chalet',
+      typeDetails: { propertyType: 'chalet', bedroomCount: 2, bathroomCount: 1 },
+    }),
+    evidence: { bedrooms: 2, bathrooms: 1 },
+  };
+  const confirmed = {
+    property: property({
+      id: 'confirmed-at-second-area',
+      area: 'area-2',
+      propertyType: 'chalet',
+      typeDetails: { propertyType: 'chalet', bedroomCount: 2, bathroomCount: 1, hasPool: true },
+    }),
+    evidence: { bedrooms: 2, bathrooms: 1, swimmingPool: true },
+  };
+  const result = await new BrokerInitiatedMatching(
+    storeFor(storedRequirement),
+    sourceFor([potential, confirmed]),
+  ).runForRequirement(storedRequirement.id);
+
+  assert.deepEqual(result.matches.map(match => match.propertyId), [
+    'confirmed-at-second-area',
+    'potential-at-preferred',
+  ]);
+  const potentialResult = result.matches[1];
+  assert.equal(potentialResult?.eligible, true);
+  assert.equal(potentialResult?.qualifies, false);
+  assert.equal(potentialResult?.potentialMatch, true);
+  assert.deepEqual(potentialResult?.needsConfirmationReasons, ['swimming_pool']);
+});
+
 test('returns zero matches successfully when no candidate qualifies', async () => {
   const storedRequirement = requirement();
   const onlyBelowThreshold = property({

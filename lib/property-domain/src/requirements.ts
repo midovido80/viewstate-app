@@ -29,6 +29,30 @@ export interface SeekerRequirementBudget {
   readonly currencyCode: string;
 }
 
+export type RequirementConstraintStrength = "required" | "preferred";
+
+/** Explicit strength overrides. Missing keys retain their historical defaults. */
+export interface RequirementConstraintStrengths {
+  readonly budget?: RequirementConstraintStrength;
+  readonly preferredAreas?: RequirementConstraintStrength;
+  readonly bedroomsMinimum?: RequirementConstraintStrength;
+  readonly bathroomsMinimum?: RequirementConstraintStrength;
+  readonly occupancy?: RequirementConstraintStrength;
+  readonly swimmingPool?: RequirementConstraintStrength;
+  readonly gym?: RequirementConstraintStrength;
+  readonly seaView?: RequirementConstraintStrength;
+  readonly centralAC?: RequirementConstraintStrength;
+}
+export type RequirementConstraintField = keyof RequirementConstraintStrengths;
+
+export function getRequirementConstraintStrength(
+  requirement: Pick<SeekerRequirementBase, "constraintStrengths">,
+  field: RequirementConstraintField,
+): RequirementConstraintStrength {
+  return requirement.constraintStrengths?.[field]
+    ?? (field === "budget" ? "required" : "preferred");
+}
+
 export type CatalogPreference =
   | {
     readonly field: PropertyDetailField;
@@ -54,6 +78,8 @@ export interface SeekerRequirementBase {
   readonly preferredAreaIds: readonly LocationAreaId[];
   readonly preferredAreaMode?: RequirementAreaMode;
   readonly budget: SeekerRequirementBudget;
+  /** Omitted for old rows; type and transaction are always hard constraints. */
+  readonly constraintStrengths?: RequirementConstraintStrengths;
   readonly notes: string;
   readonly preferredAmenities?: readonly ResidentialAmenity[];
   readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
@@ -104,7 +130,8 @@ export interface RequirementValidationIssue {
     | "invalid_catalog_preference"
     | "duplicate_catalog_preference"
     | "catalog_preference_not_allowed"
-    | "invalid_floor_use";
+    | "invalid_floor_use"
+    | "invalid_constraint_strength";
   readonly path: readonly string[];
   readonly message: string;
 }
@@ -142,6 +169,7 @@ const REQUIREMENT_FIELDS = new Set([
   "preferredAreaIds",
   "preferredAreaMode",
   "budget",
+  "constraintStrengths",
   "notes",
   "preferredAmenities",
   "preferredAmenityExclusions",
@@ -153,6 +181,17 @@ const REQUIREMENT_FIELDS = new Set([
 ]);
 
 const BUDGET_FIELDS = new Set(["minimum", "maximum", "currencyCode"]);
+const CONSTRAINT_STRENGTH_FIELDS = new Set([
+  "budget",
+  "preferredAreas",
+  "bedroomsMinimum",
+  "bathroomsMinimum",
+  "occupancy",
+  "swimmingPool",
+  "gym",
+  "seaView",
+  "centralAC",
+]);
 // Only meanings without a native Requirement owner may use catalogPreferences.
 // In particular, Property bedroomCount/bathroomCount are facts, not aliases for
 // the Requirement's bedroomsMinimum/bathroomsMinimum.
@@ -301,6 +340,23 @@ export function validateSeekerRequirement(
   }
   if (typeof value.notes !== "string") {
     issues.push(issue("required", ["notes"], "Broker-readable Notes must be a string."));
+  }
+
+  if (value.constraintStrengths !== undefined) {
+    if (!isRecord(value.constraintStrengths)) {
+      issues.push(issue("invalid_constraint_strength", ["constraintStrengths"], "Constraint strengths must be an object."));
+    } else {
+      for (const [field, strength] of Object.entries(value.constraintStrengths)) {
+        if (!CONSTRAINT_STRENGTH_FIELDS.has(field)
+          || strength !== "required" && strength !== "preferred") {
+          issues.push(issue(
+            "invalid_constraint_strength",
+            ["constraintStrengths", field],
+            "Constraint strength must be required or preferred for an approved structured criterion.",
+          ));
+        }
+      }
+    }
   }
 
   const areaMode = value.preferredAreaMode;
@@ -707,6 +763,9 @@ export function normalizeSeekerRequirement(
       maximum: validation.value.budget.maximum,
       currencyCode: validation.value.budget.currencyCode,
     },
+    ...(source.constraintStrengths !== undefined
+      ? { constraintStrengths: { ...(validation.value.constraintStrengths ?? {}) } }
+      : {}),
     notes: validation.value.notes,
     ...(source.bedroomsMinimum !== undefined
       ? { bedroomsMinimum: validation.value.bedroomsMinimum }

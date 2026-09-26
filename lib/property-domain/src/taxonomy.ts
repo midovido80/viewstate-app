@@ -31,6 +31,7 @@ export const PROPERTY_TYPES = [
   "shop",
   "warehouse",
   "chalet",
+  "commercial_plot",
   "other_built_property",
 ] as const satisfies readonly PropertyType[];
 
@@ -65,6 +66,7 @@ export type PropertyDetailField =
   | "officeCount"
   | "elevatorCount"
   | "apartmentSubtype"
+  | "roomCount"
   | "bedroomCount"
   | "livingRoomCount"
   | "floorNumber"
@@ -98,8 +100,8 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
-  { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "other_built_property"] },
-  { field: "builtUpAreaSquareMeters", appliesTo: PROPERTY_TYPES },
+  { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "commercial_plot", "other_built_property"] },
+  { field: "builtUpAreaSquareMeters", appliesTo: PROPERTY_TYPES.filter(type => type !== "commercial_plot") },
   { field: "bathroomCount", appliesTo: ["apartment", "floor", "house", "villa", "office", "shop", "warehouse", "chalet"] },
   { field: "parkingSpaceCount", appliesTo: PROPERTY_TYPES },
   { field: "floorCount", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "chalet"] },
@@ -111,6 +113,7 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "officeCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "elevatorCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "apartmentSubtype", appliesTo: ["apartment"] },
+  { field: "roomCount", appliesTo: ["apartment"] },
   { field: "bedroomCount", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "livingRoomCount", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "floorNumber", appliesTo: ["apartment", "floor", "office", "shop"] },

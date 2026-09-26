@@ -37,6 +37,10 @@ import {
   type BrokerMatchingRunResult,
 } from '@/services/brokerInitiatedMatching';
 import {
+  PropertyInitiatedMatching,
+  type PropertyInitiatedMatchingResult,
+} from '@/services/propertyInitiatedMatching';
+import {
   buildTransientRequirement,
   groupMatchAllResultsByPerson,
   runMatchingForAllRequirements,
@@ -45,7 +49,7 @@ import {
 } from '@/services/matchingUi';
 import type { Person } from '@/services/people';
 
-type MatchingMode = 'saved' | 'quick';
+type MatchingMode = 'saved' | 'quick' | 'property';
 
 const CRITERION_KEYS: Record<MatchCriterion, string> = {
   eligibility: 'matching.criteria.eligibility',
@@ -70,6 +74,13 @@ function scoreLabel(score: number, language: 'en' | 'ar'): string {
   return `${score.toLocaleString(language === 'ar' ? 'ar-KW' : 'en-US', {
     maximumFractionDigits: 2,
   })}%`;
+}
+
+function matchCountLabel(count: number, language: 'en' | 'ar'): string {
+  const localizedCount = count.toLocaleString(language === 'ar' ? 'ar-KW' : 'en-US');
+  return language === 'ar'
+    ? `${localizedCount} مطابقة مؤهلة أو محتملة`
+    : `${localizedCount} qualifying or potential matches`;
 }
 
 function explanationStatusLabel(
@@ -265,11 +276,24 @@ function ResultCard({
           </Text>
         </View>
       </View>
+      {result.potentialMatch ? (
+        <View style={[styles.potentialBox, { backgroundColor: colors.accent }]} testID={`matching-potential-${requirement.id}-${result.propertyId}`}>
+          <Text style={[styles.potentialTitle, { color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+            {language === 'ar' ? 'مطابقة محتملة — تحتاج إلى تأكيد' : 'Potential match — confirmation needed'}
+          </Text>
+          <Text style={[styles.potentialReasons, { color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+            {language === 'ar' ? 'المعلومات المطلوبة للتأكيد: ' : 'Needs confirmation: '}
+            {(result.needsConfirmationReasons ?? []).map(criterion => t(CRITERION_KEYS[criterion])).join(language === 'ar' ? '، ' : ', ')}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={[styles.explanationHeader, { borderTopColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <Feather name="list" size={16} color={colors.turquoise} />
         <Text style={[styles.explanationTitle, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-          {t('matching.results.explanation')}
+          {result.potentialMatch
+            ? language === 'ar' ? 'أسباب المطابقة المحتملة' : 'Why it may match'
+            : t('matching.results.explanation')}
         </Text>
       </View>
       <View style={styles.explanations}>
@@ -304,7 +328,10 @@ function ResultCard({
 }
 
 export default function MatchingScreen() {
-  const { requirementId: requestedRequirementId } = useLocalSearchParams<{ requirementId?: string }>();
+  const {
+    requirementId: requestedRequirementId,
+    propertyId: requestedPropertyId,
+  } = useLocalSearchParams<{ requirementId?: string; propertyId?: string }>();
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
   const router = useRouter();
@@ -333,6 +360,7 @@ export default function MatchingScreen() {
   const [runResult, setRunResult] = useState<BrokerMatchingRunResult | null>(null);
   const [quickRequirement, setQuickRequirement] = useState<SeekerRequirement | null>(null);
   const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
+  const [propertyMatchResult, setPropertyMatchResult] = useState<PropertyInitiatedMatchingResult | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const runGenerationRef = useRef(0);
@@ -356,6 +384,7 @@ export default function MatchingScreen() {
       setRunResult(null);
       setQuickRequirement(null);
       setMatchAllGroups(null);
+      setPropertyMatchResult(null);
       setError('');
       Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
         .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
@@ -363,7 +392,8 @@ export default function MatchingScreen() {
           setRequirements(validMatchingRequirements(loadedRequirements));
           setPeople(loadedPeople);
           setProperties(loadedProperties);
-          if (requestedRequirementId) setMode('saved');
+          if (requestedPropertyId) setMode('property');
+          else if (requestedRequirementId) setMode('saved');
           const firstSeeker = loadedPeople.find(person =>
             person.classifications.includes('seeker'),
           );
@@ -376,7 +406,7 @@ export default function MatchingScreen() {
         active = false;
         runGenerationRef.current += 1;
       };
-    }, [requestedRequirementId, t]),
+    }, [requestedPropertyId, requestedRequirementId, t]),
   );
 
   const clearRun = () => {
@@ -385,6 +415,7 @@ export default function MatchingScreen() {
     setRunResult(null);
     setQuickRequirement(null);
     setMatchAllGroups(null);
+    setPropertyMatchResult(null);
     setError('');
   };
 
@@ -408,8 +439,24 @@ export default function MatchingScreen() {
     const generation = ++runGenerationRef.current;
     setError('');
     setRunResult(null);
+    setMatchAllGroups(null);
+    setPropertyMatchResult(null);
     setLoading(true);
     try {
+      if (mode === 'property') {
+        if (!requestedPropertyId) {
+          setError(language === 'ar'
+            ? 'لم يتم تحديد عقار للمطابقة.'
+            : 'No property was selected for matching.');
+          return;
+        }
+        const result = await new PropertyInitiatedMatching(store, store, store)
+          .runForProperty(requestedPropertyId);
+        if (runGenerationRef.current === generation) {
+          setPropertyMatchResult(result);
+        }
+        return;
+      }
       const candidateSource = new MyPropertiesMatchingSource(store);
       let matching: BrokerInitiatedMatching;
 
@@ -481,6 +528,7 @@ export default function MatchingScreen() {
   };
 
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
+  const reverseLabel = (english: string, arabic: string) => language === 'ar' ? arabic : english;
   const selectedAreas = preferredAreaIds
     .map(id => getAreaById(id))
     .filter((area): area is NonNullable<typeof area> => area !== undefined);
@@ -508,6 +556,19 @@ export default function MatchingScreen() {
         </View>
 
         <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>
+          {requestedPropertyId ? (
+            <TouchableOpacity
+              onPress={() => chooseMode('property')}
+              style={[styles.modeButton, mode === 'property' ? { backgroundColor: colors.card } : null]}
+              testID="matching-mode-property"
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === 'property' }}
+            >
+              <Text style={[styles.modeText, { color: mode === 'property' ? colors.primary : colors.mutedForeground, fontFamily: fonts.semiBold }]}>
+                {reverseLabel('By property', 'حسب العقار')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             onPress={() => chooseMode('saved')}
             style={[styles.modeButton, mode === 'saved' ? { backgroundColor: colors.card } : null]}
@@ -532,7 +593,19 @@ export default function MatchingScreen() {
           </TouchableOpacity>
         </View>
 
-        {mode === 'saved' ? (
+        {mode === 'property' ? (
+          <View testID="matching-property-entry">
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+              {reverseLabel('Find people for this property', 'ابحث عن أشخاص لهذا العقار')}
+            </Text>
+            <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {reverseLabel(
+                'Compare this saved property with valid saved seeker requirements. Reasons and unknown property facts are shown; unknown availability is never assumed.',
+                'قارن هذا العقار المحفوظ بطلبات الباحثين الصالحة. ستظهر أسباب المطابقة والحقائق العقارية غير المعروفة، ولن يُفترض التوفر عند غياب المعلومات.',
+              )}
+            </Text>
+          </View>
+        ) : mode === 'saved' ? (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.saved.matchAllTitle')}
@@ -769,7 +842,9 @@ export default function MatchingScreen() {
         <Button
           title={loading
             ? t('matching.running')
-            : mode === 'saved' ? t('matching.runAll') : t('matching.run')}
+            : mode === 'property'
+              ? reverseLabel('Find matching people', 'ابحث عن الأشخاص المطابقين')
+              : mode === 'saved' ? t('matching.runAll') : t('matching.run')}
           onPress={runMatching}
           loading={loading}
           disabled={loading}
@@ -777,23 +852,138 @@ export default function MatchingScreen() {
           testID="matching-run"
         />
 
-        {matchAllGroups ? (
+        {propertyMatchResult ? (
+          <View style={styles.resultsSection} testID="matching-property-results">
+            <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <View style={styles.resultsCopy}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {reverseLabel('People matching this property', 'الأشخاص المطابقون لهذا العقار')}
+                </Text>
+                <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {matchCountLabel(
+                    propertyMatchResult.groups.reduce((count, group) => count + group.requirementMatches.length, 0),
+                    language,
+                  )}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={clearRun} testID="matching-property-clear" accessibilityRole="button">
+                <Text style={[styles.clearText, { color: colors.primary, fontFamily: fonts.semiBold }]}>
+                  {reverseLabel('Clear', 'مسح')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {propertyMatchResult.groups.length ? propertyMatchResult.groups.map(group => (
+              <View key={group.person.id} style={styles.personGroup} testID={`matching-property-person-${group.person.id}`}>
+                <TouchableOpacity
+                  onPress={() => router.push(`/person/${encodeURIComponent(group.person.id)}`)}
+                  accessibilityRole="button"
+                  testID={`matching-property-person-open-${group.person.id}`}
+                  style={[styles.personHeader, { backgroundColor: colors.accent, borderRadius: colors.cardRadius }]}
+                >
+                  <Text style={[styles.personName, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
+                    {group.person.name}
+                  </Text>
+                  <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
+                </TouchableOpacity>
+                {group.requirementMatches.map(({ requirement, result }) => (
+                  <View
+                    key={requirement.id}
+                    style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}
+                    testID={`matching-property-requirement-${requirement.id}`}
+                  >
+                    <View style={[styles.resultTop, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                      <View style={styles.resultIdentity}>
+                        <Text style={[styles.propertyId, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+                          {t(`matching.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}
+                        </Text>
+                        <Text style={[styles.requirementContext, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+                          {reverseLabel('Saved requirement', 'طلب محفوظ')}
+                        </Text>
+                      </View>
+                      <View style={styles.scoreBlock}>
+                        <Text style={[styles.score, { color: colors.primary, fontFamily: fonts.bold }]}>
+                          {scoreLabel(result.score, language)}
+                        </Text>
+                        <Text style={[styles.resultLabel, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>
+                          {t('matching.results.score')}
+                        </Text>
+                      </View>
+                    </View>
+                    {result.potentialMatch ? (
+                      <View style={[styles.potentialBox, { backgroundColor: colors.accent }]} testID={`matching-property-potential-${requirement.id}`}>
+                        <Text style={[styles.potentialTitle, { color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+                          {reverseLabel('Potential match — confirmation needed', 'مطابقة محتملة — تحتاج إلى تأكيد')}
+                        </Text>
+                        <Text style={[styles.potentialReasons, { color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+                          {reverseLabel('Needs confirmation: ', 'معلومات تحتاج إلى تأكيد: ')}
+                          {(result.needsConfirmationReasons ?? []).map(criterion => t(CRITERION_KEYS[criterion])).join(language === 'ar' ? '، ' : ', ')}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={[styles.explanationHeader, { borderTopColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                      <Feather name="list" size={16} color={colors.turquoise} />
+                      <Text style={[styles.explanationTitle, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+                        {reverseLabel('Reasons and unknowns', 'الأسباب والحقائق غير المعروفة')}
+                      </Text>
+                    </View>
+                    <View style={styles.explanations}>
+                      {result.explanations.map((explanation, index) => {
+                        const color = explanation.status === 'unknown'
+                          ? colors.warning
+                          : explanation.status === 'matched' ? colors.turquoise : colors.mutedForeground;
+                        return (
+                          <View key={`${explanation.criterion}-${index}`} style={[styles.explanationRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                            <View style={[styles.statusDot, { backgroundColor: color }]} />
+                            <Text style={[styles.explanationText, { color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+                              {t(CRITERION_KEYS[explanation.criterion])}: {explanationStatusLabel(explanation.status, t)} · {language === 'ar'
+                                ? explanation.status === 'unknown'
+                                  ? 'لا تتوفر بيانات عقارية مؤكدة لهذا البند.'
+                                  : explanation.status === 'matched'
+                                    ? 'العقار يستوفي هذا البند.'
+                                    : 'العقار لا يستوفي هذا البند.'
+                                : explanation.message}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )) : (
+              <View style={[styles.zeroState, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-property-zero-results">
+                <Feather name="search" size={38} color={colors.mutedForeground} />
+                <Text style={[styles.zeroTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: 'center' }]}>
+                  {reverseLabel('No matching people found', 'لم يتم العثور على أشخاص مطابقين')}
+                </Text>
+                <Text style={[styles.zeroBody, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }]}>
+                  {reverseLabel('No valid saved seeker requirements currently qualify or remain potential for this property.', 'لا توجد حالياً طلبات باحثين محفوظة وصالحة تستوفي الشروط أو تبقى محتملة لهذا العقار.')}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {reverseLabel('Results are temporary and are not saved.', 'النتائج مؤقتة ولا يتم حفظها.')}
+            </Text>
+          </View>
+        ) : null}
+
+        {mode !== 'property' && matchAllGroups ? (
           <View style={styles.resultsSection} testID="matching-results">
             <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <View style={styles.resultsCopy}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.groupedTitle')}
+                  {reverseLabel('Property matches by Person', 'مطابقات العقارات حسب الشخص')}
                 </Text>
                 <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.count').replace(
-                    '{count}',
-                    String(matchAllGroups.reduce(
+                  {matchCountLabel(
+                    matchAllGroups.reduce(
                       (count, group) => count + group.requirementGroups.reduce(
                         (subtotal, item) => subtotal + item.matches.length,
                         0,
                       ),
                       0,
-                    )),
+                    ),
+                    language,
                   )}
                 </Text>
               </View>
@@ -843,15 +1033,15 @@ export default function MatchingScreen() {
               {t('matching.results.transient')}
             </Text>
           </View>
-        ) : runResult && quickRequirement ? (
+        ) : mode !== 'property' && runResult && quickRequirement ? (
           <View style={styles.resultsSection} testID="matching-results">
             <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <View style={styles.resultsCopy}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.title')}
+                  {reverseLabel('Property matches', 'مطابقات العقارات')}
                 </Text>
                 <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.count').replace('{count}', String(runResult.matches.length))}
+                  {matchCountLabel(runResult.matches.length, language)}
                 </Text>
               </View>
               <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
@@ -875,7 +1065,7 @@ export default function MatchingScreen() {
               <View style={[styles.zeroState, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-zero-results">
                 <Feather name="search" size={38} color={colors.mutedForeground} />
                 <Text style={[styles.zeroTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: 'center' }]}>
-                  {t('matching.results.emptyTitle')}
+                  {reverseLabel('No property matches', 'لا توجد مطابقات عقارية')}
                 </Text>
                 <Text style={[styles.zeroBody, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }]}>
                   {t('matching.results.emptyBody')}
@@ -952,6 +1142,9 @@ const styles = StyleSheet.create({
   statusDot: { borderRadius: 4, height: 8, width: 8 },
   explanationText: { flex: 1, fontSize: 13, lineHeight: 18 },
   points: { fontSize: 12 },
+  potentialBox: { borderRadius: 10, gap: 4, marginTop: 12, padding: 10 },
+  potentialTitle: { fontSize: 13, lineHeight: 19 },
+  potentialReasons: { fontSize: 12, lineHeight: 18 },
   zeroState: { alignItems: 'center', borderRadius: 16, borderWidth: 1, gap: 9, paddingHorizontal: 20, paddingVertical: 28 },
   zeroTitle: { fontSize: 17, marginTop: 3 },
   zeroBody: { fontSize: 13, lineHeight: 19, maxWidth: 290 },

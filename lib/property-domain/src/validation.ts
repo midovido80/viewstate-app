@@ -212,6 +212,7 @@ export function validateTypeDetails(
   }
 
   const countFields = [
+    "roomCount",
     "bathroomCount",
     "parkingSpaceCount",
     "floorCount",
@@ -286,6 +287,35 @@ export function validateTypeDetails(
   return issues.length === 0 ? valid(details) : invalid(issues);
 }
 
+export interface StudioStandardWarning {
+  readonly field: "roomCount" | "bathroomCount" | "livingRoomCount";
+  readonly expected: string;
+  readonly actual: number;
+}
+
+/**
+ * Reports explicit departures from the conventional studio layout without
+ * changing or rejecting the user's entered facts. Missing values stay unknown.
+ */
+export function getStudioStandardWarnings(
+  details: TypeDetails | undefined,
+): readonly StudioStandardWarning[] {
+  if (details?.propertyType !== "apartment" || details.apartmentSubtype !== "studio") {
+    return [];
+  }
+  const warnings: StudioStandardWarning[] = [];
+  if (details.roomCount !== undefined && details.roomCount !== 1) {
+    warnings.push({ field: "roomCount", expected: "1", actual: details.roomCount });
+  }
+  if (details.bathroomCount !== undefined && details.bathroomCount !== 1) {
+    warnings.push({ field: "bathroomCount", expected: "1", actual: details.bathroomCount });
+  }
+  if (details.livingRoomCount !== undefined && details.livingRoomCount > 1) {
+    warnings.push({ field: "livingRoomCount", expected: "0 or 1", actual: details.livingRoomCount });
+  }
+  return warnings;
+}
+
 export function validateLocationEnrichment(
   enrichment: LocationEnrichmentMetadata,
 ): ValidationResult<LocationEnrichmentMetadata> {
@@ -294,6 +324,25 @@ export function validateLocationEnrichment(
     ...validateClassifiedLiteralText(enrichment.manualLocationText, ["locationEnrichment", "manualLocationText"], "exact_location", "explicit_per_share"),
     ...validateClassifiedLiteralText(enrichment.mapsLink, ["locationEnrichment", "mapsLink"], "exact_location", "explicit_per_share"),
   ];
+
+  if (enrichment.paciUnitNumbers !== undefined && !Array.isArray(enrichment.paciUnitNumbers)) {
+    issues.push(issue("invalid_identifier", ["locationEnrichment", "paciUnitNumbers"], "PACI unit numbers must be an array."));
+  } else {
+    for (const [index, entry] of (enrichment.paciUnitNumbers ?? []).entries()) {
+      const path = ["locationEnrichment", "paciUnitNumbers", String(index)];
+      if (typeof entry !== "object" || entry === null) {
+        issues.push(issue("invalid_identifier", path, "A PACI unit number must have a unit label and number."));
+        continue;
+      }
+      issues.push(...validateRequiredIdentifier(entry.unitLabel, [...path, "unitLabel"]));
+      issues.push(...validateClassifiedLiteralText(
+        entry.paciNumber,
+        [...path, "paciNumber"],
+        "exact_location",
+        "explicit_per_share",
+      ));
+    }
+  }
 
   if (enrichment.coordinates !== undefined) {
     const { latitude, longitude, privacy } = enrichment.coordinates;

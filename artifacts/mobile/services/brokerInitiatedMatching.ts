@@ -53,10 +53,17 @@ export class BrokerInitiatedMatching {
     const rankedResults = rankMatchResults(
       candidates.map(candidate => evaluateMatch(requirement, candidate)),
     );
+    const eligibleResults = rankedResults.filter(
+      result => result.eligible && (result.qualifies || result.potentialMatch),
+    );
+    const confirmedResults = eligibleResults.filter(result => result.qualifies);
+    const potentialResults = eligibleResults.filter(
+      result => !result.qualifies && result.potentialMatch,
+    );
 
     return {
       requirementId: requirement.id,
-      matches: rankedResults.filter(result => result.eligible && result.qualifies),
+      matches: [...confirmedResults, ...potentialResults],
     };
   }
 }

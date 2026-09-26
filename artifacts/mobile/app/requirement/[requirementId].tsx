@@ -13,6 +13,9 @@ import {
   type RequirementPurpose,
   type ResidentialAmenity,
   type SeekerRequirement,
+  type RequirementConstraintField,
+  type RequirementConstraintStrength,
+  type RequirementConstraintStrengths,
 } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { ChoiceChip } from '@/components/ChoiceChip';
@@ -45,6 +48,12 @@ import {
 import { getRequirementCatalogFields, getRequirementPresentationFields } from '@/services/requirementFieldMap';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
+import {
+  clearRequirementDraftBeforeNavigation,
+  loadRequirementDraft,
+  saveRequirementDraft,
+  type RequirementDraftPayload,
+} from '@/services/requirementDraft';
 
 const RENT_SERVICES = ['swimmingPool', 'gym', 'seaView'] as const;
 const AMENITY_LABELS: Record<string, { en: string; ar: string }> = {
@@ -78,19 +87,24 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
-  const { requirementId, seekerId } = useLocalSearchParams<{ requirementId: string; seekerId?: string }>();
+  const { requirementId, seekerId, draftId: routeDraftId } = useLocalSearchParams<{ requirementId: string; seekerId?: string; draftId?: string }>();
   const editing = requirementId !== 'new';
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, language, isRTL, fonts } = useI18n();
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const ownerFromRoute = Array.isArray(seekerId) ? seekerId[0] : seekerId;
+  const draftFromRoute = Array.isArray(routeDraftId) ? routeDraftId[0] : routeDraftId;
   const scopeKey = editing ? `requirement:${requirementId}` : `requirement:new:${ownerFromRoute ?? 'missing'}`;
   const [baseline, setBaseline] = useState<SeekerRequirement | null>(null);
   const [recordLoaded, setRecordLoaded] = useState(!editing);
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftFeedback, setDraftFeedback] = useState('');
   const [purpose, setPurpose] = useState<RequirementPurpose>('rent');
   const [propertyType, setPropertyType] = useState<PropertyType>('apartment');
   const [floorUse, setFloorUse] = useState<FloorUse | undefined>();
@@ -110,12 +124,16 @@ export default function RequirementEditor() {
   const [amenities, setAmenities] = useState<readonly ResidentialAmenity[]>([]);
   const [excludedAmenities, setExcludedAmenities] = useState<readonly ResidentialAmenity[]>([]);
   const [services, setServices] = useState<string[]>([]);
+  const [poolExcludedDirect, setPoolExcludedDirect] = useState(false);
   const [centralACPreference, setCentralACPreference] = useState<boolean | undefined>();
+  const [constraintStrengths, setConstraintStrengths] = useState<RequirementConstraintStrengths>({});
   const [minimum, setMinimum] = useState('');
   const [maximum, setMaximum] = useState('');
   const [cadence, setCadence] = useState<'monthly' | 'yearly'>('monthly');
   const [notes, setNotes] = useState('');
-  const draftId = useRef(editing ? requirementId : generateDomainId());
+  const draftId = useRef(editing ? requirementId : draftFromRoute ?? generateDomainId());
+  const finalRequirementId = useRef(editing ? requirementId : generateDomainId());
+  const [draftRevision, setDraftRevision] = useState<number | null>(null);
   const saveFlight = useRef(false);
   const confirmedRequirement = useRef<SeekerRequirement | null>(null);
   const uncertainRequirement = useRef<SeekerRequirement | null>(null);
@@ -132,16 +150,84 @@ export default function RequirementEditor() {
     setRecoveryAction(null);
     setSaving(false);
     return () => { routeGeneration.current.advance(); };
-  }, [editing, requirementId, ownerFromRoute]);
+  }, [editing, requirementId, ownerFromRoute, draftFromRoute]);
 
   useEffect(() => {
     setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(0); setInvalidCatalogFields(new Set());
     confirmedRequirement.current = null; uncertainRequirement.current = null; editConflictRequirement.current = null; setRecoveryAction(null);
-    draftId.current = editing ? requirementId : generateDomainId();
+    draftId.current = editing ? requirementId : draftFromRoute ?? generateDomainId();
+    finalRequirementId.current = editing ? requirementId : generateDomainId();
+    setDraftRevision(null);
+    setDraftFeedback('');
     setPurpose('rent'); setPropertyType('apartment'); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
-    setDriverRoom(false); setCatalog([]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
-    if (!editing) return;
+    setDriverRoom(false); setCatalog([]); setAmenities([]); setExcludedAmenities([]); setServices([]); setPoolExcludedDirect(false); setCentralACPreference(undefined); setConstraintStrengths({}); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
+    if (!editing) {
+      if (!draftFromRoute || !ownerFromRoute) return;
+      let cancelled = false;
+      void (async () => {
+        try {
+          const owner = await store.getPerson(ownerFromRoute);
+          if (!owner || !owner.classifications.includes('seeker')) {
+            if (!cancelled) setError(languageRef.current === 'ar' ? 'الشخص المحدد غير صالح.' : 'The selected Person is invalid.');
+            return;
+          }
+          const saved = await loadRequirementDraft(owner.id, draftFromRoute);
+          if (!saved) {
+            if (!cancelled) setError(languageRef.current === 'ar' ? 'لم تعد المسودة متاحة.' : 'This Requirement draft is no longer available.');
+            return;
+          }
+          if (!PROPERTY_TYPES.includes(saved.payload.propertyType as PropertyType)
+              || (saved.payload.floorUse !== undefined && !['residential', 'commercial'].includes(saved.payload.floorUse))) {
+            if (!cancelled) setError(languageRef.current === 'ar' ? 'المسودة تحتوي على نوع عقار غير صالح.' : 'The saved draft contains an invalid property type.');
+            return;
+          }
+          if (cancelled) return;
+          finalRequirementId.current = saved.finalRequirementId;
+          setDraftRevision(saved.revision);
+          setDraftFeedback(languageRef.current === 'ar' ? 'تم استئناف المسودة.' : 'Draft resumed.');
+          setPurpose(saved.payload.purpose);
+          setPropertyType(saved.payload.propertyType as PropertyType);
+          setFloorUse(saved.payload.floorUse as FloorUse | undefined);
+          setAreaMode(saved.payload.areaMode);
+          setAreas([...saved.payload.areaIds]);
+          setBedrooms(saved.payload.bedrooms);
+          setBathrooms(saved.payload.bathrooms);
+          setMasterBedrooms(saved.payload.masterBedrooms);
+          setOccupancy(['family', 'bachelor', 'any'].includes(saved.payload.occupancy ?? '')
+            ? saved.payload.occupancy as RequirementOccupancy
+            : undefined);
+          setLivingRooms(saved.payload.livingRooms);
+          setParking(saved.payload.parking);
+          setFloorNumber(saved.payload.floorNumber);
+          setRequiredArea(saved.payload.requiredArea);
+          setDriverRoom(saved.payload.driverRoom);
+          setCatalog(saved.payload.catalog.filter(value => {
+            if (!value || typeof value !== 'object') return false;
+            const item = value as Record<string, unknown>;
+            return typeof item.field === 'string'
+              && (item.kind === 'feature' && typeof item.value === 'boolean'
+                || item.kind === 'choice' && typeof item.value === 'string'
+                || item.kind === 'number' && typeof item.value === 'number'
+                  && ['exact', 'minimum', 'maximum'].includes(String(item.comparison)));
+          }) as CatalogPreference[]);
+          setAmenities(saved.payload.amenities.filter(value => RESIDENTIAL_AMENITIES.includes(value as ResidentialAmenity)) as ResidentialAmenity[]);
+          setExcludedAmenities(saved.payload.excludedAmenities.filter(value => RESIDENTIAL_AMENITIES.includes(value as ResidentialAmenity)) as ResidentialAmenity[]);
+          setServices([...saved.payload.services]);
+          setPoolExcludedDirect(false);
+          setCentralACPreference(saved.payload.centralACPreference);
+          setConstraintStrengths(Object.fromEntries(Object.entries(saved.payload.constraintStrengths)
+            .filter(([, strength]) => strength === 'required' || strength === 'preferred')) as RequirementConstraintStrengths);
+          setMinimum(saved.payload.minimumBudget);
+          setMaximum(saved.payload.maximumBudget);
+          setCadence(saved.payload.cadence);
+          setNotes(saved.payload.notes);
+        } catch {
+          if (!cancelled) setError(languageRef.current === 'ar' ? 'تعذر تحميل مسودة المتطلب.' : 'The Requirement draft could not be loaded.');
+        }
+      })();
+      return () => { cancelled = true; };
+    }
     let cancelled = false;
     void store.getRequirement(requirementId).then(record => {
       if (cancelled || !record) return;
@@ -154,6 +240,7 @@ export default function RequirementEditor() {
       };
       setPurpose(form.purpose); setPropertyType(form.propertyType); setFloorUse(form.floorUse);
       setAreas([...form.preferredAreaIds]);
+       setConstraintStrengths({ ...(form.constraintStrengths ?? {}) });
       setAreaMode((record as SeekerRequirement & Extension).preferredAreaMode ?? (record.preferredAreaIds.length ? 'specific_areas' : undefined));
       setBedrooms(form.bedroomsMinimum === undefined ? '' : String(form.bedroomsMinimum));
       setBathrooms(form.bathroomsMinimum === undefined ? '' : String(form.bathroomsMinimum));
@@ -162,13 +249,13 @@ export default function RequirementEditor() {
       setDriverRoom((record as SeekerRequirement & Extension).driverRoom === true);
       const legacyMaid = form.catalogPreferences?.some(item => item.field === 'hasMaidRoom' && item.kind === 'feature' && item.value) === true;
       setCatalog((form.catalogPreferences ?? []).filter(item => !['livingRoomCount', 'parkingSpaceCount', 'floorNumber', 'builtUpAreaSquareMeters', 'hasMaidRoom'].includes(item.field)));
-      setAmenities([...(record.preferredAmenities ?? []), ...(legacyMaid ? ['maid_room' as const] : [])]); setServices(RENT_SERVICES.filter(value => form[value] === true)); setCentralACPreference(form.centralAC);
+       setAmenities([...(record.preferredAmenities ?? []), ...(legacyMaid ? ['maid_room' as const] : [])]); setServices(RENT_SERVICES.filter(value => form[value] === true)); setPoolExcludedDirect(form.swimmingPool === false); setCentralACPreference(form.centralAC);
       setExcludedAmenities([...(record as SeekerRequirement & Extension).preferredAmenityExclusions ?? []]);
       setOccupancy(form.occupancy); setCadence(form.rentalPeriodId ?? 'monthly');
       setMinimum(form.minimumBudget === undefined ? '' : String(form.minimumBudget)); setMaximum(form.maximumBudget === undefined ? '' : String(form.maximumBudget)); setNotes(form.notes);
     });
     return () => { cancelled = true; };
-  }, [editing, requirementId, ownerFromRoute]);
+  }, [editing, requirementId, ownerFromRoute, draftFromRoute]);
 
   const catalogWithCore = useMemo(() => {
     const applicable = new Set(getApplicablePropertyFormFields(propertyType, floorUse).map(field => field.field));
@@ -195,11 +282,14 @@ export default function RequirementEditor() {
     const values = {
       purpose, propertyType, preferredAreaIds: areaMode === 'all_kuwait' ? [] : areas, preferredAreaMode: areaMode,
       minimumBudget: min.value, maximumBudget: max.value, currencyCode: MARKET_CONFIG.currencyCode, notes,
+      ...(Object.keys(constraintStrengths).length ? { constraintStrengths: { ...constraintStrengths } } : {}),
       ...(beds.value !== undefined ? { bedroomsMinimum: beds.value } : {}),
       ...(baths.value !== undefined ? { bathroomsMinimum: baths.value } : {}),
       ...(masters.value !== undefined ? { masterBedroomsMinimum: masters.value } : {}),
       ...(purpose === 'rent' ? { rentalPeriodId: cadence, ...(occupancy ? { occupancy } : {}) } : {}),
-      ...(purpose === 'rent' && services.includes('swimmingPool') ? { swimmingPool: true } : {}),
+       ...(purpose === 'rent' && (services.includes('swimmingPool') || poolExcluded)
+         ? { swimmingPool: poolSelected }
+         : {}),
       ...(purpose === 'rent' && services.includes('gym') ? { gym: true } : {}),
       ...(purpose === 'rent' && services.includes('seaView') ? { seaView: true } : {}),
       ...(centralACPreference !== undefined ? { centralAC: centralACPreference } : {}),
@@ -208,9 +298,27 @@ export default function RequirementEditor() {
       ...(catalogWithCore.length ? { catalogPreferences: catalogWithCore } : {}),
       ...(floorUse ? { floorUse } : {}), ...(driverRoom ? { driverRoom: true } : {}),
     } as RequirementFormValues & Extension;
-    const result = buildPersonRequirement(baseline?.id ?? draftId.current, ownerId, values);
+    const result = buildPersonRequirement(baseline?.id ?? finalRequirementId.current, ownerId, values);
     return result.ok ? result : { ok: false as const, message: localizedRequirementIssue(result.issues[0], language) };
   };
+  const chooseConstraintStrength = (
+    field: RequirementConstraintField,
+    strength: RequirementConstraintStrength,
+  ) => setConstraintStrengths(current => ({ ...current, [field]: strength }));
+  const markPreferenceWhenSelected = (field: RequirementConstraintField) =>
+    setConstraintStrengths(current => current[field] !== undefined
+      ? current
+      : { ...current, [field]: 'preferred' });
+  const updateRequirementNumber = (
+    field: 'bedroomsMinimum' | 'bathroomsMinimum',
+    setter: (value: string) => void,
+    value: string,
+  ) => {
+    setter(value);
+    if (value.trim()) markPreferenceWhenSelected(field);
+  };
+  const displayedStrength = (field: RequirementConstraintField): RequirementConstraintStrength =>
+    constraintStrengths[field] ?? (field === 'budget' ? 'required' : 'preferred');
 
   const transitionType = (next: PropertyType) => {
     if (next === propertyType) return;
@@ -268,6 +376,100 @@ export default function RequirementEditor() {
     setError('');
     setStep(value => value + 1);
   };
+  const saveDraftNow = async () => {
+    if (editing || savingDraft || saving) return;
+    const ownerId = ownerFromRoute;
+    if (!ownerId) {
+      setError(t('requirements.invalid_owner'));
+      return;
+    }
+    const generation = routeGeneration.current.capture();
+    const payload: RequirementDraftPayload = {
+      purpose,
+      propertyType,
+      ...(floorUse ? { floorUse } : {}),
+      ...(areaMode ? { areaMode } : {}),
+      areaIds: [...areas],
+      bedrooms,
+      bathrooms,
+      masterBedrooms,
+      ...(occupancy ? { occupancy } : {}),
+      livingRooms,
+      parking,
+      floorNumber,
+      requiredArea,
+      driverRoom,
+      catalog: [...catalogWithCore],
+      amenities: [...amenities],
+      excludedAmenities: [...excludedAmenities],
+      services: [...services],
+      ...(centralACPreference !== undefined ? { centralACPreference } : {}),
+      constraintStrengths: { ...constraintStrengths },
+      minimumBudget: minimum,
+      maximumBudget: maximum,
+      cadence,
+      notes,
+    };
+    setError('');
+    setDraftFeedback('');
+    setSavingDraft(true);
+    try {
+      const owner = await store.getPerson(ownerId);
+      if (!owner || !owner.classifications.includes('seeker')) {
+        if (routeGeneration.current.isCurrent(generation)) {
+          setError(languageRef.current === 'ar' ? 'يجب اختيار شخص مصنف كباحث لحفظ المسودة.' : 'A Person classified as a seeker is required to save this draft.');
+        }
+        return;
+      }
+      const saved = await saveRequirementDraft({
+        ownerId: owner.id,
+        draftId: draftId.current,
+        finalRequirementId: finalRequirementId.current,
+        payload,
+      });
+      if (routeGeneration.current.isCurrent(generation)) {
+        setDraftRevision(saved.revision);
+        setDraftFeedback(languageRef.current === 'ar' ? 'تم حفظ المسودة على هذا الجهاز.' : 'Draft saved on this device.');
+      }
+    } catch {
+      if (routeGeneration.current.isCurrent(generation)) {
+        setError(languageRef.current === 'ar' ? 'تعذر حفظ مسودة المتطلب.' : 'The Requirement draft could not be saved.');
+      }
+    } finally {
+      if (routeGeneration.current.isCurrent(generation)) setSavingDraft(false);
+    }
+  };
+  const clearFinalizedDraft = async (
+    requirement: SeekerRequirement,
+    navigate: () => void | Promise<void>,
+  ) => {
+    const ownerId = ownerFromRoute;
+    const revision = draftRevision;
+    if (editing || !ownerId || requirement.seekerId !== ownerId) {
+      await navigate();
+      return;
+    }
+    try {
+      const result = await clearRequirementDraftBeforeNavigation({
+        ownerId,
+        draftId: draftId.current,
+        expectedRevision: revision,
+        navigate,
+      });
+      if (result === 'cleared') setDraftRevision(null);
+      else if (result === 'changed') setDraftFeedback(languageRef.current === 'ar'
+        ? 'تم حفظ المتطلب مع الاحتفاظ بمسودة أحدث.'
+        : 'Requirement saved; a newer draft was preserved.');
+      else if (result === 'cleanup_failed') setDraftFeedback(languageRef.current === 'ar'
+        ? 'تم حفظ المتطلب، لكن تعذر حذف المسودة.'
+        : 'Requirement saved, but its draft could not be cleared.');
+    } catch {
+      setDraftFeedback(languageRef.current === 'ar'
+        ? 'تم حفظ المتطلب، لكن تعذر فتح تفاصيل الشخص.'
+        : 'Requirement saved, but Person Details could not be opened.');
+      throw new Error('REQUIREMENT_NAVIGATION_FAILED');
+    }
+  };
   const save = async () => {
     if (!tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)) return;
     const generation = routeGeneration.current.capture();
@@ -281,9 +483,13 @@ export default function RequirementEditor() {
         candidate: result.value,
         baseline,
         store,
-        navigate: () => isCurrentRoute()
-          ? router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never)
-          : undefined,
+        navigate: async () => {
+          if (!isCurrentRoute()) return;
+          await clearFinalizedDraft(
+            result.value,
+            () => router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never),
+          );
+        },
       });
       if (isCurrentRoute()) applySaveOutcome(outcome, result.value);
     } finally {
@@ -347,7 +553,10 @@ export default function RequirementEditor() {
     const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
     setSaving(true);
     try {
-      const navigate = () => isCurrentRoute() ? personDetailsNavigation(target) : undefined;
+      const navigate = async () => {
+        if (!isCurrentRoute()) return;
+        await clearFinalizedDraft(target, () => personDetailsNavigation(target));
+      };
       if (recoveryAction === 'navigation') {
         const outcome = await retryRequirementNavigation(navigate);
         if (isCurrentRoute()) applySaveOutcome(outcome, target);
@@ -382,7 +591,10 @@ export default function RequirementEditor() {
     const generation = routeGeneration.current.capture();
     const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
     try {
-      if (isCurrentRoute()) await personDetailsNavigation(target);
+      if (isCurrentRoute()) {
+        if (confirmedRequirement.current) await clearFinalizedDraft(target, () => personDetailsNavigation(target));
+        else await personDetailsNavigation(target);
+      }
     } catch {
       if (isCurrentRoute() && confirmedRequirement.current) {
         setRecoveryAction('navigation');
@@ -415,16 +627,23 @@ export default function RequirementEditor() {
   const applicableCoreFields = new Set(getApplicablePropertyFormFields(propertyType, floorUse).map(field => field.field));
   const catalogDefinitions = getRequirementCatalogFields(propertyType, floorUse);
   const { leading: leadingFields, specifications: otherSpecificationFields, amenities: amenityCatalogFields } = getRequirementPresentationFields(propertyType, floorUse);
+  const strengthLabel = (field: RequirementConstraintField) =>
+    displayedStrength(field) === 'required' ? label('Required', 'مطلوب') : label('Preference', 'تفضيل');
   const showPreferredAmenities = coreApplicable || applicableCoreFields.has('hasCentralAC') || amenityCatalogFields.length > 0;
   const poolCatalogApplies = amenityCatalogFields.includes('hasPool');
   const catalogPool = catalog.find(item => item.field === 'hasPool' && item.kind === 'feature');
   const poolSelected = catalogPool?.kind === 'feature' && catalogPool.value === true || services.includes('swimmingPool');
-  const poolExcluded = catalogPool?.kind === 'feature' && catalogPool.value === false && !services.includes('swimmingPool');
+  const poolExcluded = poolExcludedDirect || catalogPool?.kind === 'feature' && catalogPool.value === false && !services.includes('swimmingPool');
   const togglePool = () => {
     if (catalogPool?.kind === 'feature') {
       setServices(current => current.filter(value => value !== 'swimmingPool'));
+      setPoolExcludedDirect(false);
       setCatalog(current => [...current.filter(item => item.field !== 'hasPool'), ...(catalogPool.value ? [{ field: 'hasPool' as const, kind: 'feature' as const, value: false }] : [])]);
-    } else setServices(current => current.includes('swimmingPool') ? current.filter(value => value !== 'swimmingPool') : [...current, 'swimmingPool']);
+    } else if (poolExcludedDirect) {
+      setPoolExcludedDirect(false);
+    } else {
+      setServices(current => current.includes('swimmingPool') ? current.filter(value => value !== 'swimmingPool') : [...current, 'swimmingPool']);
+    }
   };
   const choiceReviewLines = (fields: readonly string[]) => fields.flatMap(field => catalog.filter((item): item is Extract<CatalogPreference, { kind: 'choice' }> => item.kind === 'choice' && item.field === field)).map(item => {
     const definition = catalogDefinitions.find(value => value.field === item.field);
@@ -435,18 +654,18 @@ export default function RequirementEditor() {
   const coreReviewLines = [
     ...(propertyType === 'floor' && floorUse ? [`${label('Floor use', 'استخدام الدور')}: ${floorUse === 'commercial' ? label('Commercial', 'تجاري') : label('Residential', 'سكني')}`] : []),
     ...choiceReviewLines(leadingFields),
-    ...(coreApplicable ? [`${label('Bedrooms', 'غرف النوم')}: ${bedrooms || '—'}`, `${label('Master bedrooms', 'غرف النوم الرئيسية')}: ${masterBedrooms || '—'}`, `${label('Bathrooms', 'الحمامات')}: ${bathrooms || '—'}`, `${label('Hall', 'صالة')}: ${livingRooms || '—'}`] : []),
+    ...(coreApplicable ? [`${label('Bedrooms', 'غرف النوم')}: ${bedrooms || '—'}${bedrooms.trim() ? ` · ${strengthLabel('bedroomsMinimum')}` : ''}`, `${label('Master bedrooms', 'غرف النوم الرئيسية')}: ${masterBedrooms || '—'}`, `${label('Bathrooms', 'الحمامات')}: ${bathrooms || '—'}${bathrooms.trim() ? ` · ${strengthLabel('bathroomsMinimum')}` : ''}`, `${label('Hall', 'صالة')}: ${livingRooms || '—'}`] : []),
     ...(applicableCoreFields.has('parkingSpaceCount') ? [`${label('Parking', 'موقف')}: ${parking || '—'}`] : []),
     ...(applicableCoreFields.has('floorNumber') ? [`${label('Floor', 'الطابق')}: ${floorNumber || '—'}`] : []),
     ...(applicableCoreFields.has('builtUpAreaSquareMeters') ? [`${label('Area', 'المساحة')}: ${requiredArea || '—'}`] : []),
     ...choiceReviewLines(otherSpecificationFields),
   ];
   const reviewLines = [
-    `${label('Areas', 'المناطق')}: ${areaMode === 'all_kuwait' ? label('All Kuwait', 'كل مناطق الكويت') : areas.map(id => { const area = getAreaById(id); return area ? (language === 'ar' ? area.ar : area.en) : label('Unknown area', 'منطقة غير معروفة'); }).join(', ')}`,
+    `${label('Areas', 'المناطق')}: ${areaMode === 'all_kuwait' ? label('All Kuwait', 'كل مناطق الكويت') : areas.map(id => { const area = getAreaById(id); return area ? (language === 'ar' ? area.ar : area.en) : label('Unknown area', 'منطقة غير معروفة'); }).join(', ')} · ${strengthLabel('preferredAreas')}`,
     ...coreReviewLines,
     ...(purpose === 'rent' && coreApplicable ? [`${label('Occupancy', 'الإشغال')}: ${occupancy ? label(occupancy, occupancy === 'family' ? 'عائلي' : occupancy === 'bachelor' ? 'عزاب' : 'أي') : '—'}`] : []),
     ...(showPreferredAmenities ? [`${label('Preferred amenities', 'المزايا المفضلة')}: ${[...new Set([...amenities, ...(driverRoom ? ['driverRoom'] : []), ...excludedAmenities.map(value => `${value}:excluded`), ...services, ...(centralACPreference !== undefined && applicableCoreFields.has('hasCentralAC') ? [`centralAC${centralACPreference ? '' : ':excluded'}`] : []), ...catalog.filter(item => item.kind === 'feature' && amenityCatalogFields.includes(item.field)).map(item => `${item.field}${item.value ? '' : ':excluded'}`)].map(value => value.endsWith(':excluded') ? `${AMENITY_LABELS[value.slice(0, -9)]?.[language === 'ar' ? 'ar' : 'en'] ?? value.slice(0, -9)} (${label('Must not have', 'يجب ألا تتوفر')})` : AMENITY_LABELS[value]?.[language === 'ar' ? 'ar' : 'en'] ?? (value === 'driverRoom' ? label('Driver room', 'غرفة سائق') : label('Selected amenity', 'ميزة محددة'))))].join(', ') || '—'}`] : []),
-    `${label('Budget', 'الميزانية')}: ${minimum || '—'}–${maximum || '—'} ${MARKET_CONFIG.currencyCode}`,
+    `${label('Budget', 'الميزانية')}: ${minimum || '—'}–${maximum || '—'} ${MARKET_CONFIG.currencyCode} · ${strengthLabel('budget')}`,
     ...(purpose === 'rent' ? [`${label('Cadence', 'الدورية')}: ${cadence === 'yearly' ? label('Yearly', 'سنوياً') : label('Monthly', 'شهرياً')}`] : []),
     ...(notes.trim() ? [`${label('Notes', 'الملاحظات')}: ${notes}`] : []),
   ];
@@ -473,34 +692,53 @@ export default function RequirementEditor() {
          </TouchableOpacity>
        </View>}
      </View> : null}
+      {draftFeedback ? <Text style={{ color: colors.primary }} testID="requirement-draft-feedback">{draftFeedback}</Text> : null}
      {step === 0 && <><Text style={styles.heading}>{t('requirements.purpose')}</Text><View style={styles.wrap}>{(['rent', 'buy'] as const).map(value => <ChoiceChip key={value} label={t(`requirements.purpose.${value}`)} selected={purpose === value} onPress={() => changePurpose(value)} testID={`requirement-purpose-${value}`} role="radio" />)}</View></>}
     {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><View style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</View>{propertyType === 'floor' && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><View style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</View></>}</>}
-    {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
+     {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}<RequirementStrengthControl label={label('Preferred areas', 'المناطق المفضلة')} value={displayedStrength('preferredAreas')} onChange={value => chooseConstraintStrength('preferredAreas', value)} testID="preferredAreas" /></>}
      {step === 3 && <View testID="requirement-core-step">
        <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>
        {leadingFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:leading`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={leadingFields} />}
        {coreApplicable && <>
-         <NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={setBedrooms} testID="requirement-bedrooms-quick-pick" />
+          <NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={value => updateRequirementNumber('bedroomsMinimum', setBedrooms, value)} testID="requirement-bedrooms-quick-pick" />
+          {bedrooms.trim() !== '' && <RequirementStrengthControl label={label('Bedrooms', 'غرف النوم')} value={displayedStrength('bedroomsMinimum')} onChange={value => chooseConstraintStrength('bedroomsMinimum', value)} testID="bedroomsMinimum" />}
          <NumericQuickPick scopeKey={scopeKey} label={label('Master bedrooms', 'غرف النوم الرئيسية')} value={masterBedrooms} onChangeText={setMasterBedrooms} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-master-bedrooms" />
-         <NumericQuickPick scopeKey={scopeKey} label={label('Bathrooms', 'الحمامات')} value={bathrooms} onChangeText={setBathrooms} testID="requirement-bathrooms-quick-pick" />
+          <NumericQuickPick scopeKey={scopeKey} label={label('Bathrooms', 'الحمامات')} value={bathrooms} onChangeText={value => updateRequirementNumber('bathroomsMinimum', setBathrooms, value)} testID="requirement-bathrooms-quick-pick" />
+          {bathrooms.trim() !== '' && <RequirementStrengthControl label={label('Bathrooms', 'الحمامات')} value={displayedStrength('bathroomsMinimum')} onChange={value => chooseConstraintStrength('bathroomsMinimum', value)} testID="bathroomsMinimum" />}
           <NumericQuickPick scopeKey={scopeKey} label={label('Hall', 'صالة')} value={livingRooms} onChangeText={setLivingRooms} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-living-rooms" />
        </>}
         {applicableCoreFields.has('parkingSpaceCount') && <NumericQuickPick scopeKey={scopeKey} label={label('Parking', 'موقف')} value={parking} onChangeText={setParking} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-parking" />}
         {applicableCoreFields.has('floorNumber') && <NumericQuickPick scopeKey={scopeKey} label={label('Floor', 'الطابق')} value={floorNumber} onChangeText={setFloorNumber} testID="requirement-floor-number" />}
         {applicableCoreFields.has('builtUpAreaSquareMeters') && <TextInput value={requiredArea} onChangeText={setRequiredArea} placeholder={label('Required area (m²)', 'المساحة المطلوبة (م²)')} style={styles.input} testID="requirement-required-area" />}
         {otherSpecificationFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:specifications`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={otherSpecificationFields} />}
-        {purpose === 'rent' && coreApplicable && <><Text style={styles.heading}>{label('Occupancy', 'الإشغال')}</Text><View style={styles.wrap}>{(['family', 'bachelor', 'any'] as const).map(value => <ChoiceChip key={value} label={value === 'family' ? label('Family', 'عائلي') : value === 'bachelor' ? label('Bachelor', 'عزاب') : label('Any', 'أي')} selected={occupancy === value} onPress={() => setOccupancy(current => current === value ? undefined : value)} role="radio" />)}</View></>}
+         {purpose === 'rent' && coreApplicable && <><Text style={styles.heading}>{label('Occupancy', 'الإشغال')}</Text><View style={styles.wrap}>{(['family', 'bachelor', 'any'] as const).map(value => <ChoiceChip key={value} label={value === 'family' ? label('Family', 'عائلي') : value === 'bachelor' ? label('Bachelor', 'عزاب') : label('Any', 'أي')} selected={occupancy === value} onPress={() => { setOccupancy(current => current === value ? undefined : value); markPreferenceWhenSelected('occupancy'); }} role="radio" />)}</View>{occupancy !== undefined && <RequirementStrengthControl label={label('Occupancy', 'الإشغال')} value={displayedStrength('occupancy')} onChange={value => chooseConstraintStrength('occupancy', value)} testID="occupancy" />}</>}
         {showPreferredAmenities && <><Text style={styles.heading}>{label('Preferred amenities', 'المزايا المفضلة')}</Text><View style={styles.wrap}>
           {coreApplicable && <ChoiceChip label={`${driverRoom ? '✓ ' : ''}${label('Driver room', 'غرفة سائق')}`} selected={driverRoom} onPress={() => setDriverRoom(value => !value)} testID="requirement-driver-room" role="checkbox" />}
-          {coreApplicable && purpose === 'rent' && RENT_SERVICES.filter(service => service !== 'swimmingPool' || !poolCatalogApplies).map(service => <ChoiceChip key={service} label={`${services.includes(service) ? '✓ ' : ''}${AMENITY_LABELS[service][language === 'ar' ? 'ar' : 'en']}`} selected={services.includes(service)} onPress={() => setServices(current => current.includes(service) ? current.filter(value => value !== service) : [...current, service])} testID={`requirement-service-${service}`} role="checkbox" />)}
-          {coreApplicable && purpose === 'rent' && poolCatalogApplies && <ChoiceChip label={`${poolSelected || poolExcluded ? '✓ ' : ''}${AMENITY_LABELS.swimmingPool[language === 'ar' ? 'ar' : 'en']}${poolExcluded ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={poolSelected || poolExcluded} onPress={togglePool} testID="requirement-service-swimmingPool" role="checkbox" />}
-          {applicableCoreFields.has('hasCentralAC') && <ChoiceChip label={`${centralACPreference !== undefined ? '✓ ' : ''}${AMENITY_LABELS.centralAC[language === 'ar' ? 'ar' : 'en']}${centralACPreference === false ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={centralACPreference !== undefined} onPress={() => setCentralACPreference(current => current === undefined ? true : undefined)} testID="requirement-central-ac" role="checkbox" />}
+           {coreApplicable && purpose === 'rent' && RENT_SERVICES.filter(service => service !== 'swimmingPool' || !poolCatalogApplies).map(service => <View key={service} style={styles.field}><ChoiceChip label={`${services.includes(service) ? '✓ ' : ''}${AMENITY_LABELS[service][language === 'ar' ? 'ar' : 'en']}`} selected={services.includes(service)} onPress={() => { setServices(current => current.includes(service) ? current.filter(value => value !== service) : [...current, service]); markPreferenceWhenSelected(service); }} testID={`requirement-service-${service}`} role="checkbox" />{services.includes(service) && <RequirementStrengthControl label={AMENITY_LABELS[service][language === 'ar' ? 'ar' : 'en']} value={displayedStrength(service)} onChange={value => chooseConstraintStrength(service, value)} testID={service} />}</View>)}
+           {coreApplicable && purpose === 'rent' && poolCatalogApplies && <View style={styles.field}><ChoiceChip label={`${poolSelected || poolExcluded ? '✓ ' : ''}${AMENITY_LABELS.swimmingPool[language === 'ar' ? 'ar' : 'en']}${poolExcluded ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={poolSelected || poolExcluded} onPress={() => { togglePool(); markPreferenceWhenSelected('swimmingPool'); }} testID="requirement-service-swimmingPool" role="checkbox" />{(poolSelected || poolExcluded) && <RequirementStrengthControl label={AMENITY_LABELS.swimmingPool[language === 'ar' ? 'ar' : 'en']} value={displayedStrength('swimmingPool')} onChange={value => chooseConstraintStrength('swimmingPool', value)} testID="swimmingPool" />}</View>}
+           {applicableCoreFields.has('hasCentralAC') && <View style={styles.field}><ChoiceChip label={`${centralACPreference !== undefined ? '✓ ' : ''}${AMENITY_LABELS.centralAC[language === 'ar' ? 'ar' : 'en']}${centralACPreference === false ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={centralACPreference !== undefined} onPress={() => { setCentralACPreference(current => current === undefined ? true : undefined); markPreferenceWhenSelected('centralAC'); }} testID="requirement-central-ac" role="checkbox" />{centralACPreference !== undefined && <RequirementStrengthControl label={AMENITY_LABELS.centralAC[language === 'ar' ? 'ar' : 'en']} value={displayedStrength('centralAC')} onChange={value => chooseConstraintStrength('centralAC', value)} testID="centralAC" />}</View>}
         </View>
         <RequirementCatalogPreferencesProxy propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} amenities={amenities} onAmenitiesChange={setAmenities} excluded={excludedAmenities} onExcludedChange={setExcludedAmenities} showAmenities={coreApplicable} amenityFields={purpose === 'rent' ? amenityCatalogFields.filter(field => field !== 'hasPool') : amenityCatalogFields} /></>}
      </View>}
-    {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <View style={styles.wrap}>{(['monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
+     {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" /><RequirementStrengthControl label={t('requirements.budget')} value={displayedStrength('budget')} onChange={value => chooseConstraintStrength('budget', value)} testID="budget" />{purpose === 'rent' && <View style={styles.wrap}>{(['monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{purpose === 'rent' ? label('Rent', 'إيجار') : label('Buy', 'شراء')} · {t(`propertyType.${propertyType}`)}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}
-   </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={() => { setError(''); setStep(value => value - 1); }} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={!!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
+    </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={() => { setError(''); setStep(value => value - 1); }} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={!!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current || savingDraft} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View>{!editing && <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={() => void saveDraftNow()} disabled={saving || savingDraft} loading={savingDraft} variant="outline" testID="requirement-save-draft" />}</View></KeyboardAvoidingView></View>;
+}
+
+function RequirementStrengthControl({ label, value, onChange, testID }: { label: string; value: RequirementConstraintStrength; onChange: (value: RequirementConstraintStrength) => void; testID: string }) {
+  const colors = useColors();
+  const { fonts, t } = useI18n();
+  return <View style={styles.strengthControl} testID={`requirement-strength-${testID}`}>
+    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{label}: {t('requirements.constraint_strength')}</Text>
+    <View style={styles.wrap}>{(['preferred', 'required'] as const).map(strength => <ChoiceChip
+      key={strength}
+      label={t(`requirements.constraint.${strength}`)}
+      selected={value === strength}
+      onPress={() => onChange(strength)}
+      testID={`requirement-constraint-${testID}-${strength}`}
+      role="radio"
+    />)}</View>
+  </View>;
 }
 
 function RequirementCatalogPreferencesProxy({ propertyType, floorUse, values, onChange, amenities, onAmenitiesChange, excluded, onExcludedChange, showAmenities, amenityFields }: { propertyType: PropertyType; floorUse?: FloorUse; values: readonly CatalogPreference[]; onChange: (values: readonly CatalogPreference[]) => void; amenities: readonly ResidentialAmenity[]; onAmenitiesChange: (values: readonly ResidentialAmenity[]) => void; excluded: readonly ResidentialAmenity[]; onExcludedChange: (values: readonly ResidentialAmenity[]) => void; showAmenities: boolean; amenityFields: readonly CatalogPreference['field'][] }) {
@@ -524,5 +762,5 @@ function RequirementCatalogPreferencesProxy({ propertyType, floorUse, values, on
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 }, body: { flex: 1 }, header: { minHeight: 60, padding: 20, alignItems: 'center', justifyContent: 'space-between' }, title: { fontSize: 19 }, content: { padding: 20, gap: 12 }, heading: { fontSize: 20, marginTop: 6, marginBottom: 8 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, input: { minHeight: 50, borderWidth: 1, borderColor: '#999', borderRadius: 12, paddingHorizontal: 14, marginBottom: 8 }, notes: { minHeight: 110, textAlignVertical: 'top', paddingTop: 12 }, summaryTitle: { fontSize: 17, fontWeight: '700' }, summary: { fontSize: 15, lineHeight: 22 }, recoveryActions: { gap: 10, paddingVertical: 8 }, footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 16 }, actions: { flexDirection: 'row', gap: 10 }, flex: { flex: 1 },
+  container: { flex: 1 }, body: { flex: 1 }, header: { minHeight: 60, padding: 20, alignItems: 'center', justifyContent: 'space-between' }, title: { fontSize: 19 }, content: { padding: 20, gap: 12 }, heading: { fontSize: 20, marginTop: 6, marginBottom: 8 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, strengthControl: { gap: 4, marginVertical: 4 }, field: { gap: 6 }, input: { minHeight: 50, borderWidth: 1, borderColor: '#999', borderRadius: 12, paddingHorizontal: 14, marginBottom: 8 }, notes: { minHeight: 110, textAlignVertical: 'top', paddingTop: 12 }, summaryTitle: { fontSize: 17, fontWeight: '700' }, summary: { fontSize: 15, lineHeight: 22 }, recoveryActions: { gap: 10, paddingVertical: 8 }, footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 16 }, actions: { flexDirection: 'row', gap: 10 }, flex: { flex: 1 },
 });

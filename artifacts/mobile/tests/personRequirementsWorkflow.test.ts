@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { evaluateMatch, normalizeSeekerRequirement, validateSeekerRequirement, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement, parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
+import { createPerson, PERSON_CLASSIFICATIONS, PROPERTY_SOURCE_ROLES, personCanBePropertySource } from '@/services/people';
 import { KUWAIT_GOVERNORATES, searchAreasSorted } from '@/constants/kuwait-areas';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -15,6 +16,96 @@ const basic = {
   currencyCode: 'KWD',
   notes: '  literal broker note  ',
 };
+
+test('Investor is a Person classification, retains other roles, and is not a Property Source role', async () => {
+  assert.ok(PERSON_CLASSIFICATIONS.includes('investor'));
+  assert.equal(PROPERTY_SOURCE_ROLES.includes('investor' as never), false);
+  const person = createPerson({
+    id: 'investor-person',
+    classifications: ['investor', 'seeker', 'broker'],
+    name: 'Investor',
+    displayPhone: '50000000',
+  });
+  assert.deepEqual(person.classifications, ['investor', 'seeker', 'broker']);
+  assert.equal(personCanBePropertySource(person, 'broker'), true);
+  const translations = await readFile('contexts/I18nContext.tsx', 'utf8');
+  assert.match(translations, /'people\.classification\.investor': 'Investor'/);
+  assert.match(translations, /'people\.classification\.investor': 'مستثمر'/);
+});
+
+test('Requirement choices preserve apartment subtype and commercial plot identity with bilingual labels', async () => {
+  for (const subtype of ['studio', 'duplex'] as const) {
+    const requirement = buildPersonRequirement(ID, SEEKER, {
+      ...basic,
+      purpose: 'buy',
+      catalogPreferences: [{ field: 'apartmentSubtype', kind: 'choice', value: subtype }],
+    });
+    assert.equal(requirement.ok, true);
+    assert.equal(requirement.ok && requirement.value.catalogPreferences?.[0]?.value, subtype);
+  }
+  const plot = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'buy',
+    propertyType: 'commercial_plot',
+  });
+  assert.equal(plot.ok, true);
+  if (plot.ok) assert.equal(plot.value.propertyType, 'commercial_plot');
+  const translations = await readFile('contexts/I18nContext.tsx', 'utf8');
+  assert.match(translations, /'propertyType\.commercial_plot': 'Commercial plot'/);
+  assert.match(translations, /'propertyType\.commercial_plot': 'أرض تجارية'/);
+});
+
+test('Requirement strength overrides persist through create, normalize, and edit adapters', async () => {
+  const strengths = {
+    budget: 'preferred',
+    preferredAreas: 'required',
+    bedroomsMinimum: 'required',
+    bathroomsMinimum: 'preferred',
+    occupancy: 'required',
+    swimmingPool: 'required',
+    gym: 'preferred',
+    seaView: 'required',
+    centralAC: 'required',
+  } as const;
+  const created = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'rent',
+    bedroomsMinimum: 2,
+    bathroomsMinimum: 1,
+    occupancy: 'family',
+    swimmingPool: true,
+    gym: true,
+    seaView: true,
+    centralAC: true,
+    constraintStrengths: strengths,
+  });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.deepEqual(created.value.constraintStrengths, strengths);
+  const form = formValuesFromRequirement(created.value);
+  assert.deepEqual(form.constraintStrengths, strengths);
+  const edited = buildPersonRequirement(created.value.id, created.value.seekerId, {
+    ...form,
+    notes: 'edited',
+  });
+  assert.equal(edited.ok, true);
+  if (edited.ok) assert.deepEqual(edited.value.constraintStrengths, strengths);
+
+  const oldRow = normalizeSeekerRequirement({
+    ...created.value,
+    constraintStrengths: undefined,
+  });
+  assert.equal(oldRow.ok, true);
+  if (oldRow.ok) assert.equal('constraintStrengths' in formValuesFromRequirement(oldRow.value), false);
+
+  const editor = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  const translations = await readFile('contexts/I18nContext.tsx', 'utf8');
+  assert.match(editor, /requirement-constraint-\$\{testID\}-\$\{strength\}/);
+  assert.match(editor, /testID="preferredAreas"/);
+  assert.match(editor, /testID="bedroomsMinimum"/);
+  assert.match(translations, /'requirements\.constraint\.required': 'Required'/);
+  assert.match(translations, /'requirements\.constraint\.required': 'مطلوب'/);
+});
 
 test('Person workflow defaults Rent to monthly and excludes cadence from Buy', () => {
   const rent = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', bedroomsMinimum: 2, occupancy: 'any' });
@@ -179,6 +270,32 @@ test('residential amenities preserve missing, explicit empty, canonical order, a
     notes: 'unrelated edit',
   });
   assert.deepEqual(edited.ok ? edited.value.preferredAmenities : null, populated.value.preferredAmenities);
+});
+
+test('reopening a canonical swimming-pool exclusion preserves false through an unrelated edit', async () => {
+  const source = buildPersonRequirement(ID, SEEKER, {
+    ...basic,
+    purpose: 'rent',
+    swimmingPool: false,
+    constraintStrengths: { swimmingPool: 'required' },
+  });
+  assert.equal(source.ok, true);
+  if (!source.ok || source.value.purpose !== 'rent') return;
+  assert.equal(source.value.swimmingPool, false);
+  assert.equal(source.value.catalogPreferences?.some(item => item.field === 'hasPool') ?? false, false);
+
+  const reopened = formValuesFromRequirement(source.value);
+  assert.equal(reopened.swimmingPool, false);
+  const edited = buildPersonRequirement(source.value.id, source.value.seekerId, {
+    ...reopened,
+    notes: 'unrelated edit',
+  });
+  assert.equal(edited.ok && edited.value.purpose === 'rent' ? edited.value.swimmingPool : undefined, false);
+
+  const editor = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  assert.match(editor, /setPoolExcludedDirect\(form\.swimmingPool === false\)/);
+  assert.match(editor, /poolExcludedDirect \|\| catalogPool\?\.kind === 'feature'/);
+  assert.match(editor, /swimmingPool: poolSelected/);
 });
 
 test('residential amenities validate IDs, duplicates, applicability, and remain informational to Matching', () => {

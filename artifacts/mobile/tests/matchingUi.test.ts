@@ -13,6 +13,7 @@ import {
   runMatchingForAllRequirements,
   validMatchingRequirements,
 } from '../services/matchingUi.ts';
+import { PropertyInitiatedMatching } from '../services/propertyInitiatedMatching.ts';
 import { BrokerInitiatedMatching } from '../services/brokerInitiatedMatching.ts';
 import { createPerson } from '../services/people.ts';
 
@@ -305,6 +306,111 @@ test('Match All filters invalid saved Requirements without changing them', () =>
   assert.deepEqual(invalid.preferredAreaIds, ['not-canonical']);
 });
 
+test('property-initiated matching reloads stores and groups ranked eligible results by seeker', async () => {
+  const property = matchingProperty('property-reverse');
+  const first = {
+    id: REQUIREMENT_ID,
+    seekerId: 'person-1',
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: [AREA_ID],
+    budget: { minimum: 500, maximum: 800, currencyCode: 'KWD' },
+    notes: '',
+    bedroomsMinimum: 2,
+    bathroomsMinimum: 1,
+    swimmingPool: true,
+    constraintStrengths: { swimmingPool: 'required' },
+  } as SeekerRequirement;
+  const second = {
+    ...first,
+    id: '66666666-6666-4666-8666-666666666666',
+    preferredAreaIds: ['salmiya', AREA_ID],
+    constraintStrengths: { swimmingPool: 'preferred' as const },
+  };
+  const invalid = { ...first, id: '77777777-7777-4777-8777-777777777777', preferredAreaIds: ['invalid-area'] };
+  const overBudget = {
+    ...first,
+    id: '99999999-9999-4999-8999-999999999999',
+    budget: { minimum: 900, maximum: 1000, currencyCode: 'KWD' },
+  };
+  const people = [
+    createPerson({ id: 'person-1', name: 'Seeker One', displayPhone: '+96550000001', classifications: ['seeker'] }),
+    createPerson({ id: 'person-2', name: 'Not a seeker', displayPhone: '+96550000002', classifications: ['owner'] }),
+  ];
+  let propertyReads = 0;
+  let requirementReads = 0;
+  let peopleReads = 0;
+  const service = new PropertyInitiatedMatching(
+    { getProperty: async () => { propertyReads += 1; return property; } },
+    { getRequirements: async () => { requirementReads += 1; return [first, second, overBudget, invalid, { ...first, id: '88888888-8888-4888-8888-888888888888', seekerId: 'person-2' }]; } },
+    { getPeople: async () => { peopleReads += 1; return people; } },
+  );
+
+  const result = await service.runForProperty(property.core.id);
+  assert.equal(result.property, property);
+  assert.deepEqual([propertyReads, requirementReads, peopleReads], [1, 1, 1]);
+  assert.equal(result.groups.length, 1);
+  assert.equal(result.groups[0]?.person.id, 'person-1');
+  assert.deepEqual(
+    result.groups[0]?.requirementMatches.map(item => item.requirement.id),
+    [second.id, first.id],
+  );
+  const confirmedMatch = result.groups[0]?.requirementMatches[0]?.result;
+  const potentialMatch = result.groups[0]?.requirementMatches[1]?.result;
+  assert.ok(confirmedMatch?.eligible && confirmedMatch.qualifies);
+  assert.ok(potentialMatch?.eligible && !potentialMatch.qualifies && potentialMatch.potentialMatch);
+  assert.deepEqual(potentialMatch?.needsConfirmationReasons, ['swimming_pool']);
+  assert.ok((potentialMatch?.score ?? 0) > (confirmedMatch?.score ?? 100));
+  assert.equal(confirmedMatch?.explanations.find(item => item.criterion === 'bedrooms')?.status, 'matched');
+  assert.equal(confirmedMatch?.explanations.find(item => item.criterion === 'bathrooms')?.status, 'matched');
+  assert.equal(potentialMatch?.explanations.find(item => item.criterion === 'swimming_pool')?.status, 'unknown');
+
+  await service.runForProperty(property.core.id);
+  assert.deepEqual([propertyReads, requirementReads, peopleReads], [2, 2, 2]);
+});
+
+test('property-initiated matching accepts read-compatible legacy area scope only', async () => {
+  const legacy = {
+    id: REQUIREMENT_ID,
+    seekerId: 'person-1',
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: [],
+    budget: { minimum: 500, maximum: 800, currencyCode: 'KWD' },
+    notes: '',
+    bedroomsMinimum: 2,
+  } as SeekerRequirement;
+  const invalidNewRecord = {
+    ...legacy,
+    id: '66666666-6666-4666-8666-666666666666',
+    preferredAreaMode: 'specific_areas',
+  } as SeekerRequirement;
+  const service = new PropertyInitiatedMatching(
+    { getProperty: async () => matchingProperty('property-legacy-scope') },
+    { getRequirements: async () => [legacy, invalidNewRecord] },
+    {
+      getPeople: async () => [
+        createPerson({
+          id: 'person-1',
+          name: 'Seeker One',
+          displayPhone: '+96550000001',
+          classifications: ['seeker'],
+        }),
+      ],
+    },
+  );
+
+  const result = await service.runForProperty('property-legacy-scope');
+
+  assert.equal(result.groups.length, 1);
+  assert.deepEqual(
+    result.groups[0]?.requirementMatches.map(item => item.requirement.id),
+    [legacy.id],
+  );
+  assert.equal(result.groups[0]?.requirementMatches[0]?.requirement.preferredAreaMode, undefined);
+  assert.equal(result.groups[0]?.requirementMatches[0]?.result.eligible, true);
+});
+
 test('wires the manual bilingual M5 tab and transient results without automatic matching', async () => {
   const [screen, tabLayout, i18n] = await Promise.all([
     readFile('app/(tabs)/matching.tsx', 'utf8'),
@@ -324,6 +430,13 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
   assert.match(screen, /runMatchingForAllRequirements/);
   assert.match(screen, /groupMatchAllResultsByPerson/);
+  assert.match(screen, /new PropertyInitiatedMatching\(store, store, store\)/);
+  assert.match(screen, /testID="matching-mode-property"/);
+  assert.match(screen, /testID="matching-property-results"/);
+  assert.match(screen, /Potential match — confirmation needed/);
+  assert.match(screen, /needsConfirmationReasons/);
+  assert.match(screen, /matching-potential-/);
+  assert.match(screen, /matching-property-potential-/);
   assert.match(screen, /runGenerationRef/);
   assert.match(screen, /store\.getProperty\(propertyId\)/);
   assert.match(
@@ -341,6 +454,9 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(i18n, /'matching\.runAll': 'مطابقة الكل'/);
   assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(group\.person\.id\)\}`\)/);
   assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(propertyId\)\}`/);
+  const propertyDetail = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  assert.match(propertyDetail, /property-find-matching-people/);
+  assert.match(propertyDetail, /params: \{ propertyId: property\.core\.id \}/);
 
   const explicitHandler = screen.indexOf('const runMatching = async () =>');
   const firstExecution = screen.indexOf('.runForRequirement(');

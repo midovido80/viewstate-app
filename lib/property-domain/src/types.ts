@@ -9,6 +9,7 @@ export type PropertyType =
   | "shop"
   | "warehouse"
   | "chalet"
+  | "commercial_plot"
   | "other_built_property";
 
 export type PropertyCaptureCategoryId =
@@ -131,6 +132,7 @@ export interface ApartmentTypeDetails {
   readonly propertyType: "apartment";
   readonly builtUpAreaSquareMeters?: number;
   readonly apartmentSubtype?: ApartmentSubtype;
+  readonly roomCount?: number;
   readonly bedroomCount?: number;
   readonly bathroomCount?: number;
   readonly livingRoomCount?: number;
@@ -259,6 +261,11 @@ export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"
   readonly hasWaterfront?: boolean;
 }
 
+export interface CommercialPlotTypeDetails {
+  readonly propertyType: "commercial_plot";
+  readonly plotAreaSquareMeters?: number;
+}
+
 export interface OtherBuiltPropertyTypeDetails {
   readonly propertyType: "other_built_property";
   readonly clarification: ClassifiedLiteralText;
@@ -278,7 +285,8 @@ export type StandardTypeDetails =
   | OfficeTypeDetails
   | ShopTypeDetails
   | WarehouseTypeDetails
-  | ChaletTypeDetails;
+  | ChaletTypeDetails
+  | CommercialPlotTypeDetails;
 
 export type TypeDetails =
   | StandardTypeDetails
@@ -291,12 +299,19 @@ export interface CoordinatesMetadata {
   readonly privacy: PrivacyMetadata;
 }
 
+/** PACI/automated address number attached to a human-readable unit label. */
+export interface PaciUnitNumberMetadata {
+  readonly unitLabel: string;
+  readonly paciNumber: ClassifiedLiteralText;
+}
+
 /**
  * Optional private enrichment. The approved Area reference remains the
  * canonical BASIC location and is never replaced by these values.
  */
 export interface LocationEnrichmentMetadata {
   readonly paciNumber?: ClassifiedLiteralText;
+  readonly paciUnitNumbers?: readonly PaciUnitNumberMetadata[];
   readonly manualLocationText?: ClassifiedLiteralText;
   readonly mapsLink?: ClassifiedLiteralText;
   readonly coordinates?: CoordinatesMetadata;

@@ -110,8 +110,10 @@ export function openRequiredNumericExactEntry(
   const parsed = parseExactIntegerInput(value);
   return {
     ...openNumericExactEntry(value),
-    invalid: parsed.kind !== 'valid'
-      || parsed.value < 6 && !(parsed.value === 0 && quickPickValues.includes(0)),
+    invalid: parsed.kind === 'invalid'
+      || parsed.kind === 'valid'
+        && parsed.value < 6
+        && !(parsed.value === 0 && quickPickValues.includes(0)),
   };
 }
 
@@ -125,8 +127,9 @@ export function resolveExactIntegerInput(
   if (
     parsed.kind === 'invalid'
     || required && (
-      parsed.kind === 'blank'
-      || parsed.value < 6 && !(parsed.kind === 'valid' && parsed.value === 0 && quickPickValues.includes(0))
+      parsed.kind === 'valid'
+      && parsed.value < 6
+      && !(parsed.value === 0 && quickPickValues.includes(0))
     )
   ) {
     return {

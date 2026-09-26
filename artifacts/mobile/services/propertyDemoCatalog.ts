@@ -129,16 +129,35 @@ export const PROPERTY_DEMO_CATALOG: readonly DemoCategoryDefinition[] = [
   },
 ];
 
-// The curated apartment categories cover rent and a sale duplex, but not a
-// standard apartment sale. Keep that canonical Property type available as a
-// generic sale choice rather than mislabeling it as a duplex.
+export function canUseDemoCategoryForTransaction(
+  category: DemoCategoryDefinition,
+  transaction: Transaction | undefined,
+): boolean {
+  if (!transaction || category.transaction === transaction) return true;
+  return (category.id === 'studio_apartment' && transaction === 'sale')
+    || (category.id === 'duplex' && transaction === 'rent');
+}
+
+export function getDemoCategoriesForTransaction(
+  categories: readonly DemoCategoryDefinition[],
+  transaction: Transaction | undefined,
+): DemoCategoryDefinition[] {
+  return categories.filter(category => canUseDemoCategoryForTransaction(category, transaction));
+}
+
+// The presets are transaction-aware. If a canonical type has presets only
+// for the opposite transaction, keep it available as a generic choice.
+// Standard apartment sale remains separately selectable from the duplex
+// preset, and legacy Other remains available only for existing records.
 export function getGenericCaptureTypesForTransaction(
   types: readonly PropertyType[],
   transaction: Transaction | undefined,
 ): PropertyType[] {
+  const categories = getDemoCategoriesForTransaction(PROPERTY_DEMO_CATALOG, transaction);
   return types.filter(type =>
-    !PROPERTY_DEMO_CATALOG.some(category => category.canonicalType === type)
-    || (type === 'apartment' && transaction === 'sale'),
+    type !== 'other_built_property'
+    && (!categories.some(category => category.canonicalType === type)
+      || (type === 'apartment' && transaction === 'sale')),
   );
 }
 
@@ -249,7 +268,7 @@ export function createDemoTransactionTransitionProposal(
     to,
     sourceSnapshot: JSON.stringify({ draft, metadata }),
     affected,
-    clearCategory: !!category && category.transaction !== to,
+    clearCategory: !!category && !canUseDemoCategoryForTransaction(category, to),
   };
 }
 

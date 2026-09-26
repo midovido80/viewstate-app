@@ -24,6 +24,7 @@ export function preserveCaptureOwnershipAndEvidence(details: CaptureDetailValues
     ...(details.areaUnit ? { areaUnit: details.areaUnit } : {}),
     ...(details.nearbyServices ? { nearbyServices: details.nearbyServices } : {}),
     ...(details.manualLocationText ? { manualLocationText: details.manualLocationText } : {}),
+    ...(details.paciUnitNumbers ? { paciUnitNumbers: details.paciUnitNumbers.map(item => ({ ...item })) } : {}),
     ...(details.mapsLink ? { mapsLink: details.mapsLink } : {}),
     ...(details.coordinates ? { coordinates: details.coordinates } : {}),
     ...(details.attachments ? { attachments: details.attachments } : {}),
@@ -48,6 +49,55 @@ export function applyCaptureTransactionDefaults(
 
 export function captureDetailsScopeKey(propertyCoreId?: string): string {
   return `capture:${propertyCoreId ?? 'new'}`;
+}
+
+export function formatCaptureDetailsValidationError(
+  error: unknown,
+  fields: CaptureDetailValues,
+  propertyType: Property['core']['propertyType'],
+  language: 'en' | 'ar',
+): string | null {
+  const message = error instanceof Error ? error.message : '';
+  if (message === 'OTHER_CLARIFICATION_REQUIRED') {
+    return language === 'ar'
+      ? 'أضف توضيحاً لنوع العقار قبل متابعة الحفظ.'
+      : 'Add a clarification for this property type before continuing.';
+  }
+  if (!message.startsWith('INVALID_CAPTURE_DETAILS:')) return null;
+
+  const paths = message.slice('INVALID_CAPTURE_DETAILS:'.length).split(',');
+  const fieldsWithIssues = paths
+    .map(path => {
+      const segments = path.split('.');
+      return segments[segments.length - 1];
+    })
+    .filter((field): field is string => Boolean(field));
+  const apartments = Number(fields.apartmentCount || 0);
+  const shops = Number(fields.shopCount || 0);
+  const offices = Number(fields.officeCount || 0);
+  const units = Number(fields.unitCount || 0);
+  const breakdown = apartments + shops + offices;
+  if (
+    fieldsWithIssues.includes('unitCount')
+    && (propertyType === 'whole_building' || propertyType === 'commercial_complex')
+    && [apartments, shops, offices, units].every(value => Number.isSafeInteger(value) && value >= 0)
+    && breakdown > units
+  ) {
+    const labels = language === 'ar'
+      ? `الشقق ${apartments} + المحلات ${shops} + المكاتب ${offices}`
+      : `apartments ${apartments} + shops ${shops} + offices ${offices}`;
+    return language === 'ar'
+      ? `مجموع التفصيل المعروف (${labels} = ${breakdown}) يتجاوز عدد الوحدات (${units}). زد عدد الوحدات أو صحح أعداد الشقق والمحلات والمكاتب.`
+      : `The known breakdown (${labels} = ${breakdown}) exceeds the unit total (${units}). Increase the unit count or correct the apartment, shop, and office counts.`;
+  }
+
+  const labels = fieldsWithIssues.map(field =>
+    PROPERTY_FORM_CATALOG.find(definition => definition.field === field)?.label[language === 'ar' ? 1 : 0] ?? field,
+  );
+  const uniqueLabels = [...new Set(labels)];
+  return language === 'ar'
+    ? `تحقق من المواصفات التالية وصحح القيم غير المتوافقة: ${uniqueLabels.join('، ')}.`
+    : `Review and correct the invalid or incompatible values for: ${uniqueLabels.join(', ')}.`;
 }
 
 export function buildPropertyWithCaptureDetails(
@@ -110,9 +160,20 @@ export function buildPropertyWithCaptureDetails(
     ...(fields.areaSquareMeters === undefined && baseline.areaSquareMeters !== undefined && baseline.areaUnit === 'square_foot'
       ? { areaSquareMeters: squareFeetToSquareMeters(baseline.areaSquareMeters), areaUnit: 'square_meter' as const }
       : {}),
-    ...((fields.manualLocationText?.trim() || fields.mapsLink?.trim() || fields.coordinates) ? {
+    ...((fields.manualLocationText?.trim() || fields.paciUnitNumbers?.length || fields.mapsLink?.trim() || fields.coordinates) ? {
       locationEnrichment: {
         ...(baseline.locationEnrichment ?? {}),
+        ...(fields.paciUnitNumbers?.length
+          ? {
+            paciUnitNumbers: fields.paciUnitNumbers.map(item => ({
+              unitLabel: item.unitLabel,
+              paciNumber: {
+                value: item.paciNumber,
+                privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
+              },
+            })),
+          }
+          : {}),
         ...(fields.manualLocationText?.trim()
           ? { manualLocationText: optionalClassifiedLiteral(fields.manualLocationText, { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' }) }
           : {}),

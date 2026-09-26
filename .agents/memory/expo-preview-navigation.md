@@ -38,3 +38,9 @@ In Expo web Preview, one browser automation session had silent pointer clicks ev
 **Why:** A Property detail verification reproduced inert pointer clicks after a hard reload and workflow restart; a DOM-dispatched click did open the editor. A later independent direct-origin pass used normal trusted clicks to open Edit, Share, Back, and Maps. The precise cause of the first session's suppressed clicks was not established.
 
 **How to apply:** Prefer an independent browser context and normal in-app entry for acceptance. Inspect event delivery, overlays, and browser focus if pointer input fails; do not blame an iframe or rewrite controls without reproducible Product evidence. Physical-device verification remains separate from web acceptance.
+
+When validating an isolated Android-targeted worktree, a passing local Android bundle export is useful but does not prove APK/device behavior. Do not assume web export is a substitute: Metro may report an unresolved expo-sqlite WASM import even when the installed WASM file exists.
+
+**Why:** A local web export stopped on the WASM import although the file was present; the Android export in the same worktree succeeded. The web resolver failure was not proven to be caused by application code.
+
+**How to apply:** Report Android bundle success and web export failure separately. Investigate web bundling only if web preview is in scope; defer real Android UI acceptance until an approved release APK is exercised.

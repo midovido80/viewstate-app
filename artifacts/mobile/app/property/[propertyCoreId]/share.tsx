@@ -103,7 +103,15 @@ export default function PropertyShareScreen() {
       const builtPreview = buildPropertySharePreview({
         property, selection,
         availableAttachments: (property.attachments ?? []).map(item => ({ id: item.id, propertyCoreId: property.core.id })),
-        privateLocation: { paci: property.locationEnrichment?.paciNumber?.value, manualLocation: property.locationEnrichment?.manualLocationText?.value, mapsLink: property.locationEnrichment?.mapsLink?.value },
+        privateLocation: {
+          paci: property.locationEnrichment?.paciNumber?.value,
+          paciUnitNumbers: property.locationEnrichment?.paciUnitNumbers?.map(item => ({
+            unitLabel: item.unitLabel,
+            paciNumber: item.paciNumber.value,
+          })),
+          manualLocation: property.locationEnrichment?.manualLocationText?.value,
+          mapsLink: property.locationEnrichment?.mapsLink?.value,
+        },
         contacts: contacts.filter(person => !!person.displayPhone).map(person => ({ id: person.id, name: person.name, phone: toEnglishDigits(person.displayPhone) })),
         labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), manualLocation: t('enrich.manual_location'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact') },
         detailLabels: Object.fromEntries(Object.entries(propertyDetailLabels).map(([field, labels]) => [field, labels[language === 'ar' ? 1 : 0]])),
@@ -191,7 +199,7 @@ export default function PropertyShareScreen() {
   const sensitive = [
     ['discloseOwnerSource', shareT('share.owner_source'), !!property.core.ownerSource],
     ['discloseExactLocation', shareT('share.exact_location'), !!property.core.exactLocation],
-    ['disclosePaci', t('enrich.paci'), !!property.locationEnrichment?.paciNumber],
+    ['disclosePaci', t('enrich.paci'), !!property.locationEnrichment?.paciNumber || !!property.locationEnrichment?.paciUnitNumbers?.length],
     ['discloseManualLocation', t('enrich.manual_location'), !!property.locationEnrichment?.manualLocationText],
     ['discloseMapsLink', t('enrich.maps_link'), !!property.locationEnrichment?.mapsLink],
   ] as const;

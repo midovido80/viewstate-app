@@ -3,7 +3,9 @@ import {
   evaluateMatch,
   MATCH_QUALIFICATION_THRESHOLD,
   MATCH_SCORING_WEIGHTS,
+  normalizeSeekerRequirement,
   rankMatchResults,
+  validateSeekerRequirement,
   type MatchingPropertyCandidate,
   type MatchingPropertyEvidence,
   type MatchResult,
@@ -495,6 +497,41 @@ test("Occupancy compatibility and requested services use approved evidence only"
   assert.equal(explanation(onlyRequestedService, "gym")?.possiblePoints, 5);
 });
 
+test("Explicitly false service preferences reward absence and required exclusions reject presence", () => {
+  const preferredAbsence = rentRequirement({
+    swimmingPool: false,
+    gym: true,
+    constraintStrengths: {
+      swimmingPool: "preferred",
+    },
+  });
+  const absent = evaluateMatch(
+    preferredAbsence,
+    candidate(property(), { swimmingPool: false, gym: true }),
+  );
+  assert.equal(absent.eligible, true);
+  assert.equal(explanation(absent, "swimming_pool")?.status, "matched");
+  assert.equal(explanation(absent, "swimming_pool")?.awardedPoints, 2.5);
+
+  const present = evaluateMatch(
+    preferredAbsence,
+    candidate(property(), { swimmingPool: true, gym: true }),
+  );
+  assert.equal(present.eligible, true);
+  assert.equal(explanation(present, "swimming_pool")?.status, "not_met");
+  assert.equal(explanation(present, "swimming_pool")?.awardedPoints, 0);
+
+  const requiredExclusion = evaluateMatch(
+    rentRequirement({
+      swimmingPool: false,
+      constraintStrengths: { swimmingPool: "required" },
+    }),
+    candidate(property(), { swimmingPool: true }),
+  );
+  assert.equal(requiredExclusion.eligible, false);
+  assert.deepEqual(requiredExclusion.failedRequiredCriteria, ["swimming_pool"]);
+});
+
 test("Buy/Sale scoring uses only Budget and Ordered Location", () => {
   const result = evaluateMatch(
     buyRequirement(),
@@ -618,6 +655,129 @@ test("Matching Core is transient and source-neutral", () => {
   assert.equal("persist" in result, false);
   assert.equal("notes" in result, false);
   assert.equal("rentalPeriodId" in result, false);
+});
+
+test("Legacy optional facts stay soft, while a required unknown fact remains a potential match", () => {
+  const legacy = rentRequirement({ bedroomsMinimum: 2 });
+  const withoutBedroomEvidence = candidate(property());
+  const legacyResult = evaluateMatch(legacy, withoutBedroomEvidence);
+  assert.equal(legacyResult.qualifies, true);
+  assert.equal(legacyResult.potentialMatch, undefined);
+
+  const required = rentRequirement({
+    bedroomsMinimum: 2,
+    constraintStrengths: { bedroomsMinimum: "required" },
+  });
+  const potential = evaluateMatch(required, withoutBedroomEvidence);
+  assert.equal(potential.eligible, true);
+  assert.equal(potential.qualifies, false);
+  assert.equal(potential.potentialMatch, true);
+  assert.deepEqual(potential.needsConfirmationReasons, ["bedrooms"]);
+  assert.equal(explanation(potential, "bedrooms")?.code, "required_evidence_unknown");
+  assert.deepEqual(checkMatchEligibility(required, withoutBedroomEvidence).needsConfirmationReasons, ["bedrooms"]);
+});
+
+test("Required unknown evidence is potential only when its optimistic score can qualify", () => {
+  const required = rentRequirement({
+    bedroomsMinimum: 3,
+    bathroomsMinimum: 3,
+    occupancy: "family",
+    swimmingPool: true,
+    gym: true,
+    seaView: true,
+    centralAC: true,
+    constraintStrengths: { bedroomsMinimum: "required" },
+  });
+  const result = evaluateMatch(
+    required,
+    candidate(
+      property({ area: "area-3", typeDetails: { propertyType: "apartment", bathroomCount: 0 } }),
+      {
+        bathrooms: 0,
+        occupancy: "bachelor",
+        swimmingPool: false,
+        gym: false,
+        seaView: false,
+        centralAC: false,
+      },
+    ),
+  );
+  assert.equal(result.score, 58);
+  assert.equal(result.eligible, true);
+  assert.equal(result.qualifies, false);
+  assert.equal(result.needsConfirmationReasons?.includes("bedrooms"), true);
+  assert.equal(result.potentialMatch, undefined);
+});
+
+test("Known required failures exclude a result and identify the structured criterion", () => {
+  const required = rentRequirement({
+    bedroomsMinimum: 2,
+    constraintStrengths: { bedroomsMinimum: "required" },
+  });
+  const result = evaluateMatch(required, candidate(property({ typeDetails: { propertyType: "apartment", bedroomCount: 1 } })));
+  assert.equal(result.eligible, false);
+  assert.equal(result.qualifies, false);
+  assert.deepEqual(result.failedRequiredCriteria, ["bedrooms"]);
+  assert.equal(result.ineligibilityReasons.includes("required_criterion"), true);
+  assert.equal(result.explanations[0].message.includes("bedrooms"), true);
+});
+
+test("Budget and preferred-area strength overrides are explicit and backward-compatible", () => {
+  const oldRequirement = buyRequirement();
+  const outside = candidate(property({
+    propertyType: "villa",
+    transaction: "sale",
+    amount: 250_000,
+    area: "area-outside",
+  }));
+  const oldResult = evaluateMatch(oldRequirement, outside);
+  assert.equal(oldResult.eligible, false);
+  assert.equal(oldResult.ineligibilityReasons.includes("price"), true);
+
+  const preferences = buyRequirement({
+    constraintStrengths: { budget: "preferred", preferredAreas: "preferred" },
+  });
+  const preferredResult = evaluateMatch(preferences, outside);
+  assert.equal(preferredResult.eligible, true);
+  assert.equal(preferredResult.qualifies, false);
+  assert.equal(explanation(preferredResult, "budget")?.status, "not_met");
+
+  const requiredArea = buyRequirement({
+    constraintStrengths: { preferredAreas: "required" },
+  });
+  const outsideRequiredArea = evaluateMatch(requiredArea, outside);
+  assert.equal(outsideRequiredArea.eligible, false);
+  assert.equal(outsideRequiredArea.ineligibilityReasons.includes("location"), true);
+});
+
+test("Constraint strength validation and normalization preserve old rows without rewriting defaults", () => {
+  const legacy = {
+    id: "33333333-3333-4333-8333-333333333333",
+    seekerId: "seeker-1",
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["area-1"],
+    budget: { minimum: 100, maximum: 200, currencyCode: "KWD" },
+    notes: "",
+    bedroomsMinimum: 2,
+  };
+  const oldNormalized = normalizeSeekerRequirement(legacy);
+  assert.equal(oldNormalized.ok, true);
+  if (oldNormalized.ok) assert.equal("constraintStrengths" in oldNormalized.value, false);
+
+  const explicit = {
+    ...legacy,
+    constraintStrengths: { budget: "preferred", preferredAreas: "required", bedroomsMinimum: "required" },
+  };
+  const normalized = normalizeSeekerRequirement(explicit);
+  assert.equal(normalized.ok, true);
+  if (normalized.ok) assert.deepEqual(normalized.value.constraintStrengths, explicit.constraintStrengths);
+  const invalid = validateSeekerRequirement({
+    ...legacy,
+    constraintStrengths: { bedroomCount: "hard" },
+  });
+  assert.equal(invalid.ok, false);
+  if (!invalid.ok) assert.equal(invalid.issues.some(item => item.code === "invalid_constraint_strength"), true);
 });
 
 const failures: string[] = [];

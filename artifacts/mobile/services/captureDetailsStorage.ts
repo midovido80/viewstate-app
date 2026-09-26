@@ -14,6 +14,7 @@ export type CaptureDetailValues = Partial<Record<PropertyDetailField, string>> &
   areaSquareMeters?: number;
   areaUnit?: 'square_meter' | 'square_foot';
   manualLocationText?: string;
+  paciUnitNumbers?: readonly { readonly unitLabel: string; readonly paciNumber: string }[];
   mapsLink?: string;
   coordinates?: CoordinatesMetadata;
   attachments?: readonly PropertyAttachmentMetadata[];

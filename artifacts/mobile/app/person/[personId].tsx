@@ -26,6 +26,7 @@ import {
   PERSON_CLASSIFICATIONS,
   PersonClassification,
   PropertySource,
+  PROPERTY_SOURCE_ROLES,
 } from '@/services/people';
 import {
   inferPhoneCountry,
@@ -35,6 +36,7 @@ import {
 } from '@/services/phoneEntry';
 import { store } from '@/services/persistence';
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
+import { listRequirementDraftsForOwner, type RequirementDraftRecord } from '@/services/requirementDraft';
 
 export default function PersonDetailScreen() {
   const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string }>();
@@ -45,6 +47,8 @@ export default function PersonDetailScreen() {
   const { t, language, isRTL, fonts } = useI18n();
   const [person, setPerson] = useState<Person | null>(null);
   const [requirements, setRequirements] = useState<SeekerRequirement[]>([]);
+  const [requirementDrafts, setRequirementDrafts] = useState<RequirementDraftRecord[]>([]);
+  const [requirementDraftError, setRequirementDraftError] = useState(false);
   const [linked, setLinked] = useState<Property[]>([]);
   const [sourced, setSourced] = useState<{ source: PropertySource; property: Property }[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -62,7 +66,7 @@ export default function PersonDetailScreen() {
   const [busy, setBusy] = useState(false);
   const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
   const [requirementReturnGuard, setRequirementReturnGuard] = useState(params.requirementSaved === '1');
-  const sourceRoles = PERSON_CLASSIFICATIONS.filter((value): value is PropertySource['role'] => value !== 'seeker' && person?.classifications.includes(value) === true);
+  const sourceRoles = PROPERTY_SOURCE_ROLES.filter(value => person?.classifications.includes(value) === true);
 
   useEffect(() => {
     if (params.requirementSaved !== '1') return;
@@ -88,10 +92,21 @@ export default function PersonDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id) return;
+    setRequirementDrafts([]);
+    setRequirementDraftError(false);
     try {
       const saved = await store.getPerson(id);
       setPerson(saved);
       if (!saved) return;
+      setRequirementDrafts([]);
+      setRequirementDraftError(false);
+      if (saved.classifications.includes('seeker')) {
+        try {
+          setRequirementDrafts(await listRequirementDraftsForOwner(saved.id));
+        } catch {
+          setRequirementDraftError(true);
+        }
+      }
       const [links, sources, ownedRequirements] = await Promise.all([
         store.getLinksForPerson(id),
         store.getPropertySourcesForPerson(id),
@@ -388,6 +403,15 @@ export default function PersonDetailScreen() {
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
               {person.classifications.includes('seeker') && params.saved !== '1' ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" accessibilityRole="button" style={[styles.addRequirementButton, { borderColor: colors.primary }]}><Text style={[styles.addRequirementText, { color: colors.primary, fontFamily: fonts.semiBold }]}>{t('requirements.add')}</Text></TouchableOpacity> : null}
             </View>
+            {requirementDraftError ? <Text style={{ color: colors.destructive, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'تعذر تحميل مسودات المتطلبات.' : 'Requirement drafts could not be loaded.'}</Text> : null}
+            {requirementDrafts.map(draft => <View key={draft.draftId} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-draft-${draft.draftId}`}>
+              <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'مسودة متطلب غير مكتملة' : 'Incomplete Requirement draft'}</Text>
+              <Button
+                title={language === 'ar' ? 'استئناف المسودة' : 'Resume draft'}
+                onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id, draftId: draft.draftId } } as never)}
+                testID={`person-resume-requirement-draft-${draft.draftId}`}
+              />
+            </View>)}
             {!person.classifications.includes('seeker') ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.seeker_required')}</Text> : requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
               <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}</Text>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>

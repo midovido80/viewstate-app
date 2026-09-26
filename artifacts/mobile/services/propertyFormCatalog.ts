@@ -35,6 +35,7 @@ const LABELS: Record<string, readonly [string, string]> = {
   officeCount: ['Offices', 'عدد المكاتب'],
   elevatorCount: ['Elevators', 'عدد المصاعد'],
   apartmentSubtype: ['Apartment subtype', 'نوع الشقة'],
+  roomCount: ['Rooms', 'عدد الغرف'],
   bedroomCount: ['Bedrooms', 'غرف النوم'],
   livingRoomCount: ['Number of halls', 'عدد الصالات'],
   floorNumber: ['Floor number', 'رقم الدور'],
@@ -62,7 +63,7 @@ const LABELS: Record<string, readonly [string, string]> = {
 };
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
-  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'roomCount', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',

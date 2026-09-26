@@ -995,7 +995,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       )}
 
-      <ScrollView contentContainerStyle={mode === 'detail' ? { paddingBottom: 100 } : styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={mode === 'detail' ? { paddingBottom: Math.max(insets.bottom, 16) + 130 } : styles.content} keyboardShouldPersistTaps="handled">
         {error ? <Text testID="property-edit-error" style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}>{error}</Text> : null}
         {pendingOperation && (recoveryStatus === 'retry_required' || recoveryStatus === 'update_failed') ? (
           <Button title={t('edit.retry_update')} onPress={() => void retryRecovery(true)} loading={saving} testID="property-update-retry" />
@@ -1415,6 +1415,54 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               style={[styles.input, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-private-notes"
             />
+            {[
+              'whole_building', 'commercial_complex', 'apartment', 'floor', 'house', 'villa',
+              'office', 'shop', 'warehouse', 'commercial_plot',
+            ].includes(choices.propertyType) ? (
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('enrich.paci_unit_numbers')}</Text>
+                {(choices.paciUnitNumbers ?? []).map((item, index) => (
+                  <View key={`edit-paci-unit-${index}`} style={{ gap: 6 }}>
+                    <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('enrich.paci_unit_label')}</Text>
+                    <TextInput
+                      value={item.unitLabel}
+                      onChangeText={value => updateChoices(current => ({
+                        paciUnitNumbers: (current.paciUnitNumbers ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, unitLabel: value } : row),
+                      }))}
+                      style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                      testID={`property-edit-paci-unit-label-${index}`}
+                    />
+                    <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('enrich.paci_unit_number')}</Text>
+                    <TextInput
+                      value={item.paciNumber}
+                      onChangeText={value => updateChoices(current => ({
+                        paciUnitNumbers: (current.paciUnitNumbers ?? []).map((row, rowIndex) => rowIndex === index ? { ...row, paciNumber: value } : row),
+                      }))}
+                      style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: 'left', writingDirection: 'ltr' }]}
+                      testID={`property-edit-paci-unit-number-${index}`}
+                    />
+                    <TouchableOpacity
+                      onPress={() => updateChoices(current => ({
+                        paciUnitNumbers: (current.paciUnitNumbers ?? []).filter((_, rowIndex) => rowIndex !== index),
+                      }))}
+                      accessibilityRole="button"
+                      testID={`property-edit-paci-unit-remove-${index}`}
+                    >
+                      <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.remove_paci_unit_number')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity
+                  onPress={() => updateChoices(current => ({
+                    paciUnitNumbers: [...(current.paciUnitNumbers ?? []), { unitLabel: '', paciNumber: '' }],
+                  }))}
+                  accessibilityRole="button"
+                  testID="property-edit-paci-unit-add"
+                >
+                  <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.add_paci_unit_number')}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.paci')}</Text>
             <TextInput
               value={choices.paciNumber ?? ''}
@@ -1443,9 +1491,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.current_location')}</Text>
             </TouchableOpacity>
             {choices.coordinates ? (
-              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
-                {`${choices.coordinates.latitude}, ${choices.coordinates.longitude}`}
-              </Text>
+              <CoordinatesDisplay coordinates={choices.coordinates} />
             ) : null}
             <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <TouchableOpacity onPress={() => void addMedia()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-add-media">
@@ -1694,7 +1740,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       </Modal>
 
       {mode === 'detail' && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }}>
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 12, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border, gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/matching', params: { propertyId: property.core.id } } as never)}
+            accessibilityRole="button"
+            testID="property-find-matching-people"
+            style={{ backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 11, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 9 }}
+          >
+            <Feather name="users" size={18} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontFamily: fonts.bold, fontSize: 15 }}>
+              {language === 'ar' ? 'ابحث عن أشخاص لهذا العقار' : 'Find matching people'}
+            </Text>
+          </TouchableOpacity>
+          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }}>
           {Platform.OS === 'web' ? (
             <Link
               href={getPropertyDetailActionHref(property.core.id, 'share') as never}
@@ -1735,6 +1793,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </Text>
             </TouchableOpacity>
           )}
+          </View>
         </View>
       )}
     </View>
@@ -1745,6 +1804,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
         <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{label}</Text>
         <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{value}</Text>
+      </View>
+    );
+  }
+
+  function CoordinatesDisplay({ coordinates }: { coordinates: { latitude: number; longitude: number } }) {
+    return (
+      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 12 }}>
+        <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, writingDirection: isRTL ? 'rtl' : 'ltr' }}>
+          {t('enrich.latitude')}: <Text style={{ color: colors.foreground, writingDirection: 'ltr' }}>{coordinates.latitude}</Text>
+        </Text>
+        <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, writingDirection: isRTL ? 'rtl' : 'ltr' }}>
+          {t('enrich.longitude')}: <Text style={{ color: colors.foreground, writingDirection: 'ltr' }}>{coordinates.longitude}</Text>
+        </Text>
       </View>
     );
   }

@@ -10,6 +10,7 @@ import {
   type CatalogPreference,
   type FloorUse,
   type RequirementAreaMode,
+  type RequirementConstraintStrengths,
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 
@@ -21,6 +22,7 @@ export interface RequirementFormValues {
   readonly minimumBudget?: number;
   readonly maximumBudget?: number;
   readonly currencyCode: string;
+  readonly constraintStrengths?: RequirementConstraintStrengths;
   readonly notes: string;
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
@@ -112,6 +114,9 @@ export function buildPersonRequirement(
       maximum: values.maximumBudget,
       currencyCode: values.currencyCode,
     },
+    ...(values.constraintStrengths !== undefined
+      ? { constraintStrengths: { ...values.constraintStrengths } }
+      : {}),
     notes: values.notes,
     ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
     ...(values.bathroomsMinimum !== undefined ? { bathroomsMinimum: values.bathroomsMinimum } : {}),
@@ -158,6 +163,9 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     minimumBudget: requirement.budget.minimum,
     maximumBudget: requirement.budget.maximum,
     currencyCode: requirement.budget.currencyCode,
+    ...(requirement.constraintStrengths !== undefined
+      ? { constraintStrengths: { ...requirement.constraintStrengths } }
+      : {}),
     notes: requirement.notes,
     ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
     ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),

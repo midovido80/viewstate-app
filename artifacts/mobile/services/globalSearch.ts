@@ -8,6 +8,7 @@ const classificationLabels: Record<PersonClassification, readonly string[]> = {
   broker: ['broker', 'دلال'],
   real_estate_company: ['real estate company', 'شركة عقارية'],
   building_guard: ['building guard', 'حارس'],
+  investor: ['investor', 'مستثمر'],
 };
 
 const propertyTypeLabels: Record<PropertyType, readonly string[]> = {
@@ -21,6 +22,7 @@ const propertyTypeLabels: Record<PropertyType, readonly string[]> = {
   shop: ['shop', 'محل'],
   warehouse: ['warehouse', 'مستودع'],
   chalet: ['chalet', 'شاليه'],
+  commercial_plot: ['commercial plot', 'أرض تجارية'],
   other_built_property: ['other', 'أخرى'],
 };
 

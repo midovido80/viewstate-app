@@ -53,8 +53,17 @@ export function NumericQuickPick({
   const { expanded, pending, invalid } = visibleState;
 
   const parsedValue = parseExactIntegerInput(value);
-  const exactActionLabel = language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
+  const exactActionLabel = requireExactValue
+    ? quickPickValues.includes(0)
+      ? language === 'ar' ? 'إدخال قيمة دقيقة (٠ أو ٦ فأكثر)' : 'Enter exact value (0 or 6+)'
+      : language === 'ar' ? 'إدخال قيمة دقيقة (٦ أو أكثر)' : 'Enter exact value (6 or more)'
+    : language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
   const exactInputLabel = language === 'ar' ? `${label}: قيمة دقيقة` : `${label}: exact value`;
+  const exactInputHint = requireExactValue
+    ? quickPickValues.includes(0)
+      ? language === 'ar' ? 'أدخل ٠ أو عدداً صحيحاً لا يقل عن ٦، أو اتركه فارغاً للمسح.' : 'Enter 0 or a whole number of 6 or more, or leave blank to clear.'
+      : language === 'ar' ? 'أدخل عدداً صحيحاً لا يقل عن ٦، أو اتركه فارغاً للمسح.' : 'Enter a whole number of 6 or more, or leave blank to clear.'
+    : null;
   const invalidLabel = requireExactValue
     ? quickPickValues.includes(0)
       ? language === 'ar' ? 'أدخل ٠ أو عددًا صحيحًا لا يقل عن ٦' : 'Enter 0 or a whole number of 6 or more'
@@ -94,7 +103,7 @@ export function NumericQuickPick({
         ))}
         <ChoiceChip
           label="+6"
-          accessibilityLabel={language === 'ar' ? 'إدخال قيمة دقيقة ستة أو أكثر' : 'Enter an exact value of six or more'}
+          accessibilityLabel={exactActionLabel}
           selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
           onPress={() => {
             const transition = requireExactValue
@@ -162,6 +171,11 @@ export function NumericQuickPick({
             ]}
             testID={`${testID}-exact-input`}
           />
+          {exactInputHint && !invalid ? (
+            <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {exactInputHint}
+            </Text>
+          ) : null}
           {invalid ? (
             <Text
               accessibilityRole="alert"
@@ -209,6 +223,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   error: {
+    fontSize: 13,
+  },
+  hint: {
     fontSize: 13,
   },
 });

@@ -7,7 +7,7 @@ import {
   isDemoFeatureSuppressed,
   writeCanonicalArea,
 } from '../services/propertyFactProjection';
-import { buildPropertyUpdateCandidate, createEditDraft, migratePropertyEditDraft, createPropertyUpdateOperation, executePropertyUpdateRecovery } from '../services/propertyUpdateRecovery';
+import { buildPropertyUpdateCandidate, createEditDraft, loadPropertyEditDraft, loadPropertyUpdateOperation, migratePropertyEditDraft, createPropertyUpdateOperation, executePropertyUpdateRecovery, persistPropertyUpdateOperation, savePropertyEditDraft } from '../services/propertyUpdateRecovery';
 
 const property = (overrides: Partial<Property> = {}) => ({
   core: {
@@ -211,6 +211,90 @@ test('modern edit candidate preserves enrichment privacy, attachment metadata, a
   assert.equal(candidate.locationEnrichment?.paciNumber?.privacy.disclosurePolicy, 'explicit_per_share');
   assert.equal(candidate.attachments?.[0].id, 'attachment-1');
   assert.equal(candidate.attachments?.[0].managedUri, 'file:///cover.jpg');
+});
+
+test('PACI unit labels hydrate, persist across edit reopen, and preserve exact-location privacy through update recovery', async () => {
+  const baseline = property({
+    core: { id: 'paci-unit-property', propertyType: 'whole_building', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'paci-unit-offer',
+      propertyCoreId: 'paci-unit-property',
+      transaction: 'rent',
+      rentalPrice: { amount: 100, currencyCode: 'KWD' },
+      rentalPeriodId: 'monthly',
+    },
+    locationEnrichment: {
+      paciNumber: { value: 'LEGACY-PACI', privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' } },
+      paciUnitNumbers: [{
+        unitLabel: 'Block A · Floor 2 · Unit 4',
+        paciNumber: { value: 'UNIT-PACI-4', privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' } },
+      }],
+    },
+  });
+  const draft = createEditDraft(baseline);
+  assert.deepEqual(draft.choices.paciUnitNumbers, [{
+    unitLabel: 'Block A · Floor 2 · Unit 4',
+    paciNumber: 'UNIT-PACI-4',
+  }]);
+
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: async (key: string) => values.get(key) ?? null,
+    setItem: async (key: string, value: string) => { values.set(key, value); },
+    removeItem: async (key: string) => { values.delete(key); },
+  };
+  assert.equal(await savePropertyEditDraft(draft, null, storage), true);
+  const reopened = await loadPropertyEditDraft(baseline.core.id, storage);
+  assert.deepEqual(reopened?.choices.paciUnitNumbers, draft.choices.paciUnitNumbers);
+
+  const candidate = buildPropertyUpdateCandidate(baseline, {
+    ...reopened!.choices,
+    paciUnitNumbers: [
+      ...reopened!.choices.paciUnitNumbers!,
+      { unitLabel: 'Shop 1', paciNumber: 'UNIT-PACI-SHOP-1' },
+    ],
+  });
+  assert.equal(candidate.locationEnrichment?.paciNumber?.value, 'LEGACY-PACI');
+  assert.deepEqual(candidate.locationEnrichment?.paciUnitNumbers?.map(item => [item.unitLabel, item.paciNumber.value]), [
+    ['Block A · Floor 2 · Unit 4', 'UNIT-PACI-4'],
+    ['Shop 1', 'UNIT-PACI-SHOP-1'],
+  ]);
+  const removed = buildPropertyUpdateCandidate(baseline, {
+    ...reopened!.choices,
+    paciUnitNumbers: [],
+  });
+  assert.equal(removed.locationEnrichment?.paciUnitNumbers, undefined);
+  assert.equal(removed.locationEnrichment?.paciNumber?.value, 'LEGACY-PACI');
+  assert.ok(candidate.locationEnrichment?.paciUnitNumbers?.every(item =>
+    item.paciNumber.privacy.classification === 'exact_location'
+      && item.paciNumber.privacy.disclosurePolicy === 'explicit_per_share'));
+  const operation = createPropertyUpdateOperation({
+    operationId: 'paci-unit-update',
+    baseline,
+    candidate,
+    draftSnapshot: reopened!,
+    preparedAt: '2025-01-01T00:00:00.000Z',
+  });
+  await persistPropertyUpdateOperation(operation, storage);
+  const recoveredCandidates: Property[] = [];
+  const recovered = await executePropertyUpdateRecovery({
+    operation: (await loadPropertyUpdateOperation(storage))!,
+    allowUpdate: true,
+    getProperty: async () => baseline,
+    compareAndUpdate: async (_current, next) => {
+      recoveredCandidates.push(next);
+      return true;
+    },
+    storage,
+  });
+  assert.equal(recovered.status, 'complete');
+  assert.deepEqual(recoveredCandidates[0]?.locationEnrichment?.paciUnitNumbers?.map(item => item.paciNumber.value), [
+    'UNIT-PACI-4',
+    'UNIT-PACI-SHOP-1',
+  ]);
+  const legacyChoices = { ...draft.choices };
+  delete legacyChoices.paciUnitNumbers;
+  assert.equal(migratePropertyEditDraft({ ...draft, choices: legacyChoices }).choices.paciUnitNumbers?.length, 1);
 });
 
 test('legacy edit drafts migrate without deleting untouched enrichment or attachments', () => {

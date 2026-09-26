@@ -189,6 +189,7 @@ test('Bounded People model preserves literal fields and normalized phone search'
     'broker',
     'real_estate_company',
     'building_guard',
+    'investor',
   ]);
   const person = createPerson({
     id: 'person-stable-1',
@@ -1302,6 +1303,32 @@ test('Explicit retry saves once, then performs guarded cleanup', async () => {
   assert.equal(cleanups, 1);
 });
 
+test('Property save is not confirmed without a successful storage readback', async () => {
+  const operation = newRecoveryOperation();
+  let reads = 0;
+  let saves = 0;
+  let cleanups = 0;
+  let clears = 0;
+  const result = await executePropertySaveRecovery({
+    operation,
+    allowSave: true,
+    getProperties: async () => {
+      reads += 1;
+      return [];
+    },
+    saveProperty: async () => { saves += 1; },
+    getDraft: () => recoveryDraft,
+    cleanupDraft: async () => { cleanups += 1; return 'replaced'; },
+    clearOperation: async () => { clears += 1; return true; },
+  });
+
+  assert.equal(result.status, 'save_failed');
+  assert.equal(reads, 2, 'the target must be read back after save');
+  assert.equal(saves, 1);
+  assert.equal(cleanups, 0, 'unconfirmed saves must retain the draft');
+  assert.equal(clears, 0, 'unconfirmed saves must retain the recovery operation');
+});
+
 test('Restart after confirmed save retries cleanup only and never saves twice', async () => {
   const storage = new RecoveryMemoryStorage();
   await persistPropertySaveOperation(storage, newRecoveryOperation());
@@ -2285,10 +2312,10 @@ test('Task 6 static/source assertions: native atomic CAS/shared queue and web ex
 });
 
 test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, and sale/rent compatibility', () => {
-  assert.equal(PROPERTY_TYPES.length, 11);
+  assert.equal(PROPERTY_TYPES.length, 12);
   const residentialAmenities = ['hasMaidRoom', 'hasHeating', 'hasBalcony', 'hasLaundryRoom', 'hasSolarHeater', 'hasElevator', 'hasGarden', 'hasSecurityGuard', 'hasBBQArea'] as const;
   const exactFields = {
-    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasCentralAC'],
+    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'roomCount', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasCentralAC'],
     house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
     villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
     chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront', 'hasCentralAC'],
@@ -2299,6 +2326,7 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
      whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'hasCentralAC'],
      commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'frontageWidthMeters', 'hasCentralAC'],
     warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage', 'hasCentralAC'],
+    commercial_plot: ['plotAreaSquareMeters', 'parkingSpaceCount'],
     other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification', 'hasCentralAC'],
   } as const;
   const fieldsFor = (propertyType: Property['core']['propertyType'], floorUse?: 'residential' | 'commercial') =>
@@ -2314,7 +2342,7 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   assert.deepEqual(fieldsFor('floor', 'commercial'), [...exactFields.floor_commercial].sort());
   assert.deepEqual(FURNISHING_VALUES, ['unfurnished', 'semi_furnished', 'furnished']);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('constructionYear' as never)), false);
-  assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('roomCount' as never)), false);
+   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('roomCount' as never)), true);
 
   const normal = (value: string) => createLiteralText(value, createPrivacyMetadata('normal', 'normal'));
   const enrichedByType: Record<string, Property['typeDetails']> = {
@@ -2328,6 +2356,7 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
     whole_building: { propertyType: 'whole_building', plotAreaSquareMeters: 800, builtUpAreaSquareMeters: 1500, floorCount: 5, unitCount: 20, apartmentCount: 12, shopCount: 4, officeCount: 4, elevatorCount: 2, parkingSpaceCount: 20 },
     commercial_complex: { propertyType: 'commercial_complex', plotAreaSquareMeters: 2000, builtUpAreaSquareMeters: 3500, floorCount: 4, unitCount: 30, apartmentCount: 0, shopCount: 20, officeCount: 10, elevatorCount: 4, parkingSpaceCount: 60 },
     warehouse: { propertyType: 'warehouse', plotAreaSquareMeters: 1500, builtUpAreaSquareMeters: 1200, bathroomCount: 2, intendedUse: normal('Distribution'), commercialActivity: normal('Food logistics'), parkingSpaceCount: 8, ceilingHeightMeters: 9, loadingBayCount: 4, hasColdStorage: true },
+     commercial_plot: { propertyType: 'commercial_plot', plotAreaSquareMeters: 500 },
     other_built_property: { propertyType: 'other_built_property', clarification: normal('  Special mixed-use shell  '), plotAreaSquareMeters: 700, builtUpAreaSquareMeters: 450, parkingSpaceCount: 5 },
   };
   for (const propertyType of PROPERTY_TYPES) {
@@ -2442,8 +2471,8 @@ test('V001 injected adapters preserve attachment metadata sequencing and nonbloc
   }).ok, 'location enrichment failure cannot block BASIC finalization');
 });
 
-test('V001 People synthetic model has five classifications, independent links, search seams, and URL actions', async () => {
-  assert.equal(PERSON_CLASSIFICATIONS.length, 5);
+test('V001 People synthetic model has six classifications, independent links, search seams, and URL actions', async () => {
+  assert.equal(PERSON_CLASSIFICATIONS.length, 6);
   const imported = createPerson({
     id: 'v001-imported-person', name: 'Imported أحمد', displayPhone: '+965 5000 0001',
     notes: 'imported contact', classifications: ['owner', 'broker'],

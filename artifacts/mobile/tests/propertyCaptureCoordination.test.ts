@@ -5,6 +5,7 @@ import {
   applyCaptureTransactionDefaults,
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  formatCaptureDetailsValidationError,
   preserveCaptureOwnershipAndEvidence,
 } from '@/services/propertyCaptureDetails';
 import {
@@ -111,6 +112,61 @@ test('BEHAVIOR: commercial complex canonical counts round-trip through capture b
   assert.equal(details.roomsPerUnit, 2);
 });
 
+test('BEHAVIOR: actual building subtype counts remain bounded by unitCount', () => {
+  const building = {
+    ...baseline,
+    core: { ...baseline.core, propertyType: 'whole_building' as const },
+  };
+  assert.throws(
+    () => buildPropertyWithCaptureDetails(building, {
+      unitCount: '2',
+      apartmentCount: '1',
+      shopCount: '1',
+      officeCount: '1',
+    }),
+    /INVALID_CAPTURE_DETAILS:typeDetails\.unitCount/,
+  );
+  const valid = buildPropertyWithCaptureDetails(building, {
+    unitCount: '3',
+    apartmentCount: '1',
+    shopCount: '1',
+    officeCount: '1',
+  });
+  assert.equal((valid.typeDetails as unknown as Record<string, unknown>).unitCount, 3);
+});
+
+test('BEHAVIOR: studio capture does not inherit building unit-total validation', () => {
+  const candidate = buildPropertyWithCaptureDetails({
+    ...baseline,
+    core: { ...baseline.core, propertyType: 'apartment' },
+  }, {
+    apartmentSubtype: 'studio',
+    unitCount: '1',
+    apartmentCount: '3',
+  });
+  const details = candidate.typeDetails as unknown as Record<string, unknown>;
+  assert.equal(details.apartmentSubtype, 'studio');
+  assert.equal(details.unitCount, undefined);
+  assert.equal(details.apartmentCount, undefined);
+});
+
+test('BEHAVIOR: building unit-total failure identifies counts and correction in both languages', () => {
+  const fields = { unitCount: '3', apartmentCount: '2', shopCount: '1', officeCount: '1' };
+  const error = new Error('INVALID_CAPTURE_DETAILS:typeDetails.unitCount');
+  assert.match(
+    formatCaptureDetailsValidationError(error, fields, 'whole_building', 'en') ?? '',
+    /apartments 2 \+ shops 1 \+ offices 1 = 4.*unit total \(3\).*Increase the unit count or correct/,
+  );
+  assert.match(
+    formatCaptureDetailsValidationError(error, fields, 'whole_building', 'ar') ?? '',
+    /الشقق 2 \+ المحلات 1 \+ المكاتب 1 = 4.*عدد الوحدات \(3\).*زد عدد الوحدات/,
+  );
+  assert.match(
+    formatCaptureDetailsValidationError(new Error('INVALID_CAPTURE_DETAILS:typeDetails.bedroomCount'), {}, 'apartment', 'en') ?? '',
+    /Bedrooms/,
+  );
+});
+
 test('BEHAVIOR: fresh Rent draft applies monthly cadence without inventing values', () => {
   const changes = applyCaptureTransactionDefaults(
     { propertyCoreId: 'p', offerId: 'o' },
@@ -173,13 +229,35 @@ test('BEHAVIOR: capture candidate preserves precise location and private attachm
     classification: 'exact_location',
     disclosurePolicy: 'explicit_per_share',
   });
+  assert.equal(candidate.locationEnrichment?.coordinates?.latitude, 29.33);
+  assert.equal(candidate.locationEnrichment?.coordinates?.longitude, 48.01);
   assert.equal(candidate.attachments?.[0].id, 'capture-image-1');
   assert.equal(candidate.attachments?.[0].privacy.disclosurePolicy, 'normal');
+});
+
+test('BEHAVIOR: labeled PACI numbers persist in capture drafts and receive exact-location privacy', async () => {
+  const paciUnitNumbers = [
+    { unitLabel: 'Floor 2 · Unit 4', paciNumber: 'UNIT-PACI-4' },
+    { unitLabel: 'Shop 1', paciNumber: 'UNIT-PACI-SHOP-1' },
+  ] as const;
+  const storage = new MemoryStorage();
+  assert.equal(await saveCaptureDetails(undefined, { paciUnitNumbers }, null, storage), true);
+  const reopened = await loadCaptureDetails(undefined, storage);
+  assert.deepEqual(reopened.paciUnitNumbers, paciUnitNumbers);
+  const candidate = buildPropertyWithCaptureDetails(baseline, reopened);
+  assert.deepEqual(candidate.locationEnrichment?.paciUnitNumbers?.map(item => [item.unitLabel, item.paciNumber.value]), [
+    ['Floor 2 · Unit 4', 'UNIT-PACI-4'],
+    ['Shop 1', 'UNIT-PACI-SHOP-1'],
+  ]);
+  assert.ok(candidate.locationEnrichment?.paciUnitNumbers?.every(item =>
+    item.paciNumber.privacy.classification === 'exact_location'
+      && item.paciNumber.privacy.disclosurePolicy === 'explicit_per_share'));
 });
 
 test('BEHAVIOR: capture transitions preserve ownership evidence and copied attachment references', () => {
   const details = {
     manualLocationText: 'Owner entrance',
+    paciUnitNumbers: [{ unitLabel: 'Floor 1 · Unit 2', paciNumber: 'AUTOMATED-2' }],
     mapsLink: 'https://www.google.com/maps/search/?api=1&query=29.33%2C48.01',
     coordinates: {
       latitude: 29.33,
@@ -260,6 +338,9 @@ test('BEHAVIOR: removed attachment metadata persists before retired file deletio
 test('SOURCE ASSERTION: web attachment controls and native media filters are explicit', async () => {
   const source = await readFile('services/attachments.ts', 'utf8');
   const capture = await readFile('app/capture/index.tsx', 'utf8');
+  const propertyDetail = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  const share = await readFile('app/property/[propertyCoreId]/share.tsx', 'utf8');
+  const translations = await readFile('contexts/I18nContext.tsx', 'utf8');
   assert.match(source, /createWebFileAttachments/);
   assert.match(source, /WEB_ATTACHMENT_MAX_BYTES/);
   assert.match(source, /createIndexedDbWebAttachmentBlobStore|indexedDB\.open/);
@@ -273,12 +354,31 @@ test('SOURCE ASSERTION: web attachment controls and native media filters are exp
   assert.match(capture, /accept="video\/\*"/);
   assert.match(capture, /accept="\.pdf,application\/pdf"/);
   assert.match(capture, /capture-save-validation-error/);
+  assert.match(capture, /capture-detail-validation-error/);
+  assert.match(capture, /keyboardDismissMode="on-drag"/);
+  assert.match(capture, /buildPropertyWithCaptureDetails\(projection\.property, captureDetails, true\)/);
   assert.match(capture, /accessibilityRole="alert"/);
   assert.match(capture, /setSaveError\(message\)/);
   assert.match(capture, /if \(getCaptureMapsLinkValidationError\(captureDetails\.mapsLink\)\) return;/);
   assert.match(capture, /onChangeText=\{value => updateCaptureDetails\(\{ mapsLink: value \|\| undefined \}\)\}/);
   assert.match(capture, /capture-maps-link-error/);
   assert.match(capture, /error\.message === 'INVALID_LOCATION_LINK'[\s\S]*t\('enrich\.maps_link_invalid'\)/);
+  assert.match(capture, /capture-paci-unit-add/);
+  assert.match(capture, /capture-paci-unit-remove-/);
+  assert.match(propertyDetail, /property-edit-paci-unit-add/);
+  assert.match(propertyDetail, /property-edit-paci-unit-remove-/);
+  assert.match(share, /paciUnitNumbers: property\.locationEnrichment\?\.paciUnitNumbers\?\.map/);
+  assert.match(share, /disclosePaci[\s\S]*paciUnitNumbers\?\.length/);
+  assert.match(capture, /t\('enrich\.latitude'\)[\s\S]*writingDirection: 'ltr'/);
+  assert.match(propertyDetail, /t\('enrich\.longitude'\)[\s\S]*writingDirection: 'ltr'/);
+  assert.match(capture, /coordinates\.latitude/);
+  assert.match(capture, /coordinates\.longitude/);
+  assert.match(propertyDetail, /coordinates\.latitude/);
+  assert.match(propertyDetail, /coordinates\.longitude/);
+  assert.match(translations, /'enrich\.latitude': 'Latitude'/);
+  assert.match(translations, /'enrich\.latitude': 'خط العرض'/);
+  assert.match(translations, /'enrich\.longitude': 'Longitude'/);
+  assert.match(translations, /'enrich\.longitude': 'خط الطول'/);
 });
 
 test('BEHAVIOR: Floor transition scopes are record-owned for stale protection', () => {

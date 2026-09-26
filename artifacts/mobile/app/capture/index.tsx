@@ -38,6 +38,7 @@ import {
 import {
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  formatCaptureDetailsValidationError,
   preserveCaptureOwnershipAndEvidence,
   type CaptureDetailValues,
 } from '@/services/propertyCaptureDetails';
@@ -60,9 +61,10 @@ import {
 } from '@/services/attachments';
 import { requestCurrentCoordinates, normalizeGoogleMapsLink, pastedMapLocation, openPastedLocationLink } from '@/services/location';
 import { getAreaById } from '@/constants/kuwait-areas';
-import type { Transaction, PropertyDetailField } from '@workspace/property-domain';
+import type { Transaction, Property, PropertyDetailField, StudioStandardWarning } from '@workspace/property-domain';
+import { getStudioStandardWarnings } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
-import { PROPERTY_DEMO_CATALOG, getDemoCategory, getGenericCaptureTypesForTransaction, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
+import { PROPERTY_DEMO_CATALOG, getDemoCategory, getDemoCategoriesForTransaction, getGenericCaptureTypesForTransaction, canUseDemoCategoryForTransaction, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
 import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
@@ -110,6 +112,8 @@ export default function CaptureWorkflow() {
   const [locationBusy, setLocationBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [detailValidationError, setDetailValidationError] = useState<string | null>(null);
+  const [studioWarnings, setStudioWarnings] = useState<readonly StudioStandardWarning[]>([]);
   const [pendingConfirmation, setPendingConfirmation] = useState<{
     title: string;
     message: string;
@@ -201,6 +205,7 @@ export default function CaptureWorkflow() {
         setNearby([]);
       }
       setQuickErrors({});
+      setStudioWarnings([]);
       updateDraft({ propertyType });
     };
     if (!populated) {
@@ -216,7 +221,7 @@ export default function CaptureWorkflow() {
 
   const selectDemoCategory = (category: typeof PROPERTY_DEMO_CATALOG[number]) => {
     if (demoCategory?.id === category.id) return;
-    if (draft.transaction && draft.transaction !== category.transaction) {
+    if (draft.transaction && !canUseDemoCategoryForTransaction(category, draft.transaction)) {
       Alert.alert(
         language === 'ar' ? 'المعاملة غير متوافقة' : 'Transaction not compatible',
         language === 'ar' ? 'اختر معاملة متوافقة مع هذا التصنيف.' : 'Choose the transaction compatible with this category.',
@@ -230,6 +235,7 @@ export default function CaptureWorkflow() {
     const apply = () => {
       setNearby([]);
       setQuickErrors({});
+      setStudioWarnings([]);
       const currentMetadata = getCurrentCaptureDetails().demoMetadata;
       const currentDetails = getCurrentCaptureDetails();
       const transitioned = proposal
@@ -244,7 +250,7 @@ export default function CaptureWorkflow() {
         demoMetadata: transitioned,
         nearbyServices: JSON.stringify(nearbyServices),
       });
-      updateDraft({ propertyType: category.canonicalType, transaction: category.transaction });
+      updateDraft({ propertyType: category.canonicalType, transaction: draft.transaction ?? category.transaction });
     };
     if (!populated) {
       apply();
@@ -258,6 +264,7 @@ export default function CaptureWorkflow() {
   };
 
   const updateDemoMetadata = (changes: Partial<PropertyDemoCaptureMetadata>) => {
+    setStudioWarnings([]);
     if (!demoCategory) {
       updateCaptureDetails(changes as CaptureDetailValues);
       return;
@@ -290,6 +297,7 @@ export default function CaptureWorkflow() {
       const nextMetadata = transitioned?.metadata;
       const nextNearby = transitioned?.nearbyServices ?? nextMetadata?.nearbyServices ?? [];
       setNearby([...nextNearby]);
+      setStudioWarnings([]);
       replaceCaptureDetails({
         ...sharedArea,
         nearbyServices: JSON.stringify(nextNearby),
@@ -438,6 +446,23 @@ export default function CaptureWorkflow() {
     }
   };
 
+  const validateCaptureDetails = (property: Property) => {
+    try {
+      const candidate = buildPropertyWithCaptureDetails(property, captureDetails, true);
+      setStudioWarnings(getStudioStandardWarnings(candidate.typeDetails));
+      setDetailValidationError(null);
+      return true;
+    } catch (error) {
+      setDetailValidationError(formatCaptureDetailsValidationError(
+        error,
+        captureDetails,
+        property.core.propertyType,
+        language,
+      ) ?? t('errors.capture_incomplete'));
+      return false;
+    }
+  };
+
   const openPreview = () => {
     if (!draft.locationAreaId) {
       setAreaValidation(current => transitionCaptureAreaValidation(current, {
@@ -460,6 +485,7 @@ export default function CaptureWorkflow() {
       Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
       return;
     }
+    if (!validateCaptureDetails(projection.property)) return;
     setSaveError(null);
     setStage(3);
   };
@@ -472,6 +498,11 @@ export default function CaptureWorkflow() {
     if (!projection.ok) {
       saveFlight.current = false;
       Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
+      return;
+    }
+    if (!validateCaptureDetails(projection.property)) {
+      setSaveError(null);
+      saveFlight.current = false;
       return;
     }
     setSubmitting(true);
@@ -491,6 +522,7 @@ export default function CaptureWorkflow() {
       const evidence = await prepareCapturedDetails(projection.property, candidate);
       const result = await savePropertyWithRecovery(projection.property);
       if (result.status !== 'complete') {
+        setSaveError(t('errors.storage_save'));
         Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
         return;
       }
@@ -522,9 +554,7 @@ export default function CaptureWorkflow() {
       const message = error instanceof Error && error.message === 'INVALID_LOCATION_LINK'
         ? t('enrich.maps_link_invalid')
         : error instanceof Error && error.message.startsWith('INVALID_CAPTURE_DETAILS:')
-        ? (language === 'ar'
-          ? 'تحقق من أعداد الوحدات: يجب ألا يتجاوز مجموع الشقق والمحلات والمكاتب عدد الوحدات، ثم أعد المحاولة.'
-          : 'Check the unit totals: apartments, shops, and offices together cannot exceed the unit count. Correct the details and try again.')
+        ? formatCaptureDetailsValidationError(error, captureDetails, projection.property.core.propertyType, language) ?? t('errors.storage_save')
         : t('errors.storage_save');
       setSaveError(message);
       if (Platform.OS !== 'web') Alert.alert(t('errors.validation_title'), message);
@@ -552,6 +582,35 @@ export default function CaptureWorkflow() {
 
   const header = stage === 1 ? t('capture.progress.transaction')
     : stage === 2 ? t('capture.progress.review') : t('summary.title');
+  const supportsPaciUnitNumbers = [
+    'whole_building', 'commercial_complex', 'apartment', 'floor', 'house', 'villa',
+    'office', 'shop', 'warehouse', 'commercial_plot',
+  ].includes(draft.propertyType ?? '');
+  const paciUnitNumbers = captureDetails.paciUnitNumbers ?? [];
+  const studioGuidance = draft.propertyType === 'apartment'
+    && (captureDetails.apartmentSubtype === 'studio'
+      || (!captureDetails.apartmentSubtype && demoMetadata?.categoryId === 'studio_apartment'));
+  const renderStudioWarnings = () => studioWarnings.length ? (
+    <View style={{ gap: 6 }}>
+      {studioWarnings.map((warning, index) => {
+        const fieldLabel = warning.field === 'roomCount'
+          ? (language === 'ar' ? 'الغرف' : 'Rooms')
+          : propertyDetailLabels[warning.field][language === 'ar' ? 1 : 0];
+        return (
+          <Text
+            key={`${warning.field}-${index}`}
+            accessibilityRole="alert"
+            testID="capture-studio-standard-warning"
+            style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}
+          >
+            {language === 'ar'
+              ? `تخطيط الاستوديو المعتاد: غرفة واحدة وحمام واحد وصالة اختيارية، دون مطبخ. القيمة المدخلة لـ${fieldLabel}: ${warning.actual} (المعتاد: ${warning.expected}). احتفظ بها إذا كانت مقصودة؛ لم يتم تغييرها.`
+              : `Studio guideline: one room, one bathroom, and an optional hall; no kitchen. Entered ${fieldLabel}: ${warning.actual} (usual: ${warning.expected}). Keep it if intentional; your value is unchanged.`}
+          </Text>
+        );
+      })}
+    </View>
+  ) : null;
 
   return (
     <KeyboardAvoidingView
@@ -583,6 +642,7 @@ export default function CaptureWorkflow() {
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 96 }]}
       >
         {stage === 1 && (
@@ -599,7 +659,7 @@ export default function CaptureWorkflow() {
             </Section>
             <Section title={language === 'ar' ? 'تصنيف العقار' : 'Property category'} colors={colors} fonts={fonts}>
               <View style={[styles.categoryGrid, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                {PROPERTY_DEMO_CATALOG.filter(category => !draft.transaction || category.transaction === draft.transaction).map(category => (
+                {getDemoCategoriesForTransaction(PROPERTY_DEMO_CATALOG, draft.transaction).map(category => (
                   <TouchableOpacity key={category.id} onPress={() => selectDemoCategory(category)} accessibilityRole="radio" accessibilityState={{ selected: demoCategory?.id === category.id }} style={[styles.category, { backgroundColor: colors.card, borderColor: demoCategory?.id === category.id ? colors.primary : colors.border }]}>
                     <Check selected={demoCategory?.id === category.id} colors={colors} />
                     <Text testID={`capture-category-${category.id}`} style={[styles.categoryLabel, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{category.label[language === 'ar' ? 1 : 0]}</Text>
@@ -670,6 +730,24 @@ export default function CaptureWorkflow() {
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
             </Section>
             <Section title={language === 'ar' ? 'المواصفات' : 'Property specifications'} colors={colors} fonts={fonts}>
+              {detailValidationError ? (
+                <Text
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="polite"
+                  testID="capture-detail-validation-error"
+                  style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}
+                >
+                  {detailValidationError}
+                </Text>
+              ) : null}
+              {studioGuidance ? (
+                <Text testID="capture-studio-guidance" style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+                  {language === 'ar'
+                    ? 'التخطيط المعتاد للاستوديو: غرفة واحدة وحمام واحد، وصالة اختيارية؛ دون مطبخ. أدخل التفاصيل الفعلية، وستظهر ملاحظة عند اختلاف الأعداد.'
+                    : 'Studio guideline: one room and one bathroom, with an optional hall and no kitchen. Enter the actual details; differing counts will be flagged for review.'}
+                </Text>
+              ) : null}
+              {renderStudioWarnings()}
               <ModernPropertyForm
                 recordScopeKey={scopeKey}
                 propertyType={draft.propertyType ?? 'other_built_property'}
@@ -681,7 +759,11 @@ export default function CaptureWorkflow() {
                 language={language}
                 colors={colors}
                 fonts={fonts}
-                onChange={(field: PropertyDetailField, value: string) => field === 'floorUse' ? chooseFloorUse(value) : updateCaptureDetails({ [field]: value })}
+                onChange={(field: PropertyDetailField, value: string) => {
+                  setStudioWarnings([]);
+                  if (field === 'floorUse') chooseFloorUse(value);
+                  else updateCaptureDetails({ [field]: value });
+                }}
                 onDemoChange={updateDemoMetadata}
                 onNearbyChange={next => {
                   setNearby([...next]);
@@ -696,6 +778,47 @@ export default function CaptureWorkflow() {
               />
             </Section>
             <Section title={language === 'ar' ? 'الموقع الدقيق والمرفقات' : 'Precise location and attachments'} colors={colors} fonts={fonts}>
+              {supportsPaciUnitNumbers ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('enrich.paci_unit_numbers')}</Text>
+                  {paciUnitNumbers.map((item, index) => (
+                    <View key={`paci-unit-${index}`} style={{ gap: 6 }}>
+                      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('enrich.paci_unit_label')}</Text>
+                      <TextInput
+                        value={item.unitLabel}
+                        onChangeText={value => updateCaptureDetails({
+                          paciUnitNumbers: paciUnitNumbers.map((row, rowIndex) => rowIndex === index ? { ...row, unitLabel: value } : row),
+                        })}
+                        style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                        testID={`capture-paci-unit-label-${index}`}
+                      />
+                      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('enrich.paci_unit_number')}</Text>
+                      <TextInput
+                        value={item.paciNumber}
+                        onChangeText={value => updateCaptureDetails({
+                          paciUnitNumbers: paciUnitNumbers.map((row, rowIndex) => rowIndex === index ? { ...row, paciNumber: value } : row),
+                        })}
+                        style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: 'left', writingDirection: 'ltr' }]}
+                        testID={`capture-paci-unit-number-${index}`}
+                      />
+                      <TouchableOpacity
+                        onPress={() => updateCaptureDetails({ paciUnitNumbers: paciUnitNumbers.filter((_, rowIndex) => rowIndex !== index) })}
+                        accessibilityRole="button"
+                        testID={`capture-paci-unit-remove-${index}`}
+                      >
+                        <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.remove_paci_unit_number')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => updateCaptureDetails({ paciUnitNumbers: [...paciUnitNumbers, { unitLabel: '', paciNumber: '' }] })}
+                    accessibilityRole="button"
+                    testID="capture-paci-unit-add"
+                  >
+                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.add_paci_unit_number')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.manual_location')}</Text>
               <TextInput
                 value={captureDetails.manualLocationText ?? ''}
@@ -727,9 +850,7 @@ export default function CaptureWorkflow() {
                 <Choice selected={false} label={t('enrich.open_maps')} onPress={() => void openCaptureMapsLink()} colors={colors} fonts={fonts} />
               </View>
               {captureDetails.coordinates ? (
-                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
-                  {`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`}
-                </Text>
+                <CoordinateDisplay coordinates={captureDetails.coordinates} t={t} colors={colors} fonts={fonts} isRTL={isRTL} />
               ) : null}
               <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 {Platform.OS === 'web' ? <>
@@ -776,6 +897,25 @@ export default function CaptureWorkflow() {
                 </Text>
               </View>
             ) : null}
+            {detailValidationError ? (
+              <View
+                accessibilityRole="alert"
+                testID="capture-detail-validation-error"
+                style={[styles.saveError, { borderColor: colors.destructive, backgroundColor: colors.destructive + '0F' }]}
+              >
+                <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+                  {detailValidationError}
+                </Text>
+              </View>
+            ) : null}
+            {studioGuidance ? (
+              <Text testID="capture-studio-guidance" style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+                {language === 'ar'
+                  ? 'التخطيط المعتاد للاستوديو: غرفة واحدة وحمام واحد، وصالة اختيارية؛ دون مطبخ.'
+                  : 'Studio guideline: one room and one bathroom, with an optional hall and no kitchen.'}
+              </Text>
+            ) : null}
+            {renderStudioWarnings()}
             <TouchableOpacity onPress={() => { setSaveError(null); setStage(2); }} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, { borderColor: colors.primary }]}>
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'العودة للتحرير' : 'Back to Edit'}</Text>
             </TouchableOpacity>
@@ -799,7 +939,15 @@ export default function CaptureWorkflow() {
               {previewFeatureLabels.length ? <PreviewRow label={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available Property Features'} value={previewFeatureLabels.join(', ')} colors={colors} fonts={fonts} /> : null}
              {captureDetails.manualLocationText ? <PreviewRow label={t('enrich.manual_location')} value={captureDetails.manualLocationText} colors={colors} fonts={fonts} /> : null}
              {captureDetails.mapsLink ? <PreviewRow label={t('enrich.maps_link')} value={captureDetails.mapsLink} colors={colors} fonts={fonts} /> : null}
-             {captureDetails.coordinates ? <PreviewRow label={language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'} value={`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`} colors={colors} fonts={fonts} /> : null}
+              {captureDetails.paciUnitNumbers?.map((item, index) => (
+                <PreviewRow key={`paci-preview-${index}`} label={`${item.unitLabel} · ${t('enrich.paci_unit_number')}`} value={item.paciNumber} colors={colors} fonts={fonts} />
+              ))}
+              {captureDetails.coordinates ? (
+                <View style={{ gap: 4 }}>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'}</Text>
+                  <CoordinateDisplay coordinates={captureDetails.coordinates} t={t} colors={colors} fonts={fonts} isRTL={isRTL} />
+                </View>
+              ) : null}
              {captureAttachments.length ? <PreviewRow label={language === 'ar' ? 'المرفقات' : 'Attachments'} value={captureAttachments.map(item => item.originalName).join(', ')} colors={colors} fonts={fonts} /> : null}
           </Section>
         )}
@@ -882,7 +1030,7 @@ export default function CaptureWorkflow() {
       </Modal>
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage === 2 ? <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <Button title={t('capture.back')} onPress={() => setStage(stage === 3 ? 2 : 1)} variant="outline" testID="capture-back" />}
-        {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={!draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} testID="capture-save-property" />}
+        {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || canUseDemoCategoryForTransaction(demoCategory, draft.transaction)) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={!draft.transaction || !draft.propertyType || Boolean(demoCategory && !canUseDemoCategoryForTransaction(demoCategory, draft.transaction))} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} testID="capture-save-property" />}
       </View>
     </KeyboardAvoidingView>
   );
@@ -900,6 +1048,18 @@ function Choice({ selected, label, onPress, colors, fonts, multi = false, testID
 function PreviewRow({ label, value, colors, fonts }: any) {
   if (!value) return null;
   return <View style={[styles.previewRow, { borderBottomColor: colors.border }]}><Text style={[styles.previewLabel, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{label}</Text><Text style={[styles.previewValue, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{value}</Text></View>;
+}
+function CoordinateDisplay({ coordinates, t, colors, fonts, isRTL }: any) {
+  return (
+    <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 12 }}>
+      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, writingDirection: isRTL ? 'rtl' : 'ltr' }}>
+        {t('enrich.latitude')}: <Text style={{ color: colors.foreground, writingDirection: 'ltr' }}>{coordinates.latitude}</Text>
+      </Text>
+      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, writingDirection: isRTL ? 'rtl' : 'ltr' }}>
+        {t('enrich.longitude')}: <Text style={{ color: colors.foreground, writingDirection: 'ltr' }}>{coordinates.longitude}</Text>
+      </Text>
+    </View>
+  );
 }
 function metadataValue(value: number | undefined) {
   return value === undefined ? '' : String(value);
