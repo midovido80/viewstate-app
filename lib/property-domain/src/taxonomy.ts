@@ -65,6 +65,7 @@ export type PropertyDetailField =
   | "officeCount"
   | "elevatorCount"
   | "apartmentSubtype"
+  | "studioRoomCount"
   | "bedroomCount"
   | "livingRoomCount"
   | "floorNumber"
@@ -82,6 +83,9 @@ export type PropertyDetailField =
   | "hasPool"
   | "hasWaterfront"
   | "hasCentralAC"
+  | "hasKitchen"
+  | "hasHall"
+  | "hasParking"
   | "intendedUse"
   | "commercialActivity"
   | "frontageWidthMeters"
@@ -94,6 +98,7 @@ export interface PropertyDetailFieldDefinition {
   readonly field: PropertyDetailField;
   readonly appliesTo: readonly PropertyType[];
   readonly floorUses?: readonly FloorUse[];
+  readonly apartmentSubtypes?: readonly ApartmentSubtype[];
 }
 
 /** The canonical domain applicability matrix for enrichment fields. */
@@ -111,6 +116,7 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "officeCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "elevatorCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "apartmentSubtype", appliesTo: ["apartment"] },
+  { field: "studioRoomCount", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "bedroomCount", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "livingRoomCount", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "floorNumber", appliesTo: ["apartment", "floor", "office", "shop"] },
@@ -128,6 +134,9 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasPool", appliesTo: ["house", "villa", "chalet"] },
   { field: "hasWaterfront", appliesTo: ["chalet"] },
   { field: "hasCentralAC", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "commercial_complex", "office", "shop", "warehouse", "other_built_property"] },
+  { field: "hasKitchen", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
+  { field: "hasHall", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
+  { field: "hasParking", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "commercialActivity", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "frontageWidthMeters", appliesTo: ["floor", "shop", "commercial_complex"], floorUses: ["commercial"] },

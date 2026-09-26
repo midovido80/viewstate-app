@@ -22,7 +22,7 @@ export default function HomeScreen() {
       id: 'addProperty',
       title: t('home.action.addProperty'),
       icon: 'home',
-       onPress: () => router.push('/capture' as never),
+       onPress: () => router.push('/capture/transaction' as never),
       color: colors.primary,
     },
     {

@@ -8,6 +8,10 @@ import './vapp50DeviceUi.test.ts';
 import './package3aNumericQuickPicks.test.ts';
 import './propertyFactProjection.test.ts';
 import './propertyDetailUx3c.test.ts';
+import './studioEntry.test.ts';
+import './studioDetails.test.ts';
+import './studioFormModel.test.ts';
+import './studioSave.test.ts';
 
 import {
   buildPropertySharePreview,
@@ -21,6 +25,7 @@ import {
   PROPERTY_SOURCE_ROLES,
   PropertyDraft,
   Property,
+  type ApartmentSubtype,
   validateProperty,
   validatePropertySource,
   validateTypeDetails,
@@ -2301,15 +2306,28 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
     warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage', 'hasCentralAC'],
     other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification', 'hasCentralAC'],
   } as const;
-  const fieldsFor = (propertyType: Property['core']['propertyType'], floorUse?: 'residential' | 'commercial') =>
+  const fieldsFor = (
+    propertyType: Property['core']['propertyType'],
+    floorUse?: 'residential' | 'commercial',
+    apartmentSubtype?: ApartmentSubtype,
+  ) =>
     PROPERTY_DETAIL_FIELD_DEFINITIONS
       .filter(definition => definition.appliesTo.includes(propertyType)
+        && (!definition.apartmentSubtypes
+          || propertyType === 'apartment'
+            && apartmentSubtype !== undefined
+            && definition.apartmentSubtypes.includes(apartmentSubtype))
         && (propertyType !== 'floor' || !definition.floorUses || definition.floorUses.includes(floorUse!)))
       .map(definition => definition.field)
       .sort();
   for (const propertyType of PROPERTY_TYPES.filter(type => type !== 'floor')) {
     assert.deepEqual(fieldsFor(propertyType), [...(exactFields as Record<string, readonly string[]>)[propertyType]].sort(), `${propertyType} exact field set`);
   }
+  assert.deepEqual(
+    fieldsFor('apartment', undefined, 'studio'),
+    [...exactFields.apartment, 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking'].sort(),
+    'Studio apartment adds only its scoped fields',
+  );
   assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential].sort());
   assert.deepEqual(fieldsFor('floor', 'commercial'), [...exactFields.floor_commercial].sort());
   assert.deepEqual(FURNISHING_VALUES, ['unfurnished', 'semi_furnished', 'furnished']);

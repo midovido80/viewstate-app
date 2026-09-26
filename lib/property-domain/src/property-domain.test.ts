@@ -14,6 +14,7 @@ import {
   validateProperty,
   validatePropertyAttachments,
   validatePropertyCore,
+  validateSeekerRequirement,
   validateTypeDetails,
 } from "./index.ts";
 import type {
@@ -304,6 +305,66 @@ test("residential amenity facts preserve unknown, false, and true without derivi
   assertEqual("elevatorCount" in explicit, false, "Elevator availability must not derive a count");
   assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasElevator: true } as TypeDetails, core("floor")).ok, false, "Commercial Floor must reject residential amenities");
   assertEqual(validateTypeDetails({ propertyType: "office", hasHeating: true } as unknown as TypeDetails, core("office")).ok, false, "Commercial types must reject residential amenities");
+});
+
+test("Studio has a fixed canonical open-room fact and subtype-only feature facts", () => {
+  const studio: TypeDetails = {
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    studioRoomCount: 1,
+    hasKitchen: true,
+    hasHall: false,
+    hasParking: true,
+  };
+  assert(validateTypeDetails(studio, core("apartment")).ok, "Canonical Studio facts must validate");
+  assertEqual(validateTypeDetails({
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    studioRoomCount: 2,
+  } as unknown as TypeDetails, core("apartment")).ok, false, "Studio open-room count is fixed at one");
+  assertEqual(validateTypeDetails({
+    propertyType: "apartment",
+    apartmentSubtype: "standard_apartment",
+    hasKitchen: true,
+  }, core("apartment")).ok, false, "Studio-specific features cannot leak onto another apartment subtype");
+  assertEqual(validateTypeDetails({
+    propertyType: "apartment",
+    studioRoomCount: 1,
+  } as TypeDetails, core("apartment")).ok, false, "Open-room count requires the Studio subtype");
+});
+
+test("Requirement Studio feature preferences require the Studio subtype and allow daily rent", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "seeker-1",
+    purpose: "rent" as const,
+    propertyType: "apartment" as const,
+    preferredAreaIds: ["area-1"],
+    preferredAreaMode: "specific_areas" as const,
+    budget: { minimum: 100, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+    rentalPeriodId: "daily",
+    bathroomsMinimum: 1,
+  };
+  assert(validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [
+      { field: "apartmentSubtype", kind: "choice", value: "studio" },
+      { field: "hasKitchen", kind: "feature", value: false },
+      { field: "hasHall", kind: "feature", value: true },
+    ],
+  }).ok, "Studio feature preferences and daily rental cadence must validate");
+  assertEqual(validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [{ field: "hasKitchen", kind: "feature", value: true }],
+  }).ok, false, "Studio features require a Studio subtype choice");
+  assertEqual(validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [
+      { field: "apartmentSubtype", kind: "choice", value: "standard_apartment" },
+      { field: "hasParking", kind: "feature", value: true },
+    ],
+  }).ok, false, "Studio features cannot apply to a non-Studio subtype");
 });
 
 test("rejects enrichment counts that cannot be represented safely", () => {

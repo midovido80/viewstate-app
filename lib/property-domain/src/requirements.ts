@@ -18,7 +18,7 @@ export type RequirementPurpose = typeof REQUIREMENT_PURPOSES[number];
 export const REQUIREMENT_OCCUPANCIES = ["family", "bachelor", "any"] as const;
 export type RequirementOccupancy = typeof REQUIREMENT_OCCUPANCIES[number];
 
-export const RENTAL_PERIOD_IDS = ["monthly", "yearly"] as const;
+export const RENTAL_PERIOD_IDS = ["daily", "monthly", "yearly"] as const;
 export type RequirementRentalPeriodId = typeof RENTAL_PERIOD_IDS[number];
 export const REQUIREMENT_AREA_MODES = ["specific_areas", "all_kuwait"] as const;
 export type RequirementAreaMode = typeof REQUIREMENT_AREA_MODES[number];
@@ -167,6 +167,10 @@ const CATALOG_FEATURE_FIELDS = new Set<PropertyDetailField>([
   "hasMaidRoom", "hasHeating", "hasBalcony", "hasLaundryRoom",
   "hasSolarHeater", "hasElevator", "hasGarden", "hasSecurityGuard",
   "hasBBQArea", "hasPool", "hasWaterfront", "hasColdStorage",
+  "hasKitchen", "hasHall", "hasParking",
+]);
+const STUDIO_FEATURE_FIELDS = new Set<PropertyDetailField>([
+  "hasKitchen", "hasHall", "hasParking",
 ]);
 const CATALOG_NUMBER_RELATIONS: Partial<Record<PropertyDetailField, "minimum" | "exact">> = {
   plotAreaSquareMeters: "minimum",
@@ -520,6 +524,25 @@ export function validateSeekerRequirement(
     }
   }
 
+  const studioChoiceSelected = Array.isArray(value.catalogPreferences)
+    && value.catalogPreferences.some(preference =>
+      isRecord(preference)
+      && preference.field === "apartmentSubtype"
+      && preference.kind === "choice"
+      && preference.value === "studio");
+  if (Array.isArray(value.catalogPreferences)) {
+    value.catalogPreferences.forEach((preference, index) => {
+      if (!isRecord(preference) || !STUDIO_FEATURE_FIELDS.has(preference.field as PropertyDetailField)) return;
+      if (value.propertyType !== "apartment" || !studioChoiceSelected) {
+        issues.push(issue(
+          "catalog_preference_not_allowed",
+          ["catalogPreferences", String(index), "field"],
+          "Kitchen, hall, and parking preferences are supported only with the Studio apartment subtype.",
+        ));
+      }
+    });
+  }
+
   const budget = value.budget;
   if (!isRecord(budget)) {
     issues.push(issue("invalid_budget", ["budget"], "Budget is required."));
@@ -607,7 +630,7 @@ export function validateSeekerRequirement(
       issues.push(issue(
         "invalid_rent_field",
         ["rentalPeriodId"],
-        "rentalPeriodId must be monthly or yearly when provided.",
+        "rentalPeriodId must be daily, monthly, or yearly when provided.",
       ));
     }
     if (value.occupancy !== undefined && !isRequirementOccupancy(value.occupancy)) {

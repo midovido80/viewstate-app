@@ -22,10 +22,18 @@ export const APPROVED_REQUIREMENT_CATALOG_FIELDS = new Set<PropertyDetailField>(
     .map(definition => definition.field),
 );
 
+/** Studio-only feature preferences are deliberately excluded from generic apartment forms. */
+export const STUDIO_ONLY_REQUIREMENT_CATALOG_FIELDS = new Set<PropertyDetailField>([
+  'hasKitchen',
+  'hasHall',
+  'hasParking',
+]);
+
 export const isRequirementCatalogFieldAllowed = (field: PropertyDetailField): boolean => {
   const definition = PROPERTY_FORM_CATALOG.find(item => item.field === field);
   return definition?.wanted?.storage === 'catalogPreference'
     && APPROVED_REQUIREMENT_CATALOG_FIELDS.has(field)
+    && !STUDIO_ONLY_REQUIREMENT_CATALOG_FIELDS.has(field)
     && !CANONICAL_CATALOG_FIELDS.has(field);
 };
 

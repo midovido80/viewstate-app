@@ -9,6 +9,7 @@ export default function CaptureLayout() {
       <Stack.Screen name="location" />
       <Stack.Screen name="summary" />
       <Stack.Screen name="success" />
+      <Stack.Screen name="studio" />
     </Stack>
   );
 }

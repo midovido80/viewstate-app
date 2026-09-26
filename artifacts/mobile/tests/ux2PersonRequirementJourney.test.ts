@@ -84,11 +84,28 @@ test('UX-2 Buy and Floor preferences persist under canonical applicability witho
 test('UX-2 source role travels with the Person through every existing capture route', async () => {
   for (const route of ['index', 'transaction', 'property-type', 'price', 'location', 'summary']) {
     const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
-    assert.match(source, /linkPersonId, sourceRole/, `${route} must read both relationship parameters`);
+    assert.match(source, /useLocalSearchParams/, `${route} must read its route context`);
+    assert.match(source, /linkPersonId/, `${route} must retain the Person link`);
     assert.match(source, /sourceRole/, `${route} must retain the selected source role`);
   }
+
+  const transaction = await readFile('app/capture/transaction.tsx', 'utf8');
+  assert.match(transaction, /firstParam\(params\.linkPersonId\)/);
+  assert.match(transaction, /firstParam\(params\.sourceRole\)/);
+  assert.match(transaction, /pathname: '\/capture\/property-type'/);
+  assert.match(transaction, /params:\s*\{[\s\S]*firstParam\(params\.linkPersonId\)[\s\S]*firstParam\(params\.sourceRole\)[\s\S]*\}/);
+
+  const propertyType = await readFile('app/capture/property-type.tsx', 'utf8');
+  assert.match(propertyType, /const linkPersonId = firstParam\(params\.linkPersonId\)/);
+  assert.match(propertyType, /const sourceRole = firstParam\(params\.sourceRole\)/);
+  assert.match(propertyType, /const routeParams = \{[\s\S]*\.\.\.\(linkPersonId \? \{ linkPersonId \} : \{\}\),[\s\S]*\.\.\.\(sourceRole \? \{ sourceRole \} : \{\}\),[\s\S]*\};/);
+  assert.match(propertyType, /params:\s*\{\s*\.\.\.routeParams/);
+
   const entry = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(entry, /linkPersonId: person\.id, sourceRole: role/);
+  assert.match(entry, /sourceRoles\.map/);
+  assert.match(entry, /pathname: '\/capture'/);
+  assert.match(entry, /linkPersonId: person\.id/);
+  assert.match(entry, /sourceRole: role/);
   for (const route of ['index', 'summary']) {
     const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
     assert.match(source, /setPropertySource\(/);

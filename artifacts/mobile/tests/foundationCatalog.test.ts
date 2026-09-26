@@ -85,6 +85,9 @@ test('Only existing bounded catalogPreference meanings receive wanted mappings',
     hasPool: ['feature'],
     hasWaterfront: ['feature'],
     hasColdStorage: ['feature'],
+    hasKitchen: ['feature'],
+    hasHall: ['feature'],
+    hasParking: ['feature'],
   };
   const mapped = PROPERTY_FORM_CATALOG.filter(item => item.wanted?.storage === 'catalogPreference');
   assert.deepEqual(
@@ -129,6 +132,9 @@ test('Requirement presentation and field allow-lists derive from Foundation meta
     'commercialActivity',
     'furnishing',
     'hasColdStorage',
+    'hasHall',
+    'hasKitchen',
+    'hasParking',
     'hasPool',
     'hasWaterfront',
     'intendedUse',
@@ -149,6 +155,10 @@ test('Requirement presentation and field allow-lists derive from Foundation meta
   assert.deepEqual(getRequirementPresentationFields('floor', 'commercial').specifications, ['intendedUse', 'commercialActivity']);
   assert.deepEqual(getRequirementPresentationFields('floor', 'residential').specifications, []);
   assert.equal(getRequirementCatalogFields('floor', 'residential').some(item => item.field === 'commercialActivity'), false);
+  for (const field of ['hasKitchen', 'hasHall', 'hasParking'] as const) {
+    assert.equal(getRequirementCatalogFields('apartment').some(item => item.field === field), false);
+    assert.equal(isRequirementCatalogFieldAllowed(field), false);
+  }
 });
 
 test('Mode-aware catalog accessor excludes unsupported details from wanted mode', () => {
@@ -233,7 +243,7 @@ test('Shared core descriptors map only existing Property and Requirement paths',
 });
 
 function expectedGlobalApproval(field: string): boolean {
-  return [
+  return !['hasKitchen', 'hasHall', 'hasParking'].includes(field) && [
     'apartmentSubtype', 'furnishing', 'intendedUse', 'commercialActivity',
     'hasPool', 'hasWaterfront', 'hasColdStorage',
   ].includes(field);

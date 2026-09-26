@@ -148,6 +148,25 @@ export function validateTypeDetails(
   }
 
   const candidate = details as TypeDetails & Record<string, unknown>;
+  if (details.propertyType === "apartment") {
+    if (candidate.studioRoomCount !== undefined
+      && (details.apartmentSubtype !== "studio" || candidate.studioRoomCount !== 1)) {
+      issues.push(issue(
+        "incompatible_detail_field",
+        ["typeDetails", "studioRoomCount"],
+        "Studio room count is fixed at one and is valid only for a Studio apartment.",
+      ));
+    }
+    for (const field of ["hasKitchen", "hasHall", "hasParking"] as const) {
+      if (candidate[field] !== undefined && details.apartmentSubtype !== "studio") {
+        issues.push(issue(
+          "incompatible_detail_field",
+          ["typeDetails", field],
+          `${field} is supported only for a Studio apartment.`,
+        ));
+      }
+    }
+  }
   if (candidate.furnishing !== undefined && !isFurnishing(candidate.furnishing)) {
     issues.push(issue("invalid_furnishing", ["typeDetails", "furnishing"], "Furnishing must be unfurnished, semi_furnished, or furnished."));
   }
@@ -223,6 +242,7 @@ export function validateTypeDetails(
     "officeCount",
     "elevatorCount",
     "bedroomCount",
+    "studioRoomCount",
     "livingRoomCount",
     "floorNumber",
     "loadingBayCount",
@@ -251,6 +271,9 @@ export function validateTypeDetails(
     "hasWaterfront",
     "hasColdStorage",
     "hasCentralAC",
+    "hasKitchen",
+    "hasHall",
+    "hasParking",
   ] as const) {
     const value = candidate[field];
     if (value !== undefined && typeof value !== "boolean") {

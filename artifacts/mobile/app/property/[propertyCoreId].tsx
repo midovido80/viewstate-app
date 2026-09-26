@@ -59,7 +59,7 @@ import {
 import { Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
-import { getGalleryIndexFromScrollOffset, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent } from '@/services/propertyDetailPresentation';
+import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, getStudioPropertyEditHref, isOfferedStudio } from '@/services/propertyDetailPresentation';
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
   const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string }>();
@@ -857,6 +857,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       : undefined;
   const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
   const propertyFacts = projectPropertyFacts(property);
+  const offeredStudio = isOfferedStudio(property);
   const visibleContent = getPropertyDetailVisibleContent(property);
 
   const galleryImages = (property?.attachments ?? []).filter(a => a.kind === 'image');
@@ -872,7 +873,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const handleEdit = () => {
     if (actionFlight.current) return;
     actionFlight.current = true;
-    router.push(`/property/${encodeURIComponent(property.core.id)}/edit` as never);
+    router.push((offeredStudio
+      ? getStudioPropertyEditHref(property.core.id)
+      : `/property/${encodeURIComponent(property.core.id)}/edit`) as never);
     setTimeout(() => { actionFlight.current = false; }, 1000);
   };
 
@@ -897,14 +900,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const addSpec = (fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons') => {
     numericSpecTiles.push({ fieldId, value, icon, family, label: propertyDetailLabels[fieldId as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? fieldId });
   };
-  if (propertyFacts.templateFacts.bedroomCount !== undefined) addSpec('bedroomCount', propertyFacts.templateFacts.bedroomCount, 'bed-outline', 'MaterialCommunityIcons');
+  if (offeredStudio) {
+    addSpec('studioRoomCount', 1, 'bed-outline', 'MaterialCommunityIcons');
+    numericSpecTiles[numericSpecTiles.length - 1].label = language === 'ar' ? 'غرفة مفتوحة' : 'Open room';
+  } else if (propertyFacts.templateFacts.bedroomCount !== undefined) addSpec('bedroomCount', propertyFacts.templateFacts.bedroomCount, 'bed-outline', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.bathroomCount !== undefined) addSpec('bathroomCount', propertyFacts.templateFacts.bathroomCount, 'shower', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.livingRoomCount !== undefined) addSpec('livingRoomCount', propertyFacts.templateFacts.livingRoomCount, 'sofa-outline', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.parkingSpaceCount !== undefined) addSpec('parkingSpaceCount', propertyFacts.templateFacts.parkingSpaceCount, 'car', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.floorNumber !== undefined) addSpec('floorNumber', propertyFacts.templateFacts.floorNumber, 'stairs', 'MaterialCommunityIcons');
   if (propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square', 'MaterialCommunityIcons');
 
-  const detailValues = visibleContent.typeDetails as Record<string, unknown>;
+  const detailValues = (offeredStudio
+    ? getOfferedStudioDetailValues(visibleContent.typeDetails)
+    : visibleContent.typeDetails) as Record<string, unknown>;
   const locationArea = getAreaById(property.core.locationArea.id);
   const locationDisplay = getPropertyDetailLocationDisplay({
     governorate: locationArea ? (language === 'ar' ? locationArea.governorateAr : locationArea.governorateEn) : undefined,
@@ -936,9 +944,30 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const existingSupplementalFields = new Set<string>(supplementalDetails.map(item => item.field));
   const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
     .filter(item =>
-      !numericSpecTiles.some(tile => tile.fieldId === item.field)
+      !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
+      && !numericSpecTiles.some(tile => tile.fieldId === item.field)
       && !existingSupplementalFields.has(item.field))
-  const propertySupplementalDetails = [...supplementalDetails, ...categoryDetails];
+  const studioFacilityDetails = offeredStudio
+    ? ([
+      ['hasKitchen', language === 'ar' ? 'مطبخ' : 'Kitchen'],
+      ['hasHall', language === 'ar' ? 'صالة' : 'Hall'],
+      ['hasParking', language === 'ar' ? 'موقف' : 'Parking'],
+    ] as const).flatMap(([field, label]) => detailValues[field] === undefined ? [] : [{
+      field,
+      label,
+      value: formatPropertyDetailValue('hasCentralAC', detailValues[field], language),
+    }])
+    : [];
+  const studioAreaDetails = offeredStudio
+    && propertyFacts.areaSquareMeters === undefined
+    && detailValues.builtUpAreaSquareMeters !== undefined
+    ? [{
+      field: 'builtUpAreaSquareMeters',
+      label: propertyDetailLabels.builtUpAreaSquareMeters[language === 'ar' ? 1 : 0],
+      value: `${formatPropertyDetailValue('builtUpAreaSquareMeters', detailValues.builtUpAreaSquareMeters, language)} ${language === 'ar' ? 'م²' : 'm²'}`,
+    }]
+    : [];
+  const propertySupplementalDetails = [...supplementalDetails, ...categoryDetails, ...studioFacilityDetails, ...studioAreaDetails];
   const nearbyServicesTextList = property.nearbyServices?.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id) ?? [];
 
   return (
@@ -1238,6 +1267,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 </View>
               )}
 
+              {(!offeredStudio || detailMapsHref || property.locationEnrichment?.coordinates) ? (
               <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                 {Platform.OS === 'web' ? detailMapsHref ? (
                   <a
@@ -1287,6 +1317,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   </Text>
                 ) : null}
               </View>
+              ) : null}
 
             </View>
           </>
@@ -1712,7 +1743,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           )}
           {Platform.OS === 'web' ? (
             <Link
-              href={getPropertyDetailActionHref(property.core.id, 'edit') as never}
+              href={(offeredStudio
+                ? getStudioPropertyEditHref(property.core.id)
+                : getPropertyDetailActionHref(property.core.id, 'edit')) as never}
               testID="property-edit-action"
               accessibilityRole="link"
               style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, textDecorationLine: 'none' }}

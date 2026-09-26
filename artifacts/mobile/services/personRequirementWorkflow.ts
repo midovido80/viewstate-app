@@ -10,6 +10,7 @@ import {
   type CatalogPreference,
   type FloorUse,
   type RequirementAreaMode,
+  type RequirementRentalPeriodId,
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 
@@ -25,7 +26,7 @@ export interface RequirementFormValues {
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
   readonly occupancy?: RequirementOccupancy;
-  readonly rentalPeriodId?: 'monthly' | 'yearly';
+  readonly rentalPeriodId?: RequirementRentalPeriodId;
   readonly swimmingPool?: boolean;
   readonly gym?: boolean;
   readonly seaView?: boolean;

@@ -20,6 +20,7 @@ import {
 } from '@/services/offeredWantedPresentation';
 import type { OfferedWantedFilter, OfferedWantedRow } from '@/services/offeredWantedPresentation';
 import type { OfferedWantedLoadResult } from '@/services/offeredWantedPresentation';
+import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
 
 export default function PropertiesScreen() {
   const router = useRouter();
@@ -71,6 +72,7 @@ export default function PropertiesScreen() {
     const requirement = item.kind === 'wanted' ? item.requirement : null;
     const isHighlighted = item.kind === 'offered' && item.id === highlightedId;
     const type = property?.core.propertyType ?? requirement?.propertyType;
+    const isStudio = property ? isOfferedStudio(property) : requirement ? isWantedStudio(requirement) : false;
     const transaction = item.transaction;
     const propertyArea = property ? getAreaById(property.core.locationArea.id) : undefined;
     const areaNames = property
@@ -100,7 +102,7 @@ export default function PropertiesScreen() {
         style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
         testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
         accessibilityRole="button"
-        accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${type ? t(`propertyType.${type}` as keyof Translations) : ''}, ${areaNames.join(', ')}`}
+        accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${isStudio ? t('enrich.apartment_subtype.studio') : type ? t(`propertyType.${type}` as keyof Translations) : ''}, ${areaNames.join(', ')}`}
       >
         <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
@@ -124,6 +126,13 @@ export default function PropertiesScreen() {
                 {t(getOfferedWantedTransactionLabelKey(item) as keyof Translations)}
               </Text>
             </View>
+            {isStudio ? (
+              <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]} testID={`studio-badge-${item.kind}-${item.id}`}>
+                <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
+                  {t('enrich.apartment_subtype.studio')}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -253,7 +262,7 @@ export default function PropertiesScreen() {
       }]}>
         <Button
           title={t('properties.new')}
-        onPress={() => router.push('/capture' as any)}
+        onPress={() => router.push('/capture/transaction' as any)}
           style={styles.fab}
           testID="btn-capture"
         />

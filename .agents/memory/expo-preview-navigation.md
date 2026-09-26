@@ -21,6 +21,12 @@ When adding a new component file while Expo is already running, Metro may keep r
 
 **How to apply:** Check workflow logs before treating a blank page as a runtime or routing failure. Restart only when logs identify this concrete stale-resolution case, then confirm the root preview renders.
 
+An immediate Expo web screenshot can be completely white while a real browser session that waits for startup reaches a working Home screen. A white frame without a console error is not enough to conclude the app is broken.
+
+**Why:** Repeated root screenshots captured a white page, but a browser automation pass waiting roughly 30 seconds loaded Home and completed both English and Arabic save/edit journeys. A separate syntax error did surface explicitly in the browser and must not be confused with slow startup.
+
+**How to apply:** For acceptance, wait for the normal root UI in a real browser and inspect bundle/console errors before classifying a white snapshot as a failure. Do not claim hands-on evidence based solely on a screenshot or bundle log.
+
 For multi-step Expo wizards, verify category decisions at the step where they are made, then inspect the next step in the real browser before relying on final candidate validation or source assertions.
 
 **Why:** A Floor Requirement could advance without choosing Residential or Commercial; later validation would reject it, but the intervening Core page showed neither set of category-specific controls. Source assertions had passed because the controls existed inside a conditional branch.

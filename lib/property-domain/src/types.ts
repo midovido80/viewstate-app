@@ -131,6 +131,8 @@ export interface ApartmentTypeDetails {
   readonly propertyType: "apartment";
   readonly builtUpAreaSquareMeters?: number;
   readonly apartmentSubtype?: ApartmentSubtype;
+  /** Canonical open-plan room count for a Studio; distinct from bedrooms. */
+  readonly studioRoomCount?: 1;
   readonly bedroomCount?: number;
   readonly bathroomCount?: number;
   readonly livingRoomCount?: number;
@@ -147,6 +149,9 @@ export interface ApartmentTypeDetails {
   readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
   readonly hasCentralAC?: boolean;
+  readonly hasKitchen?: boolean;
+  readonly hasHall?: boolean;
+  readonly hasParking?: boolean;
 }
 
 export interface EmptyFloorTypeDetails {

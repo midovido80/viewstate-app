@@ -11,6 +11,7 @@ import {
   type PropertyType,
   type RequirementOccupancy,
   type RequirementPurpose,
+  type RequirementRentalPeriodId,
   type ResidentialAmenity,
   type SeekerRequirement,
 } from '@workspace/property-domain';
@@ -45,6 +46,7 @@ import {
 import { getRequirementCatalogFields, getRequirementPresentationFields } from '@/services/requirementFieldMap';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
+import { canHydrateStudioRequirement, getStudioRequirementEditHref, getStudioRequirementFallbackEditHref, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
 
 const RENT_SERVICES = ['swimmingPool', 'gym', 'seaView'] as const;
 const AMENITY_LABELS: Record<string, { en: string; ar: string }> = {
@@ -78,7 +80,7 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
-  const { requirementId, seekerId } = useLocalSearchParams<{ requirementId: string; seekerId?: string }>();
+  const { requirementId, seekerId, edit } = useLocalSearchParams<{ requirementId: string; seekerId?: string; edit?: string }>();
   const editing = requirementId !== 'new';
   const router = useRouter();
   const colors = useColors();
@@ -113,7 +115,7 @@ export default function RequirementEditor() {
   const [centralACPreference, setCentralACPreference] = useState<boolean | undefined>();
   const [minimum, setMinimum] = useState('');
   const [maximum, setMaximum] = useState('');
-  const [cadence, setCadence] = useState<'monthly' | 'yearly'>('monthly');
+  const [cadence, setCadence] = useState<RequirementRentalPeriodId>('monthly');
   const [notes, setNotes] = useState('');
   const draftId = useRef(editing ? requirementId : generateDomainId());
   const saveFlight = useRef(false);
@@ -447,7 +449,7 @@ export default function RequirementEditor() {
     ...(purpose === 'rent' && coreApplicable ? [`${label('Occupancy', 'الإشغال')}: ${occupancy ? label(occupancy, occupancy === 'family' ? 'عائلي' : occupancy === 'bachelor' ? 'عزاب' : 'أي') : '—'}`] : []),
     ...(showPreferredAmenities ? [`${label('Preferred amenities', 'المزايا المفضلة')}: ${[...new Set([...amenities, ...(driverRoom ? ['driverRoom'] : []), ...excludedAmenities.map(value => `${value}:excluded`), ...services, ...(centralACPreference !== undefined && applicableCoreFields.has('hasCentralAC') ? [`centralAC${centralACPreference ? '' : ':excluded'}`] : []), ...catalog.filter(item => item.kind === 'feature' && amenityCatalogFields.includes(item.field)).map(item => `${item.field}${item.value ? '' : ':excluded'}`)].map(value => value.endsWith(':excluded') ? `${AMENITY_LABELS[value.slice(0, -9)]?.[language === 'ar' ? 'ar' : 'en'] ?? value.slice(0, -9)} (${label('Must not have', 'يجب ألا تتوفر')})` : AMENITY_LABELS[value]?.[language === 'ar' ? 'ar' : 'en'] ?? (value === 'driverRoom' ? label('Driver room', 'غرفة سائق') : label('Selected amenity', 'ميزة محددة'))))].join(', ') || '—'}`] : []),
     `${label('Budget', 'الميزانية')}: ${minimum || '—'}–${maximum || '—'} ${MARKET_CONFIG.currencyCode}`,
-    ...(purpose === 'rent' ? [`${label('Cadence', 'الدورية')}: ${cadence === 'yearly' ? label('Yearly', 'سنوياً') : label('Monthly', 'شهرياً')}`] : []),
+    ...(purpose === 'rent' ? [`${label('Cadence', 'الدورية')}: ${cadence === 'daily' ? label('Daily', 'يومياً') : cadence === 'yearly' ? label('Yearly', 'سنوياً') : label('Monthly', 'شهرياً')}`] : []),
     ...(notes.trim() ? [`${label('Notes', 'الملاحظات')}: ${notes}`] : []),
   ];
   catalogInvalidBridge = (field, invalid) => setInvalidCatalogFields(current => {
@@ -455,6 +457,72 @@ export default function RequirementEditor() {
     if (invalid) next.add(field); else next.delete(field);
     return next;
   });
+
+  if (editing && recordLoaded && baseline && isWantedStudio(baseline) && edit !== '1') {
+    const studioRows = getWantedStudioDisplayRows(baseline, language);
+    const contextRows = getWantedStudioContextRows(baseline, language);
+    const areaText = baseline.preferredAreaMode === 'all_kuwait'
+      ? label('All Kuwait', 'كل مناطق الكويت')
+      : baseline.preferredAreaIds.map(id => {
+        const area = getAreaById(id);
+        return area ? (language === 'ar' ? area.ar : area.en) : id;
+      }).join(', ');
+    const budgetText = `${baseline.budget.minimum}–${baseline.budget.maximum} ${baseline.budget.currencyCode}`;
+    const editStudio = () => router.push((canHydrateStudioRequirement(baseline)
+      ? getStudioRequirementEditHref(baseline.id)
+      : getStudioRequirementFallbackEditHref(baseline.id, baseline.seekerId)) as never);
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <TouchableOpacity
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}
+            testID="studio-requirement-back"
+          >
+            <Text style={{ color: colors.primary }}>{t('capture.back')}</Text>
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>
+            {label('Studio Requirement', 'متطلب استوديو')}
+          </Text>
+          <View />
+        </View>
+        <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80}>
+          <Text style={[styles.heading, { color: colors.foreground }]}>{label('Wanted apartment', 'الشقة المطلوبة')}</Text>
+          <Text style={[styles.summary, { color: colors.mutedForeground }]}>{label('Studio', 'استوديو')}</Text>
+          {contextRows.map(row => (
+            <Text key={row.field} style={[styles.summary, { color: colors.foreground }]} testID={`studio-requirement-${row.field}`}>
+              {`${row.label}: ${row.value}`}
+            </Text>
+          ))}
+          <Text style={[styles.summary, { color: colors.foreground }]}>
+            {`${label('Preferred areas', 'المناطق المفضلة')}: ${areaText || label('Any area', 'أي منطقة')}`}
+          </Text>
+          <Text style={[styles.summary, { color: colors.foreground }]}>
+            {`${label('Budget range', 'نطاق الميزانية')}: ${budgetText}`}
+          </Text>
+          <View style={{ gap: 8 }}>
+            {studioRows.map(row => (
+              <Text key={row.field} style={[styles.summary, { color: colors.foreground }]} testID={`studio-requirement-${row.field}`}>
+                {`${row.label}: ${row.value}`}
+              </Text>
+            ))}
+          </View>
+          {baseline.notes.trim() ? (
+            <Text style={[styles.summary, { color: colors.foreground }]}>
+              {`${label('Notes', 'الملاحظات')}: ${baseline.notes}`}
+            </Text>
+          ) : null}
+        </KeyboardAwareScrollViewCompat>
+        <View style={styles.footer}>
+          <Button
+            title={label('Edit Studio Requirement', 'تعديل متطلب الاستوديو')}
+            onPress={editStudio}
+            style={styles.flex}
+            testID="studio-requirement-edit"
+          />
+        </View>
+      </View>
+    );
+  }
 
   return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}><Text style={{ color: colors.primary }}>{t('capture.cancel')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{step + 1}/{STEPS.length}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
      {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
@@ -498,7 +566,7 @@ export default function RequirementEditor() {
         </View>
         <RequirementCatalogPreferencesProxy propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} amenities={amenities} onAmenitiesChange={setAmenities} excluded={excludedAmenities} onExcludedChange={setExcludedAmenities} showAmenities={coreApplicable} amenityFields={purpose === 'rent' ? amenityCatalogFields.filter(field => field !== 'hasPool') : amenityCatalogFields} /></>}
      </View>}
-    {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <View style={styles.wrap}>{(['monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
+    {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <View style={styles.wrap}>{(['daily', 'monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'daily' ? label('Daily', 'يومياً') : value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{purpose === 'rent' ? label('Rent', 'إيجار') : label('Buy', 'شراء')} · {t(`propertyType.${propertyType}`)}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}
    </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={() => { setError(''); setStep(value => value - 1); }} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={!!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
 }

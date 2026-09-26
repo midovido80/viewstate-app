@@ -4,6 +4,7 @@ import {
   REQUIREMENT_PURPOSES,
   PROPERTY_TYPES,
   type FloorUse,
+  type ApartmentSubtype,
   type PropertyDetailField,
   type PropertyDetailFieldDefinition,
   type PropertyType,
@@ -217,6 +218,9 @@ const WANTED_BY_FIELD: Partial<Record<PropertyDetailField, PropertyWantedDescrip
   hasSecurityGuard: { kind: 'preference', storage: 'native', field: 'preferredAmenities', value: 'security_guard', presentation: 'none' },
   hasBBQArea: { kind: 'preference', storage: 'native', field: 'preferredAmenities', value: 'bbq_area', presentation: 'none' },
   apartmentSubtype: { kind: 'preference', storage: 'catalogPreference', field: 'apartmentSubtype', preferenceKind: 'choice', presentation: 'leading' },
+  hasKitchen: { kind: 'preference', storage: 'catalogPreference', field: 'hasKitchen', preferenceKind: 'feature', presentation: 'amenity' },
+  hasHall: { kind: 'preference', storage: 'catalogPreference', field: 'hasHall', preferenceKind: 'feature', presentation: 'amenity' },
+  hasParking: { kind: 'preference', storage: 'catalogPreference', field: 'hasParking', preferenceKind: 'feature', presentation: 'amenity' },
   furnishing: { kind: 'preference', storage: 'catalogPreference', field: 'furnishing', preferenceKind: 'choice', presentation: 'leading' },
   intendedUse: { kind: 'preference', storage: 'catalogPreference', field: 'intendedUse', preferenceKind: 'choice', presentation: 'specification' },
   commercialActivity: { kind: 'preference', storage: 'catalogPreference', field: 'commercialActivity', preferenceKind: 'choice', presentation: 'specification' },
@@ -229,6 +233,7 @@ const LABELS: Record<string, readonly [string, string]> = {
   plotAreaSquareMeters: ['Plot area (m²)', 'مساحة الأرض (م²)'],
   builtUpAreaSquareMeters: ['Built-up area (m²)', 'مساحة البناء (م²)'],
   bathroomCount: ['Bathrooms', 'الحمامات'],
+  studioRoomCount: ['Open-plan rooms', 'الغرف المفتوحة'],
   parkingSpaceCount: ['Parking spaces', 'مواقف السيارات'],
   floorCount: ['Floors', 'عدد الأدوار'],
   unitCount: ['Units', 'عدد الوحدات'],
@@ -263,10 +268,13 @@ const LABELS: Record<string, readonly [string, string]> = {
   loadingBayCount: ['Loading bays', 'مناطق التحميل'],
   hasColdStorage: ['Cold storage', 'تخزين مبرد'],
   clarification: ['Clarification (required with details)', 'التوضيح (مطلوب عند إضافة تفاصيل)'],
+  hasKitchen: ['Kitchen', 'مطبخ'],
+  hasHall: ['Hall', 'صالة'],
+  hasParking: ['Parking', 'موقف سيارة'],
 };
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
-  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',
@@ -276,6 +284,7 @@ const DECIMAL_FIELDS = new Set<PropertyDetailField>([
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
   'hasPool', 'hasWaterfront', 'hasColdStorage', 'hasCentralAC',
+  'hasKitchen', 'hasHall', 'hasParking',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
   'apartmentSubtype', 'floorUse', 'furnishing',
@@ -326,9 +335,14 @@ export function getPropertyFormField(field: PropertyDetailField): PropertyFormFi
 export function getApplicablePropertyFormFields(
   propertyType: PropertyType,
   floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
 ): readonly PropertyFormFieldDefinition[] {
   return PROPERTY_FORM_CATALOG.filter(definition =>
     definition.appliesTo.includes(propertyType)
+    && (!definition.apartmentSubtypes
+      || propertyType === 'apartment'
+        && apartmentSubtype !== undefined
+        && definition.apartmentSubtypes.includes(apartmentSubtype))
     && (!definition.floorUses
       || propertyType !== 'floor'
       || (floorUse !== undefined && definition.floorUses.includes(floorUse))),
@@ -339,18 +353,21 @@ export function getApplicablePropertyFormFieldsForMode(
   mode: 'offered',
   propertyType: PropertyType,
   floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
 ): readonly PropertyFormFieldDefinition[];
 export function getApplicablePropertyFormFieldsForMode(
   mode: 'wanted',
   propertyType: PropertyType,
   floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
 ): readonly PropertyFormWantedFieldDefinition[];
 export function getApplicablePropertyFormFieldsForMode(
   mode: PropertyFormMode,
   propertyType: PropertyType,
   floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
 ): readonly PropertyFormFieldDefinition[] | readonly PropertyFormWantedFieldDefinition[] {
-  const applicable = getApplicablePropertyFormFields(propertyType, floorUse);
+  const applicable = getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype);
   if (mode === 'offered') return applicable;
   return applicable.filter(
     (definition): definition is PropertyFormWantedFieldDefinition => definition.wanted !== undefined,
@@ -361,7 +378,8 @@ export function isPropertyFormFieldApplicable(
   field: PropertyDetailField,
   propertyType: PropertyType,
   floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
 ): boolean {
-  return getApplicablePropertyFormFields(propertyType, floorUse)
+  return getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype)
     .some(definition => definition.field === field);
 }

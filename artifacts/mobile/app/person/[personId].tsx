@@ -372,6 +372,15 @@ export default function PersonDetailScreen() {
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
+            <Button
+              title={language === 'ar' ? 'إضافة طلب استوديو' : 'Add Wanted Studio'}
+              onPress={() => router.push({
+                pathname: '/capture/transaction',
+                params: { mode: 'wanted', seekerId: person.id },
+              } as never)}
+              variant="outline"
+              testID="person-add-wanted-studio"
+            />
             <View style={styles.actions}>
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 <Button title={t('people.whatsapp')} onPress={() => void openWhatsApp()} variant="whatsapp" testID="person-whatsapp" style={styles.flex} />
