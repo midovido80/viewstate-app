@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { resolveSourcePath } from './sourcePath.ts';
 import {
   buildStudioProperty,
   buildStudioRequirement,
@@ -110,4 +112,33 @@ test('BEHAVIOR: legacy bathroom values require explicit confirmation only when r
     missingBathroomProperty.activeOffer.id,
   );
   assert.equal(replaced.typeDetails?.propertyType === 'apartment' ? replaced.typeDetails.bathroomCount : undefined, 1);
+});
+
+test('BEHAVIOR: actual Studio field errors resolve to distinct English and Arabic messages', async () => {
+  const source = await readFile(resolveSourcePath('../contexts/I18nContext.tsx', import.meta.url), 'utf8');
+  const english = source.slice(source.indexOf('const en: Translations'), source.indexOf('const ar: Translations'));
+  const arabic = source.slice(source.indexOf('const ar: Translations'));
+  const message = (dictionary: string, code: string) =>
+    dictionary.match(new RegExp(`'studio\\.error\\.${code}': '([^']+)'`))?.[1];
+
+  const invalidArea = validateStudioForm({
+    ...createStudioFormValues('offered', 'rent'),
+    locationAreaId: 'not-a-kuwait-area',
+  }).errors.find(issue => issue.field === 'locationAreaId');
+  const invalidBudget = validateStudioForm({
+    ...createStudioFormValues('wanted', 'rent'),
+    preferredAreaMode: 'all_kuwait',
+    budgetMinimum: '200',
+    budgetMaximum: '100',
+  }).errors.find(issue => issue.field === 'budgetMinimum');
+
+  for (const issue of [invalidArea, invalidBudget]) {
+    assert.ok(issue, 'production Studio validation returns the field-specific error');
+    const englishMessage = message(english, issue.code);
+    const arabicMessage = message(arabic, issue.code);
+    assert.ok(englishMessage?.length);
+    assert.ok(arabicMessage?.length);
+    assert.notEqual(englishMessage, arabicMessage);
+    assert.match(arabicMessage, /[\u0600-\u06ff]/);
+  }
 });
