@@ -75,6 +75,23 @@ export interface RequirementSaveStageDiagnostic {
     | 'navigation_failed';
   /** Static contract paths only; never includes IDs, names, notes, or raw errors. */
   readonly location: readonly string[];
+  /** Whitelisted error identity only. Never copy arbitrary exception messages here. */
+  readonly errorType?: string;
+}
+
+function safeWriteErrorType(error: unknown): string {
+  if (!(error instanceof Error)) return 'non_error';
+  const known = [
+    'SAFE_WEB_MUTATION_UNSUPPORTED', 'UNREADABLE_REQUIREMENT_STORAGE',
+    'REQUIREMENT_FEATURE_DISABLED', 'REQUIREMENT_ID_ALREADY_EXISTS',
+    'REQUIREMENT_SEEKER_NOT_FOUND', 'UNREADABLE_PERSON_STORAGE',
+  ];
+  if (known.includes(error.message)) return error.message;
+  if (error.message.startsWith('INVALID_REQUIREMENT:')) {
+    return 'INVALID_REQUIREMENT';
+  }
+  if (error.name === 'QuotaExceededError') return 'QuotaExceededError';
+  return 'unexpected_error';
 }
 
 /** Safe operational context for logs and UI decisions; excludes record data and exceptions. */
@@ -197,6 +214,7 @@ export async function savePersonRequirement(options: {
     if (error instanceof Error && error.message === 'REQUIREMENT_SEEKER_NOT_FOUND') {
       return { status: 'missing_person' };
     }
+    const errorType = safeWriteErrorType(error);
     // A rejected write can still have committed. Resolve it by the candidate's
     // exact ID before making another write available to the user.
     try {
@@ -205,7 +223,7 @@ export async function savePersonRequirement(options: {
         return {
           status: 'storage_failure',
           retryAllowed: true,
-          diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'] },
+           diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'], errorType },
         };
       }
       if (!requirementMatches(saved, candidate)) {
@@ -213,7 +231,7 @@ export async function savePersonRequirement(options: {
           status: 'storage_failure',
           retryAllowed: false,
           conflict: true,
-          diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+           diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'], errorType },
         };
       }
       return await navigateToPerson(navigate);
@@ -221,7 +239,7 @@ export async function savePersonRequirement(options: {
       return {
         status: 'storage_failure',
         retryAllowed: false,
-        diagnostic: { stage: 'readback', code: 'storage_failure', location: ['requirement', 'id'] },
+         diagnostic: { stage: 'readback', code: 'storage_failure', location: ['requirement', 'id'], errorType },
       };
     }
   }
