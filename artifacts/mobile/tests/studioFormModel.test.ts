@@ -152,7 +152,6 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
     kitchen: 'must_not_have' as const,
     hall: 'required' as const,
     parking: 'not_important' as const,
-    mapsLink: 'https://www.google.com/maps/place/Salmiya',
     description: 'Near work',
   };
   assert.equal(validateStudioForm(values).ok, true);
@@ -165,7 +164,7 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
   assert.equal(requirement.preferredAreaMode, 'all_kuwait');
   assert.deepEqual(requirement.preferredAreaIds, []);
   assert.equal(requirement.bathroomsMinimum, 1);
-  assert.equal(requirement.studioMapsLink, values.mapsLink);
+  assert.equal('studioMapsLink' in requirement, false);
   assert.deepEqual(requirement.catalogPreferences, [
     { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
     { field: 'builtUpAreaSquareMeters', kind: 'number', comparison: 'minimum', value: 30 },
@@ -178,7 +177,7 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
   assert.deepEqual(readStudioRequirement(requirement), values);
 });
 
-test('BEHAVIOR: Wanted exact location link validates, persists outside catalog preferences, and hydrates', () => {
+test('BEHAVIOR: Wanted Studio ignores legacy exact-location input and never projects it', () => {
   const values = {
     ...createStudioFormValues('wanted', 'rent'),
     preferredAreaMode: 'all_kuwait' as const,
@@ -187,11 +186,10 @@ test('BEHAVIOR: Wanted exact location link validates, persists outside catalog p
     mapsLink: 'https://maps.app.goo.gl/kuwait-studio',
   };
   const requirement = buildStudioRequirement(values, '11111111-1111-4111-8111-111111111112', 'seeker-1');
-  assert.equal(requirement.studioMapsLink, values.mapsLink);
+  assert.equal('studioMapsLink' in requirement, false);
   assert.equal(requirement.catalogPreferences?.some(preference => preference.field.includes('maps')), false);
-  assert.equal(readStudioRequirement(requirement).mapsLink, values.mapsLink);
-  assert.ok(validateStudioForm({ ...values, mapsLink: 'https://attacker.example/coordinates' }).errors
-    .some(error => error.field === 'mapsLink' && error.code === 'invalid_location_link'));
+  assert.equal(readStudioRequirement(requirement).mapsLink, '');
+  assert.equal(validateStudioForm({ ...values, mapsLink: 'https://attacker.example/coordinates' }).ok, true);
 });
 
 test('BEHAVIOR: Studio validation rejects noncanonical locations and invalid map links', () => {

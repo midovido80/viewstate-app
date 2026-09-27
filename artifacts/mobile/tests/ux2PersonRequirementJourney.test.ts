@@ -8,6 +8,11 @@ import { buildPersonRequirement, formValuesFromRequirement } from '../services/p
 import { PERSON_CLASSIFICATIONS, createPerson, personCanBePropertySource } from '../services/people.ts';
 import { getApplicablePropertyFormFields } from '../services/propertyFormCatalog.ts';
 import {
+  getGenericRequirementApartmentSubtype,
+  getGenericRequirementApartmentSubtypePreference,
+  parseGenericRequirementApartmentSubtype,
+} from '../services/requirementFieldMap.ts';
+import {
   RequirementRouteGeneration,
   retryRequirementNavigation,
   retryRequirementReadback,
@@ -52,6 +57,86 @@ test('UX-2 Rent preferences preserve zero, false, absence, and exact/custom valu
   assert.deepEqual(restored.catalogPreferences, result.value.catalogPreferences);
   assert.equal(result.value.id, rentId);
   assert.equal(result.value.seekerId, seekerId);
+});
+
+test('Standard Apartment subtype survives candidate save, exact-ID readback, and edit round-trip', async () => {
+  const selectedSubtype = parseGenericRequirementApartmentSubtype('standard');
+  assert.equal(selectedSubtype, 'standard_apartment');
+  const standardPreference = getGenericRequirementApartmentSubtypePreference(selectedSubtype);
+  assert.deepEqual(standardPreference, [
+    { field: 'apartmentSubtype', kind: 'choice', value: 'standard_apartment' },
+  ]);
+
+  const candidate = buildPersonRequirement(rentId, seekerId, {
+    purpose: 'rent',
+    propertyType: 'apartment',
+    preferredAreaIds: ['salmiya'],
+    minimumBudget: 250,
+    maximumBudget: 500,
+    currencyCode: 'KWD',
+    notes: '',
+    bedroomsMinimum: 2,
+    bathroomsMinimum: 2,
+    catalogPreferences: standardPreference,
+  });
+  assert.equal(candidate.ok, true);
+  if (!candidate.ok) return;
+  assert.equal(getGenericRequirementApartmentSubtype(candidate.value.catalogPreferences), 'standard_apartment');
+
+  const records = new Map<string, SeekerRequirement>();
+  let writes = 0;
+  let updates = 0;
+  const store = {
+    getPerson: async (id: string) => id === seekerId ? { id, classifications: ['seeker'] } : null,
+    getRequirement: async (id: string) => records.get(id) ?? null,
+    saveRequirement: async (requirement: SeekerRequirement) => {
+      writes += 1;
+      records.set(requirement.id, requirement);
+    },
+    updateRequirement: async (baseline: SeekerRequirement, replacement: SeekerRequirement) => {
+      if (records.get(baseline.id)?.id !== baseline.id || replacement.id !== baseline.id) return false;
+      updates += 1;
+      records.set(replacement.id, replacement);
+      return true;
+    },
+  };
+  const created = await savePersonRequirement({
+    candidate: candidate.value,
+    baseline: null,
+    store,
+    navigate: () => undefined,
+  });
+  assert.deepEqual(created, { status: 'saved' });
+  assert.equal(writes, 1);
+  const saved = await store.getRequirement(rentId);
+  assert.ok(saved);
+  assert.equal(saved.id, rentId);
+
+  const reopened = formValuesFromRequirement(saved);
+  assert.equal(getGenericRequirementApartmentSubtype(reopened.catalogPreferences), 'standard_apartment');
+  assert.equal(reopened.bedroomsMinimum, 2);
+  assert.equal(reopened.bathroomsMinimum, 2);
+  assert.equal(getGenericRequirementApartmentSubtype([
+    { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
+  ]), undefined, 'generic Requirement hydration does not treat Studio as a selectable subtype');
+  assert.equal(parseGenericRequirementApartmentSubtype('studio'), undefined);
+
+  const edited = buildPersonRequirement(rentId, seekerId, { ...reopened, notes: 'edited without changing subtype' });
+  assert.equal(edited.ok, true);
+  if (!edited.ok) return;
+  const updated = await savePersonRequirement({
+    candidate: edited.value,
+    baseline: saved,
+    store,
+    navigate: () => undefined,
+  });
+  assert.deepEqual(updated, { status: 'saved' });
+  assert.equal(writes, 1);
+  assert.equal(updates, 1);
+  const editedReadback = await store.getRequirement(rentId);
+  assert.ok(editedReadback);
+  assert.equal(editedReadback.id, rentId);
+  assert.equal(getGenericRequirementApartmentSubtype(formValuesFromRequirement(editedReadback).catalogPreferences), 'standard_apartment');
 });
 
 test('UX-2 Buy and Floor preferences persist under canonical applicability without Rent fields', () => {

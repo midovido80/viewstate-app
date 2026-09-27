@@ -511,6 +511,79 @@ test('Web Requirement persistence survives recreation and isolates Seekers', asy
   assert.deepEqual(await first.getRequirement(ownerRequirement.id), ownerRequirement);
 });
 
+test('legacy media-bearing local rows hydrate cleanly and become clean only when edited', async () => {
+  const peopleReader = {
+    getPerson: async (id: string) => id === 'seeker-1' ? seeker(id) : null,
+  };
+  const legacyFirst = {
+    ...rentRequirement(),
+    studioMapsLink: 'https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z',
+    attachments: [{
+      id: 'legacy-image',
+      kind: 'image',
+      originalName: 'room.jpg',
+      mimeType: 'image/jpeg',
+      order: 0,
+      managedUri: `file:///requirements/${ids.rent}/attachments/legacy-image.jpg`,
+      privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+    }],
+  };
+  const peerId = ids.other;
+  const legacyPeer = {
+    ...rentRequirement(peerId),
+    studioMapsLink: 'https://maps.google.com/?q=29.3,48.0',
+    attachments: [{ id: 'peer-file', kind: 'pdf', originalName: 'old.pdf' }],
+  };
+
+  const storage = new MemoryStorage();
+  const originalWebBytes = JSON.stringify([legacyFirst, legacyPeer]);
+  storage.values.set(WEB_REQUIREMENTS_KEY, originalWebBytes);
+  const web = new WebRequirementStore(storage, () => locks, peopleReader);
+  const hydrated = await web.getRequirement(ids.rent);
+  assert.equal(hydrated?.id, ids.rent);
+  assert.equal(hydrated?.seekerId, 'seeker-1');
+  assert.equal('studioMapsLink' in (hydrated ?? {}), false);
+  assert.equal('attachments' in (hydrated ?? {}), false);
+  assert.equal(hydrated?.notes, rentRequirement().notes);
+  assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), originalWebBytes, 'Hydration must not rewrite prior bytes');
+
+  const attemptedNewSave = {
+    ...rentRequirement('66666666-6666-4666-8666-666666666666'),
+    attachments: legacyFirst.attachments,
+    studioMapsLink: legacyFirst.studioMapsLink,
+  } as unknown as SeekerRequirement;
+  await assert.rejects(web.saveRequirement(attemptedNewSave), /INVALID_REQUIREMENT/);
+  assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), originalWebBytes, 'Rejected save must leave rows unchanged');
+
+  const replacement = { ...hydrated!, notes: 'edited after hydration' };
+  assert.equal(await web.updateRequirement(hydrated!, replacement), true, 'Clean UI snapshot can edit legacy row');
+  const persistedAfterEdit = JSON.parse(storage.values.get(WEB_REQUIREMENTS_KEY) ?? '[]') as Record<string, unknown>[];
+  assert.equal('studioMapsLink' in persistedAfterEdit[0], false, 'Edited row transitions to clean contract');
+  assert.equal('attachments' in persistedAfterEdit[0], false, 'Edited row drops old media metadata');
+  assert.equal('studioMapsLink' in persistedAfterEdit[1], true, 'Untouched legacy peer remains intact');
+  assert.equal('attachments' in persistedAfterEdit[1], true, 'Unedited files are not discarded');
+  assert.equal(persistedAfterEdit[0].id, ids.rent, 'Edit preserves row identity');
+  assert.equal(persistedAfterEdit[0].seekerId, 'seeker-1', 'Edit preserves ownership');
+
+  const db = new RequirementDatabase();
+  db.requirements.set(ids.rent, JSON.stringify(legacyFirst));
+  db.chronology.set(ids.rent, 123456);
+  const native = new SQLiteRequirementStore(() => db, peopleReader);
+  const nativeHydrated = await native.getRequirement(ids.rent);
+  assert.equal(nativeHydrated?.id, ids.rent);
+  assert.equal('studioMapsLink' in (nativeHydrated ?? {}), false);
+  assert.equal('attachments' in (nativeHydrated ?? {}), false);
+  assert.equal(db.requirements.get(ids.rent), JSON.stringify(legacyFirst), 'SQLite hydration must not rewrite bytes');
+  assert.equal(await native.updateRequirement(nativeHydrated!, {
+    ...nativeHydrated!,
+    notes: 'native edit',
+  }), true, 'Clean snapshot can transition a native legacy row');
+  const nativeAfterEdit = JSON.parse(db.requirements.get(ids.rent) ?? '{}') as Record<string, unknown>;
+  assert.equal('studioMapsLink' in nativeAfterEdit, false);
+  assert.equal('attachments' in nativeAfterEdit, false);
+  assert.equal(db.chronology.get(ids.rent), 123456, 'Edit preserves existing chronology');
+});
+
 class RequirementDatabase {
   readonly requirements = new Map<string, string>();
   readonly chronology = new Map<string, number>();

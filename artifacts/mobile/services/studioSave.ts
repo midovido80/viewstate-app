@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import {
+  validateSeekerRequirement,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   validateProperty,
+  type RequirementValidationIssue,
 } from '@workspace/property-domain';
 import {
   persistCapturedDetails,
@@ -22,17 +24,13 @@ import {
 } from '@/services/propertyUpdateRecovery';
 import {
   savePersonRequirement,
+  requirementsEquivalent,
   type RequirementSaveOutcome,
   type RequirementSaveStore,
 } from '@/services/requirementSaveOutcome';
 import type { PropertyStore } from '@/services/persistence';
 import type { Person } from '@/services/people';
-import {
-  saveRequirementAttachments,
-} from '@/services/studioAttachmentPersistence';
-import type { AttachmentFileStore, LocalAttachment } from '@/services/attachmentOperations';
-import type { AttachmentSource } from '@/services/attachments';
-import type { RequirementStore } from '@/services/requirementPersistence';
+import { getAreaById } from '@/constants/kuwait-areas';
 
 export interface StudioRequirementStore extends RequirementSaveStore {
   getPerson(id: string): Promise<Person | null>;
@@ -50,7 +48,10 @@ export type StudioPropertySaveResult =
   | { readonly status: 'conflict'; readonly propertyId: string }
   | { readonly status: 'storage_failure'; readonly propertyId: string; readonly retryAllowed: boolean };
 
-export type StudioRequirementSaveResult = RequirementSaveOutcome;
+export type StudioRequirementSaveResult =
+  | Exclude<RequirementSaveOutcome, { readonly status: 'saved' }>
+  | { readonly status: 'saved'; readonly requirement: SeekerRequirement }
+  | { readonly status: 'invalid_requirement'; readonly issue?: RequirementValidationIssue };
 
 export function basicStudioProperty(property: Property): Property {
   return { core: property.core, activeOffer: property.activeOffer };
@@ -411,49 +412,51 @@ export async function retryStudioPropertyRecovery(options: {
   }
 }
 
-/** Verifies the referenced real Person exists before saving. */
+/** Validate the canonical Requirement contract and seeker ownership before writing. */
 export async function saveStudioRequirement(options: {
   readonly candidate: SeekerRequirement;
   readonly baseline: SeekerRequirement | null;
   readonly store: StudioRequirementStore;
   readonly navigate: () => void | Promise<void>;
-  readonly attachmentPersistence?: {
-    readonly fileStore: AttachmentFileStore;
-    readonly sources?: readonly AttachmentSource[];
-    readonly preparedAttachments?: readonly LocalAttachment[];
-  };
-}): Promise<StudioRequirementSaveResult | { readonly status: 'attachment_recovery_required' | 'attachment_storage_failure' }> {
+}): Promise<StudioRequirementSaveResult> {
+  const validation = validateSeekerRequirement(options.candidate, {
+    isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
+  });
+  if (!validation.ok) return { status: 'invalid_requirement', issue: validation.issues[0] };
+  if (options.baseline && (
+    options.baseline.id !== options.candidate.id
+    || options.baseline.seekerId !== options.candidate.seekerId
+  )) return { status: 'edit_conflict' };
+
   try {
     const person = await options.store.getPerson(options.candidate.seekerId);
     if (!person) return { status: 'missing_person' };
     if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
   } catch {
-    return { status: 'storage_failure', retryAllowed: false };
+    return { status: 'storage_failure', retryAllowed: true };
   }
-  if (options.attachmentPersistence) {
-    const result = await saveRequirementAttachments({
-      candidate: options.candidate,
-      baseline: options.baseline,
-      store: options.store as unknown as RequirementStore,
-      fileStore: options.attachmentPersistence.fileStore,
-      sources: options.attachmentPersistence.sources,
-      preparedAttachments: options.attachmentPersistence.preparedAttachments,
-    });
-    if (result.status === 'saved') {
-      try {
-        await options.navigate();
-        return { status: 'saved' };
-      } catch {
-        return { status: 'saved_navigation_failed' };
-      }
-    }
-    if (result.status === 'missing') return { status: 'missing_person' };
-    if (result.status === 'conflict') return { status: 'edit_conflict' };
-    return {
-      status: result.status === 'storage_failure'
-        ? 'attachment_storage_failure'
-        : 'attachment_recovery_required',
-    };
+
+  // Use the canonical save path for ownership, exact-ID resolution, and CAS
+  // edits. Navigation is deferred until the normalized stored value is fetched.
+  const outcome = await savePersonRequirement({
+    ...options,
+    navigate: () => undefined,
+  });
+  if (outcome.status !== 'saved') return outcome;
+
+  let requirement: SeekerRequirement | null;
+  try {
+    requirement = await options.store.getRequirement(options.candidate.id);
+  } catch {
+    return { status: 'saved_readback_failed' };
   }
-  return savePersonRequirement(options);
+  if (!requirementsEquivalent(requirement, options.candidate)) {
+    return { status: 'saved_readback_failed' };
+  }
+  try {
+    await options.navigate();
+    return { status: 'saved', requirement: requirement! };
+  } catch {
+    return { status: 'saved_navigation_failed' };
+  }
 }

@@ -46,7 +46,7 @@ export default function PropertyTypeScreen() {
   const rawTransaction = firstParam(params.transaction);
   const transaction: Transaction | undefined = rawTransaction === 'sale' || rawTransaction === 'rent'
     ? rawTransaction
-    : draft.transaction;
+    : mode === 'wanted' ? undefined : draft.transaction;
   const seekerId = firstParam(params.seekerId);
   const linkPersonId = firstParam(params.linkPersonId);
   const sourceRole = firstParam(params.sourceRole);

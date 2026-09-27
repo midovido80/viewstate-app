@@ -247,7 +247,7 @@ test('Requirement save serializes direct invocations while preserving sequential
   assert.doesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
   assert.doesNotMatch(person, /person-saved-add-requirement|person-add-requirement/);
   assert.match(person, /testID="person-primary-action"/);
-  assert.match(person, /getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(person, /getPersonWantedRequirementRoute\(person\.id\)/);
   assert.match(person, /requirements\.map\(requirement/);
   assert.match(person, /testID=\{`requirement-edit-\$\{requirement\.id\}`\}/);
 });

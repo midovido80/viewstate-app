@@ -45,17 +45,20 @@ test('BEHAVIOR: shared Studio catalog supplies both mode-specific sequences and 
   assert.deepEqual(getStudioCatalogChoiceLabel(transactionChoices[1], 'wanted'), ['Buy', 'للشراء']);
 });
 
-test('STRUCTURAL: Studio keeps exact-location, private-note, and media controls at the shared form tail', async () => {
+test('STRUCTURAL: Offered Studio keeps its exact-location and media controls; Wanted omits them', async () => {
   const studio = await readFile(resolveSourcePath('../app/capture/studio.tsx', import.meta.url), 'utf8');
   const form = studio.slice(studio.indexOf('const renderForm ='), studio.indexOf('const reviewItem ='));
   assert.match(form, /textInput\('privateNotes'/);
-  assert.match(form, /renderExactLocationSection\(\)/);
-  assert.match(form, /renderStudioAttachments\(\)/);
+  assert.match(form, /mode === 'offered' \? renderExactLocationSection\(\) : null/);
+  assert.match(form, /mode === 'offered' \? renderStudioAttachments\(\) : null/);
   assert.match(studio, /testID="studio-open-google-maps"/);
   assert.match(studio, /testID="studio-add-media"/);
   assert.match(studio, /testID="studio-add-file"/);
   assert.match(studio, /setAttachmentCover/);
   assert.match(studio, /reorderAttachments/);
+  assert.doesNotMatch(studio, /attachmentPersistence:/);
+  assert.match(studio, /candidate,\s*baseline: baselineRequirement,\s*store,\s*navigate:/);
+  assert.match(studio, /setSavedRequirement\(result\.requirement\)/);
 });
 
 test('BEHAVIOR: only two visible binary choices preserve untouched Offered and Wanted semantics', () => {

@@ -12,6 +12,7 @@ import {
 import type { Person } from '@/services/people';
 import type { UnreadableRecord } from '@/services/localRecordParser';
 import {
+  normalizeLegacySeekerRequirementForRead,
   normalizeSeekerRequirement,
   type SeekerRequirement,
 } from '@workspace/property-domain';
@@ -90,6 +91,14 @@ function normalizeForStorage(value: unknown): SeekerRequirement {
   return result.value;
 }
 
+function normalizeForRead(value: unknown): SeekerRequirement {
+  const result = normalizeLegacySeekerRequirementForRead(value, {
+    isCanonicalAreaId: canonicalAreaId,
+  });
+  if (!result.ok) throw invalidRequirementError(result.issues);
+  return result.value;
+}
+
 async function assertSeekerOwnership(
   personStore: RequirementOwnershipReader,
   seekerId: string,
@@ -100,7 +109,7 @@ async function assertSeekerOwnership(
 
 function parseRequirement(raw: string): SeekerRequirement {
   try {
-    return normalizeForStorage(JSON.parse(raw));
+    return normalizeForRead(JSON.parse(raw));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('INVALID_REQUIREMENT')) {
       throw new Error('UNREADABLE_REQUIREMENT');
@@ -283,10 +292,11 @@ export class WebRequirementStore implements RequirementStore {
   private async getAllRaw(): Promise<{
     readonly requirements: SeekerRequirement[];
     readonly hasUnreadable: boolean;
+    readonly rawValues: unknown[];
   }> {
-    if (!this.requirementsEnabled) return { requirements: [], hasUnreadable: false };
+    if (!this.requirementsEnabled) return { requirements: [], hasUnreadable: false, rawValues: [] };
     const raw = await this.storage.getItem(WEB_REQUIREMENTS_KEY);
-    if (raw === null) return { requirements: [], hasUnreadable: false };
+    if (raw === null) return { requirements: [], hasUnreadable: false, rawValues: [] };
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) throw new Error('not-array');
@@ -305,7 +315,7 @@ export class WebRequirementStore implements RequirementStore {
           return [];
         }
       });
-      return { requirements, hasUnreadable };
+      return { requirements, hasUnreadable, rawValues: parsed };
     } catch {
       this.reportUnreadable({ type: 'requirement', id: 'storage' });
       throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
@@ -341,8 +351,8 @@ export class WebRequirementStore implements RequirementStore {
           normalized.id,
           createCreationTimestamp(),
         );
-        all.unshift(normalized);
-        await this.storage.setItem(WEB_REQUIREMENTS_KEY, JSON.stringify(all));
+        current.rawValues.unshift(normalized);
+        await this.storage.setItem(WEB_REQUIREMENTS_KEY, JSON.stringify(current.rawValues));
       }));
   }
 
@@ -391,13 +401,13 @@ export class WebRequirementStore implements RequirementStore {
         matching.length !== 1
         || JSON.stringify(matching[0].requirement) !== JSON.stringify(normalizedExpected)
       ) return false;
-      all[matching[0].index] = normalized;
-      await this.storage.setItem(WEB_REQUIREMENTS_KEY, JSON.stringify(all));
+       current.rawValues[matching[0].index] = normalized;
+       await this.storage.setItem(WEB_REQUIREMENTS_KEY, JSON.stringify(current.rawValues));
       return true;
     });
   }
 }
 
 function parseRequirementValue(value: unknown): SeekerRequirement {
-  return normalizeForStorage(value);
+  return normalizeForRead(value);
 }

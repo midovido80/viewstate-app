@@ -54,7 +54,6 @@ const messages: Record<LocalizableRequirementIssueCode, readonly [english: strin
   invalid_catalog_preference: ['This property preference is invalid or not supported for the selected category.', 'تفضيل العقار غير صالح أو غير مدعوم للفئة المختارة.'],
   duplicate_catalog_preference: ['Each property preference can be selected only once.', 'لا يمكن اختيار تفضيل المواصفات أكثر من مرة.'],
   catalog_preference_not_allowed: ['This property preference is not available for the selected category or floor use.', 'تفضيل العقار غير متاح للفئة أو استخدام الدور المختار.'],
-  invalid_attachment: ['Review the Requirement attachment details and try again.', 'راجع تفاصيل مرفقات المتطلب وحاول مرة أخرى.'],
   incompatible_category_preference: ['Remove or change the preference that is not supported by this category.', 'أزل أو غيّر التفضيل غير المدعوم لهذه الفئة.'],
   invalid_floor_use: ['Choose an approved floor use for this Floor Requirement.', 'اختر استخداماً معتمداً لمتطلب الدور.'],
   invalid_requirement_draft: ['The Requirement draft is invalid. Review the highlighted details and try again.', 'مسودة المتطلب غير صالحة. راجع التفاصيل المحددة وحاول مرة أخرى.'],

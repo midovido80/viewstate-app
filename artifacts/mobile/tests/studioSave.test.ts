@@ -528,7 +528,7 @@ test('Studio Requirement duplicate-ID collision is rejected after exact-ID readb
   assert.equal(navigationCount.value, 0);
 });
 
-test('Studio Requirement attachment save keeps the seeker gate and exact-ID readback', async () => {
+test('Wanted Studio rejects retired exact-location and attachment fields before writing', async () => {
   const values = {
     ...createStudioFormValues('wanted', 'rent'),
     preferredAreaMode: 'all_kuwait' as const,
@@ -537,70 +537,28 @@ test('Studio Requirement attachment save keeps the seeker gate and exact-ID read
   };
   const candidate = buildStudioRequirement(values, '66666666-6666-4666-8666-666666666666', seeker.id);
   const memory = requirementStore(seeker);
-  const events: string[] = [];
-  const fileStore: AttachmentFileStore = {
-    copyToProperty: async () => 'file:///unused',
-    copyToRequirement: async () => `file:///requirements/${candidate.id}/attachments/studio-requirement-image`,
-    delete: async uri => { events.push(`delete:${uri}`); },
-  };
-  const staged: LocalAttachment = {
-    id: 'studio-requirement-image',
-    kind: 'image',
-    originalName: 'studio.jpg',
-    mimeType: 'image/jpeg',
-    uri: `file:///requirements/${candidate.id}/attachments/studio-requirement-image`,
-    order: 0,
-    isCover: true,
-  };
-  const saved = await saveStudioRequirement({
-    candidate,
+  let navigationCount = 0;
+  const legacyCandidate = {
+    ...candidate,
+    studioMapsLink: 'https://maps.app.goo.gl/legacy',
+    attachments: [{
+      id: 'retired-image',
+      kind: 'image',
+      originalName: 'private.jpg',
+      mimeType: 'image/jpeg',
+      order: 0,
+      managedUri: 'file:///legacy-private-file',
+      privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+    }],
+  } as unknown as SeekerRequirement;
+  const result = await saveStudioRequirement({
+    candidate: legacyCandidate,
     baseline: null,
     store: memory.store,
-    navigate: () => undefined,
-    attachmentPersistence: { fileStore, preparedAttachments: [staged] },
+    navigate: () => { navigationCount += 1; },
   });
-  assert.deepEqual(saved, { status: 'saved' });
-  assert.deepEqual(memory.writes, ['save']);
-  const readback = await memory.store.getRequirement(candidate.id);
-  assert.equal(readback?.attachments?.[0].id, staged.id);
-  assert.equal(readback?.attachments?.[0].managedUri, staged.uri);
-  assert.equal(readback?.attachments?.[0].isCover, true);
-  assert.deepEqual(events, []);
-  assert.equal(memory.requirements.size, 1);
-  const edited = await saveStudioRequirement({
-    candidate: { ...readback!, notes: 'Edited while retaining its media' },
-    baseline: readback,
-    store: memory.store,
-    navigate: () => undefined,
-    attachmentPersistence: { fileStore, preparedAttachments: [] },
-  });
-  assert.deepEqual(edited, { status: 'saved' });
-  assert.deepEqual((await memory.store.getRequirement(candidate.id))?.attachments, readback?.attachments);
-  assert.deepEqual(events, []);
-
-  const owner = createPerson({
-    id: 'person-studio-attachment-owner',
-    classifications: ['owner'],
-    name: 'Not a seeker',
-    displayPhone: '55512347',
-  });
-  const blockedStore = requirementStore(owner);
-  let copiedOrDeleted = false;
-  const blocked = await saveStudioRequirement({
-    candidate: { ...candidate, id: '77777777-7777-4777-8777-777777777777', seekerId: owner.id },
-    baseline: null,
-    store: blockedStore.store,
-    navigate: () => undefined,
-    attachmentPersistence: {
-      fileStore: {
-        ...fileStore,
-        copyToRequirement: async () => { copiedOrDeleted = true; return staged.uri; },
-        delete: async () => { copiedOrDeleted = true; },
-      },
-      preparedAttachments: [staged],
-    },
-  });
-  assert.deepEqual(blocked, { status: 'non_seeker' });
-  assert.deepEqual(blockedStore.writes, []);
-  assert.equal(copiedOrDeleted, false);
+  assert.equal(result.status, 'invalid_requirement');
+  assert.deepEqual(memory.writes, []);
+  assert.equal(memory.requirements.size, 0);
+  assert.equal(navigationCount, 0);
 });

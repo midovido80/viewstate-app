@@ -60,16 +60,14 @@ import {
   retryRequirementReadback,
   verifyUncertainRequirementWrite,
 } from '@/services/requirementSaveOutcome';
+import { localizedRequirementIssue } from '@/services/requirementIssueMessage';
 import {
   createExpoFileStore,
   createIndexedDbWebAttachmentBlobStore,
   createWebAttachmentFileStore,
   createWebFileAttachments,
-  createWebRequirementAttachments,
   pickAndStoreMedia,
   pickAndStorePdfs,
-  pickAndStoreRequirementMedia,
-  pickAndStoreRequirementPdfs,
   type WebAttachmentBlobStore,
 } from '@/services/attachments';
 import {
@@ -97,6 +95,32 @@ type RouteParams = {
   editPropertyId?: string;
   editRequirementId?: string;
 };
+
+export function getStudioEditBackTarget(
+  mode: StudioFormMode,
+  editing: boolean,
+  propertyId?: string,
+  requirementId?: string,
+  seekerId?: string,
+):
+  | { readonly pathname: '/requirement/[requirementId]'; readonly params: { readonly requirementId: string; readonly seekerId: string } }
+  | { readonly pathname: '/property/[propertyCoreId]'; readonly params: { readonly propertyCoreId: string } }
+  | null {
+  if (!editing) return null;
+  if (mode === 'wanted' && requirementId && seekerId) {
+    return {
+      pathname: '/requirement/[requirementId]',
+      params: { requirementId, seekerId },
+    };
+  }
+  if (mode === 'offered' && propertyId) {
+    return {
+      pathname: '/property/[propertyCoreId]',
+      params: { propertyCoreId: propertyId },
+    };
+  }
+  return null;
+}
 
 const isTransaction = (value: string | undefined): value is Transaction =>
   value === 'sale' || value === 'rent';
@@ -233,19 +257,6 @@ export default function StudioCaptureRoute() {
       attachmentFileStore.delete(item.uri).catch(() => undefined)));
   }, []);
 
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (step === 'review') {
-        returnToForm();
-        return true;
-      }
-      router.back();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [returnToForm, router, step]);
-
   const update = useCallback(<K extends keyof StudioFormValues>(key: K, value: StudioFormValues[K]) => {
     setValues(current => ({ ...current, [key]: value }));
     setFieldErrors(current => {
@@ -345,7 +356,7 @@ export default function StudioCaptureRoute() {
           if (!cancelled) {
             setMode('wanted');
             setBaselineRequirement(requirement);
-            setAttachments((requirement.attachments ?? []).map(localFromPropertyAttachment));
+            setAttachments([]);
             setEditOwnerPerson(person);
             setSelectedPersonId(requirement.seekerId);
             setValues(readStudioRequirement(requirement));
@@ -379,6 +390,39 @@ export default function StudioCaptureRoute() {
       && selectedPerson.classifications.includes('seeker')
       && (!seekerParam || selectedPerson.id === seekerParam));
   const showingReview = step === 'review' && wantedIdentityReady;
+  const getEditBackTarget = () => getStudioEditBackTarget(
+    mode,
+    editing,
+    baselineProperty?.core.id ?? editPropertyId,
+    baselineRequirement?.id ?? editRequirementId,
+    baselineRequirement?.seekerId ?? selectedPersonId,
+  );
+  const leaveStudio = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    const target = getEditBackTarget();
+    if (target) router.replace(target as never);
+  };
+  const handleHeaderBack = () => {
+    if (showingReview) returnToForm();
+    else leaveStudio();
+  };
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'review') {
+        returnToForm();
+        return true;
+      }
+      leaveStudio();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [baselineProperty, baselineRequirement, editPropertyId, editRequirementId, mode, returnToForm, router, selectedPersonId, step]);
+
   const areaTitle = (id: string) => {
     const area = getAreaById(id);
     return area ? (language === 'ar' ? area.ar : area.en) : id;
@@ -456,17 +500,11 @@ export default function StudioCaptureRoute() {
     : 'The file could not be added. Check its type or media-library permission and try again.';
 
   const addStudioMedia = async () => {
-    if (attachmentBusy) return;
+    if (mode !== 'offered' || attachmentBusy) return;
     setAttachmentBusy(true);
     try {
-      const id = mode === 'offered' ? baselineProperty?.core.id ?? draftPropertyId.current
-        : baselineRequirement?.id ?? draftRequirementId.current;
-      const picked = mode === 'offered'
-        ? await pickAndStoreMedia(id, attachments, { fileStore: attachmentFileStore })
-        : await pickAndStoreRequirementMedia(id, attachments, {
-          fileStore: attachmentFileStore,
-          platform: Platform.OS,
-        });
+      const id = baselineProperty?.core.id ?? draftPropertyId.current;
+      const picked = await pickAndStoreMedia(id, attachments, { fileStore: attachmentFileStore });
       appendStagedAttachments(picked);
     } catch {
       setAttachmentError(attachmentFailureMessage());
@@ -476,17 +514,11 @@ export default function StudioCaptureRoute() {
   };
 
   const addStudioPdf = async () => {
-    if (attachmentBusy) return;
+    if (mode !== 'offered' || attachmentBusy) return;
     setAttachmentBusy(true);
     try {
-      const id = mode === 'offered' ? baselineProperty?.core.id ?? draftPropertyId.current
-        : baselineRequirement?.id ?? draftRequirementId.current;
-      const picked = mode === 'offered'
-        ? await pickAndStorePdfs(id, attachments, DocumentPicker, { fileStore: attachmentFileStore })
-        : await pickAndStoreRequirementPdfs(id, attachments, DocumentPicker, {
-          fileStore: attachmentFileStore,
-          platform: Platform.OS,
-        });
+      const id = baselineProperty?.core.id ?? draftPropertyId.current;
+      const picked = await pickAndStorePdfs(id, attachments, DocumentPicker, { fileStore: attachmentFileStore });
       appendStagedAttachments(picked);
     } catch {
       setAttachmentError(attachmentFailureMessage());
@@ -496,17 +528,15 @@ export default function StudioCaptureRoute() {
   };
 
   const addStudioWebFiles = (kind: 'media' | 'pdf') => {
-    if (Platform.OS !== 'web' || attachmentBusy) return;
+    if (mode !== 'offered' || Platform.OS !== 'web' || attachmentBusy) return;
     try {
       openStudioWebFilePicker({
         accept: kind === 'media' ? 'image/*,video/*' : 'application/pdf',
         onFiles: files => {
           if (!files.length) return;
           setAttachmentBusy(true);
-          const ownerId = mode === 'offered' ? baselineProperty?.core.id ?? draftPropertyId.current
-            : baselineRequirement?.id ?? draftRequirementId.current;
-          const createFiles = mode === 'offered' ? createWebFileAttachments : createWebRequirementAttachments;
-          void createFiles(ownerId, attachments, files, undefined, webAttachmentBlobs.current!)
+          const ownerId = baselineProperty?.core.id ?? draftPropertyId.current;
+          void createWebFileAttachments(ownerId, attachments, files, undefined, webAttachmentBlobs.current!)
             .then(appendStagedAttachments)
             .catch(() => setAttachmentError(attachmentFailureMessage()))
             .finally(() => setAttachmentBusy(false));
@@ -765,60 +795,52 @@ export default function StudioCaptureRoute() {
           baselineRequirement?.id ?? draftRequirementId.current,
           ownerId,
         );
-        const staged = attachments.filter(item => stagedFiles.current.has(item.id));
-        const retained = attachments.filter(item => !stagedFiles.current.has(item.id));
-        const candidateWithRetained: SeekerRequirement = {
-          ...candidate,
-          ...(retained.length ? { attachments: retained.map(propertyAttachmentMetadata) } : {}),
-        };
-        const expectedRequirement: SeekerRequirement = {
-          ...candidateWithRetained,
-          ...((retained.length || staged.length)
-            ? { attachments: [...retained.map(propertyAttachmentMetadata), ...staged.map(propertyAttachmentMetadata)] }
-            : {}),
-        };
         const result = await saveStudioRequirement({
-          candidate: candidateWithRetained,
+          candidate,
           baseline: baselineRequirement,
           store,
-          navigate: () => undefined,
-          attachmentPersistence: {
-            fileStore: attachmentFileStore,
-            preparedAttachments: staged,
-          },
+          navigate: () => router.replace({
+            pathname: '/requirement/[requirementId]',
+            params: { requirementId: candidate.id, seekerId: candidate.seekerId },
+          } as never),
         });
         if (result.status === 'saved') {
           committedRequirement.current = null;
           uncertainRequirement.current = null;
-          preserveStagedFiles.current = true;
-          setSavedRequirement(expectedRequirement);
+          setSavedRequirement(result.requirement);
           setError('');
-        } else if (result.status === 'missing_person' || result.status === 'non_seeker') {
-          setError(t('studio.person_missing'));
+        } else if (result.status === 'missing_person') {
+          setError(localizedRequirementIssue({ code: 'save_missing_person' }, language));
+        } else if (result.status === 'non_seeker') {
+          setError(localizedRequirementIssue({ code: 'save_non_seeker' }, language));
+        } else if (result.status === 'invalid_requirement') {
+          setError(localizedRequirementIssue(result.issue, language));
         } else if (result.status === 'saved_readback_failed' || result.status === 'saved_navigation_failed') {
           committedRequirement.current = candidate;
-          setError(t(result.status === 'saved_navigation_failed' ? 'studio.navigation_failed' : 'studio.saved_readback_failed'));
+          setError(localizedRequirementIssue({
+            code: result.status === 'saved_navigation_failed' ? 'save_navigation_failed' : 'save_readback_failed',
+          }, language));
         } else if (result.status === 'edit_conflict'
           || (result.status === 'storage_failure' && result.conflict)) {
           if (result.status !== 'edit_conflict') uncertainRequirement.current = candidate;
-          setError(t('studio.save_conflict'));
-        } else if (result.status === 'attachment_recovery_required') {
-          uncertainStagedOwnership.current = true;
-          uncertainRequirement.current = expectedRequirement;
-          setError(t('studio.save_uncertain'));
-        } else if (result.status === 'attachment_storage_failure') {
-          setError(t('studio.save_failed'));
+          setError(localizedRequirementIssue({
+            code: result.status === 'edit_conflict' ? 'save_edit_conflict' : 'save_conflict',
+          }, language));
         } else {
           if (result.status === 'storage_failure' && result.retryAllowed === false) {
             uncertainRequirement.current = candidate;
           }
-          setError(result.status === 'storage_failure' && result.retryAllowed === false
-            ? t('studio.save_uncertain')
-            : t('studio.save_failed'));
+          setError(localizedRequirementIssue({
+            code: result.status === 'storage_failure' && result.retryAllowed === false
+              ? 'save_storage_uncertain'
+              : 'save_storage_failure',
+          }, language));
         }
       }
-    } catch {
-      setError(t('studio.save_failed'));
+    } catch (saveError) {
+      setError(saveError instanceof Error && saveError.message.startsWith('INVALID_STUDIO_REQUIREMENT:')
+        ? localizedRequirementIssue({ code: 'invalid_requirement' }, language)
+        : t('studio.save_failed'));
     } finally {
       flight.current = false;
       setSaving(false);
@@ -857,17 +879,26 @@ export default function StudioCaptureRoute() {
     flight.current = true;
     setSaving(true);
     try {
-      const navigate = () => undefined;
+      const navigate = () => router.replace({
+        pathname: '/requirement/[requirementId]',
+        params: { requirementId: candidate.id, seekerId: candidate.seekerId },
+      } as never);
       const wasUncertain = !!uncertainRequirement.current;
       const outcome = wasUncertain
         ? await verifyUncertainRequirementWrite({ candidate, store, navigate })
         : await retryRequirementReadback({ candidate, store, navigate });
       if (outcome.status === 'saved') {
+        const readback = await store.getRequirement(candidate.id);
+        if (!readback) {
+          committedRequirement.current = candidate;
+          setError(localizedRequirementIssue({ code: 'save_readback_failed' }, language));
+          return;
+        }
         committedRequirement.current = null;
         uncertainRequirement.current = null;
         uncertainStagedOwnership.current = false;
         preserveStagedFiles.current = true;
-        setSavedRequirement(candidate);
+        setSavedRequirement(readback);
         setError('');
       } else if (outcome.status === 'storage_failure' && outcome.retryAllowed) {
         committedRequirement.current = null;
@@ -879,10 +910,10 @@ export default function StudioCaptureRoute() {
         setError(t('studio.save_conflict'));
       } else if (outcome.status === 'saved_navigation_failed') {
         committedRequirement.current = candidate;
-        setError(t('studio.navigation_failed'));
+        setError(localizedRequirementIssue({ code: 'save_navigation_failed' }, language));
       } else {
         committedRequirement.current = candidate;
-        setError(t('studio.saved_readback_failed'));
+        setError(localizedRequirementIssue({ code: 'save_readback_failed' }, language));
       }
     } finally {
       flight.current = false;
@@ -1151,8 +1182,8 @@ export default function StudioCaptureRoute() {
           {mode === 'offered'
             ? textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })
             : null}
-          {renderExactLocationSection()}
-          {renderStudioAttachments()}
+          {mode === 'offered' ? renderExactLocationSection() : null}
+          {mode === 'offered' ? renderStudioAttachments() : null}
         </>
       )}
     </>
@@ -1365,10 +1396,7 @@ export default function StudioCaptureRoute() {
         <TouchableOpacity
           accessibilityRole="button"
           testID="studio-close"
-          onPress={() => {
-            if (showingReview) returnToForm();
-            else router.back();
-          }}
+          onPress={handleHeaderBack}
           style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.card }]}
         >
           <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={20} color={colors.foreground} />
@@ -1406,7 +1434,7 @@ export default function StudioCaptureRoute() {
               <>
                 <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('studio.review')}</Text>
                 {renderReview()}
-                {renderStudioAttachments()}
+                {mode === 'offered' ? renderStudioAttachments() : null}
               </>
             )}
             {savedProperty ? (

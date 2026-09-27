@@ -1,4 +1,4 @@
-import type { PropertyDetailField, PropertyType, FloorUse } from '@workspace/property-domain';
+import type { ApartmentSubtype, CatalogPreference, PropertyDetailField, PropertyType, FloorUse } from '@workspace/property-domain';
 import {
   PROPERTY_FORM_CATALOG,
   getApplicablePropertyFormFields,
@@ -29,6 +29,33 @@ export const STUDIO_ONLY_REQUIREMENT_CATALOG_FIELDS = new Set<PropertyDetailFiel
   'hasParking',
 ]);
 
+export type GenericRequirementApartmentSubtype = Exclude<ApartmentSubtype, 'studio'>;
+
+export function parseGenericRequirementApartmentSubtype(
+  value?: string,
+): GenericRequirementApartmentSubtype | undefined {
+  if (value === 'standard') return 'standard_apartment';
+  return value === 'standard_apartment' || value === 'duplex' ? value : undefined;
+}
+
+export function getGenericRequirementApartmentSubtypePreference(
+  apartmentSubtype?: GenericRequirementApartmentSubtype,
+): readonly CatalogPreference[] {
+  return apartmentSubtype
+    ? [{ field: 'apartmentSubtype', kind: 'choice', value: apartmentSubtype }]
+    : [];
+}
+
+export function getGenericRequirementApartmentSubtype(
+  preferences?: readonly CatalogPreference[],
+): GenericRequirementApartmentSubtype | undefined {
+  const preference = preferences?.find(item => item.field === 'apartmentSubtype' && item.kind === 'choice');
+  if (!preference || preference.kind !== 'choice') return undefined;
+  return preference.value === 'standard_apartment' || preference.value === 'duplex'
+    ? preference.value
+    : undefined;
+}
+
 export const isRequirementCatalogFieldAllowed = (field: PropertyDetailField): boolean => {
   const definition = PROPERTY_FORM_CATALOG.find(item => item.field === field);
   return definition?.wanted?.storage === 'catalogPreference'
@@ -37,8 +64,12 @@ export const isRequirementCatalogFieldAllowed = (field: PropertyDetailField): bo
     && !CANONICAL_CATALOG_FIELDS.has(field);
 };
 
-export function getRequirementCatalogFields(propertyType: PropertyType, floorUse?: FloorUse) {
-  return getApplicablePropertyFormFields(propertyType, floorUse)
+export function getRequirementCatalogFields(
+  propertyType: PropertyType,
+  floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
+) {
+  return getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype)
     .filter(definition =>
       definition.field !== 'floorUse'
       && definition.wanted?.storage === 'catalogPreference'
@@ -47,8 +78,12 @@ export function getRequirementCatalogFields(propertyType: PropertyType, floorUse
 }
 
 /** Divide approved controls by meaning, never by their persistence location. */
-export function getRequirementPresentationFields(propertyType: PropertyType, floorUse?: FloorUse) {
-  const definitions = getRequirementCatalogFields(propertyType, floorUse);
+export function getRequirementPresentationFields(
+  propertyType: PropertyType,
+  floorUse?: FloorUse,
+  apartmentSubtype?: ApartmentSubtype,
+) {
+  const definitions = getRequirementCatalogFields(propertyType, floorUse, apartmentSubtype);
   const leading = definitions
     .filter(definition => definition.wanted?.presentation === 'leading')
     .map(definition => definition.field);

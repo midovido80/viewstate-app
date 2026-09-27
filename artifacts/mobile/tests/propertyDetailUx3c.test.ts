@@ -17,8 +17,18 @@ import {
   getPropertySuccessRoutes,
   prioritizeHighlightedProperty,
 } from '../services/propertyDetailPresentation.ts';
-import { resolveWebAttachmentImageSources } from '../services/attachmentOperations.ts';
+import { reorderAttachments, resolveWebAttachmentImageSources, setAttachmentCover } from '../services/attachmentOperations.ts';
 import { getPropertyMapsWebHref } from '../services/mapsLink.ts';
+import { openStudioWebMapsLocation } from '../services/studioWebActions.ts';
+import {
+  discardPropertyEditDraftAndCleanupOwnedAttachments,
+  getPropertyDetailMapsHref,
+  getPropertyEditMapsFieldError,
+  propertyEditChoicesAreDirty,
+  shouldShowPropertyGallery,
+} from '../services/propertyDetailEditorUx.ts';
+import type { PropertyEditChoices, PropertyEditDraftV1 } from '../services/propertyUpdateRecovery.ts';
+import { buildPropertyUpdateCandidate, createEditDraft } from '../services/propertyUpdateRecovery.ts';
 
 test('Property detail web navigation resolves same-ID action routes and a safe Home fallback', () => {
   assert.equal(getPropertyDetailActionHref('property /exact', 'edit'), '/property/property%20%2Fexact/edit');
@@ -283,4 +293,228 @@ test('Web property gallery resolves persisted IndexedDB refs and revokes transie
     ], blobStore, objectUrls),
     /ATTACHMENT_FILE_MISSING/,
   );
+});
+
+test('Apartment Maps editor validates HTTPS Google links with field-localized errors', () => {
+  assert.equal(getPropertyEditMapsFieldError('', 'en'), '');
+  assert.equal(getPropertyEditMapsFieldError('https://www.google.com/maps/place/Kuwait', 'en'), '');
+  assert.equal(
+    getPropertyEditMapsFieldError('http://www.google.com/maps/place/Kuwait', 'en'),
+    'Enter a valid, secure Google Maps URL (HTTPS).',
+  );
+  assert.equal(
+    getPropertyEditMapsFieldError('https://evil.example/maps/place/Kuwait', 'ar'),
+    'أدخل رابط خرائط Google صالحًا وآمنًا (HTTPS).',
+  );
+  assert.equal(
+    getPropertyEditMapsFieldError(
+      'https://www.google.com/maps/search/?api=1&https://www.google.com/maps/search/?api=1&query=Salmiya%2C%20Kuwait',
+      'en',
+    ),
+    'Enter a valid, secure Google Maps URL (HTTPS).',
+    'an automation append that concatenates two URLs is rejected as an Apartment field error',
+  );
+});
+
+test('Apartment Maps links survive candidate save, same-ID reload, and detail link projection', () => {
+  const baseline = {
+    core: {
+      id: 'apartment-maps-roundtrip',
+      propertyType: 'apartment',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'apartment-maps-offer',
+      propertyCoreId: 'apartment-maps-roundtrip',
+      transaction: 'rent',
+      rentalPrice: { amount: 100, currencyCode: 'KWD' },
+      rentalPeriodId: 'monthly',
+    },
+  } as Property;
+  const link = 'https://www.google.com/maps/place/Salmiya';
+  const draft = createEditDraft(baseline);
+  const saved = buildPropertyUpdateCandidate(baseline, { ...draft.choices, mapsLink: link });
+  assert.equal(saved.locationEnrichment?.mapsLink?.value, link);
+  const reloadedDraft = createEditDraft(saved);
+  assert.equal(reloadedDraft.propertyCoreId, baseline.core.id);
+  assert.equal(reloadedDraft.choices.mapsLink, link);
+  assert.equal(getPropertyMapsWebHref(reloadedDraft.choices.mapsLink, undefined), link);
+});
+
+test('Apartment replacing a populated Maps search preserves the pasted URL through save, reload, and Open', () => {
+  const previousSearchUrl = 'https://www.google.com/maps/search/?api=1&query=Salmiya%2C%20Kuwait';
+  const pastedMapsUrl = 'https://www.google.com/maps/place/Salmiya/@29.3375,48.0761,15z';
+  const baseline = {
+    core: {
+      id: 'apartment-maps-replacement',
+      propertyType: 'apartment',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'apartment-maps-replacement-offer',
+      propertyCoreId: 'apartment-maps-replacement',
+      transaction: 'rent',
+      rentalPrice: { amount: 100, currencyCode: 'KWD' },
+      rentalPeriodId: 'monthly',
+    },
+    locationEnrichment: {
+      mapsLink: createLiteralText(
+        previousSearchUrl,
+        createPrivacyMetadata('exact_location', 'explicit_per_share'),
+      ),
+    },
+  } as Property;
+  const initialDraft = createEditDraft(baseline);
+  assert.equal(initialDraft.choices.mapsLink, previousSearchUrl);
+
+  const replacedDraft = {
+    ...initialDraft,
+    choices: { ...initialDraft.choices, mapsLink: pastedMapsUrl },
+  };
+  const saved = buildPropertyUpdateCandidate(baseline, replacedDraft.choices);
+  assert.equal(saved.locationEnrichment?.mapsLink?.value, pastedMapsUrl);
+  const reloadedDraft = createEditDraft(saved);
+  assert.equal(reloadedDraft.choices.mapsLink, pastedMapsUrl);
+
+  let popupUrl = '';
+  openStudioWebMapsLocation(
+    { link: reloadedDraft.choices.mapsLink ?? '', query: 'Salmiya, Kuwait' },
+    url => {
+      popupUrl = url;
+      return null;
+    },
+  );
+  assert.equal(popupUrl, pastedMapsUrl, 'a supplied valid URL opens exactly, without prepending the area query');
+});
+
+test('Apartment clean exit keeps staged-file ownership on CAS conflict and cleans it after restart', async () => {
+  const baseline = {
+    core: {
+      id: 'apartment-clean-exit',
+      propertyType: 'apartment',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'apartment-clean-exit-offer',
+      propertyCoreId: 'apartment-clean-exit',
+      transaction: 'rent',
+      rentalPrice: { amount: 100, currencyCode: 'KWD' },
+      rentalPeriodId: 'monthly',
+    },
+  } as Property;
+  const baseDraft = createEditDraft(baseline);
+  const draft: PropertyEditDraftV1 = {
+    ...baseDraft,
+    choices: {
+      ...baseDraft.choices,
+      newlyCopiedAttachmentUris: ['managed://restart-owned-image'],
+    },
+  };
+  const deleted = new Set<string>();
+  const conflict = await discardPropertyEditDraftAndCleanupOwnedAttachments({
+    draft,
+    transientOwnedUris: [],
+    discardDraft: async () => false,
+    deleteAttachment: async uri => { deleted.add(uri); },
+  });
+  assert.equal(conflict.status, 'conflict');
+  assert.deepEqual(conflict.ownedUris, []);
+  assert.deepEqual([...deleted], [], 'a failed draft CAS must never delete attachments still referenced by stored recovery');
+
+  const discarded = await discardPropertyEditDraftAndCleanupOwnedAttachments({
+    draft,
+    transientOwnedUris: [],
+    discardDraft: async () => true,
+    deleteAttachment: async uri => { deleted.add(uri); },
+  });
+  assert.equal(discarded.status, 'discarded');
+  assert.deepEqual(discarded.ownedUris, ['managed://restart-owned-image']);
+  assert.deepEqual([...deleted], ['managed://restart-owned-image'], 'reloaded edit state cleans from durable choices ownership');
+});
+
+test('Apartment Property Details opens an area search only when exact map data is absent', () => {
+  assert.equal(
+    getPropertyDetailMapsHref({ standardApartment: true, areaQuery: 'Salmiya' }),
+    'https://www.google.com/maps/search/?api=1&query=Salmiya',
+  );
+  assert.equal(
+    getPropertyDetailMapsHref({
+      standardApartment: true,
+      areaQuery: 'Salmiya',
+      link: 'https://evil.example/maps/place',
+    }),
+    null,
+    'invalid saved links fail closed instead of falling back to an area search',
+  );
+  assert.equal(
+    getPropertyDetailMapsHref({ standardApartment: false, areaQuery: 'Salmiya' }),
+    null,
+  );
+});
+
+test('Apartment edit dirty state ignores hydration and normalization, but tracks semantic values', () => {
+  const clean: PropertyEditChoices = {
+    propertyType: 'apartment',
+    transaction: 'sale',
+    locationAreaId: 'salmiya',
+    mapsLink: '',
+    canonicalDetails: { bedroomCount: '2', bathroomCount: '1' },
+    attachments: [],
+  };
+  assert.equal(propertyEditChoicesAreDirty(clean, { ...clean }), false);
+  assert.equal(propertyEditChoicesAreDirty(clean, { ...clean, mapsLink: '  ' }), false);
+  assert.equal(propertyEditChoicesAreDirty({ ...clean, attachments: undefined }, { ...clean, attachments: [] }), false);
+  assert.equal(propertyEditChoicesAreDirty(clean, {
+    ...clean,
+    canonicalDetails: { bathroomCount: '1', bedroomCount: '2' },
+  }), false);
+  assert.equal(propertyEditChoicesAreDirty(clean, {
+    ...clean,
+    canonicalDetails: { ...clean.canonicalDetails, bedroomCount: '3' },
+  }), true);
+  assert.equal(propertyEditChoicesAreDirty(clean, {
+    ...clean,
+    attachments: [{
+      id: 'new-file',
+      kind: 'pdf',
+      originalName: 'floor-plan.pdf',
+      mimeType: 'application/pdf',
+      managedUri: 'viewstate-web-attachment:property:new-file',
+      order: 0,
+      privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+    }],
+  }), true);
+});
+
+test('Apartment attachment ordering and cover selection preserve managed identity and URIs', () => {
+  const attachments = [
+    { id: 'apartment-image', kind: 'image' as const, originalName: 'front.jpg', mimeType: 'image/jpeg', uri: 'managed://front', order: 0 },
+    { id: 'apartment-plan', kind: 'pdf' as const, originalName: 'plan.pdf', mimeType: 'application/pdf', uri: 'managed://plan', order: 1 },
+  ];
+  const reordered = reorderAttachments(attachments, ['apartment-plan', 'apartment-image']);
+  assert.deepEqual(reordered.map(item => [item.id, item.uri, item.order]), [
+    ['apartment-plan', 'managed://plan', 0],
+    ['apartment-image', 'managed://front', 1],
+  ]);
+  assert.equal(setAttachmentCover(reordered, 'apartment-image').find(item => item.id === 'apartment-image')?.isCover, true);
+});
+
+test('Apartment gallery is omitted without images, including PDF-only attachment lists', () => {
+  assert.equal(shouldShowPropertyGallery(0), false);
+  assert.equal(shouldShowPropertyGallery(1), true);
+});
+
+test('Apartment route wires verified Maps opening, platform-specific attachment pickers, previews, and clean Back', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  assert.match(source, /getPropertyDetailMapsHref/);
+  assert.match(source, /discardPropertyEditDraftAndCleanupOwnedAttachments/);
+  assert.match(source, /openStudioWebMapsLocation\(\{ link, query \}\)/);
+  assert.match(source, /openGoogleMapsQuery\(query\)/);
+  assert.match(source, /openStudioWebFilePicker\([\s\S]*accept: 'image\/\*,video\/\*'/);
+  assert.match(source, /openStudioWebFilePicker\([\s\S]*accept: 'application\/pdf'/);
+  assert.match(source, /Platform\.OS !== 'web' \|\| galleryImageSources\[attachment\.id\]/);
+  assert.match(source, /propertyEditChoicesAreDirty\(cleanChoicesRef\.current, next\.choices\)/);
+  assert.match(source, /if \(!standardApartment \|\| editDirty\) \{\s*setLeaveVisible\(true\)/);
+  assert.match(source, /testID=\"property-edit-maps-link-error\"/);
+  assert.match(source, /persistAttachmentsThenDeleteRemoved/);
 });

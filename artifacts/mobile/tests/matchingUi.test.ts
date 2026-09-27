@@ -367,7 +367,7 @@ test('Person Details keeps post-save feedback transient and uses classification 
   const personScreen = await readFile('app/person/[personId].tsx', 'utf8');
   assert.match(personScreen, /testID="person-action-confirmation"/);
   assert.match(personScreen, /testID="person-primary-action"/);
-  assert.match(personScreen, /getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(personScreen, /getPersonWantedRequirementRoute\(person\.id\)/);
   assert.doesNotMatch(personScreen, /person-saved-next-step|person-saved-add-property|person-add-wanted-studio/);
   assert.doesNotMatch(personScreen, /person-add-requirement/);
 });

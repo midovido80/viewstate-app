@@ -102,24 +102,28 @@ test('REGRESSION: header and Android Back return from Review without resetting t
 
   assert.match(returnToForm, /setError\(''\);\s*setStep\('form'\)/);
   assert.doesNotMatch(returnToForm, /setValues|setAttachments|stagedFiles\.current\.clear/);
-  assert.match(header, /if \(showingReview\) returnToForm\(\);\s*else router\.back\(\);/);
-  assert.match(hardwareBack, /if \(step === 'review'\) \{\s*returnToForm\(\);\s*return true;\s*\}\s*router\.back\(\)/);
+  assert.match(header, /onPress=\{handleHeaderBack\}/);
+  assert.match(studio, /const handleHeaderBack = \(\) => \{\s*if \(showingReview\) returnToForm\(\);\s*else leaveStudio\(\);/);
+  assert.match(studio, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\);\s*return;\s*\}/);
+  assert.match(studio, /const target = getEditBackTarget\(\);\s*if \(target\) router\.replace\(target as never\);/);
+  assert.match(hardwareBack, /if \(step === 'review'\) \{\s*returnToForm\(\);\s*return true;\s*\}\s*leaveStudio\(\)/);
   assert.match(studio, /title=\{t\('studio\.back'\)\} onPress=\{returnToForm\}/);
   assert.match(studio, /title=\{t\('studio\.next'\)\}[\s\S]*validate\(\)\) setStep\('review'\)/);
   assert.match(studio, /const \[values, setValues\] = useState/);
   assert.match(studio, /const \[attachments, setAttachments\] = useState/);
 });
 
-test('STRUCTURAL: shared offered and wanted Studio routes expose durable media, safe Maps, Back, and success actions', async () => {
+test('STRUCTURAL: only Offered Studio exposes durable media and exact Maps controls', async () => {
   const studio = await source;
-  assert.match(studio, /pickAndStoreRequirementMedia/);
-  assert.match(studio, /pickAndStoreRequirementPdfs/);
-  assert.match(studio, /createWebRequirementAttachments/);
-  assert.match(studio, /saveRequirementAttachments|attachmentPersistence:/);
+  assert.match(studio, /mode === 'offered' \? renderExactLocationSection\(\) : null/);
+  assert.match(studio, /mode === 'offered' \? renderStudioAttachments\(\) : null/);
+  assert.doesNotMatch(studio, /pickAndStoreRequirementMedia|pickAndStoreRequirementPdfs|createWebRequirementAttachments/);
+  assert.doesNotMatch(studio, /attachmentPersistence:/);
   assert.match(studio, /openPastedLocationLink/);
   assert.match(studio, /BackHandler\.addEventListener\('hardwareBackPress'/);
   assert.match(studio, /testID="studio-view-saved-property"/);
   assert.match(studio, /testID="studio-view-saved-requirement"/);
+  assert.match(studio, /pathname: '\/requirement\/\[requirementId\]'/);
   assert.match(studio, /testID="studio-home"/);
 });
 

@@ -251,7 +251,7 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
       errors.push(formError(field, 'invalid_choice', `Selection for ${field} is not valid for ${values.mode} Studio forms.`));
     }
   }
-  if (values.mapsLink !== '' && getCaptureMapsLinkValidationError(values.mapsLink)) {
+  if (values.mode === 'offered' && values.mapsLink !== '' && getCaptureMapsLinkValidationError(values.mapsLink)) {
     errors.push(formError('mapsLink', 'invalid_location_link', 'Enter a supported Google Maps link.'));
   }
   if (values.description !== '' && values.description.trim().length === 0) {
@@ -400,7 +400,6 @@ export function buildStudioRequirement(
       : {}),
     ...(preferences.length > 0 ? { catalogPreferences: preferences } : {}),
     ...(values.transaction === 'rent' ? { rentalPeriodId: values.rentalPeriodId } : {}),
-    ...(values.mapsLink !== '' ? { studioMapsLink: values.mapsLink } : {}),
   };
   const checked = validateSeekerRequirement(candidate, {
     isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
@@ -565,6 +564,6 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
     hall: wantedSelection(requirement, 'hasHall'),
     parking: wantedSelection(requirement, 'hasParking'),
     description: requirement.notes,
-    mapsLink: requirement.studioMapsLink ?? '',
+    mapsLink: '',
   };
 }

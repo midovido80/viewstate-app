@@ -8,7 +8,8 @@ test('Person primary actions follow assigned classifications and keep one Home a
   assert.match(source, /const primaryActionTitle = \(classification: PersonClassification\)/);
   assert.match(source, /classification === 'seeker'.*Add Requirement/s);
   assert.match(source, /classification === 'owner'.*Add Offered Property/s);
-  assert.match(source, /getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(source, /getPersonWantedRequirementRoute\(person\.id\)/);
+  assert.match(source, /pathname: '\/capture\/transaction',\s*params: \{ mode: 'wanted', seekerId: personId \}/);
   assert.match(source, /linkPersonId: person\.id, sourceRole: 'owner'/);
   assert.match(source, /person\.classifications\.length > 1/);
   assert.match(source, /person\.classifications\.map\(classification =>/);

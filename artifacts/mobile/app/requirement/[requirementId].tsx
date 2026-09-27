@@ -43,7 +43,14 @@ import {
   tryStartRequirementSave,
   verifyUncertainRequirementWrite,
 } from '@/services/requirementSaveOutcome';
-import { getRequirementCatalogFields, getRequirementPresentationFields } from '@/services/requirementFieldMap';
+import {
+  getGenericRequirementApartmentSubtype,
+  getGenericRequirementApartmentSubtypePreference,
+  parseGenericRequirementApartmentSubtype,
+  getRequirementCatalogFields,
+  getRequirementPresentationFields,
+  type GenericRequirementApartmentSubtype,
+} from '@/services/requirementFieldMap';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
 import { canHydrateStudioRequirement, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
@@ -93,7 +100,14 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
-  const { requirementId, seekerId, edit } = useLocalSearchParams<{ requirementId: string | string[]; seekerId?: string | string[]; edit?: string | string[] }>();
+  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam } = useLocalSearchParams<{
+    requirementId: string | string[];
+    seekerId?: string | string[];
+    edit?: string | string[];
+    purpose?: string | string[];
+    propertyType?: string | string[];
+    apartmentSubtype?: string | string[];
+  }>();
   const routeRequirementId = Array.isArray(requirementId) ? requirementId[0] : requirementId;
   const editing = routeRequirementId !== 'new';
   const router = useRouter();
@@ -101,14 +115,24 @@ export default function RequirementEditor() {
   const insets = useSafeAreaInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const ownerFromRoute = Array.isArray(seekerId) ? seekerId[0] : seekerId;
+  const routePurpose = Array.isArray(purposeParam) ? purposeParam[0] : purposeParam;
+  const routePropertyType = Array.isArray(propertyTypeParam) ? propertyTypeParam[0] : propertyTypeParam;
+  const routeApartmentSubtype = Array.isArray(apartmentSubtypeParam) ? apartmentSubtypeParam[0] : apartmentSubtypeParam;
+  const initialPurpose: RequirementPurpose = routePurpose === 'buy' || routePurpose === 'rent' ? routePurpose : 'rent';
+  const initialPropertyType: PropertyType = PROPERTY_TYPES.includes(routePropertyType as PropertyType)
+    ? routePropertyType as PropertyType
+    : 'apartment';
+  const initialApartmentSubtype: GenericRequirementApartmentSubtype | undefined =
+    parseGenericRequirementApartmentSubtype(routeApartmentSubtype);
   const scopeKey = editing ? `requirement:${routeRequirementId}` : `requirement:new:${ownerFromRoute ?? 'missing'}`;
   const [baseline, setBaseline] = useState<SeekerRequirement | null>(null);
   const [recordLoaded, setRecordLoaded] = useState(!editing);
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [purpose, setPurpose] = useState<RequirementPurpose>('rent');
-  const [propertyType, setPropertyType] = useState<PropertyType>('apartment');
+  const [purpose, setPurpose] = useState<RequirementPurpose>(initialPurpose);
+  const [propertyType, setPropertyType] = useState<PropertyType>(initialPropertyType);
+  const [apartmentSubtype, setApartmentSubtype] = useState<GenericRequirementApartmentSubtype | undefined>(initialApartmentSubtype);
   const [floorUse, setFloorUse] = useState<FloorUse | undefined>();
   const [areaMode, setAreaMode] = useState<AreaMode | undefined>();
   const [areas, setAreas] = useState<string[]>([]);
@@ -155,9 +179,9 @@ export default function RequirementEditor() {
     setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(0); setInvalidCatalogFields(new Set());
     confirmedRequirement.current = null; uncertainRequirement.current = null; editConflictRequirement.current = null; setRecoveryAction(null);
     draftId.current = editing ? routeRequirementId : generateDomainId();
-    setPurpose('rent'); setPropertyType('apartment'); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
+    setPurpose(initialPurpose); setPropertyType(initialPropertyType); setApartmentSubtype(initialApartmentSubtype); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
-    setDriverRoom(false); setCatalog([]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
+    setDriverRoom(false); setCatalog([...getGenericRequirementApartmentSubtypePreference(initialApartmentSubtype)]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
     if (!editing) return;
     let cancelled = false;
     void store.getRequirement(routeRequirementId).then(record => {
@@ -169,6 +193,8 @@ export default function RequirementEditor() {
       setBaseline(record);
       setRecordLoaded(true);
       const form = formValuesFromRequirement(record) as RequirementFormValues & Extension;
+      const savedApartmentSubtype = getGenericRequirementApartmentSubtype(form.catalogPreferences);
+      setApartmentSubtype(savedApartmentSubtype);
       const number = (field: NumberField) => {
         const item = form.catalogPreferences?.find(value => value.field === field && value.kind === 'number');
         return item?.kind === 'number' ? String(item.value) : '';
@@ -193,7 +219,7 @@ export default function RequirementEditor() {
       setRecordLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [editing, routeRequirementId, ownerFromRoute, language]);
+  }, [editing, routeRequirementId, ownerFromRoute, language, initialPurpose, initialPropertyType, initialApartmentSubtype]);
 
   const editRequested = (Array.isArray(edit) ? edit[0] : edit) === '1';
   useEffect(() => {
@@ -210,14 +236,14 @@ export default function RequirementEditor() {
   }, [editRequested, recordLoaded, baseline, router]);
 
   const catalogWithCore = useMemo(() => {
-    const applicable = new Set(getApplicablePropertyFormFields(propertyType, floorUse).map(field => field.field));
+    const applicable = new Set(getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype).map(field => field.field));
     const values = catalog.filter(item => !['livingRoomCount', 'parkingSpaceCount', 'floorNumber', 'builtUpAreaSquareMeters'].includes(item.field));
     const numeric = (field: NumberField, value: string, comparison: 'minimum' | 'exact') => {
       const parsed = parseOptionalRequirementNumber(value, { integer: comparison !== 'minimum' || field !== 'builtUpAreaSquareMeters' });
       return parsed.ok && parsed.value !== undefined ? [{ field, kind: 'number' as const, comparison, value: parsed.value }] : [];
     };
     return [...values, ...(applicable.has('livingRoomCount') ? numeric('livingRoomCount', livingRooms, 'minimum') : []), ...(applicable.has('parkingSpaceCount') ? numeric('parkingSpaceCount', parking, 'minimum') : []), ...(applicable.has('floorNumber') ? numeric('floorNumber', floorNumber, 'exact') : []), ...(applicable.has('builtUpAreaSquareMeters') ? numeric('builtUpAreaSquareMeters', requiredArea, 'minimum') : [])];
-  }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse]);
+  }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse, apartmentSubtype]);
 
   const candidate = () => {
     if (editing && (!recordLoaded || !baseline || baseline.id !== routeRequirementId)) return { ok: false as const, message: language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.' };
@@ -254,12 +280,13 @@ export default function RequirementEditor() {
   const transitionType = (next: PropertyType) => {
     if (next === propertyType) return;
     const nextResidential = next === 'floor' && floorUse === undefined ? true : isResidential(next, next === 'floor' ? floorUse : undefined);
-    const nextAllowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined).map(item => item.field));
+    const nextSubtype = next === 'apartment' ? apartmentSubtype : undefined;
+    const nextAllowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).map(item => item.field));
     const removedCatalog = next === 'floor' && floorUse === undefined ? [] : catalog.filter(item => !nextAllowed.has(item.field));
     const hasCore = bedrooms || bathrooms || masterBedrooms || livingRooms || driverRoom;
-    const nextHasCentralAC = getApplicablePropertyFormFields(next, next === 'floor' ? floorUse : undefined).some(field => field.field === 'hasCentralAC');
+    const nextHasCentralAC = getApplicablePropertyFormFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).some(field => field.field === 'hasCentralAC');
     const removedNames = [...(!nextResidential ? [bedrooms && 'Bedrooms', bathrooms && 'Bathrooms', masterBedrooms && 'Master bedrooms', livingRooms && 'Living rooms', driverRoom && 'Driver room'].filter(Boolean) : []), ...removedCatalog.map(item => item.field), ...(!nextResidential ? [...amenities, ...excludedAmenities, ...(driverRoom ? ['driverRoom'] : []), ...services] : []), ...(centralACPreference !== undefined && !nextHasCentralAC ? ['centralAC'] : [])].map(value => localizedPreferenceName(String(value), language, next, next === 'floor' ? floorUse : undefined)).filter(Boolean);
-    const apply = () => { setPropertyType(next); if (next !== 'floor') setFloorUse(undefined); const allowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined).map(item => item.field)); if (!(next === 'floor' && floorUse === undefined)) setCatalog(current => current.filter(item => allowed.has(item.field))); if (!nextResidential) { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } if (!nextHasCentralAC) setCentralACPreference(undefined); };
+    const apply = () => { setPropertyType(next); if (next !== 'floor') setFloorUse(undefined); if (next !== 'apartment') setApartmentSubtype(undefined); const allowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).map(item => item.field)); if (!(next === 'floor' && floorUse === undefined)) setCatalog(current => current.filter(item => allowed.has(item.field))); if (!nextResidential) { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } if (!nextHasCentralAC) setCentralACPreference(undefined); };
     if ((hasCore && !nextResidential) || removedNames.length) {
       const message = language === 'ar' ? `سيؤدي التغيير إلى إزالة مواصفات غير متوافقة: ${removedNames.join('، ')}` : `Changing type removes incompatible preferences: ${removedNames.join(', ')}`;
       if (typeof window !== 'undefined' && window.confirm) { if (window.confirm(message)) apply(); } else Alert.alert(t('transition.requirement.title'), message, [{ text: t('capture.cancel') }, { text: t('transition.remove_confirm'), onPress: apply }]);
@@ -451,9 +478,10 @@ export default function RequirementEditor() {
 
   const coreApplicable = isResidential(propertyType, floorUse);
   const label = (english: string, arabic: string) => english === 'Amenities' ? '' : language === 'ar' ? arabic : english;
-  const applicableCoreFields = new Set(getApplicablePropertyFormFields(propertyType, floorUse).map(field => field.field));
-  const catalogDefinitions = getRequirementCatalogFields(propertyType, floorUse);
-  const { leading: leadingFields, specifications: otherSpecificationFields, amenities: amenityCatalogFields } = getRequirementPresentationFields(propertyType, floorUse);
+  const applicableCoreFields = new Set(getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype).map(field => field.field));
+  const catalogDefinitions = getRequirementCatalogFields(propertyType, floorUse, apartmentSubtype);
+  const { leading: leadingFields, specifications: otherSpecificationFields, amenities: amenityCatalogFields } = getRequirementPresentationFields(propertyType, floorUse, apartmentSubtype);
+  const editableLeadingFields = leadingFields.filter(field => field !== 'apartmentSubtype');
   const showPreferredAmenities = coreApplicable || applicableCoreFields.has('hasCentralAC') || amenityCatalogFields.length > 0;
   const poolCatalogApplies = amenityCatalogFields.includes('hasPool');
   const catalogPool = catalog.find(item => item.field === 'hasPool' && item.kind === 'feature');
@@ -653,7 +681,7 @@ export default function RequirementEditor() {
     {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
      {step === 3 && <View testID="requirement-core-step">
        <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>
-       {leadingFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:leading`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={leadingFields} />}
+       {editableLeadingFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:leading`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={editableLeadingFields} />}
        {coreApplicable && <>
          <NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={setBedrooms} testID="requirement-bedrooms-quick-pick" />
          <NumericQuickPick scopeKey={scopeKey} label={label('Master bedrooms', 'غرف النوم الرئيسية')} value={masterBedrooms} onChangeText={setMasterBedrooms} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-master-bedrooms" />

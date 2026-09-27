@@ -139,16 +139,6 @@ export async function createWebFileAttachments(
   return createWebAttachmentsForOwner(propertyId, existing, files, createId, blobStore);
 }
 
-export async function createWebRequirementAttachments(
-  requirementId: string,
-  existing: readonly LocalAttachment[],
-  files: readonly { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> }[],
-  createId: () => string = defaultId,
-  blobStore: WebAttachmentBlobStore = createIndexedDbWebAttachmentBlobStore(),
-): Promise<LocalAttachment[]> {
-  return createWebAttachmentsForOwner(`requirement:${requirementId}`, existing, files, createId, blobStore);
-}
-
 async function createWebAttachmentsForOwner(
   ownerScope: string,
   existing: readonly LocalAttachment[],
@@ -234,7 +224,6 @@ async function storeSources(
   existing: readonly LocalAttachment[],
   sources: readonly AttachmentSource[],
   dependencies: AttachmentDependencies,
-  owner: 'property' | 'requirement' = 'property',
 ): Promise<LocalAttachment[]> {
   assertNative(dependencies.platform);
   const result: LocalAttachment[] = [];
@@ -251,11 +240,7 @@ async function storeSources(
       if (existing.some(item => item.id === id) || result.some(item => item.id === id)) {
         throw new Error('DUPLICATE_ATTACHMENT_ID');
       }
-      const copy = owner === 'requirement'
-        ? dependencies.fileStore.copyToRequirement
-        : dependencies.fileStore.copyToProperty;
-      if (!copy) throw new Error('REQUIREMENT_ATTACHMENT_STORAGE_UNSUPPORTED');
-      const uri = await copy.call(dependencies.fileStore, recordId, id, source);
+      const uri = await dependencies.fileStore.copyToProperty(recordId, id, source);
       result.push({
         id,
         kind: attachmentKind(source.mimeType),
@@ -319,54 +304,6 @@ export async function pickAndStorePdfs(
     mimeType: asset.mimeType ?? 'application/pdf',
   }));
   return storeSources(propertyId, existing, sources, dependencies);
-}
-
-export async function pickAndStoreRequirementMedia(
-  requirementId: string,
-  existing: readonly LocalAttachment[],
-  dependencies: AttachmentDependencies,
-  imagePicker: ImagePickerModule = ImagePicker,
-  mediaTypes: ('images' | 'videos')[] = ['images', 'videos'],
-): Promise<LocalAttachment[]> {
-  assertNative(dependencies.platform);
-  const permission = await imagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) throw new Error('MEDIA_LIBRARY_PERMISSION_DENIED');
-  const picked = await imagePicker.launchImageLibraryAsync({
-    mediaTypes,
-    allowsMultipleSelection: true,
-    quality: 1,
-  });
-  if (picked.canceled) return [];
-  const sources = picked.assets.map((asset, index): AttachmentSource => {
-    if (!asset.mimeType) throw new Error('ATTACHMENT_MIME_TYPE_MISSING');
-    return {
-      uri: asset.uri,
-      name: asset.fileName ?? nameFromUri(asset.uri, `media-${index + 1}`),
-      mimeType: asset.mimeType,
-    };
-  });
-  return storeSources(requirementId, existing, sources, dependencies, 'requirement');
-}
-
-export async function pickAndStoreRequirementPdfs(
-  requirementId: string,
-  existing: readonly LocalAttachment[],
-  documentPicker: DocumentPickerModule,
-  dependencies: AttachmentDependencies,
-): Promise<LocalAttachment[]> {
-  assertNative(dependencies.platform);
-  const picked = await documentPicker.getDocumentAsync({
-    type: ['application/pdf'],
-    multiple: true,
-    copyToCacheDirectory: true,
-  });
-  if (picked.canceled) return [];
-  const sources = (picked.assets ?? []).map(asset => ({
-    uri: asset.uri,
-    name: asset.name,
-    mimeType: asset.mimeType ?? 'application/pdf',
-  }));
-  return storeSources(requirementId, existing, sources, dependencies, 'requirement');
 }
 
 export async function openAttachment(

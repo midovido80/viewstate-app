@@ -1,10 +1,10 @@
 ---
-name: Studio Requirement media scope
-description: Persistence boundary for Wanted Studio attachment metadata and blobs.
+name: Wanted Requirement boundary
+description: Why Wanted records must not acquire exact Property location or media, and how to handle older local rows.
 ---
 
-Wanted Studio attachments use the app's local Requirement persistence and owner-scoped managed files or browser blobs. Treat saved metadata as durable on the same device/browser, not as a cross-device upload or server-backed document.
+Wanted Requirements, including Studio, describe seeker preferences: preferred areas, specifications, budget, cadence, and notes. Exact Google Maps locations and Property attachments belong only to Offered Properties. Do not reuse Property-media persistence to save a Requirement.
 
-**Why:** The current API has no Requirement blob authority or upload endpoint. Persisting local managed URIs does not make their bytes accessible from another device; claiming otherwise risks invisible broken media.
+**Why:** The founder clarified that a Wanted record is a real Requirement rather than a Property listing. Earlier Studio work temporarily accepted Property map links and local media on Requirements; this was the wrong domain boundary and complicated a real save failure.
 
-**How to apply:** Preserve attachment identity, ordering, cover and managed URI on local create/edit/readback; delete replaced files only after a confirmed exact-ID save. If cross-device access is later requested, design a separate authenticated upload/ownership and migration path instead of repurposing local URIs.
+**How to apply:** New Requirement candidates must never collect or persist exact locations or attachments. Older local rows that contain those legacy fields should remain readable without rewriting stored bytes or deleting files on hydration; an explicit user edit can persist the corrected canonical Requirement. Keep the Property media path independent.

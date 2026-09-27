@@ -34,11 +34,11 @@ import {
 } from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
 import { clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, type PropertyEnrichmentDraftV1 } from '@/services/propertyEnrichmentRecovery';
-import { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, createWebAttachmentFileStore, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment, type WebAttachmentBlobStore } from '@/services/attachments';
+import { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, createWebAttachmentFileStore, createWebFileAttachments, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment, type WebAttachmentBlobStore } from '@/services/attachments';
 import { reorderAttachments, resolveWebAttachmentImageSources, setAttachmentCover } from '@/services/attachmentOperations';
 import { projectPropertyFacts, isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
-import { normalizeGoogleMapsLink, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates, openSavedPropertyMapsLocation } from '@/services/location';
-import { getPropertyMapsWebHref } from '@/services/mapsLink';
+import { normalizeGoogleMapsLink, openGoogleMapsQuery, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates, openSavedPropertyMapsLocation } from '@/services/location';
+import { openStudioWebFilePicker, openStudioWebMapsLocation } from '@/services/studioWebActions';
 import {
   PropertyEditDraftV1,
   buildPropertyUpdateCandidate,
@@ -69,6 +69,7 @@ import {
   type PropertyTransitionState,
 } from '@/services/propertyTypeTransition';
 import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, isOfferedStudio } from '@/services/propertyDetailPresentation';
+import { discardPropertyEditDraftAndCleanupOwnedAttachments, getPropertyDetailMapsHref, getPropertyEditMapsFieldError, propertyEditChoicesAreDirty, shouldShowPropertyGallery } from '@/services/propertyDetailEditorUx';
 
 export function getPropertyEditRouteHref(propertyCoreId: string, offeredStudio: boolean): string {
   return offeredStudio
@@ -84,10 +85,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const insets = useSafeAreaInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
+  const standardApartment = Boolean(property?.core.propertyType === 'apartment' && !isOfferedStudio(property));
   const [hasEnrichmentDraft, setHasEnrichmentDraft] = useState(false);
   const [legacyEnrichmentDraft, setLegacyEnrichmentDraft] = useState<PropertyEnrichmentDraftV1 | null>(null);
   const [draft, setDraft] = useState<PropertyEditDraftV1 | null>(null);
   const draftRef = useRef<PropertyEditDraftV1 | null>(null);
+  const cleanChoicesRef = useRef<PropertyEditDraftV1['choices'] | null>(null);
+  const cleanExitOwnedUrisRef = useRef<readonly string[] | null>(null);
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'unreadable'>('loading');
   const [error, setError] = useState('');
@@ -102,6 +106,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaSearch, setAreaSearch] = useState('');
   const [leaveVisible, setLeaveVisible] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
+  const [mapsFieldError, setMapsFieldError] = useState('');
   const [discarding, setDiscarding] = useState(false);
   const [newAttachmentUris, setNewAttachmentUris] = useState<string[]>([]);
   const [pendingOperation, setPendingOperation] = useState<PropertyUpdateOperationV1 | null>(null);
@@ -230,7 +236,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   useEffect(() => {
     let active = true;
     let revokeSources = () => {};
-    const images = (property?.attachments ?? [])
+    const sourceAttachments = standardApartment && mode === 'edit'
+      ? (draft?.choices.attachments ?? property?.attachments ?? [])
+      : (property?.attachments ?? []);
+    const images = sourceAttachments
       .filter(attachment => attachment.kind === 'image')
       .map(({ id: attachmentId, kind, managedUri }) => ({ id: attachmentId, kind, uri: managedUri }));
     setGalleryImageSources({});
@@ -260,7 +269,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       active = false;
       revokeSources();
     };
-  }, [property?.core.id, property?.attachments, t]);
+  }, [property?.core.id, property?.attachments, mode, draft?.choices.attachments, standardApartment, t]);
 
   const areaName = (areaId: string) => {
     const area = getAreaById(areaId);
@@ -348,6 +357,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       }
       setDraft(next);
       draftRef.current = next;
+      cleanChoicesRef.current = standardApartment ? createEditDraft(property).choices : null;
+      setEditDirty(standardApartment && propertyEditChoicesAreDirty(cleanChoicesRef.current, next.choices));
+      setMapsFieldError('');
       setMode('edit');
     } catch {
       setError(t('edit.draft_unreadable'));
@@ -418,6 +430,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         }
         draftRef.current = next;
         setDraft(next);
+        setEditDirty(standardApartment && propertyEditChoicesAreDirty(cleanChoicesRef.current, next.choices));
         return true;
       } catch {
         setError(t('edit.draft_unreadable'));
@@ -519,38 +532,72 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     };
   });
 
+  const storePickedAttachments = async (next: LocalAttachment[]) => {
+    if (!property || !next.length) return;
+    const copied = next.map(item => item.uri);
+    const owned = await updateChoices(current => {
+      const existing = current.attachments ?? property.attachments ?? [];
+      const hasCover = existing.some(item => item.isCover);
+      let firstNewImageCovered = false;
+      return {
+        attachments: [
+          ...existing,
+          ...next.map((item, index) => {
+            const makeCover = standardApartment
+              ? !hasCover && !firstNewImageCovered && item.kind === 'image'
+              : !hasCover && index === 0 && item.kind === 'image';
+            if (makeCover) firstNewImageCovered = true;
+            return {
+              id: item.id,
+              kind: item.kind,
+              originalName: item.originalName,
+              mimeType: item.mimeType,
+              order: existing.length + index,
+              managedUri: item.uri,
+              ...(makeCover ? { isCover: true as const } : {}),
+              privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+            };
+          }),
+        ],
+        newlyCopiedAttachmentUris: [...(current.newlyCopiedAttachmentUris ?? []), ...copied],
+      };
+    });
+    if (!owned) {
+      await Promise.all(copied.map(uri => attachmentStore.delete(uri).catch(() => undefined)));
+      return;
+    }
+    setNewAttachmentUris(current => [...current, ...copied]);
+  };
+
   const addMedia = async () => {
     if (!property || !draft) return;
-    try {
-      const next = await pickAndStoreMedia(property.core.id, localAttachments, { fileStore: attachmentStore });
-      if (next.length) {
-        const copied = next.map(item => item.uri);
-        const owned = await updateChoices(current => {
-          const existing = current.attachments ?? property.attachments ?? [];
-          const hasCover = existing.some(item => item.isCover);
-          return {
-            attachments: [
-              ...existing,
-              ...next.map((item, index) => ({
-                id: item.id,
-                kind: item.kind,
-                originalName: item.originalName,
-                mimeType: item.mimeType,
-                order: existing.length + index,
-                managedUri: item.uri,
-                ...(!hasCover && index === 0 && item.kind === 'image' ? { isCover: true } : {}),
-                privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
-              })),
-            ],
-            newlyCopiedAttachmentUris: [...(current.newlyCopiedAttachmentUris ?? []), ...copied],
-          };
+    if (standardApartment && Platform.OS === 'web') {
+      try {
+        openStudioWebFilePicker({
+          accept: 'image/*,video/*',
+          onFiles: files => {
+            void (async () => {
+              try {
+                await storePickedAttachments(await createWebFileAttachments(
+                  property.core.id,
+                  localAttachments,
+                  files,
+                  undefined,
+                  webBlobStore.current!,
+                ));
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+              }
+            })();
+          },
         });
-        if (!owned) {
-          await Promise.all(copied.map(uri => attachmentStore.delete(uri).catch(() => undefined)));
-          return;
-        }
-        setNewAttachmentUris(current => [...current, ...copied]);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
       }
+      return;
+    }
+    try {
+      await storePickedAttachments(await pickAndStoreMedia(property.core.id, localAttachments, { fileStore: attachmentStore }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
     }
@@ -558,46 +605,69 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
   const addPdfs = async () => {
     if (!property || !draft) return;
-    try {
-      const next = await pickAndStorePdfs(property.core.id, localAttachments, DocumentPicker, { fileStore: attachmentStore });
-      if (next.length) {
-        const copied = next.map(item => item.uri);
-        const owned = await updateChoices(current => {
-          const existing = current.attachments ?? property.attachments ?? [];
-          return {
-            attachments: [
-              ...existing,
-              ...next.map((item, index) => ({
-                id: item.id,
-                kind: item.kind,
-                originalName: item.originalName,
-                mimeType: item.mimeType,
-                order: existing.length + index,
-                managedUri: item.uri,
-                privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
-              })),
-            ],
-            newlyCopiedAttachmentUris: [...(current.newlyCopiedAttachmentUris ?? []), ...copied],
-          };
+    if (standardApartment && Platform.OS === 'web') {
+      try {
+        openStudioWebFilePicker({
+          accept: 'application/pdf',
+          onFiles: files => {
+            void (async () => {
+              try {
+                await storePickedAttachments(await createWebFileAttachments(
+                  property.core.id,
+                  localAttachments,
+                  files,
+                  undefined,
+                  webBlobStore.current!,
+                ));
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
+              }
+            })();
+          },
         });
-        if (!owned) {
-          await Promise.all(copied.map(uri => attachmentStore.delete(uri).catch(() => undefined)));
-          return;
-        }
-        setNewAttachmentUris(current => [...current, ...copied]);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
       }
+      return;
+    }
+    try {
+      await storePickedAttachments(await pickAndStorePdfs(property.core.id, localAttachments, DocumentPicker, { fileStore: attachmentStore }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
     }
   };
 
   const openMapsLink = async () => {
-    const link = draft?.choices.mapsLink?.trim();
-    if (!link) return;
+    const link = draft?.choices.mapsLink?.trim() ?? '';
+    if (!standardApartment) {
+      if (!link) return;
+      try {
+        await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+      } catch {
+        setError(t('enrich.maps_link_invalid'));
+      }
+      return;
+    }
+    const area = getAreaById(draft?.choices.locationAreaId ?? property?.core.locationArea.id ?? '');
+    const query = area ? (language === 'ar' ? area.ar : area.en) : '';
+    const validation = getPropertyEditMapsFieldError(link, language);
+    if (validation) {
+      setMapsFieldError(validation);
+      return;
+    }
+    setMapsFieldError('');
     try {
-      await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+      if (Platform.OS === 'web') {
+        openStudioWebMapsLocation({ link, query });
+      } else if (link) {
+        await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+      } else {
+        await openGoogleMapsQuery(query);
+      }
     } catch {
-      setError(t('enrich.maps_link_invalid'));
+      setMapsFieldError(language === 'ar'
+        ? 'تعذر فتح خرائط Google لهذا الموقع.'
+        : 'Could not open Google Maps for this location.');
     }
   };
 
@@ -750,6 +820,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setRecoveryStatus(null);
         setDraft(null);
         draftRef.current = null;
+        cleanChoicesRef.current = null;
+        setEditDirty(false);
         setError('');
         setMode('detail');
         router.replace(`/property/${encodeURIComponent(id!)}` as never);
@@ -769,13 +841,72 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
+  const deleteOwnedAttachmentForCleanup = async (uri: string) => {
+    try {
+      await attachmentStore.delete(uri);
+    } catch (cause) {
+      if (!(cause instanceof Error && (
+        cause.message === 'ATTACHMENT_FILE_MISSING'
+        || cause.message.includes('ENOENT')
+      ))) throw cause;
+    }
+  };
+
   const leaveEditor = () => {
     if (!draft) {
       setMode('detail');
       router.replace(`/property/${encodeURIComponent(id!)}` as never);
       return;
     }
-    setLeaveVisible(true);
+    if (!standardApartment || editDirty) {
+      setLeaveVisible(true);
+      return;
+    }
+    void (async () => {
+      await draftMutationFlight.current;
+      const latest = draftRef.current;
+      const latestIsDirty = Boolean(latest && propertyEditChoicesAreDirty(cleanChoicesRef.current, latest.choices));
+      if (latestIsDirty) {
+        setEditDirty(true);
+        setLeaveVisible(true);
+        return;
+      }
+      await flushPropertyEditDraftWrites();
+      const current = draftRef.current;
+      if (!current) return;
+      if (cleanExitOwnedUrisRef.current) {
+        try {
+          for (const uri of cleanExitOwnedUrisRef.current) await deleteOwnedAttachmentForCleanup(uri);
+        } catch {
+          setError(t('edit.recovery_cleanup'));
+          return;
+        }
+      } else {
+        const result = await discardPropertyEditDraftAndCleanupOwnedAttachments({
+          draft: current,
+          transientOwnedUris: newAttachmentUris,
+          discardDraft: candidate => discardPropertyEditDraft(candidate.propertyCoreId, candidate),
+          deleteAttachment: deleteOwnedAttachmentForCleanup,
+        });
+        if (result.status === 'conflict') {
+          setError(t('edit.draft_conflict'));
+          return;
+        }
+        if (result.status === 'cleanup_failed') {
+          cleanExitOwnedUrisRef.current = result.ownedUris;
+          setError(t('edit.recovery_cleanup'));
+          return;
+        }
+      }
+      cleanExitOwnedUrisRef.current = null;
+      setNewAttachmentUris([]);
+      setDraft(null);
+      draftRef.current = null;
+      cleanChoicesRef.current = null;
+      setEditDirty(false);
+      setMode('detail');
+      router.replace(`/property/${encodeURIComponent(id!)}` as never);
+    })();
   };
 
   const discardEditDraft = async () => {
@@ -806,6 +937,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       setNewAttachmentUris([]);
       setDraft(null);
       draftRef.current = null;
+      cleanChoicesRef.current = null;
+      setEditDirty(false);
       setMode('detail');
       router.replace(`/property/${encodeURIComponent(id!)}` as never);
     } catch {
@@ -831,6 +964,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       if (!currentDraft || currentDraft.propertyCoreId !== draft.propertyCoreId) {
         setError(t('edit.draft_conflict'));
         return;
+      }
+      if (standardApartment) {
+        const mapsValidation = getPropertyEditMapsFieldError(currentDraft.choices.mapsLink ?? '', language);
+        setMapsFieldError(mapsValidation);
+        if (mapsValidation) return;
       }
       if (invalidQuickPickFields.size > 0) {
         setError(t('errors.capture_incomplete'));
@@ -862,7 +1000,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         if (legacyEnrichmentDraft) await clearConfirmedPropertyEnrichmentDraft(legacyEnrichmentDraft);
         setProperty(pending.candidate);
         setDraft(null);
-      draftRef.current = null;
+        draftRef.current = null;
+        cleanChoicesRef.current = null;
+        setEditDirty(false);
         setMode('detail');
         router.replace(`/property/${encodeURIComponent(id!)}` as never);
         return;
@@ -913,6 +1053,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       setProperty(candidate);
       setDraft(null);
       draftRef.current = null;
+      cleanChoicesRef.current = null;
+      setEditDirty(false);
       setMode('detail');
       router.replace(`/property/${encodeURIComponent(id!)}` as never);
     } catch (caught) {
@@ -1012,19 +1154,25 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const openDetailMapsLink = async () => {
     const location = property?.locationEnrichment;
     try {
-      await openSavedPropertyMapsLocation(
-        location?.mapsLink?.value,
-        location?.coordinates,
-      );
+      if (standardApartment && !location?.mapsLink?.value && !location?.coordinates) {
+        await openGoogleMapsQuery(areaName(property.core.locationArea.id));
+      } else {
+        await openSavedPropertyMapsLocation(
+          location?.mapsLink?.value,
+          location?.coordinates,
+        );
+      }
       setMapsActionError('');
     } catch {
       setMapsActionError(t('detail.maps_unavailable'));
     }
   };
-  const detailMapsHref = getPropertyMapsWebHref(
-    property.locationEnrichment?.mapsLink?.value,
-    property.locationEnrichment?.coordinates,
-  );
+  const detailMapsHref = getPropertyDetailMapsHref({
+    link: property.locationEnrichment?.mapsLink?.value,
+    coordinates: property.locationEnrichment?.coordinates,
+    areaQuery: areaName(property.core.locationArea.id),
+    standardApartment,
+  });
 
   const numericSpecTiles: { fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons', label: string }[] = [];
   const addSpec = (fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons') => {
@@ -1185,9 +1333,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
         {mode === 'detail' ? (
           <>
-            <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
-              {galleryImages.length > 0 ? (
-                <View style={{ height: 260, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
+            {shouldShowPropertyGallery(galleryImages.length) || !standardApartment ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+                {galleryImages.length > 0 ? (
+                  <View style={{ height: 260, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
                   <ScrollView
                     horizontal
                     pagingEnabled
@@ -1252,13 +1401,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   >
                     <Feather name="maximize" size={20} color="#fff" />
                   </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={{ height: 260, borderRadius: 20, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }}>
-                  <Feather name="image" size={56} color={colors.mutedForeground} />
-                </View>
-              )}
-            </View>
+                  </View>
+                ) : (
+                  <View style={{ height: 260, borderRadius: 20, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="image" size={56} color={colors.mutedForeground} />
+                  </View>
+                )}
+              </View>
+            ) : null}
 
             {otherFiles.length > 0 && (
               <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
@@ -1627,10 +1777,22 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
             <TextInput
               value={choices.mapsLink ?? ''}
-              onChangeText={value => updateChoices({ mapsLink: value })}
+              onChangeText={value => {
+                updateChoices({ mapsLink: value });
+                if (standardApartment) setMapsFieldError(getPropertyEditMapsFieldError(value, language));
+              }}
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-maps-link"
             />
+            {standardApartment && mapsFieldError ? (
+              <Text
+                accessibilityRole="alert"
+                testID="property-edit-maps-link-error"
+                style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}
+              >
+                {mapsFieldError}
+              </Text>
+            ) : null}
             <TouchableOpacity onPress={() => void openMapsLink()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-open-maps">
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.open_maps')}</Text>
             </TouchableOpacity>
@@ -1653,6 +1815,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             {localAttachments.map((attachment, index) => (
               <View key={attachment.id} style={[styles.sourceSection, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => void openPropertyAttachment({ ...attachment, managedUri: attachment.uri, privacy: { classification: 'normal', disclosurePolicy: 'normal' } })} testID={`property-edit-open-${attachment.id}`}>
+                  {standardApartment && attachment.kind === 'image' && (Platform.OS !== 'web' || galleryImageSources[attachment.id]) ? (
+                    <Image
+                      source={{ uri: Platform.OS === 'web' ? galleryImageSources[attachment.id] : attachment.uri }}
+                      style={{ width: 96, height: 72, borderRadius: 8, marginBottom: 8, resizeMode: 'cover' }}
+                    />
+                  ) : null}
                   <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{attachment.isCover ? '★ ' : ''}{attachment.originalName}</Text>
                 </TouchableOpacity>
                 <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -1665,10 +1833,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   })} testID={`property-edit-up-${attachment.id}`}>
                     <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t('enrich.move_up')}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => updateAttachmentChoices(items => setAttachmentCover(items, attachment.id))} testID={`property-edit-cover-${attachment.id}`}>
+                  <TouchableOpacity disabled={standardApartment && attachment.kind !== 'image'} onPress={() => updateAttachmentChoices(items => setAttachmentCover(items, attachment.id))} testID={`property-edit-cover-${attachment.id}`}>
                     <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t('enrich.cover')}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => updateAttachmentChoices(items => items.filter(item => item.id !== attachment.id).map((item, order) => ({ ...item, order })))} testID={`property-edit-remove-${attachment.id}`}>
+                  <TouchableOpacity onPress={() => updateAttachmentChoices(items => {
+                    let remaining = items.filter(item => item.id !== attachment.id).map((item, order) => ({ ...item, order }));
+                    if (standardApartment && !remaining.some(item => item.isCover)) {
+                      const firstImage = remaining.find(item => item.kind === 'image');
+                      if (firstImage) remaining = setAttachmentCover(remaining, firstImage.id);
+                    }
+                    return remaining;
+                  })} testID={`property-edit-remove-${attachment.id}`}>
                     <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('enrich.remove')}</Text>
                   </TouchableOpacity>
                 </View>

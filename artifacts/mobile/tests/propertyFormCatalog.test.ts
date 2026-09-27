@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import {
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   PROPERTY_TYPES,
@@ -9,8 +10,10 @@ import {
   PROPERTY_FORM_CATALOG,
   PROPERTY_FORM_TYPES,
   getApplicablePropertyFormFields,
+  getApplicablePropertyFormFieldsForMode,
   isPropertyFormFieldApplicable,
 } from '@/services/propertyFormCatalog';
+import { getRequirementCatalogFields } from '@/services/requirementFieldMap';
 
 test('BEHAVIOR: the fast property catalog exposes every approved Property type', () => {
   assert.deepEqual(PROPERTY_FORM_TYPES, PROPERTY_TYPES);
@@ -68,4 +71,33 @@ test('BEHAVIOR: numeric quick-pick and exact-entry metadata is catalog-owned', (
   assert.equal(controls.get('loadingBayCount'), 'numeric_quick_pick');
   assert.equal(controls.get('builtUpAreaSquareMeters'), 'decimal');
   assert.equal(controls.get('hasPool'), 'boolean');
+});
+
+test('BEHAVIOR: Standard wanted Apartment form exposes multi-bedroom, bathroom, and applicable catalog fields', async () => {
+  const wantedFields = getApplicablePropertyFormFieldsForMode(
+    'wanted',
+    'apartment',
+    undefined,
+    'standard_apartment',
+  ).map(definition => definition.field);
+  assert.ok(wantedFields.includes('bedroomCount'));
+  assert.ok(wantedFields.includes('bathroomCount'));
+  assert.ok(wantedFields.includes('floorNumber'));
+
+  const genericCatalog = getRequirementCatalogFields('apartment', undefined, 'standard_apartment')
+    .map(definition => definition.field);
+  assert.ok(genericCatalog.includes('apartmentSubtype'));
+  assert.ok(genericCatalog.includes('furnishing'));
+  assert.equal(genericCatalog.includes('hasKitchen'), false);
+  assert.equal(genericCatalog.includes('hasHall'), false);
+  assert.equal(genericCatalog.includes('hasParking'), false);
+
+  const requirementScreen = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  assert.match(requirementScreen, /purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam/);
+  assert.match(requirementScreen, /setPurpose\(initialPurpose\); setPropertyType\(initialPropertyType\); setApartmentSubtype\(initialApartmentSubtype\)/);
+  assert.match(requirementScreen, /leadingFields\.filter\(field => field !== 'apartmentSubtype'\)/);
+  assert.match(requirementScreen, /testID="requirement-bedrooms-quick-pick"/);
+  assert.match(requirementScreen, /testID="requirement-bathrooms-quick-pick"/);
+  assert.match(requirementScreen, /testID="requirement-floor-number"/);
+  assert.match(requirementScreen, /getRequirementPresentationFields\(propertyType, floorUse, apartmentSubtype\)/);
 });

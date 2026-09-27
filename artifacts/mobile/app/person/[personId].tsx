@@ -38,10 +38,10 @@ import {
 import { store } from '@/services/persistence';
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 
-export function getPersonWantedStudioRoute(personId: string) {
+export function getPersonWantedRequirementRoute(personId: string) {
   return {
-    pathname: '/capture/studio',
-    params: { mode: 'wanted', seekerId: personId, transaction: 'rent' },
+    pathname: '/capture/transaction',
+    params: { mode: 'wanted', seekerId: personId },
   } as const;
 }
 
@@ -346,7 +346,7 @@ export default function PersonDetailScreen() {
   );
   const actionForClassification = (classification: PersonClassification) => {
     if (classification === 'seeker') {
-      router.push(getPersonWantedStudioRoute(person.id) as never);
+      router.push(getPersonWantedRequirementRoute(person.id) as never);
     } else if (classification === 'owner') {
       router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: 'owner' } } as never);
     } else if (sourceRoles.includes(classification as PropertySource['role'])) {

@@ -4,4 +4,4 @@
 - [Property fact convergence](property-fact-convergence.md) — mapped legacy metadata is fallback-only; a canonical edit snapshot, including deletion, is authoritative.
 - [Requirement save evidence boundary](requirement-save-evidence-boundary.md) — separate unrecoverable historical exceptions from independently verified current save gates.
 - [Property list ordering](property-list-ordering.md) — retain deterministic creation chronology until an updated-order storage change is authorized.
-- [Studio Requirement media scope](studio-requirement-media-scope.md) — Wanted Studio attachments are locally durable, not cross-device synced; keep owner-scoped references.
+- [Wanted Requirement boundary](studio-requirement-media-scope.md) — Requirements hold seeker preferences, not Property location or media; decode legacy rows without rewriting them.

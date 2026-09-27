@@ -35,6 +35,7 @@ const stubSources = new Map<string, string>([
       },
     });
     const React = { createElement };
+    globalThis.React = React;
     export { createElement };
     export default React;
     export const useState = initial => {
@@ -206,6 +207,84 @@ test('production property type route enables Apartment Next and opens subtype se
   assert.equal(harness.pushes[0].pathname, '/capture/apartment-subtype');
   assert.deepEqual(harness.pushes[0].params, { ...flowContext, propertyType: 'apartment' });
   assert.deepEqual(harness.draftUpdates, []);
+});
+
+test('production Wanted chooser requires an explicit Rent or Buy choice and keeps the exact seeker', async () => {
+  const transactionRoute = await import('../app/capture/transaction.tsx');
+  const propertyTypeRoute = await import('../app/capture/property-type.tsx');
+  const subtypeRoute = await import('../app/capture/apartment-subtype.tsx');
+
+  for (const transaction of ['rent', 'sale'] as const) {
+    const seekerId = `exact-seeker-${transaction}`;
+    const transactionHarness = routeHarness({ mode: 'wanted', seekerId });
+    const initialTransaction = renderRoute(transactionRoute, transactionHarness);
+    assert.equal(findByTestId(initialTransaction, 'btn-next').props.disabled, true);
+    (findByTestId(initialTransaction, 'select-wanted').props.onSelect as () => void)();
+    const selectedTransaction = renderRoute(transactionRoute, transactionHarness);
+    (findByTestId(selectedTransaction, transaction === 'rent' ? 'select-rent' : 'select-sale').props.onSelect as () => void)();
+    (findByTestId(renderRoute(transactionRoute, transactionHarness), 'btn-next').props.onPress as () => void)();
+
+    assert.deepEqual(transactionHarness.pushes[0], {
+      pathname: '/capture/property-type',
+      params: { mode: 'wanted', transaction, seekerId },
+    });
+
+    const propertyHarness = routeHarness({ mode: 'wanted', transaction, seekerId });
+    const propertyScreen = renderRoute(propertyTypeRoute, propertyHarness);
+    assert.equal(findByTestId(propertyScreen, 'btn-next').props.disabled, true);
+    (findByTestId(propertyScreen, 'select-type-apartment').props.onSelect as () => void)();
+    (findByTestId(renderRoute(propertyTypeRoute, propertyHarness), 'btn-next').props.onPress as () => void)();
+    assert.deepEqual(propertyHarness.pushes[0], {
+      pathname: '/capture/apartment-subtype',
+      params: { mode: 'wanted', transaction, seekerId, propertyType: 'apartment' },
+    });
+
+    const subtypeHarness = routeHarness({ mode: 'wanted', transaction, seekerId, propertyType: 'apartment' });
+    const subtypeScreen = renderRoute(subtypeRoute, subtypeHarness);
+    assert.equal(findByTestId(subtypeScreen, 'btn-next').props.disabled, true);
+    (findByTestId(subtypeScreen, 'select-apartment-standard').props.onSelect as () => void)();
+    (findByTestId(renderRoute(subtypeRoute, subtypeHarness), 'btn-next').props.onPress as () => void)();
+    assert.deepEqual(subtypeHarness.pushes[0], {
+      pathname: '/requirement/new',
+      params: {
+        mode: 'wanted',
+        transaction,
+        seekerId,
+        propertyType: 'apartment',
+        apartmentSubtype: 'standard',
+        purpose: transaction === 'sale' ? 'buy' : 'rent',
+      },
+    });
+  }
+});
+
+test('production wanted Apartment Studio selection uses its dedicated route with the exact seeker', async () => {
+  const route = await import('../app/capture/apartment-subtype.tsx');
+  const seekerId = 'seeker-studio-exact';
+  const harness = routeHarness({ mode: 'wanted', transaction: 'sale', seekerId, propertyType: 'apartment' });
+  const screen = renderRoute(route, harness);
+  (findByTestId(screen, 'select-apartment-studio').props.onSelect as () => void)();
+  (findByTestId(renderRoute(route, harness), 'btn-next').props.onPress as () => void)();
+
+  assert.deepEqual(harness.pushes[0], {
+    pathname: '/capture/studio',
+    params: {
+      mode: 'wanted',
+      transaction: 'sale',
+      seekerId,
+      propertyType: 'apartment',
+      apartmentSubtype: 'studio',
+    },
+  });
+});
+
+test('production wanted property type has no inherited draft type or transaction defaults', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  const harness = routeHarness({ mode: 'wanted', seekerId: 'exact-seeker' });
+  harness.capture.draft = { propertyType: 'villa', transaction: 'rent' };
+  const screen = renderRoute(route, harness);
+  assert.equal(findByTestId(screen, 'btn-next').props.disabled, true);
+  assert.equal(findByTestId(screen, 'select-type-villa').props.selected, false);
 });
 
 test('production subtype route sends Studio to dedicated capture and preserves Person context on Back', async () => {
