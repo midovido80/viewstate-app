@@ -109,6 +109,30 @@ export function isWantedStudio(requirement: Pick<SeekerRequirement, 'propertyTyp
     ) === true;
 }
 
+/**
+ * Localized apartment subtype wording for wanted Requirement summaries.
+ * Older Requirement records may use `standard` rather than the canonical
+ * `standard_apartment` value; retain that legacy display mapping.
+ */
+export function getWantedApartmentSubtypeLabel(
+  requirement: Pick<SeekerRequirement, 'propertyType' | 'catalogPreferences'>,
+  language: 'en' | 'ar',
+): string | undefined {
+  if (requirement.propertyType !== 'apartment') return undefined;
+  const preference = requirement.catalogPreferences?.find(item =>
+    item.field === 'apartmentSubtype' && item.kind === 'choice',
+  );
+  if (!preference || preference.kind !== 'choice') return undefined;
+  const labels: Record<string, readonly [string, string]> = {
+    standard: ['Standard Apartment', 'شقة عادية'],
+    standard_apartment: ['Standard Apartment', 'شقة عادية'],
+    studio: ['Studio', 'استوديو'],
+    duplex: ['Duplex', 'دوبلكس'],
+  };
+  const label = labels[String(preference.value)];
+  return label?.[language === 'ar' ? 1 : 0];
+}
+
 export function canHydrateStudioRequirement(requirement: SeekerRequirement): boolean {
   try {
     readStudioRequirement(requirement);

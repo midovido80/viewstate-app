@@ -89,20 +89,20 @@ test('Property sources are optional role relationships, independent of Person cl
   assert.deepEqual(await store.getPropertySource(source.propertyCoreId), source);
 });
 
-test('an existing non-seeker Person may own one exact-readback Requirement', async () => {
+test('an existing Person with seeker classification may retain other Person roles', async () => {
   const storage = new MemoryStorage();
   const store = new WebStore(storage, locks);
   await store.init();
   const owner = createPerson({
     id: 'owner-requirement-person',
-    classifications: ['owner'],
+    classifications: ['owner', 'seeker'],
     name: 'Owner',
     displayPhone: '51111111',
   });
   await store.savePerson(owner);
   const secondOwner = createPerson({
     id: 'different-existing-person',
-    classifications: ['owner'],
+    classifications: ['owner', 'seeker'],
     name: 'Second owner',
     displayPhone: '52222222',
   });
@@ -160,6 +160,7 @@ test('an existing non-seeker Person may own one exact-readback Requirement', asy
     status: 'storage_failure',
     retryAllowed: false,
     conflict: true,
+    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
   });
   assert.deepEqual(
     JSON.parse(storage.values.get(WEB_REQUIREMENTS_KEY) ?? '[]')

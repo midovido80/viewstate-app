@@ -48,5 +48,11 @@ test('post-save success uses brief localized feedback instead of a large action 
   assert.match(source, /setTimeout\(\(\) => \{\s*setConfirmation\(''\);/);
   assert.match(source, /testID="person-action-confirmation"/);
   assert.match(source, /language === 'ar' \? 'تم حفظ الشخص' : 'Person saved'/);
+  assert.match(source, /if \(!confirmation\) return;[\s\S]*setTimeout\(\(\) => setConfirmation\(''\), 1800\)/);
+  assert.match(source, /accessibilityRole="text"/);
+  assert.match(source, /accessibilityLiveRegion="polite"/);
+  assert.match(source, /setMode\('detail'\);\s*setConfirmation\(language === 'ar' \? 'تم حفظ الشخص' : 'Person saved'\)/);
+  assert.match(source, /params\.requirementSaved !== '1'[\s\S]*setConfirmation\(language === 'ar' \? 'تم حفظ الطلب' : 'Requirement saved'\)/);
+  assert.match(source, /confirmation: \{ alignSelf: 'flex-start'[\s\S]*borderWidth: 1/);
   assert.doesNotMatch(source, /savedBox|person-saved-next-step|person-saved-add-property/);
 });

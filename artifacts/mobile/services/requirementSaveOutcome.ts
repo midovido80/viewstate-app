@@ -55,9 +55,52 @@ export type RequirementSaveOutcome =
   | { readonly status: 'missing_person' }
   | { readonly status: 'non_seeker' }
   | { readonly status: 'edit_conflict' }
-  | { readonly status: 'storage_failure'; readonly retryAllowed: boolean; readonly conflict?: boolean }
+  | {
+    readonly status: 'storage_failure';
+    readonly retryAllowed: boolean;
+    readonly conflict?: boolean;
+    readonly diagnostic?: RequirementSaveStageDiagnostic;
+  }
   | { readonly status: 'saved_readback_failed' }
   | { readonly status: 'saved_navigation_failed' };
+
+export interface RequirementSaveStageDiagnostic {
+  readonly stage: 'ownership' | 'write' | 'readback' | 'navigation';
+  readonly code:
+    | 'person_missing'
+    | 'person_not_seeker'
+    | 'edit_conflict'
+    | 'storage_failure'
+    | 'readback_failed'
+    | 'navigation_failed';
+  /** Static contract paths only; never includes IDs, names, notes, or raw errors. */
+  readonly location: readonly string[];
+}
+
+/** Safe operational context for logs and UI decisions; excludes record data and exceptions. */
+export function requirementSaveStageDiagnostic(
+  outcome: RequirementSaveOutcome,
+): RequirementSaveStageDiagnostic | null {
+  if (outcome.status === 'storage_failure' && outcome.diagnostic) {
+    return outcome.diagnostic;
+  }
+  switch (outcome.status) {
+    case 'saved':
+      return null;
+    case 'missing_person':
+      return { stage: 'ownership', code: 'person_missing', location: ['person'] };
+    case 'non_seeker':
+      return { stage: 'ownership', code: 'person_not_seeker', location: ['person', 'classifications'] };
+    case 'edit_conflict':
+      return { stage: 'write', code: 'edit_conflict', location: ['requirement'] };
+    case 'storage_failure':
+      return { stage: 'write', code: 'storage_failure', location: ['requirement'] };
+    case 'saved_readback_failed':
+      return { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] };
+    case 'saved_navigation_failed':
+      return { stage: 'navigation', code: 'navigation_failed', location: ['person'] };
+  }
+}
 
 export function requirementIdentityMatches(
   saved: SeekerRequirement | null,
@@ -123,9 +166,14 @@ export async function savePersonRequirement(options: {
   try {
     person = await store.getPerson(candidate.seekerId);
   } catch {
-    return { status: 'storage_failure', retryAllowed: true };
+    return {
+      status: 'storage_failure',
+      retryAllowed: true,
+      diagnostic: { stage: 'ownership', code: 'storage_failure', location: ['person'] },
+    };
   }
   if (!person) return { status: 'missing_person' };
+  if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
 
   try {
     if (baseline) {
@@ -139,7 +187,12 @@ export async function savePersonRequirement(options: {
     if (error instanceof Error && error.message === 'REQUIREMENT_CHANGED') {
       return baseline
         ? { status: 'edit_conflict' }
-        : { status: 'storage_failure', retryAllowed: true, conflict: true };
+        : {
+          status: 'storage_failure',
+          retryAllowed: false,
+          conflict: true,
+          diagnostic: { stage: 'write', code: 'edit_conflict', location: ['requirement', 'id'] },
+        };
     }
     if (error instanceof Error && error.message === 'REQUIREMENT_SEEKER_NOT_FOUND') {
       return { status: 'missing_person' };
@@ -149,14 +202,27 @@ export async function savePersonRequirement(options: {
     try {
       const saved = await store.getRequirement(candidate.id);
       if (saved === null) {
-        return { status: 'storage_failure', retryAllowed: true };
+        return {
+          status: 'storage_failure',
+          retryAllowed: true,
+          diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'] },
+        };
       }
       if (!requirementMatches(saved, candidate)) {
-        return { status: 'storage_failure', retryAllowed: false, conflict: true };
+        return {
+          status: 'storage_failure',
+          retryAllowed: false,
+          conflict: true,
+          diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+        };
       }
       return await navigateToPerson(navigate);
     } catch {
-      return { status: 'storage_failure', retryAllowed: false };
+      return {
+        status: 'storage_failure',
+        retryAllowed: false,
+        diagnostic: { stage: 'readback', code: 'storage_failure', location: ['requirement', 'id'] },
+      };
     }
   }
 
@@ -200,11 +266,26 @@ export async function verifyUncertainRequirementWrite(options: {
   try {
     saved = await options.store.getRequirement(options.candidate.id);
   } catch {
-    return { status: 'storage_failure', retryAllowed: false };
+    return {
+      status: 'storage_failure',
+      retryAllowed: false,
+      diagnostic: { stage: 'readback', code: 'storage_failure', location: ['requirement', 'id'] },
+    };
   }
-  if (saved === null) return { status: 'storage_failure', retryAllowed: true };
+  if (saved === null) {
+    return {
+      status: 'storage_failure',
+      retryAllowed: true,
+      diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+    };
+  }
   if (!requirementMatches(saved, options.candidate)) {
-    return { status: 'storage_failure', retryAllowed: false, conflict: true };
+    return {
+      status: 'storage_failure',
+      retryAllowed: false,
+      conflict: true,
+      diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+    };
   }
   return navigateToPerson(options.navigate);
 }

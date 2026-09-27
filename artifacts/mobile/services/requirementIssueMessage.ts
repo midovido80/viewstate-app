@@ -1,5 +1,6 @@
 import type { RequirementValidationIssue } from '@workspace/property-domain';
 import type { Language } from '@/contexts/I18nContext';
+import type { RequirementSaveOutcome } from '@/services/requirementSaveOutcome';
 
 type RequirementIssueAlias =
   | 'missing_area_mode'
@@ -26,6 +27,41 @@ export type LocalizableRequirementIssue = {
   readonly code: LocalizableRequirementIssueCode | (string & {});
   readonly path?: readonly string[];
 };
+
+export type RequirementSaveIssueCode = Extract<
+  RequirementIssueAlias,
+  | 'save_conflict'
+  | 'save_missing_person'
+  | 'save_non_seeker'
+  | 'save_edit_conflict'
+  | 'save_storage_failure'
+  | 'save_storage_uncertain'
+  | 'save_readback_failed'
+  | 'save_navigation_failed'
+>;
+
+/** Keeps stage details out of copy; only safe status codes select localized text. */
+export function requirementSaveIssueCode(
+  outcome: RequirementSaveOutcome,
+): RequirementSaveIssueCode | null {
+  switch (outcome.status) {
+    case 'saved':
+      return null;
+    case 'missing_person':
+      return 'save_missing_person';
+    case 'non_seeker':
+      return 'save_non_seeker';
+    case 'edit_conflict':
+      return 'save_edit_conflict';
+    case 'storage_failure':
+      if (outcome.conflict) return 'save_conflict';
+      return outcome.retryAllowed ? 'save_storage_failure' : 'save_storage_uncertain';
+    case 'saved_readback_failed':
+      return 'save_readback_failed';
+    case 'saved_navigation_failed':
+      return 'save_navigation_failed';
+  }
+}
 
 const messages: Record<LocalizableRequirementIssueCode, readonly [english: string, arabic: string]> = {
   invalid_requirement: ['Review the Requirement details and try again.', 'راجع تفاصيل المتطلب وحاول مرة أخرى.'],

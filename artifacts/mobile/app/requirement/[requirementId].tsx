@@ -53,7 +53,7 @@ import {
 } from '@/services/requirementFieldMap';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
-import { canHydrateStudioRequirement, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
+import { canHydrateStudioRequirement, getWantedApartmentSubtypeLabel, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
 
 const RENT_SERVICES = ['swimmingPool', 'gym', 'seaView'] as const;
 const AMENITY_LABELS: Record<string, { en: string; ar: string }> = {
@@ -124,10 +124,15 @@ export default function RequirementEditor() {
     : 'apartment';
   const initialApartmentSubtype: GenericRequirementApartmentSubtype | undefined =
     parseGenericRequirementApartmentSubtype(routeApartmentSubtype);
+  const hasExplicitCatalogSelection = (routePurpose === 'rent' || routePurpose === 'buy')
+    && PROPERTY_TYPES.includes(routePropertyType as PropertyType)
+    && (routePropertyType !== 'apartment' || initialApartmentSubtype !== undefined);
+  const startsAtSpecifications = editing || hasExplicitCatalogSelection;
   const scopeKey = editing ? `requirement:${routeRequirementId}` : `requirement:new:${ownerFromRoute ?? 'missing'}`;
   const [baseline, setBaseline] = useState<SeekerRequirement | null>(null);
   const [recordLoaded, setRecordLoaded] = useState(!editing);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(startsAtSpecifications ? 3 : 0);
+  const [showCatalogBackControls, setShowCatalogBackControls] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [purpose, setPurpose] = useState<RequirementPurpose>(initialPurpose);
@@ -176,7 +181,7 @@ export default function RequirementEditor() {
   }, [editing, routeRequirementId, ownerFromRoute]);
 
   useEffect(() => {
-    setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(0); setInvalidCatalogFields(new Set());
+    setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(startsAtSpecifications ? 3 : 0); setShowCatalogBackControls(false); setInvalidCatalogFields(new Set());
     confirmedRequirement.current = null; uncertainRequirement.current = null; editConflictRequirement.current = null; setRecoveryAction(null);
     draftId.current = editing ? routeRequirementId : generateDomainId();
     setPurpose(initialPurpose); setPropertyType(initialPropertyType); setApartmentSubtype(initialApartmentSubtype); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
@@ -219,7 +224,7 @@ export default function RequirementEditor() {
       setRecordLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [editing, routeRequirementId, ownerFromRoute, language, initialPurpose, initialPropertyType, initialApartmentSubtype]);
+  }, [editing, routeRequirementId, ownerFromRoute, initialPurpose, initialPropertyType, initialApartmentSubtype, startsAtSpecifications]);
 
   const editRequested = (Array.isArray(edit) ? edit[0] : edit) === '1';
   useEffect(() => {
@@ -318,7 +323,7 @@ export default function RequirementEditor() {
   };
 
   const review = () => {
-    if (!areaMode || (areaMode === 'specific_areas' && !areas.length)) { setStep(2); setError(language === 'ar' ? 'اختر نطاق المناطق ومنطقة.' : 'Choose an area scope and area.'); return; }
+    if (!areaMode || (areaMode === 'specific_areas' && !areas.length)) { setStep(startsAtSpecifications ? 3 : 2); setError(language === 'ar' ? 'اختر نطاق المناطق ومنطقة.' : 'Choose an area scope and area.'); return; }
     if (propertyType === 'floor' && !floorUse) { setStep(1); setError(language === 'ar' ? 'اختر استخدام الدور.' : 'Choose the floor use.'); return; }
     if ((coreApplicable && [bedrooms, bathrooms, masterBedrooms, livingRooms].some(value => !parseOptionalRequirementNumber(value).ok)) || (applicableCoreFields.has('parkingSpaceCount') && !parseOptionalRequirementNumber(parking).ok) || (applicableCoreFields.has('floorNumber') && !parseOptionalRequirementNumber(floorNumber).ok) || (applicableCoreFields.has('builtUpAreaSquareMeters') && !parseOptionalRequirementNumber(requiredArea, { integer: false }).ok)) { setStep(3); setError(language === 'ar' ? 'صحح المواصفات الأساسية.' : 'Correct the core specifications.'); return; }
     if (!parseOptionalRequirementNumber(minimum, { integer: false }).ok || !parseOptionalRequirementNumber(maximum, { integer: false }).ok) { setStep(4); setError(language === 'ar' ? 'صحح الميزانية.' : 'Correct the budget.'); return; }
@@ -332,8 +337,29 @@ export default function RequirementEditor() {
       return;
     }
     setError('');
-    setStep(value => value + 1);
+    if (startsAtSpecifications && step === 1) setShowCatalogBackControls(false);
+    setStep(value => startsAtSpecifications && value === 1 ? 3 : value + 1);
   };
+  const previousStep = () => {
+    setError('');
+    if (startsAtSpecifications && step === 3) {
+      setShowCatalogBackControls(true);
+      setStep(1);
+      return;
+    }
+    setStep(value => value - 1);
+  };
+  const changeApartmentSubtype = (next: GenericRequirementApartmentSubtype) => {
+    setApartmentSubtype(next);
+    setCatalog(current => [
+      ...current.filter(item => item.field !== 'apartmentSubtype'),
+      ...getGenericRequirementApartmentSubtypePreference(next),
+    ]);
+  };
+  const apartmentSubtypeLabel = (value: string) => getWantedApartmentSubtypeLabel({
+    propertyType,
+    catalogPreferences: [{ field: 'apartmentSubtype', kind: 'choice', value }],
+  }, language) ?? value;
   const save = async () => {
     if (!tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)) return;
     const generation = routeGeneration.current.capture();
@@ -367,7 +393,7 @@ export default function RequirementEditor() {
     requirement: SeekerRequirement,
   ) => {
     if (outcome.status === 'saved') {
-      confirmedRequirement.current = null;
+      confirmedRequirement.current = requirement;
       uncertainRequirement.current = null;
       editConflictRequirement.current = null;
       setRecoveryAction(null);
@@ -496,7 +522,7 @@ export default function RequirementEditor() {
   const choiceReviewLines = (fields: readonly string[]) => fields.flatMap(field => catalog.filter((item): item is Extract<CatalogPreference, { kind: 'choice' }> => item.kind === 'choice' && item.field === field)).map(item => {
     const definition = catalogDefinitions.find(value => value.field === item.field);
     const itemLabel = definition?.label[language === 'ar' ? 1 : 0] ?? label('Preference', 'تفضيل');
-    const itemValue = item.field === 'furnishing' ? t(`enrich.furnishing.${item.value}` as any) : item.field === 'apartmentSubtype' ? t(`enrich.apartment_subtype.${item.value}` as any) : item.field === 'intendedUse' ? ({ office: label('Office', 'مكتب'), retail: label('Retail', 'تجزئة'), warehouse: label('Warehouse', 'مستودع'), residential: label('Residential', 'سكني') } as Record<string, string>)[item.value] : item.field === 'commercialActivity' ? ({ retail: label('Retail', 'تجزئة'), office: label('Office', 'مكتب'), restaurant: label('Restaurant', 'مطعم'), clinic: label('Clinic', 'عيادة'), warehouse: label('Warehouse', 'مستودع') } as Record<string, string>)[item.value] : label('Selected choice', 'اختيار محدد');
+    const itemValue = item.field === 'furnishing' ? t(`enrich.furnishing.${item.value}` as any) : item.field === 'apartmentSubtype' ? apartmentSubtypeLabel(item.value) : item.field === 'intendedUse' ? ({ office: label('Office', 'مكتب'), retail: label('Retail', 'تجزئة'), warehouse: label('Warehouse', 'مستودع'), residential: label('Residential', 'سكني') } as Record<string, string>)[item.value] : item.field === 'commercialActivity' ? ({ retail: label('Retail', 'تجزئة'), office: label('Office', 'مكتب'), restaurant: label('Restaurant', 'مطعم'), clinic: label('Clinic', 'عيادة'), warehouse: label('Warehouse', 'مستودع') } as Record<string, string>)[item.value] : label('Selected choice', 'اختيار محدد');
     return `${itemLabel}: ${itemValue}`;
   });
   const coreReviewLines = [
@@ -659,7 +685,7 @@ export default function RequirementEditor() {
     );
   }
 
-  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}><Text style={{ color: colors.primary }}>{t('capture.cancel')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{step + 1}/{STEPS.length}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
+  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}><Text style={{ color: colors.primary }}>{t('capture.cancel')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
      {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
        {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
        {recoveryAction && recoveryAction !== 'edit_conflict' && <View style={styles.recoveryActions}>
@@ -677,10 +703,11 @@ export default function RequirementEditor() {
        </View>}
      </View> : null}
      {step === 0 && <><Text style={styles.heading}>{t('requirements.purpose')}</Text><View style={styles.wrap}>{(['rent', 'buy'] as const).map(value => <ChoiceChip key={value} label={t(`requirements.purpose.${value}`)} selected={purpose === value} onPress={() => changePurpose(value)} testID={`requirement-purpose-${value}`} role="radio" />)}</View></>}
-    {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><View style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</View>{propertyType === 'floor' && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><View style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</View></>}</>}
+   {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><View style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</View>{showCatalogBackControls && propertyType === 'apartment' && <><Text style={styles.heading}>{label('Apartment subtype', 'نوع الشقة')}</Text><View style={styles.wrap}>{(['standard_apartment', 'duplex'] as const).map(value => <ChoiceChip key={value} label={apartmentSubtypeLabel(value)} selected={apartmentSubtype === value} onPress={() => changeApartmentSubtype(value)} testID={`requirement-apartment-subtype-${value}`} role="radio" />)}</View></>}{propertyType === 'floor' && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><View style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</View></>}</>}
     {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
      {step === 3 && <View testID="requirement-core-step">
        <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>
+       {startsAtSpecifications && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode === 'specific_areas'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
        {editableLeadingFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:leading`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={editableLeadingFields} />}
        {coreApplicable && <>
          <NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={setBedrooms} testID="requirement-bedrooms-quick-pick" />
@@ -703,7 +730,7 @@ export default function RequirementEditor() {
      </View>}
     {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <View style={styles.wrap}>{(['daily', 'monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'daily' ? label('Daily', 'يومياً') : value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{purpose === 'rent' ? label('Rent', 'إيجار') : label('Buy', 'شراء')} · {t(`propertyType.${propertyType}`)}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}
-   </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={() => { setError(''); setStep(value => value - 1); }} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={!!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
+   </KeyboardAwareScrollViewCompat><View style={styles.footer}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={previousStep} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={saving || !!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
 }
 
 function RequirementCatalogPreferencesProxy({ propertyType, floorUse, values, onChange, amenities, onAmenitiesChange, excluded, onExcludedChange, showAmenities, amenityFields }: { propertyType: PropertyType; floorUse?: FloorUse; values: readonly CatalogPreference[]; onChange: (values: readonly CatalogPreference[]) => void; amenities: readonly ResidentialAmenity[]; onAmenitiesChange: (values: readonly ResidentialAmenity[]) => void; excluded: readonly ResidentialAmenity[]; onExcludedChange: (values: readonly ResidentialAmenity[]) => void; showAmenities: boolean; amenityFields: readonly CatalogPreference['field'][] }) {

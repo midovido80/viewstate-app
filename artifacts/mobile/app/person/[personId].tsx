@@ -18,7 +18,7 @@ import { ChoiceChip } from '@/components/ChoiceChip';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, toEnglishDigits } from '@/constants/market';
-import { isWantedStudio } from '@/services/propertyDetailPresentation';
+import { getWantedApartmentSubtypeLabel } from '@/services/propertyDetailPresentation';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import {
@@ -90,14 +90,21 @@ export default function PersonDetailScreen() {
   }, [language, params.saved, router]);
 
   useEffect(() => {
+    if (!confirmation) return;
+    const timer = setTimeout(() => setConfirmation(''), 1800);
+    return () => clearTimeout(timer);
+  }, [confirmation]);
+
+  useEffect(() => {
     if (params.requirementSaved !== '1') return;
     setRequirementReturnGuard(true);
+    setConfirmation(language === 'ar' ? 'تم حفظ الطلب' : 'Requirement saved');
     const timer = setTimeout(() => {
       setRequirementReturnGuard(false);
       router.setParams({ requirementSaved: undefined });
     }, 750);
     return () => clearTimeout(timer);
-  }, [params.requirementSaved, router]);
+  }, [language, params.requirementSaved, router]);
 
   const navigateBack = () => {
     if (mode === 'edit') {
@@ -173,6 +180,7 @@ export default function PersonDetailScreen() {
       ) ?? replacement;
       setPerson(resolved);
       setMode('detail');
+      setConfirmation(language === 'ar' ? 'تم حفظ الشخص' : 'Person saved');
       if (resolved.id !== person.id) {
         router.replace(`/person/${encodeURIComponent(resolved.id)}` as never);
       }
@@ -224,7 +232,6 @@ export default function PersonDetailScreen() {
       setLinkOpen(false);
       setSelectedProperty(null);
       setConfirmation(language === 'ar' ? 'تم ربط العقار بالشخص' : 'Property linked to person');
-      setTimeout(() => setConfirmation(''), 2200);
       await load();
     } catch {
       setError(t('people.link_action_failed'));
@@ -454,7 +461,13 @@ export default function PersonDetailScreen() {
               testID="person-primary-action"
             />
             {confirmation ? (
-              <View style={[styles.confirmation, { backgroundColor: colors.accent }]} accessibilityRole="alert" testID="person-action-confirmation">
+              <View
+                style={[styles.confirmation, { backgroundColor: colors.accent, borderColor: colors.border }]}
+                accessibilityRole="text"
+                accessible
+                accessibilityLiveRegion="polite"
+                testID="person-action-confirmation"
+              >
                 <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
               </View>
             ) : null}
@@ -469,7 +482,7 @@ export default function PersonDetailScreen() {
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
             </View>
             {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
-              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}{isWantedStudio(requirement) ? ` · ${t('enrich.apartment_subtype.studio')}` : ''}</Text>
+              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}{getWantedApartmentSubtypeLabel(requirement, language) ? ` · ${getWantedApartmentSubtypeLabel(requirement, language)}` : ''}</Text>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
                 {requirement.preferredAreaMode === 'all_kuwait'
                   ? (language === 'ar' ? 'كل مناطق الكويت' : 'All Kuwait')
@@ -676,7 +689,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   ltrText: { writingDirection: 'ltr', textAlign: 'left' },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },
-  confirmation: { alignSelf: 'stretch', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  confirmation: { alignSelf: 'flex-start', maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   roleChoices: { paddingHorizontal: 20, paddingTop: 8 },
   confirmLink: { marginTop: 10, padding: 14, borderWidth: 1, borderRadius: 12, gap: 10 },
   requirementCard: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 8 },

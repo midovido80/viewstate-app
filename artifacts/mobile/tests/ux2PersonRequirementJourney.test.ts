@@ -203,7 +203,7 @@ test('UX-2 source role travels with the Person through every existing capture ro
   }
 });
 
-test('UX-2 Requirement save requires an existing Person, not seeker classification', async () => {
+test('UX-2 Requirement save requires an existing Person with seeker classification', async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
     purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
     minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
@@ -231,8 +231,8 @@ test('UX-2 Requirement save requires an existing Person, not seeker classificati
     },
     navigate: () => undefined,
   });
-  assert.deepEqual(ownerRequirement, { status: 'saved' });
-  assert.equal(writes, 1);
+  assert.deepEqual(ownerRequirement, { status: 'non_seeker' });
+  assert.equal(writes, 0, 'a Person without seeker classification cannot own a Requirement save');
 });
 
 test('UX-2 storage and readback failures keep writes bounded and allow confirmation-only recovery', async () => {
@@ -323,7 +323,11 @@ test('UX-2 unresolved writes require exact-ID verification before a manual retry
     candidate: built.value, baseline: null, store,
     navigate: () => assert.fail('must not navigate'),
   });
-  assert.deepEqual(outcome, { status: 'storage_failure', retryAllowed: true });
+  assert.deepEqual(outcome, {
+    status: 'storage_failure',
+    retryAllowed: true,
+    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'] },
+  });
   assert.equal(writes, 1);
   assert.equal(reads, 1, 'the exact-ID lookup must happen before retry can be enabled');
 });
@@ -398,7 +402,7 @@ test('UX-2 competing edit is a non-retryable conflict and preserves the draft fo
   assert.match(route, /if \(window\.confirm\(message\)\) void openPersonDetails\(\)/);
   assert.match(route, /style: 'cancel'/);
   assert.match(route, /will discard them/);
-  assert.match(route, /disabled=\{!!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
   assert.doesNotMatch(route, /outcome\.status === 'edit_conflict'[\s\S]{0,180}setNotes\(/);
 });
 
@@ -523,7 +527,8 @@ test('UX-2 failed navigation offers navigation-only recovery and route displays 
   assert.equal(shouldRenderRequirementRecoveryControls(false, null), false);
   assert.equal(tryStartRequirementSave({ current: false }, true, false), false, 'dismissing the error cannot unlock a confirmed save');
   assert.match(route, /tryStartRequirementSave\(saveFlight, !!confirmedRequirement\.current, !!uncertainRequirement\.current, !!editConflictRequirement\.current\)/);
-  assert.match(route, /disabled=\{!!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.equal(tryStartRequirementSave({ current: false }, false, false, true), false, 'an edit conflict also prevents another save');
   const saveStart = route.indexOf('const save = async () =>');
   assert.ok(route.indexOf('tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart) < route.indexOf('const result = candidate();', saveStart));
   for (const code of ['save_missing_person', 'save_non_seeker', 'save_edit_conflict', 'save_storage_failure', 'save_readback_failed', 'save_navigation_failed']) {
