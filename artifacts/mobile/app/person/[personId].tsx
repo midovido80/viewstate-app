@@ -18,7 +18,11 @@ import { ChoiceChip } from '@/components/ChoiceChip';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, toEnglishDigits } from '@/constants/market';
-import { getWantedApartmentSubtypeLabel } from '@/services/propertyDetailPresentation';
+import {
+  canHydrateStudioRequirement,
+  getStudioRequirementEditHref,
+  getWantedApartmentSubtypeLabel,
+} from '@/services/propertyDetailPresentation';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import {
@@ -494,7 +498,7 @@ export default function PersonDetailScreen() {
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
-              <View style={[styles.secondaryActions, styles.requirementActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} style={styles.requirementAction} testID={`requirement-view-${requirement.id}`}/><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.requirementAction} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.requirementAction} testID={`requirement-edit-${requirement.id}`}/></View>
+              <View style={[styles.secondaryActions, styles.requirementActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never)} style={styles.requirementAction} testID={`requirement-view-${requirement.id}`}/><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.requirementAction} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push(canHydrateStudioRequirement(requirement) ? getStudioRequirementEditHref(requirement.id) as never : { pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.requirementAction} testID={`requirement-edit-${requirement.id}`}/></View>
             </View>)}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>

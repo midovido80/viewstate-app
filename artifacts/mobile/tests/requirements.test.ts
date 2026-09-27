@@ -874,6 +874,12 @@ test('mixed Web Requirements atomically isolate two unreadable rows and keep can
   ]);
   const reopened = new WebRequirementStore(storage, () => locks, reader);
   assert.equal((await reopened.getRequirementsForSeeker('seeker-1')).length, 4);
+  const activeIds = (await reopened.getRequirements()).map(item => item.id);
+  assert.equal(activeIds.includes(ids.other), false, 'Unreadable legacy entry stays out of active reads');
+  assert.equal(activeIds.includes('legacy-unknown'), false, 'Quarantined entry stays out of Matching input');
+  const beforeView = new Map(storage.values);
+  assert.equal((await reopened.getRequirement(standard.id))?.id, standard.id);
+  assert.deepEqual(storage.values, beforeView, 'Viewing an exact ID does not write Requirement or chronology storage');
   await reopened.saveRequirement(standard); // same literal ID is an idempotent no-op
   assert.equal((await reopened.getRequirements()).filter(item => item.id === standard.id).length, 1);
   assert.equal(await reopened.updateRequirement(standard, { ...standard, notes: 'edited once' }), true);

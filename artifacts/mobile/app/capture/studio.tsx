@@ -1455,8 +1455,8 @@ export default function StudioCaptureRoute() {
                 <Button
                   title={language === 'ar' ? 'عرض المتطلب' : 'View Requirement'}
                   onPress={() => router.replace({
-                    pathname: '/requirement/[requirementId]',
-                    params: { requirementId: savedRequirement.id, seekerId: savedRequirement.seekerId },
+                    pathname: '/requirement/view/[requirementId]',
+                    params: { requirementId: savedRequirement.id },
                   } as never)}
                   testID="studio-view-saved-requirement"
                 />
