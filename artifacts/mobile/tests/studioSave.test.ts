@@ -521,7 +521,7 @@ test('Studio Requirement duplicate-ID collision is rejected after exact-ID readb
     status: 'storage_failure',
     retryAllowed: false,
     conflict: true,
-    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'], errorType: 'REQUIREMENT_ID_ALREADY_EXISTS' },
   });
   assert.deepEqual(await memory.store.getRequirement(candidate.id), candidate);
   assert.deepEqual(memory.writes, ['save', 'save']);

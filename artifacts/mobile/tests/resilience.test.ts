@@ -1303,7 +1303,7 @@ test('Arabic and English recovery and preservation warnings are present', async 
   assert.match(translations, /'startup\.retry': 'إعادة المحاولة'/);
   assert.match(translations, /Nothing was deleted, reset, or replaced/);
   assert.match(translations, /لم يتم حذف أي بيانات أو إعادة ضبطها أو استبدالها/);
-  assert.match(translations, /Unreadable records are still preserved locally/);
+  assert.match(translations, /Unreadable records are preserved locally/);
   assert.match(translations, /السجلات غير المقروءة محفوظة محلياً/);
 });
 

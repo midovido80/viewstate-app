@@ -160,7 +160,7 @@ test('an existing Person with seeker classification may retain other Person role
     status: 'storage_failure',
     retryAllowed: false,
     conflict: true,
-    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'], errorType: 'REQUIREMENT_ID_ALREADY_EXISTS' },
   });
   assert.deepEqual(
     JSON.parse(storage.values.get(WEB_REQUIREMENTS_KEY) ?? '[]')

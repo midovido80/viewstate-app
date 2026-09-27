@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -38,7 +38,6 @@ import {
   retryRequirementNavigation,
   retryRequirementReadback,
   RequirementRouteGeneration,
-  requirementSaveStageDiagnostic,
   savePersonRequirement,
   shouldRenderRequirementRecoveryControls,
   tryStartRequirementSave,
@@ -135,8 +134,6 @@ export default function RequirementEditor() {
   const [step, setStep] = useState(startsAtSpecifications ? 3 : 0);
   const [showCatalogBackControls, setShowCatalogBackControls] = useState(false);
   const [error, setError] = useState('');
-  const [developmentSaveTrace, setDevelopmentSaveTrace] = useState('');
-  const saveAttemptNumber = useRef(0);
   const [saving, setSaving] = useState(false);
   const [purpose, setPurpose] = useState<RequirementPurpose>(initialPurpose);
   const [propertyType, setPropertyType] = useState<PropertyType>(initialPropertyType);
@@ -368,16 +365,13 @@ export default function RequirementEditor() {
     const generation = routeGeneration.current.capture();
     const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
     setError('');
-    setDevelopmentSaveTrace('');
     try {
       const result = candidate();
       if (!result.ok) {
         setError(result.message);
-        if (__DEV__) setDevelopmentSaveTrace('editor=diagnostic-1 stage=validation code=candidate_rejected adapter=' + (Platform.OS === 'web' ? 'WebStore' : 'SQLiteStore'));
         return;
       }
       setSaving(true);
-      const attempt = ++saveAttemptNumber.current;
       const outcome = await savePersonRequirement({
         candidate: result.value,
         baseline,
@@ -387,23 +381,6 @@ export default function RequirementEditor() {
           : undefined,
       });
       if (isCurrentRoute()) {
-        if (__DEV__) {
-          const diagnostic = requirementSaveStageDiagnostic(outcome);
-          const trace = [
-            'editor=diagnostic-1',
-            'attempt=' + attempt,
-            'stage=' + (diagnostic?.stage ?? 'confirmed'),
-            'code=' + (diagnostic?.code ?? 'saved'),
-            'type=' + (diagnostic?.errorType ?? 'none'),
-            'adapter=' + (Platform.OS === 'web' ? 'WebStore' : 'SQLiteStore'),
-            'mode=' + (baseline ? 'update' : 'create'),
-            'personId=' + result.value.seekerId,
-            'requirementId=' + result.value.id,
-            'location=' + (diagnostic?.location.join('.') ?? 'none'),
-          ].join(' ');
-          console.info('[requirement-save-diagnostic]', trace);
-          if (outcome.status !== 'saved') setDevelopmentSaveTrace(trace);
-        }
         applySaveOutcome(outcome, result.value);
       }
     } finally {
@@ -716,11 +693,6 @@ export default function RequirementEditor() {
   return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}><Text style={{ color: colors.primary }}>{t('capture.cancel')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
      {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
        {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
-        {__DEV__ && developmentSaveTrace ? (
-          <Text selectable style={{ color: colors.mutedForeground, fontSize: 11 }} testID="requirement-development-save-trace">
-            {developmentSaveTrace}
-          </Text>
-        ) : null}
        {recoveryAction && recoveryAction !== 'edit_conflict' && <View style={styles.recoveryActions}>
          <TouchableOpacity onPress={() => void retryRecoveryAction()} disabled={saving} testID="requirement-save-recovery">
            <Text style={{ color: colors.primary }}>{recoveryAction === 'verify' ? label('Check save status', 'تحقق من حالة الحفظ') : recoveryAction === 'readback' ? label('Retry confirmation', 'أعد محاولة التأكيد') : label('Retry opening Person Details', 'أعد محاولة فتح تفاصيل الشخص')}</Text>

@@ -326,7 +326,7 @@ test('UX-2 unresolved writes require exact-ID verification before a manual retry
   assert.deepEqual(outcome, {
     status: 'storage_failure',
     retryAllowed: true,
-    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'] },
+    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'], errorType: 'unexpected_error' },
   });
   assert.equal(writes, 1);
   assert.equal(reads, 1, 'the exact-ID lookup must happen before retry can be enabled');
@@ -464,7 +464,7 @@ test('UX-2 route generation prevents stale async saves from navigating or applyi
   const route = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   assert.match(route, /useLayoutEffect\(\(\) => \{\s*routeGeneration\.current\.advance\(\)/);
   assert.match(route, /return \(\) => \{ routeGeneration\.current\.advance\(\); \};/);
-  assert.match(route, /if \(isCurrentRoute\(\)\) applySaveOutcome\(outcome, result\.value\)/);
+  assert.match(route, /if \(isCurrentRoute\(\)\) \{\s*applySaveOutcome\(outcome, result\.value\)/);
   assert.match(route, /if \(isCurrentRoute\(\)\) applySaveOutcome\(outcome, target\)/);
   assert.match(route, /: undefined/);
 });
