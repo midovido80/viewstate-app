@@ -17,7 +17,7 @@ import {
   Tajawal_700Bold,
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
@@ -26,6 +26,7 @@ SplashScreen.preventAutoHideAsync();
 
 import {
   store,
+  getRequirementRecoveryReport,
   type LocalStoreIntegrityStatus,
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
@@ -42,6 +43,8 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
+  usePathname(); // Refresh the bounded recovery report after Requirement navigation.
+  const recoveryReport = getRequirementRecoveryReport();
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       {integrityStatus.hasUnreadableRecords ? (
@@ -75,6 +78,12 @@ function RootLayoutNav({
           >
             {t('integrity.count')} {integrityStatus.unreadableRecords.length}
           </Text>
+          {__DEV__ && recoveryReport && recoveryReport.quarantined.length > 0 ? (
+            <Text selectable testID="requirement-recovery-report" style={styles.integrityCount}>
+              {`Recovery v2: ${recoveryReport.quarantined.map(item =>
+                `index=${item.index} id=${item.id ?? 'unknown'} reason=${item.reason}`).join('; ')}`}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>

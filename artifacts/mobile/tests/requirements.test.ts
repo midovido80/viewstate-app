@@ -17,6 +17,7 @@ import {
   NATIVE_REQUIREMENTS_TABLE,
   SQLiteRequirementStore,
   WEB_REQUIREMENTS_KEY,
+  WEB_REQUIREMENTS_RECOVERY_KEY,
   WebRequirementStore,
 } from '../services/requirementPersistence.ts';
 import {
@@ -830,11 +831,78 @@ test('Malformed Requirement rows remain unchanged while valid peers remain reada
   assert.deepEqual((await web.getRequirements()).map(item => item.id), [ids.rent]);
   assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), originalWebBytes);
   assert.deepEqual(webWarnings, [{ type: 'requirement', id: ids.other }]);
-  await assert.rejects(
-    web.saveRequirement(buyRequirement()),
-    /UNREADABLE_REQUIREMENT_STORAGE/,
-  );
+  await web.saveRequirement(buyRequirement());
+  assert.equal((await web.getRequirement(ids.buy))?.id, ids.buy);
+  assert.deepEqual(web.getRecoveryReport().quarantined, [{
+    index: 1, id: ids.other, reason: 'invalid_requirement',
+  }]);
   assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), originalWebBytes);
+});
+
+test('mixed Web Requirements atomically isolate two unreadable rows and keep canonical records usable', async () => {
+  const storage = new MemoryStorage();
+  const current = rentRequirement();
+  const invalidArea = { ...buyRequirement(ids.other), preferredAreaIds: ['unknown_kuwait_area'] };
+  const opaque = { id: 'legacy-unknown', seekerId: 'seeker-1', purpose: 'rent', unknown: true };
+  const original = JSON.stringify([current, invalidArea, opaque]);
+  storage.values.set(WEB_REQUIREMENTS_KEY, original);
+  const reader = { getPerson: async (id: string) => id === 'seeker-1' ? seeker(id) : null };
+  const store = new WebRequirementStore(storage, () => locks, reader);
+  const standard = rentRequirement(ids.buy);
+  const studio = { ...rentRequirement('44444444-4444-4444-8444-444444444444'),
+    preferredAreaIds: ['salmiya'], catalogPreferences: [
+      { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
+    ] } as unknown as RentSeekerRequirement;
+  const building = { ...buyRequirement('55555555-5555-4555-8555-555555555555'),
+    propertyType: 'whole_building', preferredAreaIds: [],
+    preferredAreaMode: 'all_kuwait',
+  } as BuySeekerRequirement;
+  for (const record of [standard, studio, building]) await store.saveRequirement(record);
+  for (const record of [current, standard, studio, building]) {
+    assert.equal((await store.getRequirement(record.id))?.id, record.id);
+  }
+  assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), original, 'Original source remains recoverable');
+  const recovery = JSON.parse(storage.values.get(WEB_REQUIREMENTS_RECOVERY_KEY)!) as {
+    requirements: SeekerRequirement[];
+    quarantine: Array<{ raw: unknown; sourceIndex: number; reason: string }>;
+  };
+  assert.equal((recovery as typeof recovery & { version: number }).version, 2);
+  assert.deepEqual(recovery.quarantine.map(item => item.raw), [invalidArea, opaque]);
+  assert.deepEqual(recovery.quarantine.map(item => item.sourceIndex), [1, 2]);
+  assert.deepEqual(store.getRecoveryReport().quarantined.map(item => item.reason), [
+    'invalid_requirement', 'unknown_fields',
+  ]);
+  const reopened = new WebRequirementStore(storage, () => locks, reader);
+  assert.equal((await reopened.getRequirementsForSeeker('seeker-1')).length, 4);
+  await reopened.saveRequirement(standard); // same literal ID is an idempotent no-op
+  assert.equal((await reopened.getRequirements()).filter(item => item.id === standard.id).length, 1);
+  assert.equal(await reopened.updateRequirement(standard, { ...standard, notes: 'edited once' }), true);
+  assert.equal((await reopened.getRequirement(standard.id))?.notes, 'edited once');
+  assert.equal((await reopened.getRequirements()).filter(item => item.id === standard.id).length, 1);
+});
+
+test('failed recovery envelope write leaves original mixed collection and recovery untouched', async () => {
+  class FailingRecoveryStorage extends MemoryStorage {
+    failNext = true;
+    override async setItem(key: string, value: string): Promise<void> {
+      if (key === WEB_REQUIREMENTS_RECOVERY_KEY && this.failNext) {
+        this.failNext = false;
+        throw new Error('STORAGE_WRITE_FAILED');
+      }
+      await super.setItem(key, value);
+    }
+  }
+  const storage = new FailingRecoveryStorage();
+  const legacy = JSON.stringify([rentRequirement(), { id: 'unreadable', unknown: true }]);
+  storage.values.set(WEB_REQUIREMENTS_KEY, legacy);
+  const store = new WebRequirementStore(storage, () => locks, {
+    getPerson: async () => seeker('seeker-1'),
+  });
+  await assert.rejects(store.saveRequirement(buyRequirement()), /STORAGE_WRITE_FAILED/);
+  assert.equal(storage.values.get(WEB_REQUIREMENTS_KEY), legacy);
+  assert.equal(storage.values.get(WEB_REQUIREMENTS_RECOVERY_KEY), undefined);
+  await store.saveRequirement(buyRequirement());
+  assert.equal((await store.getRequirements()).length, 2);
 });
 
 test('Requirement chronology migration does not complete for invalid canonical Areas', async () => {

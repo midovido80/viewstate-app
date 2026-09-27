@@ -39,6 +39,7 @@ import {
   SQLiteRequirementStore,
   WEB_REQUIREMENTS_KEY,
   WebRequirementStore,
+  type RequirementRecoveryReport,
   type RequirementPersistenceOptions,
   type RequirementStore,
 } from '@/services/requirementPersistence';
@@ -1376,6 +1377,10 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   getRequirementsForSeeker = (seekerId: string) =>
     this.requirements.getRequirementsForSeeker(seekerId);
 
+  getRequirementRecoveryReport(): RequirementRecoveryReport {
+    return this.requirements.getRecoveryReport();
+  }
+
   updateRequirement = (
     expected: Parameters<RequirementStore['updateRequirement']>[0],
     replacement: Parameters<RequirementStore['updateRequirement']>[1],
@@ -1386,3 +1391,7 @@ export const store: PropertyStore & PersonStore & RequirementStore & {
   getIntegrityStatus(): LocalStoreIntegrityStatus;
 } =
   Platform.OS === 'web' ? new WebStore() : new SQLiteStore();
+
+export function getRequirementRecoveryReport(): RequirementRecoveryReport | null {
+  return store instanceof WebStore ? store.getRequirementRecoveryReport() : null;
+}

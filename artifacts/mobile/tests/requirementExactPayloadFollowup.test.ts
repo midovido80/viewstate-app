@@ -395,7 +395,7 @@ test('SQLite exact-ID readback recovers committed writes and same-ID retries aft
   assert.deepEqual(uncertain, {
     status: 'storage_failure',
     retryAllowed: true,
-    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'] },
+    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'], errorType: 'unexpected_error' },
   });
   assert.equal(beforeInsertDatabase.requirements.size, 0);
   assert.equal(beforeInsertDatabase.chronology.size, 0);
@@ -424,7 +424,7 @@ test('SQLite exact-ID readback recovers committed writes and same-ID retries aft
   assert.deepEqual(rolledBack, {
     status: 'storage_failure',
     retryAllowed: true,
-    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'] },
+    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'], errorType: 'unexpected_error' },
   });
   assert.equal(rollbackDatabase.requirementInsertAttempts, 1);
   assert.equal(rollbackDatabase.requirements.size, 0, 'Transaction failure rolls back the requirement insert');
@@ -456,7 +456,7 @@ test('SQLite conflicting existing Requirement ID fails closed without overwrite'
     status: 'storage_failure',
     retryAllowed: false,
     conflict: true,
-    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'] },
+    diagnostic: { stage: 'readback', code: 'readback_failed', location: ['requirement', 'id'], errorType: 'REQUIREMENT_ID_ALREADY_EXISTS' },
   });
   assert.equal(database.requirementInsertAttempts, 0, 'Pre-existing ID must not be inserted over');
   assert.deepEqual(await persistence.getRequirement(candidate.id), existing);
