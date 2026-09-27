@@ -154,8 +154,12 @@ test('SOURCE ASSERTION: Requirement route is headerless while Add and Edit remai
   ]);
   assert.match(layout, /name="requirement\/\[requirementId\]" options=\{\{ headerShown: false \}\}/);
   assert.match(requirement, /editing \? t\('requirements\.edit'\) : t\('requirements\.add'\)/);
-  assert.match(person, /testID="person-add-requirement"[^>]*accessibilityRole="button"/);
-  assert.match(person, /addRequirementButton/);
+  assert.match(person, /testID="person-primary-action"/);
+  assert.equal((person.match(/testID="person-primary-action"/g) ?? []).length, 1);
+  assert.match(person, /const primaryActionTitle = \(classification: PersonClassification\)/);
+  assert.match(person, /person\.classifications\.length > 1/);
+  assert.match(person, /person\.classifications\.map\(classification =>/);
+  assert.doesNotMatch(person, /person-add-requirement|person-add-wanted-studio/);
 });
 
 test('SOURCE ASSERTION: Search presentation never falls back to internal IDs', async () => {

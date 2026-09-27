@@ -45,7 +45,6 @@ export const STUDIO_FORM_FIELD_ORDER: Readonly<Record<StudioCatalogMode, readonl
   offered: [
     'transaction',
     'locationAreaId',
-    'mapsLink',
     'price',
     'rentalPeriodId',
     'areaSquareMeters',

@@ -50,6 +50,17 @@ export function captureDetailsScopeKey(propertyCoreId?: string): string {
   return `capture:${propertyCoreId ?? 'new'}`;
 }
 
+export function isBasicApartmentFollowUpCapture(
+  propertyType: Property['core']['propertyType'] | undefined,
+  selectedRouteSubtype: string | undefined,
+  storedSubtype: string | undefined,
+): boolean {
+  if (propertyType !== 'apartment') return false;
+  if (selectedRouteSubtype === 'standard') return true;
+  if (selectedRouteSubtype === 'studio') return false;
+  return storedSubtype !== 'studio' && storedSubtype !== 'duplex';
+}
+
 export function buildPropertyWithCaptureDetails(
   baseline: Property,
   fields: CaptureDetailValues,

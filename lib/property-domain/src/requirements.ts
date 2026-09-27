@@ -1,6 +1,7 @@
 import type { FloorUse, LocationAreaId, PropertyType } from "./types.ts";
 import type { ResidentialAmenity } from "./types.ts";
 import type { PropertyDetailField } from "./taxonomy.ts";
+import type { PropertyAttachmentMetadata } from "./types.ts";
 import {
   APARTMENT_SUBTYPES,
   FLOOR_USES,
@@ -58,6 +59,10 @@ export interface SeekerRequirementBase {
   readonly preferredAmenities?: readonly ResidentialAmenity[];
   readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
   readonly catalogPreferences?: readonly CatalogPreference[];
+  /** Optional local-only media evidence; it is not a matching preference. */
+  readonly attachments?: readonly PropertyAttachmentMetadata[];
+  /** Exact, validated Google Maps link for an Apartment Studio Requirement. */
+  readonly studioMapsLink?: string;
   readonly floorUse?: FloorUse;
   readonly masterBedroomsMinimum?: number;
   readonly driverRoom?: boolean;
@@ -104,7 +109,8 @@ export interface RequirementValidationIssue {
     | "invalid_catalog_preference"
     | "duplicate_catalog_preference"
     | "catalog_preference_not_allowed"
-    | "invalid_floor_use";
+    | "invalid_floor_use"
+    | "invalid_attachment";
   readonly path: readonly string[];
   readonly message: string;
 }
@@ -146,6 +152,8 @@ const REQUIREMENT_FIELDS = new Set([
   "preferredAmenities",
   "preferredAmenityExclusions",
   "catalogPreferences",
+  "attachments",
+  "studioMapsLink",
   "floorUse",
   ...REQUIREMENT_TYPED_FIELDS,
   ...RENT_FIELDS,
@@ -251,6 +259,145 @@ function copyOptional<T extends Record<string, unknown>>(
   return result as T;
 }
 
+const ATTACHMENT_FIELDS = new Set([
+  "id", "kind", "originalName", "mimeType", "order", "managedUri", "isCover", "privacy",
+]);
+
+function isRequirementManagedUri(uri: unknown, requirementId: unknown, attachmentId: unknown): boolean {
+  if (typeof uri !== "string" || typeof requirementId !== "string" || typeof attachmentId !== "string") {
+    return false;
+  }
+  const nativeScope = `/requirements/${encodeURIComponent(requirementId)}/attachments/`;
+  if (/^file:\/\/\S+$/i.test(uri)) return uri.includes(nativeScope);
+  const webMatch = uri.match(/^viewstate-web-attachment:([^:\s]+):([^:\s]+)$/);
+  if (!webMatch) return false;
+  try {
+    return decodeURIComponent(webMatch[1]) === `requirement:${requirementId}`
+      && decodeURIComponent(webMatch[2]) === attachmentId;
+  } catch {
+    return false;
+  }
+}
+
+function isSafeStudioMapsLink(value: unknown): value is string {
+  if (
+    typeof value !== "string"
+    || value.length === 0
+    || value.length > 2048
+    || /[\u0000-\u001f\u007f\s\\]/.test(value)
+  ) return false;
+  const parsed = value.match(/^https:\/\/([^/?#]+)(\/[^?#]*)?(?:\?([^#]*))?(#.*)?$/i);
+  if (!parsed || parsed[1].includes("@")) return false;
+  const host = parsed[1].toLowerCase();
+  const path = parsed[2] ?? "/";
+  const isGoogleMapsPath = (
+    (host === "google.com" || host === "www.google.com" || host === "maps.google.com")
+    && path.toLowerCase().startsWith("/maps")
+  );
+  const isShortMapsLink = (
+    (host === "goo.gl" && path.toLowerCase().startsWith("/maps/"))
+    || (host === "maps.app.goo.gl" && path.length > 1)
+  );
+  const isSupportedMapsRootQuery = host === "maps.google.com"
+    && path === "/"
+    && parsed[4] === undefined
+    && isSafeMapsRootQuery(parsed[3]);
+  return isGoogleMapsPath || isSupportedMapsRootQuery || isShortMapsLink;
+}
+
+function isSafeMapsRootQuery(query: string | undefined): boolean {
+  if (!query) return false;
+  const [parameter] = query.split("&");
+  if (query.split("&").length !== 1 || !parameter.startsWith("q=")) return false;
+  try {
+    const value = decodeURIComponent(parameter.slice(2).replace(/\+/g, " "));
+    return value.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(value);
+  } catch {
+    return false;
+  }
+}
+
+function validateRequirementAttachments(value: unknown, requirementId: unknown): RequirementValidationIssue[] {
+  if (!Array.isArray(value)) {
+    return [issue("invalid_attachment", ["attachments"], "Requirement attachments must be a list.")];
+  }
+  const issues: RequirementValidationIssue[] = [];
+  const ids = new Set<string>();
+  const orders = new Set<number>();
+  let coverCount = 0;
+  value.forEach((attachment, index) => {
+    const path = ["attachments", String(index)];
+    if (!isRecord(attachment)) {
+      issues.push(issue("invalid_attachment", path, "Attachment metadata must be an object."));
+      return;
+    }
+    for (const key of Object.keys(attachment)) {
+      if (!ATTACHMENT_FIELDS.has(key)) {
+        issues.push(issue("invalid_attachment", [...path, key], "Field is not part of attachment metadata."));
+      }
+    }
+    for (const field of ["id", "originalName", "mimeType"] as const) {
+      if (typeof attachment[field] !== "string" || attachment[field].trim().length === 0) {
+        issues.push(issue("invalid_attachment", [...path, field], `${field} must be a non-empty string.`));
+      }
+    }
+    if (typeof attachment.id === "string") {
+      if (ids.has(attachment.id)) {
+        issues.push(issue("invalid_attachment", [...path, "id"], "Attachment identities must be unique."));
+      }
+      ids.add(attachment.id);
+    }
+    if (!["image", "video", "pdf"].includes(String(attachment.kind))) {
+      issues.push(issue("invalid_attachment", [...path, "kind"], "Attachment kind must be image, video, or pdf."));
+    }
+    if (!Number.isSafeInteger(attachment.order) || (attachment.order as number) < 0) {
+      issues.push(issue("invalid_attachment", [...path, "order"], "Attachment order must be a non-negative integer."));
+    } else {
+      if (orders.has(attachment.order as number)) {
+        issues.push(issue("invalid_attachment", [...path, "order"], "Attachment order values must be unique."));
+      }
+      orders.add(attachment.order as number);
+    }
+    const mimeType = attachment.mimeType;
+    const mimeMatchesKind = attachment.kind === "image"
+      ? typeof mimeType === "string" && mimeType.startsWith("image/")
+      : attachment.kind === "video"
+        ? typeof mimeType === "string" && mimeType.startsWith("video/")
+        : attachment.kind === "pdf"
+          ? mimeType === "application/pdf"
+          : false;
+    if (!mimeMatchesKind) {
+      issues.push(issue("invalid_attachment", [...path, "mimeType"], "MIME type must match the attachment kind."));
+    }
+    if (
+      !isRequirementManagedUri(attachment.managedUri, requirementId, attachment.id)
+    ) {
+      issues.push(issue("invalid_attachment", [...path, "managedUri"], "Attachment URI must use local storage owned by this Requirement."));
+    }
+    if (attachment.isCover !== undefined && attachment.isCover !== true) {
+      issues.push(issue("invalid_attachment", [...path, "isCover"], "Only a true image cover may be specified."));
+    }
+    if (attachment.isCover === true) {
+      coverCount += 1;
+      if (attachment.kind !== "image") {
+        issues.push(issue("invalid_attachment", [...path, "isCover"], "Only an image may be the Requirement cover."));
+      }
+    }
+    if (
+      !isRecord(attachment.privacy)
+      || Object.keys(attachment.privacy).some(key => key !== "classification" && key !== "disclosurePolicy")
+      || attachment.privacy.classification !== "normal"
+      || attachment.privacy.disclosurePolicy !== "normal"
+    ) {
+      issues.push(issue("invalid_attachment", [...path, "privacy"], "Requirement attachments require normal privacy and disclosure."));
+    }
+  });
+  if (coverCount > 1) {
+    issues.push(issue("invalid_attachment", ["attachments"], "At most one image may be the Requirement cover."));
+  }
+  return issues;
+}
+
 export function isRequirementPurpose(value: unknown): value is RequirementPurpose {
   return REQUIREMENT_PURPOSES.includes(value as RequirementPurpose);
 }
@@ -305,6 +452,9 @@ export function validateSeekerRequirement(
   }
   if (typeof value.notes !== "string") {
     issues.push(issue("required", ["notes"], "Broker-readable Notes must be a string."));
+  }
+  if (value.attachments !== undefined) {
+    issues.push(...validateRequirementAttachments(value.attachments, value.id));
   }
 
   const areaMode = value.preferredAreaMode;
@@ -530,6 +680,22 @@ export function validateSeekerRequirement(
       && preference.field === "apartmentSubtype"
       && preference.kind === "choice"
       && preference.value === "studio");
+  if (value.studioMapsLink !== undefined) {
+    if (!isSafeStudioMapsLink(value.studioMapsLink)) {
+      issues.push(issue(
+        "invalid_requirement",
+        ["studioMapsLink"],
+        "Studio Maps link must be a safe HTTPS Google Maps URL.",
+      ));
+    }
+    if (value.propertyType !== "apartment" || !studioChoiceSelected) {
+      issues.push(issue(
+        "invalid_requirement",
+        ["studioMapsLink"],
+        "Studio Maps link is supported only for the Apartment Studio subtype.",
+      ));
+    }
+  }
   if (Array.isArray(value.catalogPreferences)) {
     value.catalogPreferences.forEach((preference, index) => {
       if (!isRecord(preference) || !STUDIO_FEATURE_FIELDS.has(preference.field as PropertyDetailField)) return;
@@ -731,6 +897,12 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(source.studioMapsLink !== undefined
+      ? { studioMapsLink: validation.value.studioMapsLink }
+      : {}),
+    ...(source.attachments !== undefined
+      ? { attachments: validation.value.attachments?.map(attachment => ({ ...attachment, privacy: { ...attachment.privacy } })) }
+      : {}),
     ...(source.bedroomsMinimum !== undefined
       ? { bedroomsMinimum: validation.value.bedroomsMinimum }
       : {}),

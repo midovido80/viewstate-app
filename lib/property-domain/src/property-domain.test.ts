@@ -8,6 +8,7 @@ import {
   createPriceValue,
   createPrivacyMetadata,
   isPropertyType,
+  normalizeSeekerRequirement,
   projectDraftToProperty,
   updatePropertyDraft,
   validateOffer,
@@ -397,6 +398,123 @@ test("Requirement Studio feature preferences require the Studio subtype and allo
       { field: "hasParking", kind: "feature", value: true },
     ],
   }).ok, false, "Studio features cannot apply to a non-Studio subtype");
+});
+
+test("Studio Requirement preserves only safe Google Maps links on Studio apartments", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "seeker-1",
+    purpose: "rent" as const,
+    propertyType: "apartment" as const,
+    preferredAreaIds: ["area-1"],
+    preferredAreaMode: "specific_areas" as const,
+    budget: { minimum: 100, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+    catalogPreferences: [
+      { field: "apartmentSubtype" as const, kind: "choice" as const, value: "studio" },
+    ],
+  };
+  const exactLink = "https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z";
+  const normalized = normalizeSeekerRequirement({ ...base, studioMapsLink: exactLink });
+  assert(normalized.ok, "Studio Requirement accepts a safe HTTPS Google Maps URL");
+  const readback = normalizeSeekerRequirement(JSON.parse(JSON.stringify(normalized.value)));
+  assert(readback.ok, "Serialized Studio Requirement validates on readback");
+  assertEqual(readback.value.studioMapsLink, exactLink, "Create/edit/readback normalization preserves the exact link");
+  const rootQueryLink = "https://maps.google.com/?q=29.3759,47.9774";
+  const rootQueryReadback = normalizeSeekerRequirement({ ...base, studioMapsLink: rootQueryLink });
+  assert(rootQueryReadback.ok, "A non-empty q-only Google Maps root query is a supported link");
+  assertEqual(rootQueryReadback.value.studioMapsLink, rootQueryLink, "Root-query links remain exact on readback");
+  assertEqual(
+    normalizeSeekerRequirement({ ...base, studioMapsLink: exactLink, purpose: "buy" }).ok,
+    true,
+    "Studio map-link support is independent of Rent or Buy",
+  );
+  assertEqual(
+    normalizeSeekerRequirement({ ...base, catalogPreferences: [], studioMapsLink: exactLink }).ok,
+    false,
+    "A link cannot be attached to a non-Studio apartment Requirement",
+  );
+  assertEqual(
+    normalizeSeekerRequirement({ ...base, propertyType: "villa", studioMapsLink: exactLink }).ok,
+    false,
+    "A link cannot be attached to a non-apartment Requirement",
+  );
+  for (const unsafeLink of [
+    "http://www.google.com/maps/place/Kuwait",
+    "https://www.google.com.evil.example/maps/place/Kuwait",
+    "https://www.google.com/search?q=maps",
+    "https://maps.google.com/",
+    "https://maps.google.com/?q=",
+    "https://maps.google.com/?q=%20%20",
+    "https://maps.google.com/?query=29.3759,47.9774",
+    "https://maps.google.com/?q=29.3759,47.9774&redirect=https://evil.example",
+    "https://maps.google.com/?q=one&q=two",
+    "https://maps.google.com/?q=29.3759,47.9774#fragment",
+    "https://maps.google.com/?q=29.3759, 47.9774",
+    "https://maps.google.com/?q=29.3759%0A47.9774",
+    "https://user@www.google.com/maps/place/Kuwait",
+    " https://www.google.com/maps/place/Kuwait",
+    "",
+  ]) {
+    assertEqual(
+      normalizeSeekerRequirement({ ...base, studioMapsLink: unsafeLink }).ok,
+      false,
+      `Unsafe map link must be rejected: ${unsafeLink}`,
+    );
+  }
+  assertEqual(
+    normalizeSeekerRequirement({ ...base }).ok,
+    true,
+    "Generic Requirements remain valid without a Studio map link",
+  );
+});
+
+test("Requirement attachments validate local metadata and normalize in user order", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "seeker-1",
+    purpose: "rent" as const,
+    propertyType: "apartment" as const,
+    preferredAreaIds: ["area-1"],
+    preferredAreaMode: "specific_areas" as const,
+    budget: { minimum: 100, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+  };
+  const image: PropertyAttachmentMetadata = {
+    id: "image-1",
+    kind: "image",
+    originalName: "room.jpg",
+    mimeType: "image/jpeg",
+    order: 1,
+    managedUri: "file:///requirements/11111111-1111-4111-8111-111111111111/attachments/image-1.jpg",
+    isCover: true,
+    privacy: createPrivacyMetadata("normal", "normal"),
+  };
+  const pdf: PropertyAttachmentMetadata = {
+    id: "pdf-1",
+    kind: "pdf",
+    originalName: "brief.pdf",
+    mimeType: "application/pdf",
+    order: 0,
+    managedUri: "viewstate-web-attachment:requirement%3A11111111-1111-4111-8111-111111111111:pdf-1",
+    privacy: createPrivacyMetadata("normal", "normal"),
+  };
+  const result = normalizeSeekerRequirement({ ...base, attachments: [pdf, image] });
+  assert(result.ok, "Image and PDF evidence with valid local URIs must be accepted");
+  assertEqual(result.value.attachments?.[0].id, "pdf-1", "Attachment array order must be preserved");
+  assertEqual(result.value.attachments?.[1].isCover, true, "Image cover metadata must survive normalization");
+  assertEqual(normalizeSeekerRequirement(base).ok, true, "Attachments remain optional for generic Requirements");
+
+  const invalids = [
+    { attachments: [{ ...image, managedUri: "https://example.com/photo.jpg" }] },
+    { attachments: [{ ...image, privacy: createPrivacyMetadata("private_notes", "never") }] },
+    { attachments: [{ ...image }, { ...pdf, id: image.id }] },
+    { attachments: [{ ...image }, { ...pdf, order: image.order }] },
+    { attachments: [{ ...image, isCover: undefined }, { ...pdf, kind: "pdf" as const, isCover: true }] },
+  ];
+  for (const patch of invalids) {
+    assertEqual(validateSeekerRequirement({ ...base, ...patch }).ok, false, "Malformed attachment metadata must be rejected");
+  }
 });
 
 test("rejects enrichment counts that cannot be represented safely", () => {

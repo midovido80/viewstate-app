@@ -321,8 +321,10 @@ test('People source exposes selected contact import, actions, links, and confirm
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Done action', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
-  const [successSource, enrichmentSource, fieldSource, catalogSource, detailPresentationSource, detailSource, translations] = await Promise.all([
+  const [successSource, summarySource, legacyCaptureSource, enrichmentSource, fieldSource, catalogSource, detailPresentationSource, detailSource, translations] = await Promise.all([
     readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
+    readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
+    readFile(sourcePath('../app/capture/index.tsx'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId]/enrich.tsx'), 'utf8'),
     readFile(sourcePath('../components/PropertyEnrichmentFields.tsx'), 'utf8'),
     readFile(sourcePath('../services/propertyFormCatalog.ts'), 'utf8'),
@@ -330,21 +332,38 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
-  assert.match(successSource, /btn-view-property/);
-  assert.match(successSource, /btn-view-properties/);
-  assert.doesNotMatch(successSource, /btn-add-details-now|summary\.add_details/);
-  assert.match(successSource, /btn-later/);
-  assert.match(successSource, /summary\.done/);
+  const basicSuccessActions = successSource
+    .split("basicApartmentFollowUp === '1' && propertyCoreId ?")[1]
+    ?.split(') : propertyCoreId ? (')[0] ?? '';
+  const otherSuccessActions = successSource
+    .split(') : propertyCoreId ? (')[1]
+    ?.split(') : (')[0] ?? '';
+  assert.match(summarySource, /isBasicApartmentFollowUpCapture\(/);
+  assert.match(summarySource, /saveBasicOnly \? \{ basicApartmentFollowUp: '1' \}/);
+  assert.match(legacyCaptureSource, /isBasicApartmentFollowUp \? \{ basicApartmentFollowUp: '1' \}/);
+  assert.match(successSource, /basicApartmentFollowUp === '1' && propertyCoreId \?/);
+  assert.match(basicSuccessActions, /btn-add-property-details/);
+  assert.match(basicSuccessActions, /btn-finish-later/);
+  assert.doesNotMatch(basicSuccessActions, /btn-view-property|btn-view-properties|btn-later/);
+  assert.match(successSource, /title=\{t\('summary\.add_details'\)\}[\s\S]*encodeURIComponent\(propertyCoreId\).*\/enrich/);
+  assert.match(successSource, /title=\{t\('summary\.later'\)\}[\s\S]*navigateOnce\(destinations\.home, true\)/);
+  assert.match(otherSuccessActions, /btn-view-property/);
+  assert.match(otherSuccessActions, /btn-view-properties/);
+  assert.match(otherSuccessActions, /btn-later/);
+  assert.match(otherSuccessActions, /summary\.done/);
   assert.match(successSource, /navigationStartedRef/);
   assert.match(successSource, /navigateOnce/);
   assert.match(successSource, /getPropertySuccessRoutes/);
   assert.match(successSource, /router\.push/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
+  assert.match(enrichmentSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\?edit=1`/);
   assert.match(detailSource, /property-edit-action/);
   assert.match(detailSource, /getPropertyDetailVisibleContent/);
   assert.doesNotMatch(detailSource, /property-enrich-action|detail\.add_details/);
   assert.match(translations, /'summary\.done': 'Done'/);
   assert.match(translations, /'summary\.done': 'تم'/);
+  assert.match(translations, /'summary\.add_details': 'Add details now'/);
+  assert.match(translations, /'summary\.add_details': 'إضافة التفاصيل الآن'/);
   assert.match(translations, /'detail\.continue_details': 'Continue details'/);
   assert.match(translations, /'detail\.continue_details': 'متابعة التفاصيل'/);
   assert.match(enrichmentSource, /router\.replace/);
@@ -2526,18 +2545,37 @@ test('Unified WhatsApp resolution covers no, one, and both installed variants', 
 test('Google Maps capture accepts only safe short/full links and prefers native app with web fallback', async () => {
   const full = 'https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z';
   const short = 'https://maps.app.goo.gl/AbCdEf123';
+  const rootQuery = 'https://maps.google.com/?q=29.3759,47.9774';
   assert.equal(normalizeGoogleMapsLink(`  ${full}  `), full);
   assert.equal(normalizeGoogleMapsLink(short), short);
+  assert.equal(normalizeGoogleMapsLink(rootQuery), rootQuery);
   for (const rejected of [
     'http://www.google.com/maps/place/Salmiya',
     'https://example.com/maps/place/Salmiya',
     'https://google.com/search?q=maps',
+    'https://maps.google.com/',
+    'https://maps.google.com/?q=',
+    'https://maps.google.com/?q=%20%20',
+    'https://maps.google.com/?query=29.3759,47.9774',
+    'https://maps.google.com/?q=29.3759,47.9774&redirect=https://evil.example',
+    'https://maps.google.com/?q=one&q=two',
+    'https://maps.google.com/?q=one&',
+    'https://maps.google.com/?q=one#fragment',
+    'https://maps.google.com/?q=29.3759, 47.9774',
+    'https://maps.google.com/?q=29.3759%0A47.9774',
+    'https://maps.google.com.evil.example/?q=one',
+    'https://user@maps.google.com/?q=one',
     'javascript:alert(1)',
   ]) {
     assert.throws(() => normalizeGoogleMapsLink(rejected), /INVALID_LOCATION_LINK/);
   }
 
   const opened: string[] = [];
+  await openPastedGoogleMapsLink(rootQuery, {
+    openURL: async url => { opened.push(url); },
+  }, 'android');
+  assert.deepEqual(opened, [rootQuery], 'Android opens supported root-query links in Maps');
+  opened.length = 0;
   const nativeOpener = {
     openURL: async (url: string) => { opened.push(url); },
   };

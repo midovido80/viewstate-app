@@ -245,8 +245,9 @@ test('Requirement save serializes direct invocations while preserving sequential
   assert.ok(release > firstStoreAwait, 'flight must be released after the persistence flight');
   assert.match(requirement, /finally \{\s*if \(isCurrentRoute\(\)\) \{\s*setSaving\(false\);\s*saveFlight\.current = false;/);
   assert.doesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
-  assert.doesNotMatch(person, /testID="person-saved-add-requirement"/);
-  assert.match(person, /testID="person-add-requirement"/);
+  assert.doesNotMatch(person, /person-saved-add-requirement|person-add-requirement/);
+  assert.match(person, /testID="person-primary-action"/);
+  assert.match(person, /getPersonWantedStudioRoute\(person\.id\)/);
   assert.match(person, /requirements\.map\(requirement/);
   assert.match(person, /testID=\{`requirement-edit-\$\{requirement\.id\}`\}/);
 });

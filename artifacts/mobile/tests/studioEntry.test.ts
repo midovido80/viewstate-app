@@ -40,8 +40,10 @@ test('Apartment subtype route structurally preserves dedicated and existing dest
 
 test('Person Details starts the dedicated wanted Studio form for the existing seeker', async () => {
   const person = await source('../app/person/[personId].tsx');
-  assert.match(person, /testID="person-add-wanted-studio"/);
-  assert.match(person, /router\.push\(getPersonWantedStudioRoute\(person\.id\)/);
-  assert.match(person, /person\.classifications\.includes\('seeker'\)/);
+  assert.match(person, /testID="person-primary-action"/);
+  assert.match(person, /classification === 'seeker'\)\s*\{\s*router\.push\(getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(person, /person\.classifications\.map\(classification =>/);
+  assert.match(person, /person\.classifications\.length > 1/);
+  assert.doesNotMatch(person, /person-add-wanted-studio|person-saved-add-requirement/);
   assert.match(person, /params: \{ mode: 'wanted', seekerId: personId, transaction: 'rent' \}/);
 });

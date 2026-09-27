@@ -56,6 +56,12 @@ export interface AttachmentFileStore {
     attachmentId: string,
     source: { readonly uri: string; readonly name: string; readonly mimeType: string },
   ): Promise<string>;
+  /** Requirement evidence is stored separately from Property attachments. */
+  copyToRequirement?(
+    requirementId: string,
+    attachmentId: string,
+    source: { readonly uri: string; readonly name: string; readonly mimeType: string },
+  ): Promise<string>;
   delete(uri: string): Promise<void>;
 }
 

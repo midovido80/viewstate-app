@@ -29,7 +29,7 @@ export default function ApartmentSubtypeScreen() {
   }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { updateDraft } = useCapture();
+  const { updateDraft, updateCaptureDetails } = useCapture();
   const { t, fonts, isRTL, language } = useI18n();
   const initialSubtype = firstParam(params.apartmentSubtype);
   const [apartmentSubtype, setApartmentSubtype] = useState<ApartmentSubtypeChoice | undefined>(
@@ -88,6 +88,7 @@ export default function ApartmentSubtypeScreen() {
     }
 
     if (!updateDraft({ propertyType: 'apartment', ...(transaction ? { transaction } : {}) })) return;
+    if (!updateCaptureDetails({ apartmentSubtype: 'standard_apartment' })) return;
     router.push({
       pathname: '/capture/price',
       params: { ...routeParams, propertyType: 'apartment', apartmentSubtype: 'standard' },

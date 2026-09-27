@@ -124,6 +124,7 @@ export function createIndexedDbWebAttachmentBlobStore(
 export function createWebAttachmentFileStore(blobStore: WebAttachmentBlobStore): AttachmentFileStore {
   return {
     copyToProperty: async () => { throw new Error('WEB_ATTACHMENT_COPY_REQUIRES_FILE_PICKER'); },
+    copyToRequirement: async () => { throw new Error('WEB_ATTACHMENT_COPY_REQUIRES_FILE_PICKER'); },
     delete: uri => uri.startsWith('viewstate-web-attachment:') ? blobStore.delete(uri) : Promise.resolve(),
   };
 }
@@ -135,6 +136,26 @@ export async function createWebFileAttachments(
   createId: () => string = defaultId,
   blobStore: WebAttachmentBlobStore = createIndexedDbWebAttachmentBlobStore(),
 ): Promise<LocalAttachment[]> {
+  return createWebAttachmentsForOwner(propertyId, existing, files, createId, blobStore);
+}
+
+export async function createWebRequirementAttachments(
+  requirementId: string,
+  existing: readonly LocalAttachment[],
+  files: readonly { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> }[],
+  createId: () => string = defaultId,
+  blobStore: WebAttachmentBlobStore = createIndexedDbWebAttachmentBlobStore(),
+): Promise<LocalAttachment[]> {
+  return createWebAttachmentsForOwner(`requirement:${requirementId}`, existing, files, createId, blobStore);
+}
+
+async function createWebAttachmentsForOwner(
+  ownerScope: string,
+  existing: readonly LocalAttachment[],
+  files: readonly { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> }[],
+  createId: () => string,
+  blobStore: WebAttachmentBlobStore,
+): Promise<LocalAttachment[]> {
   const result: LocalAttachment[] = [];
   const written: string[] = [];
   try {
@@ -144,7 +165,7 @@ export async function createWebFileAttachments(
       }
       if (file.size > WEB_ATTACHMENT_MAX_BYTES) throw new Error('ATTACHMENT_TOO_LARGE');
       const id = createId();
-      const uri = `viewstate-web-attachment:${encodeURIComponent(propertyId)}:${encodeURIComponent(id)}`;
+      const uri = `viewstate-web-attachment:${encodeURIComponent(ownerScope)}:${encodeURIComponent(id)}`;
       await blobStore.put(uri, new Blob([await file.arrayBuffer()], { type: file.type }));
       written.push(uri);
       result.push({ id, kind: attachmentKind(file.type), originalName: file.name, mimeType: file.type, uri, order: existing.length + result.length });
@@ -174,24 +195,33 @@ function extensionFor(source: AttachmentSource): string {
 }
 
 export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFileStore {
+  const copyToManagedScope = async (
+    scope: 'properties' | 'requirements',
+    recordId: string,
+    attachmentId: string,
+    source: AttachmentSource,
+  ) => {
+    assertNative();
+    const directory = new module.Directory(
+      module.Paths.document,
+      scope,
+      encodeURIComponent(recordId),
+      'attachments',
+    );
+    await directory.create({ intermediates: true, idempotent: true });
+    const destination = new module.File(
+      directory,
+      `${encodeURIComponent(attachmentId)}${extensionFor(source)}`,
+    );
+    const input = new module.File(source.uri);
+    await input.copy(destination);
+    return destination.uri;
+  };
   return {
-    async copyToProperty(propertyId, attachmentId, source) {
-      assertNative();
-      const directory = new module.Directory(
-        module.Paths.document,
-        'properties',
-        encodeURIComponent(propertyId),
-        'attachments',
-      );
-      await directory.create({ intermediates: true, idempotent: true });
-      const destination = new module.File(
-        directory,
-        `${encodeURIComponent(attachmentId)}${extensionFor(source)}`,
-      );
-      const input = new module.File(source.uri);
-      await input.copy(destination);
-      return destination.uri;
-    },
+    copyToProperty: (propertyId, attachmentId, source) =>
+      copyToManagedScope('properties', propertyId, attachmentId, source),
+    copyToRequirement: (requirementId, attachmentId, source) =>
+      copyToManagedScope('requirements', requirementId, attachmentId, source),
     async delete(uri) {
       assertNative();
       await new module.File(uri).delete();
@@ -200,34 +230,44 @@ export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFil
 }
 
 async function storeSources(
-  propertyId: string,
+  recordId: string,
   existing: readonly LocalAttachment[],
   sources: readonly AttachmentSource[],
   dependencies: AttachmentDependencies,
+  owner: 'property' | 'requirement' = 'property',
 ): Promise<LocalAttachment[]> {
   assertNative(dependencies.platform);
   const result: LocalAttachment[] = [];
-  for (const source of sources) {
-    if (
-      !source.mimeType.startsWith('image/')
-      && !source.mimeType.startsWith('video/')
-      && source.mimeType !== 'application/pdf'
-    ) {
-      throw new Error('UNSUPPORTED_ATTACHMENT_TYPE');
+  try {
+    for (const source of sources) {
+      if (
+        !source.mimeType.startsWith('image/')
+        && !source.mimeType.startsWith('video/')
+        && source.mimeType !== 'application/pdf'
+      ) {
+        throw new Error('UNSUPPORTED_ATTACHMENT_TYPE');
+      }
+      const id = (dependencies.createId ?? defaultId)();
+      if (existing.some(item => item.id === id) || result.some(item => item.id === id)) {
+        throw new Error('DUPLICATE_ATTACHMENT_ID');
+      }
+      const copy = owner === 'requirement'
+        ? dependencies.fileStore.copyToRequirement
+        : dependencies.fileStore.copyToProperty;
+      if (!copy) throw new Error('REQUIREMENT_ATTACHMENT_STORAGE_UNSUPPORTED');
+      const uri = await copy.call(dependencies.fileStore, recordId, id, source);
+      result.push({
+        id,
+        kind: attachmentKind(source.mimeType),
+        originalName: source.name,
+        mimeType: source.mimeType,
+        uri,
+        order: existing.length + result.length,
+      });
     }
-    const id = (dependencies.createId ?? defaultId)();
-    if (existing.some(item => item.id === id) || result.some(item => item.id === id)) {
-      throw new Error('DUPLICATE_ATTACHMENT_ID');
-    }
-    const uri = await dependencies.fileStore.copyToProperty(propertyId, id, source);
-    result.push({
-      id,
-      kind: attachmentKind(source.mimeType),
-      originalName: source.name,
-      mimeType: source.mimeType,
-      uri,
-      order: existing.length + result.length,
-    });
+  } catch (error) {
+    await Promise.all(result.map(item => dependencies.fileStore.delete(item.uri).catch(() => undefined)));
+    throw error;
   }
   return result;
 }
@@ -279,6 +319,54 @@ export async function pickAndStorePdfs(
     mimeType: asset.mimeType ?? 'application/pdf',
   }));
   return storeSources(propertyId, existing, sources, dependencies);
+}
+
+export async function pickAndStoreRequirementMedia(
+  requirementId: string,
+  existing: readonly LocalAttachment[],
+  dependencies: AttachmentDependencies,
+  imagePicker: ImagePickerModule = ImagePicker,
+  mediaTypes: ('images' | 'videos')[] = ['images', 'videos'],
+): Promise<LocalAttachment[]> {
+  assertNative(dependencies.platform);
+  const permission = await imagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) throw new Error('MEDIA_LIBRARY_PERMISSION_DENIED');
+  const picked = await imagePicker.launchImageLibraryAsync({
+    mediaTypes,
+    allowsMultipleSelection: true,
+    quality: 1,
+  });
+  if (picked.canceled) return [];
+  const sources = picked.assets.map((asset, index): AttachmentSource => {
+    if (!asset.mimeType) throw new Error('ATTACHMENT_MIME_TYPE_MISSING');
+    return {
+      uri: asset.uri,
+      name: asset.fileName ?? nameFromUri(asset.uri, `media-${index + 1}`),
+      mimeType: asset.mimeType,
+    };
+  });
+  return storeSources(requirementId, existing, sources, dependencies, 'requirement');
+}
+
+export async function pickAndStoreRequirementPdfs(
+  requirementId: string,
+  existing: readonly LocalAttachment[],
+  documentPicker: DocumentPickerModule,
+  dependencies: AttachmentDependencies,
+): Promise<LocalAttachment[]> {
+  assertNative(dependencies.platform);
+  const picked = await documentPicker.getDocumentAsync({
+    type: ['application/pdf'],
+    multiple: true,
+    copyToCacheDirectory: true,
+  });
+  if (picked.canceled) return [];
+  const sources = (picked.assets ?? []).map(asset => ({
+    uri: asset.uri,
+    name: asset.name,
+    mimeType: asset.mimeType ?? 'application/pdf',
+  }));
+  return storeSources(requirementId, existing, sources, dependencies, 'requirement');
 }
 
 export async function openAttachment(

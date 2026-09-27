@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,9 +12,11 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import type { Property, PropertySourceRole, SeekerRequirement, Transaction } from '@workspace/property-domain';
+import type { Property, PropertyAttachmentMetadata, PropertySourceRole, SeekerRequirement, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
@@ -56,6 +60,32 @@ import {
   retryRequirementReadback,
   verifyUncertainRequirementWrite,
 } from '@/services/requirementSaveOutcome';
+import {
+  createExpoFileStore,
+  createIndexedDbWebAttachmentBlobStore,
+  createWebAttachmentFileStore,
+  createWebFileAttachments,
+  createWebRequirementAttachments,
+  pickAndStoreMedia,
+  pickAndStorePdfs,
+  pickAndStoreRequirementMedia,
+  pickAndStoreRequirementPdfs,
+  type WebAttachmentBlobStore,
+} from '@/services/attachments';
+import {
+  reorderAttachments,
+  resolveWebAttachmentImageSources,
+  setAttachmentCover,
+  type AttachmentFileStore,
+  type LocalAttachment,
+} from '@/services/attachmentOperations';
+import { openPastedLocationLink, openGoogleMapsQuery } from '@/services/location';
+import * as Linking from 'expo-linking';
+import { createPrivacyMetadata } from '@workspace/property-domain';
+import {
+  openStudioWebFilePicker,
+  openStudioWebMapsLocation,
+} from '@/services/studioWebActions';
 
 type InputRef = { current: TextInput | null };
 type RouteParams = {
@@ -72,6 +102,25 @@ const isTransaction = (value: string | undefined): value is Transaction =>
   value === 'sale' || value === 'rent';
 const firstParam = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
+const localFromPropertyAttachment = (attachment: PropertyAttachmentMetadata): LocalAttachment => ({
+  id: attachment.id,
+  kind: attachment.kind,
+  originalName: attachment.originalName,
+  mimeType: attachment.mimeType,
+  uri: attachment.managedUri,
+  order: attachment.order,
+  ...(attachment.isCover ? { isCover: true as const } : {}),
+});
+const propertyAttachmentMetadata = (attachment: LocalAttachment): PropertyAttachmentMetadata => ({
+  id: attachment.id,
+  kind: attachment.kind,
+  originalName: attachment.originalName,
+  mimeType: attachment.mimeType,
+  order: attachment.order,
+  managedUri: attachment.uri,
+  ...(attachment.isCover ? { isCover: true as const } : {}),
+  privacy: createPrivacyMetadata('normal', 'normal'),
+});
 
 export default function StudioCaptureRoute() {
   const params = useLocalSearchParams<RouteParams>();
@@ -118,6 +167,11 @@ export default function StudioCaptureRoute() {
     message: string;
   } | null>(null);
   const [savedProperty, setSavedProperty] = useState<Property | null>(null);
+  const [savedRequirement, setSavedRequirement] = useState<SeekerRequirement | null>(null);
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [webImageSources, setWebImageSources] = useState<Readonly<Record<string, string>>>({});
   const [peopleError, setPeopleError] = useState(false);
   const flight = useRef(false);
   const committedRequirement = useRef<SeekerRequirement | null>(null);
@@ -128,11 +182,69 @@ export default function StudioCaptureRoute() {
   const draftPropertyId = useRef(generateDomainId());
   const draftOfferId = useRef(generateDomainId());
   const draftRequirementId = useRef(generateDomainId());
+  const stagedFiles = useRef(new Map<string, LocalAttachment>());
+  const preserveStagedFiles = useRef(false);
+  const uncertainStagedOwnership = useRef(false);
+  const webAttachmentBlobs = useRef<WebAttachmentBlobStore | null>(null);
+  if (Platform.OS === 'web' && !webAttachmentBlobs.current) {
+    webAttachmentBlobs.current = createIndexedDbWebAttachmentBlobStore();
+  }
+  const attachmentFileStore: AttachmentFileStore = Platform.OS === 'web'
+    ? createWebAttachmentFileStore(webAttachmentBlobs.current!)
+    : createExpoFileStore(FileSystem);
   const routeTransaction = isTransaction(transactionParam) ? transactionParam : undefined;
   const isValidRoute = editing
     || ((modeParam === 'offered' || modeParam === 'wanted') && routeTransaction !== undefined);
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
+  const returnToForm = useCallback(() => {
+    setError('');
+    setStep('form');
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let revoke: () => void = () => {};
+    if (Platform.OS === 'web') {
+      void resolveWebAttachmentImageSources(attachments, webAttachmentBlobs.current!).then(result => {
+        if (!active) {
+          result.revoke();
+          return;
+        }
+        revoke = result.revoke;
+        setWebImageSources(result.sources);
+      }).catch(() => {
+        if (active) setAttachmentError(language === 'ar'
+          ? 'تعذر معاينة أحد المرفقات.'
+          : 'An attachment preview could not be loaded.');
+      });
+    } else {
+      setWebImageSources({});
+    }
+    return () => {
+      active = false;
+      revoke();
+    };
+  }, [attachments, language]);
+
+  useEffect(() => () => {
+    if (preserveStagedFiles.current || uncertainStagedOwnership.current) return;
+    void Promise.all([...stagedFiles.current.values()].map(item =>
+      attachmentFileStore.delete(item.uri).catch(() => undefined)));
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'review') {
+        returnToForm();
+        return true;
+      }
+      router.back();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [returnToForm, router, step]);
 
   const update = useCallback(<K extends keyof StudioFormValues>(key: K, value: StudioFormValues[K]) => {
     setValues(current => ({ ...current, [key]: value }));
@@ -194,6 +306,8 @@ export default function StudioCaptureRoute() {
       const nextMode = modeParam;
       setMode(nextMode);
       setValues(createStudioFormValues(nextMode, routeTransaction));
+      setAttachments([]);
+      stagedFiles.current.clear();
       setSelectedPersonId(seekerParam ?? '');
       draftPropertyId.current = generateDomainId();
       draftOfferId.current = generateDomainId();
@@ -214,6 +328,7 @@ export default function StudioCaptureRoute() {
           if (!cancelled) {
             setMode('offered');
             setBaselineProperty(property);
+            setAttachments((property.attachments ?? []).map(localFromPropertyAttachment));
             const studioValues = readStudioProperty(property);
             setValues({
               ...studioValues,
@@ -230,6 +345,7 @@ export default function StudioCaptureRoute() {
           if (!cancelled) {
             setMode('wanted');
             setBaselineRequirement(requirement);
+            setAttachments((requirement.attachments ?? []).map(localFromPropertyAttachment));
             setEditOwnerPerson(person);
             setSelectedPersonId(requirement.seekerId);
             setValues(readStudioRequirement(requirement));
@@ -283,13 +399,21 @@ export default function StudioCaptureRoute() {
         onFail?: () => void,
       ) => void;
     } | null;
-    target?.focus?.();
+    try {
+      target?.focus?.();
+    } catch {
+      // A non-focusable layout wrapper can still be scrolled into view below.
+    }
     if (target?.measureLayout && scrollRef.current) {
-      target.measureLayout(
-        scrollRef.current as never,
-        (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true }),
-        () => undefined,
-      );
+      try {
+        target.measureLayout(
+          scrollRef.current as never,
+          (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true }),
+          () => undefined,
+        );
+      } catch {
+        // Keep the field-specific error visible even if a host cannot measure.
+      }
     }
   };
   const labelStyle = {
@@ -311,6 +435,113 @@ export default function StudioCaptureRoute() {
     setSelectedPersonId(personId);
     setPersonError('');
     setError('');
+  };
+
+  const appendStagedAttachments = (picked: readonly LocalAttachment[]) => {
+    if (!picked.length) return;
+    picked.forEach(item => stagedFiles.current.set(item.id, item));
+    setAttachments(current => {
+      let next = [...current, ...picked];
+      if (!next.some(item => item.isCover)) {
+        const firstImage = next.find(item => item.kind === 'image');
+        if (firstImage) next = setAttachmentCover(next, firstImage.id);
+      }
+      return next;
+    });
+    setAttachmentError('');
+  };
+
+  const attachmentFailureMessage = () => language === 'ar'
+    ? 'تعذر إضافة الملف. تحقق من نوع الملف أو أذونات مكتبة الصور وحاول مرة أخرى.'
+    : 'The file could not be added. Check its type or media-library permission and try again.';
+
+  const addStudioMedia = async () => {
+    if (attachmentBusy) return;
+    setAttachmentBusy(true);
+    try {
+      const id = mode === 'offered' ? baselineProperty?.core.id ?? draftPropertyId.current
+        : baselineRequirement?.id ?? draftRequirementId.current;
+      const picked = mode === 'offered'
+        ? await pickAndStoreMedia(id, attachments, { fileStore: attachmentFileStore })
+        : await pickAndStoreRequirementMedia(id, attachments, {
+          fileStore: attachmentFileStore,
+          platform: Platform.OS,
+        });
+      appendStagedAttachments(picked);
+    } catch {
+      setAttachmentError(attachmentFailureMessage());
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const addStudioPdf = async () => {
+    if (attachmentBusy) return;
+    setAttachmentBusy(true);
+    try {
+      const id = mode === 'offered' ? baselineProperty?.core.id ?? draftPropertyId.current
+        : baselineRequirement?.id ?? draftRequirementId.current;
+      const picked = mode === 'offered'
+        ? await pickAndStorePdfs(id, attachments, DocumentPicker, { fileStore: attachmentFileStore })
+        : await pickAndStoreRequirementPdfs(id, attachments, DocumentPicker, {
+          fileStore: attachmentFileStore,
+          platform: Platform.OS,
+        });
+      appendStagedAttachments(picked);
+    } catch {
+      setAttachmentError(attachmentFailureMessage());
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const addStudioWebFiles = (kind: 'media' | 'pdf') => {
+    if (Platform.OS !== 'web' || attachmentBusy) return;
+    try {
+      openStudioWebFilePicker({
+        accept: kind === 'media' ? 'image/*,video/*' : 'application/pdf',
+        onFiles: files => {
+          if (!files.length) return;
+          setAttachmentBusy(true);
+          const ownerId = mode === 'offered' ? baselineProperty?.core.id ?? draftPropertyId.current
+            : baselineRequirement?.id ?? draftRequirementId.current;
+          const createFiles = mode === 'offered' ? createWebFileAttachments : createWebRequirementAttachments;
+          void createFiles(ownerId, attachments, files, undefined, webAttachmentBlobs.current!)
+            .then(appendStagedAttachments)
+            .catch(() => setAttachmentError(attachmentFailureMessage()))
+            .finally(() => setAttachmentBusy(false));
+        },
+      });
+    } catch {
+      setAttachmentError(attachmentFailureMessage());
+    }
+  };
+
+  const removeStudioAttachment = (item: LocalAttachment) => {
+    setAttachments(current => {
+      const remaining = current.filter(candidate => candidate.id !== item.id);
+      if (!remaining.some(candidate => candidate.isCover)) {
+        const firstImage = remaining.find(candidate => candidate.kind === 'image');
+        if (firstImage) return setAttachmentCover(remaining, firstImage.id);
+      }
+      return remaining.map((candidate, order) => ({ ...candidate, order }));
+    });
+    const staged = stagedFiles.current.get(item.id);
+    if (staged) {
+      stagedFiles.current.delete(item.id);
+      void attachmentFileStore.delete(staged.uri).catch(() => undefined);
+    }
+  };
+
+  const moveStudioAttachment = (item: LocalAttachment, offset: -1 | 1) => {
+    setAttachments(current => {
+      const ordered = [...current].sort((left, right) => left.order - right.order);
+      const index = ordered.findIndex(candidate => candidate.id === item.id);
+      const target = index + offset;
+      if (target < 0 || target >= ordered.length) return current;
+      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+      return reorderAttachments(current, ordered.map(candidate => candidate.id));
+    });
   };
 
   const renderPersonSelector = () => (
@@ -435,6 +666,30 @@ export default function StudioCaptureRoute() {
     router.replace({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: property.core.id } } as never);
   };
 
+  const linkPropertySourceIfNeeded = async (property: Property) => {
+    if (linkPersonId && !editing) {
+      await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: property.core.id });
+      if (sourceRole) {
+        await store.setPropertySource({
+          propertyCoreId: property.core.id,
+          personId: linkPersonId,
+          role: sourceRole as PropertySourceRole,
+        });
+      }
+    }
+  };
+
+  const finishPropertySave = async (property: Property) => {
+    preserveStagedFiles.current = true;
+    uncertainStagedOwnership.current = false;
+    const retained = new Set((property.attachments ?? []).map(item => `${item.id}\u0000${item.managedUri}`));
+    const removed = (baselineProperty?.attachments ?? [])
+      .filter(item => !retained.has(`${item.id}\u0000${item.managedUri}`));
+    await Promise.all(removed.map(item => attachmentFileStore.delete(item.managedUri).catch(() => undefined)));
+    setSavedProperty(property);
+    await linkPropertySourceIfNeeded(property);
+  };
+
   const doSave = async () => {
     if (flight.current || !recordLoaded || propertyRecovery) return;
     if (committedRequirement.current || uncertainRequirement.current) return;
@@ -452,22 +707,29 @@ export default function StudioCaptureRoute() {
           baselineProperty?.core.id ?? draftPropertyId.current,
           baselineProperty?.activeOffer.id ?? draftOfferId.current,
         );
-        const candidate = baselineProperty
+        const candidateWithoutAttachments = baselineProperty
           ? prepareStudioPropertyEditCandidate(baselineProperty, built)
           : built;
+        const candidate: Property = {
+          ...candidateWithoutAttachments,
+          ...(attachments.length
+            ? { attachments: attachments.map(propertyAttachmentMetadata) }
+            : { attachments: undefined }),
+        };
         const outcome = await saveStudioProperty({
           candidate,
           baseline: baselineProperty,
           store,
         });
         if (outcome.status === 'saved') {
-          setSavedProperty(outcome.property);
           try {
-            await navigateAfterPropertySave(outcome.property);
+            await finishPropertySave(outcome.property);
+            setError('');
           } catch {
             setError(t('studio.link_failed'));
           }
         } else if (outcome.status === 'recovery_required') {
+          uncertainStagedOwnership.current = true;
           setPropertyRecovery({
             id: outcome.propertyId,
             candidate,
@@ -475,6 +737,7 @@ export default function StudioCaptureRoute() {
             message: t('studio.save_uncertain'),
           });
         } else if (outcome.status === 'saved_readback_failed') {
+          uncertainStagedOwnership.current = true;
           setPropertyRecovery({
             id: outcome.propertyId,
             candidate,
@@ -484,6 +747,15 @@ export default function StudioCaptureRoute() {
         } else if (outcome.status === 'conflict') {
           setError(t('studio.save_conflict'));
         } else {
+          if (!outcome.retryAllowed) {
+            uncertainStagedOwnership.current = true;
+            setPropertyRecovery({
+              id: candidate.core.id,
+              candidate,
+              baseline: baselineProperty,
+              message: t('studio.save_uncertain'),
+            });
+          }
           setError(outcome.retryAllowed ? t('studio.save_failed') : t('studio.save_uncertain'));
         }
       } else {
@@ -493,30 +765,56 @@ export default function StudioCaptureRoute() {
           baselineRequirement?.id ?? draftRequirementId.current,
           ownerId,
         );
+        const staged = attachments.filter(item => stagedFiles.current.has(item.id));
+        const retained = attachments.filter(item => !stagedFiles.current.has(item.id));
+        const candidateWithRetained: SeekerRequirement = {
+          ...candidate,
+          ...(retained.length ? { attachments: retained.map(propertyAttachmentMetadata) } : {}),
+        };
+        const expectedRequirement: SeekerRequirement = {
+          ...candidateWithRetained,
+          ...((retained.length || staged.length)
+            ? { attachments: [...retained.map(propertyAttachmentMetadata), ...staged.map(propertyAttachmentMetadata)] }
+            : {}),
+        };
         const result = await saveStudioRequirement({
-          candidate,
+          candidate: candidateWithRetained,
           baseline: baselineRequirement,
           store,
-          navigate: () => router.replace({
-            pathname: '/person/[personId]',
-            params: { personId: ownerId, requirementSaved: '1' },
-          } as never),
+          navigate: () => undefined,
+          attachmentPersistence: {
+            fileStore: attachmentFileStore,
+            preparedAttachments: staged,
+          },
         });
         if (result.status === 'saved') {
           committedRequirement.current = null;
           uncertainRequirement.current = null;
+          preserveStagedFiles.current = true;
+          setSavedRequirement(expectedRequirement);
           setError('');
         } else if (result.status === 'missing_person' || result.status === 'non_seeker') {
           setError(t('studio.person_missing'));
         } else if (result.status === 'saved_readback_failed' || result.status === 'saved_navigation_failed') {
           committedRequirement.current = candidate;
           setError(t(result.status === 'saved_navigation_failed' ? 'studio.navigation_failed' : 'studio.saved_readback_failed'));
-        } else if (result.status === 'edit_conflict' || result.conflict) {
+        } else if (result.status === 'edit_conflict'
+          || (result.status === 'storage_failure' && result.conflict)) {
           if (result.status !== 'edit_conflict') uncertainRequirement.current = candidate;
           setError(t('studio.save_conflict'));
+        } else if (result.status === 'attachment_recovery_required') {
+          uncertainStagedOwnership.current = true;
+          uncertainRequirement.current = expectedRequirement;
+          setError(t('studio.save_uncertain'));
+        } else if (result.status === 'attachment_storage_failure') {
+          setError(t('studio.save_failed'));
         } else {
-          if (result.retryAllowed === false) uncertainRequirement.current = candidate;
-          setError(result.retryAllowed === false ? t('studio.save_uncertain') : t('studio.save_failed'));
+          if (result.status === 'storage_failure' && result.retryAllowed === false) {
+            uncertainRequirement.current = candidate;
+          }
+          setError(result.status === 'storage_failure' && result.retryAllowed === false
+            ? t('studio.save_uncertain')
+            : t('studio.save_failed'));
         }
       }
     } catch {
@@ -540,11 +838,8 @@ export default function StudioCaptureRoute() {
       });
       if (result.status === 'saved') {
         setSavedProperty(result.property);
-        try {
-          await navigateAfterPropertySave(result.property);
-        } catch {
-          setError(t('studio.link_failed'));
-        }
+        preserveStagedFiles.current = true;
+        await finishPropertySave(result.property).catch(() => setError(t('studio.link_failed')));
       } else if (result.status === 'conflict') {
         setError(t('studio.save_conflict'));
       } else {
@@ -562,10 +857,7 @@ export default function StudioCaptureRoute() {
     flight.current = true;
     setSaving(true);
     try {
-      const navigate = () => router.replace({
-          pathname: '/person/[personId]',
-          params: { personId: candidate.seekerId, requirementSaved: '1' },
-        } as never);
+      const navigate = () => undefined;
       const wasUncertain = !!uncertainRequirement.current;
       const outcome = wasUncertain
         ? await verifyUncertainRequirementWrite({ candidate, store, navigate })
@@ -573,10 +865,14 @@ export default function StudioCaptureRoute() {
       if (outcome.status === 'saved') {
         committedRequirement.current = null;
         uncertainRequirement.current = null;
+        uncertainStagedOwnership.current = false;
+        preserveStagedFiles.current = true;
+        setSavedRequirement(candidate);
         setError('');
       } else if (outcome.status === 'storage_failure' && outcome.retryAllowed) {
         committedRequirement.current = null;
         uncertainRequirement.current = null;
+        uncertainStagedOwnership.current = false;
         setError(t('studio.save_failed'));
       } else if (outcome.status === 'storage_failure' && outcome.conflict) {
         uncertainRequirement.current = candidate;
@@ -807,7 +1103,7 @@ export default function StudioCaptureRoute() {
           </View>
         );
       case 'mapsLink':
-        return <View key={fieldId}>{textInput('mapsLink', catalogLabel(fieldId))}</View>;
+        return null;
       case 'price':
         return <View key={fieldId}>{textInput('price', catalogLabel(fieldId), { keyboardType: 'decimal-pad' })}</View>;
       case 'budgetMinimum':
@@ -850,9 +1146,120 @@ export default function StudioCaptureRoute() {
     <>
       {mode === 'wanted' ? renderPersonSelector() : null}
       {mode === 'wanted' && !wantedIdentityReady ? null : (
-        <>{STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}</>
+        <>
+          {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}
+          {mode === 'offered'
+            ? textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })
+            : null}
+          {renderExactLocationSection()}
+          {renderStudioAttachments()}
+        </>
       )}
     </>
+  );
+
+  const renderExactLocationSection = () => (
+    <View style={styles.field} testID="studio-exact-location">
+      <Text style={[styles.label, labelStyle]}>
+        {language === 'ar' ? 'الموقع الدقيق (اختياري)' : 'Exact location (optional)'}
+      </Text>
+      {textInput('mapsLink', language === 'ar' ? 'رابط خرائط Google' : 'Google Maps URL')}
+      <Button
+        title={language === 'ar' ? 'فتح خرائط Google' : 'Open Google Maps'}
+        onPress={() => {
+          const link = values.mapsLink.trim();
+          const query = mode === 'offered'
+            ? areaTitle(values.locationAreaId)
+            : values.preferredAreaMode === 'all_kuwait'
+              ? 'Kuwait'
+              : values.preferredAreaIds.map(areaTitle).join(', ') || 'Kuwait';
+          if (Platform.OS === 'web') {
+            try {
+              openStudioWebMapsLocation({ link, query });
+            } catch {
+              setAttachmentError(language === 'ar'
+                ? 'تعذر فتح رابط خرائط Google صالح.'
+                : 'Could not open a valid Google Maps link.');
+            }
+            return;
+          }
+          void (link
+            ? openPastedLocationLink({ source: 'pasted_link', link }, Linking)
+            : openGoogleMapsQuery(query, Linking))
+            .catch(() => setAttachmentError(language === 'ar'
+              ? 'تعذر فتح رابط خرائط Google صالح.'
+              : 'Could not open a valid Google Maps link.'));
+        }}
+        testID="studio-open-google-maps"
+      />
+    </View>
+  );
+
+  const renderStudioAttachments = () => (
+    <View style={[styles.field, styles.attachmentPanel]} testID="studio-attachments">
+      <Text style={[styles.label, labelStyle]}>
+        {language === 'ar' ? 'الصور والمستندات' : 'Images and documents'}
+      </Text>
+      <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <Button
+          title={language === 'ar' ? 'إضافة صور أو مقاطع فيديو' : 'Add images or videos'}
+          onPress={() => Platform.OS === 'web' ? addStudioWebFiles('media') : void addStudioMedia()}
+          disabled={attachmentBusy || saving}
+          testID="studio-add-media"
+        />
+        <Button
+          title={language === 'ar' ? 'إضافة PDF / ملف' : 'Add PDF / File'}
+          onPress={() => Platform.OS === 'web' ? addStudioWebFiles('pdf') : void addStudioPdf()}
+          disabled={attachmentBusy || saving}
+          testID="studio-add-file"
+        />
+      </View>
+      {attachmentBusy ? <ActivityIndicator color={colors.primary} /> : null}
+      {attachmentError ? <FieldError message={attachmentError} /> : null}
+      {attachments.slice().sort((left, right) => left.order - right.order).map((item, index) => (
+        <View key={item.id} style={[styles.attachmentRow, { borderColor: colors.border, backgroundColor: colors.card }]} testID={`studio-attachment-${item.id}`}>
+          {item.kind === 'image' ? (
+            <Image
+              source={{ uri: Platform.OS === 'web' ? webImageSources[item.id] ?? '' : item.uri }}
+              style={styles.attachmentPreview}
+              resizeMode="cover"
+              accessibilityLabel={item.originalName}
+            />
+          ) : (
+            <View style={[styles.attachmentPreview, styles.attachmentFileIcon, { backgroundColor: colors.secondary }]}>
+              <Feather name={item.kind === 'video' ? 'video' : 'file-text'} size={24} color={colors.primary} />
+            </View>
+          )}
+          <View style={styles.attachmentDescription}>
+            <Text numberOfLines={2} style={{ color: colors.foreground, fontFamily: fonts.medium }}>{item.originalName}</Text>
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
+              {item.kind === 'image' ? (language === 'ar' ? 'صورة' : 'Image')
+                : item.kind === 'video' ? (language === 'ar' ? 'فيديو' : 'Video')
+                  : 'PDF'}
+              {item.isCover ? (language === 'ar' ? ' · صورة الغلاف' : ' · Cover') : ''}
+            </Text>
+            <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <Button title={language === 'ar' ? '↑' : '↑'} onPress={() => moveStudioAttachment(item, -1)} disabled={index === 0} testID={`studio-attachment-up-${item.id}`} />
+              <Button title="↓" onPress={() => moveStudioAttachment(item, 1)} disabled={index === attachments.length - 1} testID={`studio-attachment-down-${item.id}`} />
+              {item.kind === 'image' ? (
+                <Button
+                  title={language === 'ar' ? 'تعيين غلاف' : 'Set cover'}
+                  onPress={() => setAttachments(current => setAttachmentCover(current, item.id))}
+                  disabled={item.isCover}
+                  testID={`studio-attachment-cover-${item.id}`}
+                />
+              ) : null}
+              <Button title={language === 'ar' ? 'إزالة' : 'Remove'} onPress={() => removeStudioAttachment(item)} testID={`studio-attachment-remove-${item.id}`} />
+            </View>
+          </View>
+        </View>
+      ))}
+      {attachments.length === 0 ? (
+        <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
+          {language === 'ar' ? 'لا توجد مرفقات بعد.' : 'No attachments yet.'}
+        </Text>
+      ) : null}
+    </View>
   );
 
   const reviewItem = (label: string, value: string) => (
@@ -933,6 +1340,13 @@ export default function StudioCaptureRoute() {
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
       {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderReviewCatalogField(fieldId))}
+      {mode === 'offered' && values.privateNotes
+        ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes)
+        : null}
+      {reviewItem(
+        language === 'ar' ? 'الموقع الدقيق' : 'Exact location',
+        values.mapsLink || '—',
+      )}
       {mode === 'wanted' && selectedPerson ? reviewItem(t('studio.person'), selectedPerson.name) : null}
     </View>
   );
@@ -951,7 +1365,10 @@ export default function StudioCaptureRoute() {
         <TouchableOpacity
           accessibilityRole="button"
           testID="studio-close"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (showingReview) returnToForm();
+            else router.back();
+          }}
           style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.card }]}
         >
           <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={20} color={colors.foreground} />
@@ -975,16 +1392,48 @@ export default function StudioCaptureRoute() {
             bottomOffset={86}
             testID="studio-scroll"
           >
+            {error ? (
+              <Text
+                testID="studio-form-error-summary"
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}
+              >
+                {error}
+              </Text>
+            ) : null}
             {!showingReview ? renderForm() : (
               <>
                 <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('studio.review')}</Text>
                 {renderReview()}
+                {renderStudioAttachments()}
               </>
             )}
-            {error ? (
-              <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}>
-                {error}
-              </Text>
+            {savedProperty ? (
+              <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                <Button
+                  title={language === 'ar' ? 'عرض العقار' : 'View Property'}
+                  onPress={() => router.replace({
+                    pathname: '/property/[propertyCoreId]',
+                    params: { propertyCoreId: savedProperty.core.id },
+                  } as never)}
+                  testID="studio-view-saved-property"
+                />
+                <Button title={language === 'ar' ? 'الرئيسية' : 'Home'} onPress={() => router.replace('/' as never)} testID="studio-home" />
+              </View>
+            ) : null}
+            {savedRequirement ? (
+              <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                <Button
+                  title={language === 'ar' ? 'عرض المتطلب' : 'View Requirement'}
+                  onPress={() => router.replace({
+                    pathname: '/requirement/[requirementId]',
+                    params: { requirementId: savedRequirement.id, seekerId: savedRequirement.seekerId },
+                  } as never)}
+                  testID="studio-view-saved-requirement"
+                />
+                <Button title={language === 'ar' ? 'الرئيسية' : 'Home'} onPress={() => router.replace('/' as never)} testID="studio-home" />
+              </View>
             ) : null}
             {propertyRecovery ? (
               <View style={[styles.recovery, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
@@ -1018,19 +1467,19 @@ export default function StudioCaptureRoute() {
             ) : null}
             <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {showingReview ? (
-                <Button title={t('studio.back')} onPress={() => { setError(''); setStep('form'); }} disabled={saving} />
+                <Button title={t('studio.back')} onPress={returnToForm} disabled={saving} />
               ) : null}
               {!showingReview ? (
                 <Button
                   title={t('studio.next')}
-                  onPress={() => { if (validate()) setStep('review'); }}
-                  disabled={saving || !recordLoaded}
+                  onPress={() => { if (!savedProperty && !savedRequirement && validate()) setStep('review'); }}
+                  disabled={saving || !recordLoaded || !!savedProperty || !!savedRequirement}
                 />
               ) : (
                 <Button
                   title={saving ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : t(editing ? 'studio.save_changes' : 'studio.save')}
                   onPress={() => void doSave()}
-                  disabled={saving || !!propertyRecovery || !!committedRequirement.current}
+                  disabled={saving || !!propertyRecovery || !!committedRequirement.current || !!savedProperty || !!savedRequirement}
                   testID="studio-save"
                 />
               )}
@@ -1072,4 +1521,10 @@ const styles = StyleSheet.create({
   reviewRow: { minHeight: 48, alignItems: 'center', gap: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   recovery: { gap: 12, padding: 14, borderWidth: 1, borderRadius: 14 },
   actions: { gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' },
+  attachmentPanel: { padding: 12, borderWidth: 1, borderRadius: 14 },
+  attachmentRow: { flexDirection: 'row', gap: 10, padding: 10, borderWidth: 1, borderRadius: 12 },
+  attachmentPreview: { width: 76, height: 76, borderRadius: 8 },
+  attachmentFileIcon: { alignItems: 'center', justifyContent: 'center' },
+  attachmentDescription: { flex: 1, gap: 6 },
+  successActions: { gap: 12, padding: 14, borderWidth: 1, borderRadius: 14 },
 });

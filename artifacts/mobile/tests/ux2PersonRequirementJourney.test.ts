@@ -102,10 +102,15 @@ test('UX-2 source role travels with the Person through every existing capture ro
   assert.match(propertyType, /params:\s*\{\s*\.\.\.routeParams/);
 
   const entry = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(entry, /sourceRoles\.map/);
+  assert.match(entry, /const eligibleSourceRoles = person\.classifications\.filter/);
+  assert.match(entry, /eligibleSourceRoles\.map\(role =>/);
+  assert.match(entry, /person\.classifications\.map\(classification =>/);
+  assert.match(entry, /person\.classifications\.includes\(selectedSourceRole\)/);
   assert.match(entry, /pathname: '\/capture'/);
   assert.match(entry, /linkPersonId: person\.id/);
   assert.match(entry, /sourceRole: role/);
+  assert.match(entry, /role: selectedSourceRole/);
+  assert.doesNotMatch(entry, /person-saved-add-property|person-add-wanted-studio|person-add-requirement/);
   for (const route of ['index', 'summary']) {
     const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
     assert.match(source, /setPropertySource\(/);

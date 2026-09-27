@@ -21,7 +21,7 @@ import {
 
 test('BEHAVIOR: shared Studio catalog supplies both mode-specific sequences and bilingual labels', () => {
   assert.deepEqual(STUDIO_FORM_FIELD_ORDER.offered, [
-    'transaction', 'locationAreaId', 'mapsLink', 'price', 'rentalPeriodId',
+    'transaction', 'locationAreaId', 'price', 'rentalPeriodId',
     'areaSquareMeters', 'studioRoomCount', 'bathrooms', 'kitchen', 'hall',
     'parking', 'floorNumber', 'description',
   ]);
@@ -38,10 +38,24 @@ test('BEHAVIOR: shared Studio catalog supplies both mode-specific sequences and 
   assert.equal(isStudioCatalogFieldApplicable('rentalPeriodId', 'wanted', 'rent'), true);
   assert.ok(STUDIO_FORM_CATALOG.every(field =>
     field.label.length === 2 && field.modes.length > 0));
+  assert.equal(STUDIO_FORM_FIELD_ORDER.offered.includes('mapsLink'), false);
 
   const transactionChoices = getStudioCatalogField('transaction').quickPicks!;
   assert.deepEqual(getStudioCatalogChoiceLabel(transactionChoices[1], 'offered'), ['Sale', 'للبيع']);
   assert.deepEqual(getStudioCatalogChoiceLabel(transactionChoices[1], 'wanted'), ['Buy', 'للشراء']);
+});
+
+test('STRUCTURAL: Studio keeps exact-location, private-note, and media controls at the shared form tail', async () => {
+  const studio = await readFile(resolveSourcePath('../app/capture/studio.tsx', import.meta.url), 'utf8');
+  const form = studio.slice(studio.indexOf('const renderForm ='), studio.indexOf('const reviewItem ='));
+  assert.match(form, /textInput\('privateNotes'/);
+  assert.match(form, /renderExactLocationSection\(\)/);
+  assert.match(form, /renderStudioAttachments\(\)/);
+  assert.match(studio, /testID="studio-open-google-maps"/);
+  assert.match(studio, /testID="studio-add-media"/);
+  assert.match(studio, /testID="studio-add-file"/);
+  assert.match(studio, /setAttachmentCover/);
+  assert.match(studio, /reorderAttachments/);
 });
 
 test('BEHAVIOR: only two visible binary choices preserve untouched Offered and Wanted semantics', () => {

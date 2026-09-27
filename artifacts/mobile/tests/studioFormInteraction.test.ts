@@ -87,3 +87,62 @@ test('STRUCTURAL: field validation localizes and focuses the actual failing cont
   assert.match(studio, /target\?\.focus\?\.\(\)/);
   assert.match(studio, /return result\.ok && wantedIdentityReady/);
 });
+
+test('REGRESSION: header and Android Back return from Review without resetting the Studio draft', async () => {
+  const studio = await source;
+  const returnToFormStart = studio.indexOf('const returnToForm =');
+  const returnToFormEnd = studio.indexOf('\n\n  useEffect(', returnToFormStart);
+  const returnToForm = studio.slice(returnToFormStart, returnToFormEnd);
+  const headerStart = studio.indexOf('testID="studio-close"');
+  const headerEnd = studio.indexOf('<Text style={[styles.title', headerStart);
+  const header = studio.slice(headerStart, headerEnd);
+  const hardwareBackStart = studio.indexOf("BackHandler.addEventListener('hardwareBackPress'");
+  const hardwareBackEnd = studio.indexOf('return () => subscription.remove();', hardwareBackStart);
+  const hardwareBack = studio.slice(hardwareBackStart, hardwareBackEnd);
+
+  assert.match(returnToForm, /setError\(''\);\s*setStep\('form'\)/);
+  assert.doesNotMatch(returnToForm, /setValues|setAttachments|stagedFiles\.current\.clear/);
+  assert.match(header, /if \(showingReview\) returnToForm\(\);\s*else router\.back\(\);/);
+  assert.match(hardwareBack, /if \(step === 'review'\) \{\s*returnToForm\(\);\s*return true;\s*\}\s*router\.back\(\)/);
+  assert.match(studio, /title=\{t\('studio\.back'\)\} onPress=\{returnToForm\}/);
+  assert.match(studio, /title=\{t\('studio\.next'\)\}[\s\S]*validate\(\)\) setStep\('review'\)/);
+  assert.match(studio, /const \[values, setValues\] = useState/);
+  assert.match(studio, /const \[attachments, setAttachments\] = useState/);
+});
+
+test('STRUCTURAL: shared offered and wanted Studio routes expose durable media, safe Maps, Back, and success actions', async () => {
+  const studio = await source;
+  assert.match(studio, /pickAndStoreRequirementMedia/);
+  assert.match(studio, /pickAndStoreRequirementPdfs/);
+  assert.match(studio, /createWebRequirementAttachments/);
+  assert.match(studio, /saveRequirementAttachments|attachmentPersistence:/);
+  assert.match(studio, /openPastedLocationLink/);
+  assert.match(studio, /BackHandler\.addEventListener\('hardwareBackPress'/);
+  assert.match(studio, /testID="studio-view-saved-property"/);
+  assert.match(studio, /testID="studio-view-saved-requirement"/);
+  assert.match(studio, /testID="studio-home"/);
+});
+
+test('REGRESSION: Studio web Maps preserves the route and file actions invoke separate browser pickers', async () => {
+  const studio = await source;
+  const exactLocation = studio.slice(
+    studio.indexOf('const renderExactLocationSection ='),
+    studio.indexOf('const renderStudioAttachments ='),
+  );
+  const attachments = studio.slice(
+    studio.indexOf('const renderStudioAttachments ='),
+    studio.indexOf('const reviewItem ='),
+  );
+  const errorSummary = studio.slice(
+    studio.indexOf('testID="studio-form-error-summary"'),
+    studio.indexOf("!showingReview ? renderForm()"),
+  );
+
+  assert.match(exactLocation, /Platform\.OS === 'web'[\s\S]*openStudioWebMapsLocation\(\{ link, query \}\)/);
+  assert.match(exactLocation, /openPastedLocationLink\(\{ source: 'pasted_link', link \}, Linking\)/);
+  assert.match(studio, /openStudioWebFilePicker\(\{[\s\S]*accept: kind === 'media' \? 'image\/\*\,video\/\*' : 'application\/pdf'/);
+  assert.match(attachments, /addStudioWebFiles\('media'\)/);
+  assert.match(attachments, /addStudioWebFiles\('pdf'\)/);
+  assert.match(errorSummary, /accessibilityRole="alert"/);
+  assert.match(studio, /catch \{\s*\/\/ Keep the field-specific error visible even if a host cannot measure\./);
+});

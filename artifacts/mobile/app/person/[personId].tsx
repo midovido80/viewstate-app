@@ -66,12 +66,28 @@ export default function PersonDetailScreen() {
   const [classifications, setClassifications] = useState<PersonClassification[]>([]);
   const [countryOpen, setCountryOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [classificationChooserOpen, setClassificationChooserOpen] = useState(false);
+  const [propertyActionChooserOpen, setPropertyActionChooserOpen] = useState(false);
+  const [selectedSourceRole, setSelectedSourceRole] = useState<PropertySource['role'] | null>(null);
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [confirmation, setConfirmation] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
   const [requirementReturnGuard, setRequirementReturnGuard] = useState(params.requirementSaved === '1');
   const sourceRoles = PROPERTY_SOURCE_ROLES;
+
+  useEffect(() => {
+    if (params.saved !== '1') return;
+    setConfirmation(language === 'ar' ? 'تم حفظ الشخص' : 'Person saved');
+    const timer = setTimeout(() => {
+      setConfirmation('');
+      router.setParams({ saved: undefined });
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [language, params.saved, router]);
 
   useEffect(() => {
     if (params.requirementSaved !== '1') return;
@@ -173,6 +189,12 @@ export default function PersonDetailScreen() {
 
   const openLink = async () => {
     setPropertySearch('');
+    setSelectedProperty(null);
+    const eligibleRoles = person?.classifications.filter(
+      (classification): classification is PropertySource['role'] =>
+        sourceRoles.includes(classification as PropertySource['role']),
+    ) ?? [];
+    setSelectedSourceRole(eligibleRoles.length === 1 ? eligibleRoles[0] : null);
     setProperties(await store.getProperties());
     setLinkOpen(true);
   };
@@ -182,15 +204,32 @@ export default function PersonDetailScreen() {
     setProperties(value.trim() ? await store.searchProperties(value) : await store.getProperties());
   };
 
-  const link = async (property: Property) => {
-    if (!person) return;
+  const link = async () => {
+    if (!person || !selectedProperty || !selectedSourceRole || linkBusy) return;
+    setLinkBusy(true);
     setError('');
     try {
-      await store.linkPersonToProperty({ personId: person.id, propertyCoreId: property.core.id });
+      if (!person.classifications.includes(selectedSourceRole)) {
+        throw new Error('SOURCE_ROLE_MISMATCH');
+      }
+      const currentLinks = await store.getLinksForPerson(person.id);
+      if (!currentLinks.some(item => item.propertyCoreId === selectedProperty.core.id)) {
+        await store.linkPersonToProperty({ personId: person.id, propertyCoreId: selectedProperty.core.id });
+      }
+      await store.setPropertySource({
+        personId: person.id,
+        propertyCoreId: selectedProperty.core.id,
+        role: selectedSourceRole,
+      });
       setLinkOpen(false);
+      setSelectedProperty(null);
+      setConfirmation(language === 'ar' ? 'تم ربط العقار بالشخص' : 'Property linked to person');
+      setTimeout(() => setConfirmation(''), 2200);
       await load();
     } catch {
       setError(t('people.link_action_failed'));
+    } finally {
+      setLinkBusy(false);
     }
   };
 
@@ -301,6 +340,35 @@ export default function PersonDetailScreen() {
   }];
   const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
     ?? PHONE_COUNTRIES[0];
+  const eligibleSourceRoles = person.classifications.filter(
+    (classification): classification is PropertySource['role'] =>
+      sourceRoles.includes(classification as PropertySource['role']),
+  );
+  const actionForClassification = (classification: PersonClassification) => {
+    if (classification === 'seeker') {
+      router.push(getPersonWantedStudioRoute(person.id) as never);
+    } else if (classification === 'owner') {
+      router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: 'owner' } } as never);
+    } else if (sourceRoles.includes(classification as PropertySource['role'])) {
+      setSelectedSourceRole(classification as PropertySource['role']);
+      setPropertyActionChooserOpen(true);
+    }
+  };
+  const activatePrimaryAction = () => {
+    if (person.classifications.length === 1) {
+      actionForClassification(person.classifications[0]);
+    } else {
+      setClassificationChooserOpen(true);
+    }
+  };
+  const primaryActionTitle = (classification: PersonClassification) => {
+    if (classification === 'seeker') return language === 'ar' ? 'إضافة طلب' : 'Add Requirement';
+    if (classification === 'owner') return language === 'ar' ? 'إضافة عقار معروض' : 'Add Offered Property';
+    return language === 'ar' ? 'إضافة أو ربط عقار' : 'Add or Link Property';
+  };
+  const primaryActionLabel = person.classifications.length > 1
+    ? (language === 'ar' ? 'اختر الإجراء' : 'Choose action')
+    : primaryActionTitle(person.classifications[0]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -319,14 +387,14 @@ export default function PersonDetailScreen() {
           {mode === 'edit' ? t('people.edit') : t('people.detail')}
         </Text>
         {mode === 'detail' ? (
-          <TouchableOpacity
-            onPress={beginEdit}
-            testID="person-edit"
-            accessibilityRole="button"
-            style={[styles.headerSide, { alignItems: isRTL ? 'flex-start' : 'flex-end' }]}
-          >
-            <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('detail.edit')}</Text>
-          </TouchableOpacity>
+          <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <TouchableOpacity onPress={beginEdit} testID="person-edit" accessibilityRole="button" style={styles.headerAction}>
+              <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('detail.edit')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.replace('/' as never)} testID="person-home" accessibilityRole="button" style={styles.headerAction}>
+              <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('home.title')}</Text>
+            </TouchableOpacity>
+          </View>
         ) : <View style={styles.headerSide} />}
       </View>
       <KeyboardAwareScrollViewCompat
@@ -380,13 +448,15 @@ export default function PersonDetailScreen() {
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            {person.classifications.includes('seeker') ? (
-              <Button
-                title={language === 'ar' ? 'إضافة طلب استوديو' : 'Add Wanted Studio'}
-                onPress={() => router.push(getPersonWantedStudioRoute(person.id) as never)}
-                variant="outline"
-                testID="person-add-wanted-studio"
-              />
+            <Button
+              title={primaryActionLabel}
+              onPress={activatePrimaryAction}
+              testID="person-primary-action"
+            />
+            {confirmation ? (
+              <View style={[styles.confirmation, { backgroundColor: colors.accent }]} accessibilityRole="alert" testID="person-action-confirmation">
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
+              </View>
             ) : null}
             <View style={styles.actions}>
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -395,15 +465,8 @@ export default function PersonDetailScreen() {
               </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
-             {params.saved === '1' ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step">
-               <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('people.saved_next')}</Text>
-                <Button title={t('requirements.add')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" />
-               {sourceRoles.map(role => <Button key={role} title={`${t('people.add_property')} · ${t(`source.role.${role}`)}`} onPress={() => router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: role } } as never)} variant="outline" testID={`person-saved-add-property-${role}`} />)}
-               <Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/>
-             </View> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
-              {params.saved !== '1' ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement" accessibilityRole="button" style={[styles.addRequirementButton, { borderColor: colors.primary }]}><Text style={[styles.addRequirementText, { color: colors.primary, fontFamily: fonts.semiBold }]}>{t('requirements.add')}</Text></TouchableOpacity> : null}
             </View>
             {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
               <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}{isWantedStudio(requirement) ? ` · ${t('enrich.apartment_subtype.studio')}` : ''}</Text>
@@ -422,9 +485,9 @@ export default function PersonDetailScreen() {
             </View>)}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
-              <TouchableOpacity onPress={() => void openLink()} testID="person-link-property" accessibilityRole="button">
+              {eligibleSourceRoles.length ? <TouchableOpacity onPress={() => void openLink()} testID="person-link-property" accessibilityRole="button">
                 <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('people.link')}</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> : null}
             </View>
             {linked.map(property => (
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -474,16 +537,59 @@ export default function PersonDetailScreen() {
 
       <Modal visible={linkOpen} animationType="slide" onRequestClose={() => setLinkOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left', marginHorizontal: 20, marginTop: 12 }]}>{language === 'ar' ? 'صفة العلاقة' : 'Relationship role'}</Text>
+          <View style={[styles.choicesWrap, styles.roleChoices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            {eligibleSourceRoles.map(role => (
+              <ChoiceChip
+                key={role}
+                label={t(`source.role.${role}`)}
+                selected={selectedSourceRole === role}
+                onPress={() => setSelectedSourceRole(role)}
+                testID={`link-source-role-${role}`}
+                role="radio"
+              />
+            ))}
+          </View>
           <TextInput value={propertySearch} onChangeText={value => void searchProperties(value)} placeholder={t('home.search')} placeholderTextColor={colors.mutedForeground} style={[inputStyle, styles.modalSearch]} testID="link-property-search" />
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {properties.filter(property => !linked.some(item => item.core.id === property.core.id)).map(property => (
-              <TouchableOpacity key={property.core.id} onPress={() => void link(property)} style={[styles.propertyChoice, { borderBottomColor: colors.border }]} testID={`link-property-choice-${property.core.id}`}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+              <TouchableOpacity key={property.core.id} onPress={() => setSelectedProperty(property)} accessibilityRole="radio" accessibilityState={{ selected: selectedProperty?.core.id === property.core.id }} style={[styles.propertyChoice, { borderBottomColor: colors.border, backgroundColor: selectedProperty?.core.id === property.core.id ? colors.accent : 'transparent' }]} testID={`link-property-choice-${property.core.id}`}>
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
               </TouchableOpacity>
             ))}
-            {sourceRoles.map(role => <Button key={role} title={`${t('people.add_property')} · ${t(`source.role.${role}`)}`} onPress={() => router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: role } } as never)} variant="outline" testID={`person-add-property-${role}`} />)}
+            {selectedProperty ? (
+              <View style={[styles.confirmLink, { borderColor: colors.border, backgroundColor: colors.card }]} testID="link-property-confirmation">
+                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+                  {language === 'ar' ? 'تأكيد ربط هذا العقار؟' : 'Confirm linking this property?'}
+                </Text>
+                <Button title={language === 'ar' ? 'تأكيد الربط' : 'Confirm link'} onPress={() => void link()} disabled={!selectedSourceRole || linkBusy} loading={linkBusy} testID="link-property-confirm" />
+              </View>
+            ) : null}
             <Button title={t('capture.cancel')} onPress={() => setLinkOpen(false)} variant="outline" testID="link-property-cancel" />
           </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={classificationChooserOpen} transparent animationType="fade" onRequestClose={() => setClassificationChooserOpen(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.dialog, { backgroundColor: colors.card, borderColor: colors.border }]} testID="person-classification-action-chooser">
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{language === 'ar' ? 'اختر الإجراء' : 'Choose an action'}</Text>
+            {person.classifications.map(classification => (
+              <Button key={classification} title={`${t(`people.classification.${classification}` as keyof Translations)} · ${primaryActionTitle(classification)}`} onPress={() => { setClassificationChooserOpen(false); actionForClassification(classification); }} variant="outline" testID={`person-classification-action-${classification}`} />
+            ))}
+            <Button title={t('capture.cancel')} onPress={() => setClassificationChooserOpen(false)} variant="outline" />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={propertyActionChooserOpen} transparent animationType="fade" onRequestClose={() => setPropertyActionChooserOpen(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.dialog, { backgroundColor: colors.card, borderColor: colors.border }]} testID="person-property-action-chooser">
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{language === 'ar' ? 'إضافة أو ربط عقار' : 'Add or link property'}</Text>
+            <Button title={language === 'ar' ? 'إضافة عقار' : 'Add property'} onPress={() => { const role = selectedSourceRole; setPropertyActionChooserOpen(false); if (role && person.classifications.includes(role)) router.push({ pathname: '/capture', params: { linkPersonId: person.id, sourceRole: role } } as never); }} testID="person-add-property" />
+            <Button title={t('people.link')} onPress={() => { setPropertyActionChooserOpen(false); void openLink(); }} variant="outline" testID="person-link-existing-property" />
+            <Button title={t('capture.cancel')} onPress={() => setPropertyActionChooserOpen(false)} variant="outline" />
+          </View>
         </View>
       </Modal>
 
@@ -547,13 +653,13 @@ export default function PersonDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  addRequirementButton: { minHeight: 44, maxWidth: '52%', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
-  addRequirementText: { fontSize: 15, lineHeight: 20, textAlign: 'center', flexShrink: 1 },
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 20 },
   header: { minHeight: 60, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { flex: 2, fontSize: 20, textAlign: 'center' },
   headerSide: { flex: 1, minWidth: 0 },
+  headerActions: { flex: 1.5, alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  headerAction: { minHeight: 44, justifyContent: 'center' },
   content: { padding: 20, gap: 14 },
   name: { fontSize: 28 },
   phone: { fontSize: 18 },
@@ -570,7 +676,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   ltrText: { writingDirection: 'ltr', textAlign: 'left' },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },
-  savedBox: { padding: 14, borderRadius: 12, gap: 10 },
+  confirmation: { alignSelf: 'stretch', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  roleChoices: { paddingHorizontal: 20, paddingTop: 8 },
+  confirmLink: { marginTop: 10, padding: 14, borderWidth: 1, borderRadius: 12, gap: 10 },
   requirementCard: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 8 },
   requirementTitle: { fontSize: 17 },
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },

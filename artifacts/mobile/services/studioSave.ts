@@ -27,6 +27,12 @@ import {
 } from '@/services/requirementSaveOutcome';
 import type { PropertyStore } from '@/services/persistence';
 import type { Person } from '@/services/people';
+import {
+  saveRequirementAttachments,
+} from '@/services/studioAttachmentPersistence';
+import type { AttachmentFileStore, LocalAttachment } from '@/services/attachmentOperations';
+import type { AttachmentSource } from '@/services/attachments';
+import type { RequirementStore } from '@/services/requirementPersistence';
 
 export interface StudioRequirementStore extends RequirementSaveStore {
   getPerson(id: string): Promise<Person | null>;
@@ -106,6 +112,7 @@ export function prepareStudioPropertyEditCandidate(
   }
   const core = { ...compatibleBaseline.core, ...candidate.core };
   if (!candidate.core.description) delete (core as { description?: Property['core']['description'] }).description;
+  if (!candidate.core.privateNotes) delete (core as { privateNotes?: Property['core']['privateNotes'] }).privateNotes;
   const hasCanonicalTopLevelArea = compatibleBaseline.areaSquareMeters !== undefined;
   if (hasCanonicalTopLevelArea) delete details.builtUpAreaSquareMeters;
   const merged: Property = {
@@ -410,13 +417,43 @@ export async function saveStudioRequirement(options: {
   readonly baseline: SeekerRequirement | null;
   readonly store: StudioRequirementStore;
   readonly navigate: () => void | Promise<void>;
-}): Promise<StudioRequirementSaveResult> {
+  readonly attachmentPersistence?: {
+    readonly fileStore: AttachmentFileStore;
+    readonly sources?: readonly AttachmentSource[];
+    readonly preparedAttachments?: readonly LocalAttachment[];
+  };
+}): Promise<StudioRequirementSaveResult | { readonly status: 'attachment_recovery_required' | 'attachment_storage_failure' }> {
   try {
     const person = await options.store.getPerson(options.candidate.seekerId);
     if (!person) return { status: 'missing_person' };
     if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
   } catch {
     return { status: 'storage_failure', retryAllowed: false };
+  }
+  if (options.attachmentPersistence) {
+    const result = await saveRequirementAttachments({
+      candidate: options.candidate,
+      baseline: options.baseline,
+      store: options.store as unknown as RequirementStore,
+      fileStore: options.attachmentPersistence.fileStore,
+      sources: options.attachmentPersistence.sources,
+      preparedAttachments: options.attachmentPersistence.preparedAttachments,
+    });
+    if (result.status === 'saved') {
+      try {
+        await options.navigate();
+        return { status: 'saved' };
+      } catch {
+        return { status: 'saved_navigation_failed' };
+      }
+    }
+    if (result.status === 'missing') return { status: 'missing_person' };
+    if (result.status === 'conflict') return { status: 'edit_conflict' };
+    return {
+      status: result.status === 'storage_failure'
+        ? 'attachment_storage_failure'
+        : 'attachment_recovery_required',
+    };
   }
   return savePersonRequirement(options);
 }

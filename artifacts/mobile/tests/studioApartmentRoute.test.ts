@@ -10,6 +10,8 @@ interface RouteHarness {
   navigations: Array<{ pathname: string; params?: Record<string, unknown> }>;
   setParamsCalls: Array<Record<string, unknown>>;
   draftUpdates: Array<Record<string, unknown>>;
+  detailUpdates: Array<Record<string, unknown>>;
+  captureDetails: Record<string, unknown>;
   router: {
     push: (destination: { pathname: string; params?: Record<string, unknown> }) => void;
     navigate: (destination: { pathname: string; params?: Record<string, unknown> }) => void;
@@ -19,6 +21,7 @@ interface RouteHarness {
   capture: {
     draft: Record<string, unknown>;
     updateDraft: (draft: Record<string, unknown>) => boolean;
+    updateCaptureDetails: (details: Record<string, unknown>) => boolean;
   };
 }
 
@@ -97,6 +100,8 @@ const routeHarness = (params: RouteHarness['params'] = {}): RouteHarness => {
     navigations: [],
     setParamsCalls: [],
     draftUpdates: [],
+    detailUpdates: [],
+    captureDetails: {},
   } as unknown as RouteHarness;
   harness.router = {
     push: destination => { harness.pushes.push(destination); },
@@ -111,6 +116,11 @@ const routeHarness = (params: RouteHarness['params'] = {}): RouteHarness => {
     draft: {},
     updateDraft: draft => {
       harness.draftUpdates.push(draft);
+      return true;
+    },
+    updateCaptureDetails: details => {
+      harness.detailUpdates.push(details);
+      Object.assign(harness.captureDetails, details);
       return true;
     },
   };
@@ -231,6 +241,8 @@ test('production subtype route keeps Standard on existing offered and wanted des
   (findByTestId(offeredScreen, 'select-apartment-standard').props.onSelect as () => void)();
   (findByTestId(renderRoute(route, offered), 'btn-next').props.onPress as () => void)();
   assert.deepEqual(offered.draftUpdates, [{ propertyType: 'apartment', transaction: 'rent' }]);
+  assert.deepEqual(offered.detailUpdates, [{ apartmentSubtype: 'standard_apartment' }]);
+  assert.equal(offered.captureDetails.apartmentSubtype, 'standard_apartment');
   assert.deepEqual(offered.pushes[0], {
     pathname: '/capture/price',
     params: {
@@ -248,6 +260,7 @@ test('production subtype route keeps Standard on existing offered and wanted des
   const wantedScreen = renderRoute(route, wanted);
   (findByTestId(wantedScreen, 'select-apartment-standard').props.onSelect as () => void)();
   (findByTestId(renderRoute(route, wanted), 'btn-next').props.onPress as () => void)();
+  assert.deepEqual(wanted.detailUpdates, []);
   assert.deepEqual(wanted.pushes[0], {
     pathname: '/requirement/new',
     params: {

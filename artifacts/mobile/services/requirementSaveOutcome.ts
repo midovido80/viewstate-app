@@ -1,4 +1,7 @@
-import type { SeekerRequirement } from '@workspace/property-domain';
+import {
+  normalizeSeekerRequirement,
+  type SeekerRequirement,
+} from '@workspace/property-domain';
 
 export interface RequirementSavePerson {
   readonly id?: string;
@@ -63,12 +66,38 @@ export function requirementIdentityMatches(
   return saved?.id === expected.id && saved.seekerId === expected.seekerId;
 }
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map(key =>
+      `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+/**
+ * Requirement stores normalize optional defaults and nested metadata on write.
+ * Compare validated canonical projections, not the callers' insertion order or
+ * pre-normalized object shape, while still requiring the exact ID and owner.
+ */
+export function requirementsEquivalent(
+  left: SeekerRequirement | null,
+  right: SeekerRequirement,
+): boolean {
+  if (!requirementIdentityMatches(left, right)) return false;
+  const normalizedLeft = normalizeSeekerRequirement(left);
+  const normalizedRight = normalizeSeekerRequirement(right);
+  return normalizedLeft.ok
+    && normalizedRight.ok
+    && stableStringify(normalizedLeft.value) === stableStringify(normalizedRight.value);
+}
+
 function requirementMatches(
   saved: SeekerRequirement | null,
   expected: SeekerRequirement,
 ): boolean {
-  return requirementIdentityMatches(saved, expected)
-    && JSON.stringify(saved) === JSON.stringify(expected);
+  return requirementsEquivalent(saved, expected);
 }
 
 async function navigateToPerson(

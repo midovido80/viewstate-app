@@ -67,6 +67,12 @@ import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
 
+function hasApartmentDetailsToPreserve(details: CaptureDetailValues): boolean {
+  const { apartmentSubtype: _subtype, ...optionalDetails } = details;
+  return details.areaSquareMeters !== undefined
+    || hasPopulatedCategoryCapture(optionalDetails as Record<string, unknown>);
+}
+
 // The capture child routes preserve the person link in their params. Keep the
 // selected source role alongside it for installations where child routes
 // replace (rather than inherit) parent params.
@@ -91,6 +97,11 @@ export default function CaptureWorkflow() {
     getCurrentCaptureDetails,
     getCurrentDraft,
   } = useCapture();
+  const isStandardApartmentCapture = draft.propertyType === 'apartment'
+    && captureDetails.apartmentSubtype !== 'studio'
+    && captureDetails.apartmentSubtype !== 'duplex';
+  const [reviewApartmentDetails, setReviewApartmentDetails] = useState(false);
+  const isBasicApartmentFollowUp = isStandardApartmentCapture && !reviewApartmentDetails;
   const [stage, setStage] = useState<1 | 2 | 3>(draft.propertyType && draft.transaction ? 2 : 1);
   const [nearby, setNearby] = useState<string[]>(() => {
     try {
@@ -450,8 +461,27 @@ export default function CaptureWorkflow() {
       return;
     }
     if (!draft.locationAreaId) return;
-    if (getCaptureMapsLinkValidationError(captureDetails.mapsLink)) return;
-    if (Object.keys(quickErrors).length > 0) {
+    if (
+      isBasicApartmentFollowUp
+      && (hasApartmentDetailsToPreserve(captureDetails) || Boolean(draft.description?.value) || Boolean(description))
+    ) {
+      Alert.alert(
+        language === 'ar' ? 'توجد تفاصيل محفوظة في المسودة' : 'This draft has saved details',
+        language === 'ar'
+          ? 'تحتوي هذه المسودة على مواصفات أو موقع دقيق أو مرفقات. تم إيقاف الحفظ الأساسي لحمايتها. اعرض نموذج التفاصيل الكامل واحفظها مع العقار، أو ألغِ للاحتفاظ بالمسودة.'
+          : 'This draft contains specifications, precise location, or attachments. BASIC save is paused to protect them. Review the full details form and save them with the property, or cancel to keep the draft.',
+        [
+          { text: language === 'ar' ? 'الاحتفاظ بالمسودة' : 'Keep draft', style: 'cancel' },
+          {
+            text: language === 'ar' ? 'مراجعة التفاصيل' : 'Review details',
+            onPress: () => setReviewApartmentDetails(true),
+          },
+        ],
+      );
+      return;
+    }
+    if (!isBasicApartmentFollowUp && getCaptureMapsLinkValidationError(captureDetails.mapsLink)) return;
+    if (!isBasicApartmentFollowUp && Object.keys(quickErrors).length > 0) {
       Alert.alert(t('errors.validation_title'), language === 'ar' ? 'صحح القيم غير الصالحة أولاً.' : 'Correct the invalid numeric values first.');
       return;
     }
@@ -487,8 +517,12 @@ export default function CaptureWorkflow() {
           throw new Error('SOURCE_ROLE_MISMATCH');
         }
       }
-      const candidate = buildPropertyWithCaptureDetails(projection.property, captureDetails, true);
-      const evidence = await prepareCapturedDetails(projection.property, candidate);
+      const candidate = isBasicApartmentFollowUp
+        ? undefined
+        : buildPropertyWithCaptureDetails(projection.property, captureDetails, true);
+      const evidence = candidate
+        ? await prepareCapturedDetails(projection.property, candidate)
+        : null;
       const result = await savePropertyWithRecovery(projection.property);
       if (result.status !== 'complete') {
         Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
@@ -515,7 +549,12 @@ export default function CaptureWorkflow() {
       await clearCaptureDetails(projection.property.core.id);
       router.replace({
         pathname: '/capture/success',
-        params: { propertyCoreId: projection.property.core.id, ...(linkPersonId ? { linkPersonId } : {}), ...(sourceRole ? { sourceRole } : {}) },
+        params: {
+          propertyCoreId: projection.property.core.id,
+          ...(isBasicApartmentFollowUp ? { basicApartmentFollowUp: '1' } : {}),
+          ...(linkPersonId ? { linkPersonId } : {}),
+          ...(sourceRole ? { sourceRole } : {}),
+        },
       } as never);
     } catch (error) {
       console.error('Capture workflow save failed:', error);
@@ -660,6 +699,8 @@ export default function CaptureWorkflow() {
                   <Choice selected={draft.rentalPeriodId === 'yearly'} label={language === 'ar' ? 'سنوياً' : 'Yearly'} onPress={() => updateDraft({ rentalPeriodId: 'yearly' })} colors={colors} fonts={fonts} />
                 </View>
               )}
+              {!isBasicApartmentFollowUp && (
+                <>
                <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
               <TextInput value={metadataValue(captureDetails.areaSquareMeters)} onChangeText={value => {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
@@ -668,7 +709,11 @@ export default function CaptureWorkflow() {
               }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+                </>
+              )}
             </Section>
+            {!isBasicApartmentFollowUp && (
+              <>
             <Section title={language === 'ar' ? 'المواصفات' : 'Property specifications'} colors={colors} fonts={fonts}>
               <ModernPropertyForm
                 recordScopeKey={scopeKey}
@@ -760,6 +805,8 @@ export default function CaptureWorkflow() {
               ))}
               <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('enrich.attachment_privacy')}</Text>
             </Section>
+              </>
+            )}
           </>
         )}
 
@@ -786,6 +833,8 @@ export default function CaptureWorkflow() {
             <PreviewRow label={language === 'ar' ? 'القطعة' : 'Block'} value={draft.block ?? ''} colors={colors} fonts={fonts} />
             <PreviewRow label={draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')} value={String((draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount) ?? '')} colors={colors} fonts={fonts} />
             {draft.transaction === 'rent' && <PreviewRow label={language === 'ar' ? 'الدورية' : 'Cadence'} value={draft.rentalPeriodId === 'yearly' ? (language === 'ar' ? 'سنوياً' : 'Yearly') : (language === 'ar' ? 'شهرياً' : 'Monthly')} colors={colors} fonts={fonts} />}
+            {!isBasicApartmentFollowUp && (
+              <>
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
              {applicable.filter(definition => definition.group !== 'amenity' && captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
@@ -801,6 +850,8 @@ export default function CaptureWorkflow() {
              {captureDetails.mapsLink ? <PreviewRow label={t('enrich.maps_link')} value={captureDetails.mapsLink} colors={colors} fonts={fonts} /> : null}
              {captureDetails.coordinates ? <PreviewRow label={language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'} value={`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`} colors={colors} fonts={fonts} /> : null}
              {captureAttachments.length ? <PreviewRow label={language === 'ar' ? 'المرفقات' : 'Attachments'} value={captureAttachments.map(item => item.originalName).join(', ')} colors={colors} fonts={fonts} /> : null}
+              </>
+            )}
           </Section>
         )}
       </ScrollView>

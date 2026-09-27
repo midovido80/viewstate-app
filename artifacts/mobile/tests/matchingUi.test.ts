@@ -363,13 +363,11 @@ test('Person entry opens the saved Match All mode without selecting one Requirem
   assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
 });
 
-test('post-save state offers Requirement capture for any existing Person without a disabled CTA', async () => {
+test('Person Details keeps post-save feedback transient and uses classification actions', async () => {
   const personScreen = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(personScreen, /params\.saved === '1' \? <View/);
-  assert.match(personScreen, /<Button title=\{t\('requirements\.add'\)\} onPress=/);
-  assert.match(personScreen, /params\.saved !== '1' \? <TouchableOpacity onPress=/);
-  assert.match(personScreen, /testID="person-add-requirement"/);
-  // Studio has a seeker-only action; the separate generic Requirement action stays available.
-  assert.match(personScreen, /<Button title=\{t\('requirements\.add'\)\} onPress=\{\(\) => router\.push\(\{ pathname: '\/requirement\/new'/);
-  assert.doesNotMatch(personScreen, /testID="person-saved-add-requirement"[^>]*disabled=/);
+  assert.match(personScreen, /testID="person-action-confirmation"/);
+  assert.match(personScreen, /testID="person-primary-action"/);
+  assert.match(personScreen, /getPersonWantedStudioRoute\(person\.id\)/);
+  assert.doesNotMatch(personScreen, /person-saved-next-step|person-saved-add-property|person-add-wanted-studio/);
+  assert.doesNotMatch(personScreen, /person-add-requirement/);
 });

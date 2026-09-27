@@ -10,6 +10,7 @@ import {
   supportsRequirementAmenities,
 } from '@/services/amenityTypeTransitions';
 import { AMENITY_TRANSITION_COPY } from '@/services/amenityTransitionCopy';
+import './propertyTypeTransition.test.ts';
 
 test('Arabic and English transition fallback copy is readable and actionable', () => {
   assert.match(AMENITY_TRANSITION_COPY.en.amenitiesNotAllowed, /Property Type/);

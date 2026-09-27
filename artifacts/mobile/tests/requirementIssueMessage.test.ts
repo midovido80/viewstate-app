@@ -30,6 +30,7 @@ const productionCodes: readonly LocalizableRequirementIssueCode[] = [
   'duplicate_catalog_preference',
   'catalog_preference_not_allowed',
   'invalid_floor_use',
+  'invalid_attachment',
 ];
 
 test('every production Requirement issue has safe English and Arabic copy', () => {

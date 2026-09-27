@@ -59,6 +59,15 @@ import {
 import { Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
+import {
+  applyPropertyTransition,
+  createPropertyTypeTransitionProposal,
+  createTransactionTransitionProposal,
+  propertyTransitionConfirmationMessage,
+  propertyTransitionErrorMessage,
+  type PropertyTransitionProposal,
+  type PropertyTransitionState,
+} from '@/services/propertyTypeTransition';
 import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, isOfferedStudio } from '@/services/propertyDetailPresentation';
 
 export function getPropertyEditRouteHref(propertyCoreId: string, offeredStudio: boolean): string {
@@ -82,6 +91,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'unreadable'>('loading');
   const [error, setError] = useState('');
+  const [pendingPropertyTransition, setPendingPropertyTransition] = useState<{
+    proposal: PropertyTransitionProposal;
+    title: string;
+    message: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const saveFlight = useRef(false);
   const draftMutationFlight = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -106,6 +120,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [locationBusy, setLocationBusy] = useState(false);
   const [mapsActionError, setMapsActionError] = useState('');
   const [galleryImageSources, setGalleryImageSources] = useState<Readonly<Record<string, string>>>({});
+  const [galleryResolutionError, setGalleryResolutionError] = useState('');
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
@@ -219,6 +234,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       .filter(attachment => attachment.kind === 'image')
       .map(({ id: attachmentId, kind, managedUri }) => ({ id: attachmentId, kind, uri: managedUri }));
     setGalleryImageSources({});
+    setGalleryResolutionError('');
     setActiveGalleryIndex(0);
     if (Platform.OS !== 'web' || images.length === 0) {
       return () => { active = false; };
@@ -234,9 +250,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       })
       .catch(cause => {
         if (!active) return;
-        setError(cause instanceof Error && cause.message === 'ATTACHMENT_FILE_MISSING'
+        const message = cause instanceof Error && cause.message === 'ATTACHMENT_FILE_MISSING'
           ? t('enrich.attachment_missing')
-          : t('enrich.attachment_failed'));
+          : t('enrich.attachment_failed');
+        setGalleryResolutionError(message);
+        setError(message);
       });
     return () => {
       active = false;
@@ -602,16 +620,115 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
+  const transitionStateFor = (choices: PropertyEditDraftV1['choices']): PropertyTransitionState => ({
+      propertyType: choices.propertyType,
+      transaction: choices.transaction,
+      canonicalDetails: choices.canonicalDetails ?? {},
+      priceAmount: choices.priceAmount,
+      rentalPeriodId: choices.rentalPeriodId,
+    });
+  const commitPropertyTransition = (proposal: PropertyTransitionProposal) => {
+    const current = draftRef.current;
+    if (!current) return;
+    const transitioned = applyPropertyTransition(
+      `property:${current.propertyCoreId}`,
+      transitionStateFor(current.choices),
+      proposal,
+    );
+    if (!transitioned) {
+      setError(propertyTransitionErrorMessage(language));
+      return;
+    }
+    if (proposal.kind === 'property_type') {
+      void updateChoices({
+        propertyType: transitioned.propertyType,
+        canonicalDetails: transitioned.canonicalDetails as Record<string, string>,
+      }, { replaceCanonicalDetails: true });
+      return;
+    }
+    const transaction = transitioned.transaction;
+    void updateChoices({
+      transaction,
+      priceAmount: transitioned.priceAmount,
+      rentalPeriodId: transaction === 'rent'
+        ? (current.choices.transaction === 'sale'
+          ? MARKET_CONFIG.defaultRentalPeriodId
+          : transitioned.rentalPeriodId)
+        : undefined,
+    });
+  };
+
+  const requestPropertyTransition = (proposal: PropertyTransitionProposal, title: string) => {
+    setError('');
+    if (proposal.affected.length === 0) {
+      commitPropertyTransition(proposal);
+      return;
+    }
+    const current = draftRef.current;
+    if (!current) return;
+    const message = propertyTransitionConfirmationMessage(
+      proposal,
+      language,
+      field => field === 'priceAmount'
+        ? (proposal.from === 'rent'
+          ? (language === 'ar' ? 'قيمة الإيجار' : 'Rental price')
+          : (language === 'ar' ? 'سعر البيع' : 'Sale price'))
+        : field === 'rentalPeriodId'
+          ? (language === 'ar' ? 'دورية الإيجار' : 'Rental period')
+          : propertyDetailLabels[field as PropertyDetailField]?.[language === 'ar' ? 1 : 0]
+            ?? (language === 'ar' ? 'تفصيل العقار' : 'Property detail'),
+      (field, value) => field === 'priceAmount'
+        ? (proposal.from === 'rent'
+          ? formatRentalPrice(Number(value), 'KWD', current.choices.rentalPeriodId, language, t)
+          : formatPrice(Number(value), 'KWD', language))
+        : field === 'rentalPeriodId'
+          ? formatRentalCadence(value, t)
+          : formatPropertyDetailValue(
+            field as PropertyDetailField,
+            field.startsWith('has') ? value === 'true' : value,
+            language,
+            t,
+          ),
+    );
+    setPendingPropertyTransition({ proposal, title, message });
+  };
+
   const selectTransaction = (transaction: Transaction) => {
     if (!draft || transaction === draft.choices.transaction) return;
-    setError('');
-    updateChoices({
+    const proposal = createTransactionTransitionProposal(
+      `property:${draft.propertyCoreId}`,
+      transitionStateFor(draft.choices),
       transaction,
-      priceAmount: undefined,
-      ...(transaction === 'rent' && draft.baseline.activeOffer.transaction === 'sale'
-        ? { rentalPeriodId: MARKET_CONFIG.defaultRentalPeriodId }
-        : {}),
-    });
+    );
+    if (!proposal) return;
+    requestPropertyTransition(
+      proposal,
+      language === 'ar'
+        ? `تغيير نوع المعاملة إلى ${t(`transaction.${transaction}` as keyof Translations)}؟`
+        : `Change transaction to ${t(`transaction.${transaction}` as keyof Translations)}?`,
+    );
+  };
+
+  const selectPropertyType = (propertyType: Property['core']['propertyType']) => {
+    if (!draft || propertyType === draft.choices.propertyType) return;
+    const proposal = createPropertyTypeTransitionProposal(
+      `property:${draft.propertyCoreId}`,
+      transitionStateFor(draft.choices),
+      propertyType,
+    );
+    if (!proposal) return;
+    requestPropertyTransition(
+      proposal,
+      language === 'ar'
+        ? `تغيير نوع العقار إلى ${t(`propertyType.${propertyType}` as keyof Translations)}؟`
+        : `Change property type to ${t(`propertyType.${propertyType}` as keyof Translations)}?`,
+    );
+  };
+
+  const confirmPropertyTransition = () => {
+    const pending = pendingPropertyTransition;
+    setPendingPropertyTransition(null);
+    if (pending) commitPropertyTransition(pending.proposal);
   };
 
   const retryRecovery = async (allowUpdate: boolean) => {
@@ -988,10 +1105,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       {mode === 'detail' ? (
         <View style={{ backgroundColor: colors.background, paddingBottom: 16 }}>
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 }}>
-            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity
+              onPress={() => router.replace('/' as never)}
+              accessibilityRole="button"
+              accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'}
+              testID="property-home-action"
+              style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}
+            >
               <Feather name="home" size={22} color={colors.primary} />
               <Text style={{ fontFamily: fonts.bold, fontSize: 18, color: colors.foreground }}>ViewState</Text>
-            </View>
+              <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.primary }}>
+                {language === 'ar' ? 'الرئيسية' : 'Home'}
+              </Text>
+            </TouchableOpacity>
             <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 20 }}>
               <TouchableOpacity testID="property-favorite-icon">
                 <Feather name="heart" size={24} color={colors.foreground} />
@@ -1032,7 +1158,18 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
             </TouchableOpacity>
             <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('edit.title')}</Text>
-            <View style={styles.headerSide} />
+            <TouchableOpacity
+              onPress={() => router.replace('/' as never)}
+              accessibilityRole="button"
+              accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'}
+              testID="property-home-action"
+              style={[styles.headerSide, { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }]}
+            >
+              <Feather name="home" size={18} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
+                {language === 'ar' ? 'الرئيسية' : 'Home'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -1079,7 +1216,21 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                       (Platform.OS !== 'web' || galleryImageSources[img.id]) ? (
                         <Image key={img.id} source={{ uri: Platform.OS === 'web' ? galleryImageSources[img.id] : img.managedUri }} style={{ width: galleryPageWidth, height: 260, resizeMode: 'cover' }} />
                       ) : (
-                        <View key={img.id} style={{ width: galleryPageWidth, height: 260, backgroundColor: colors.card }} />
+                        <View key={img.id} style={{ width: galleryPageWidth, height: 260, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                          {galleryResolutionError ? (
+                            <Text
+                              accessibilityRole="alert"
+                              testID="property-gallery-resolution-error"
+                              style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}
+                            >
+                              {galleryResolutionError}
+                            </Text>
+                          ) : (
+                            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }}>
+                              {language === 'ar' ? 'جارٍ تحميل الصورة…' : 'Loading photo…'}
+                            </Text>
+                          )}
+                        </View>
                       )
                     ))}
                   </ScrollView>
@@ -1366,7 +1517,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.type')}</Text>
             <View style={styles.options}>
               {PROPERTY_TYPES.map(type => (
-                <Choice key={type} selected={choices.propertyType === type} onPress={() => updateChoices({ propertyType: type })} title={t(`propertyType.${type}` as keyof Translations)} testID={`edit-type-${type}`} />
+                <Choice key={type} selected={choices.propertyType === type} onPress={() => selectPropertyType(type)} title={t(`propertyType.${type}` as keyof Translations)} testID={`edit-type-${type}`} />
               ))}
             </View>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.transaction')}</Text>
@@ -1646,6 +1797,71 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>{t('delete.confirm')}</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={pendingPropertyTransition !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingPropertyTransition(null)}
+      >
+        <View style={styles.modalOverlay}>
+          {pendingPropertyTransition ? (
+            <View
+              style={[
+                styles.modalCard,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  borderRadius: colors.cardRadius,
+                  maxHeight: '90%',
+                },
+              ]}
+              testID="property-transition-dialog"
+              accessibilityRole="alert"
+              accessibilityViewIsModal
+            >
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' },
+                ]}
+              >
+                {pendingPropertyTransition.title}
+              </Text>
+              <ScrollView style={{ flexGrow: 0, maxHeight: 320 }} contentContainerStyle={{ gap: 8 }}>
+                <Text
+                  style={[
+                    styles.modalMessage,
+                    { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' },
+                  ]}
+                >
+                  {pendingPropertyTransition.message}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setPendingPropertyTransition(null)}
+                style={[styles.modalAction, { borderColor: colors.border }]}
+                testID="property-transition-cancel"
+                accessibilityRole="button"
+              >
+                <Text style={[styles.modalActionText, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+                  {t('capture.cancel')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmPropertyTransition}
+                style={[styles.modalAction, { borderColor: colors.destructive }]}
+                testID="property-transition-confirm"
+                accessibilityRole="button"
+              >
+                <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>
+                  {t('transition.remove_confirm')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
       </Modal>
 

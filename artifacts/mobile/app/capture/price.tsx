@@ -12,7 +12,11 @@ import { formatRentalCadence, MARKET_CONFIG } from '@/constants/market';
 
 export default function PriceScreen() {
   const router = useRouter();
-  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
+  const { linkPersonId, sourceRole, apartmentSubtype } = useLocalSearchParams<{
+    linkPersonId?: string;
+    sourceRole?: string;
+    apartmentSubtype?: string;
+  }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { draft, updateDraft, isReady } = useCapture();
@@ -64,7 +68,14 @@ export default function PriceScreen() {
         salePrice: undefined
       });
     }
-    router.push({ pathname: '/capture/location', params: linkPersonId ? { linkPersonId, sourceRole } : {} } as never);
+    router.push({
+      pathname: '/capture/location',
+      params: {
+        ...(linkPersonId ? { linkPersonId } : {}),
+        ...(sourceRole ? { sourceRole } : {}),
+        ...(apartmentSubtype ? { apartmentSubtype } : {}),
+      },
+    } as never);
   };
 
   return (

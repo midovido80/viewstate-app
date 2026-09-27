@@ -20,6 +20,8 @@ import {
 import {
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  isBasicApartmentFollowUpCapture,
+  type CaptureDetailValues,
 } from '@/services/propertyCaptureDetails';
 import {
   finalizeCapturedDetails,
@@ -30,10 +32,21 @@ import type { Property, PropertyDetailField } from '@workspace/property-domain';
 import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
+import { hasPopulatedCategoryCapture } from '@/services/propertyDemoCatalog';
+
+function hasApartmentDetailsToPreserve(details: CaptureDetailValues): boolean {
+  const { apartmentSubtype: _subtype, ...optionalDetails } = details;
+  return details.areaSquareMeters !== undefined
+    || hasPopulatedCategoryCapture(optionalDetails as Record<string, unknown>);
+}
 
 export default function SummaryScreen() {
   const router = useRouter();
-  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
+  const { linkPersonId, sourceRole, apartmentSubtype } = useLocalSearchParams<{
+    linkPersonId?: string;
+    sourceRole?: string;
+    apartmentSubtype?: string;
+  }>();
   const selectedSourceRole = sourceRole;
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -51,6 +64,13 @@ export default function SummaryScreen() {
   const { t, isRTL, language, fonts } = useI18n();
   const [submitting, setSubmitting] = useState(false);
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
+  // Studio has its own save workflow. The apartment subtype wizard routes
+  // standard apartments through this Summary screen.
+  const isBasicApartmentFollowUp = isBasicApartmentFollowUpCapture(
+    draft.propertyType,
+    apartmentSubtype,
+    captureDetails.apartmentSubtype,
+  );
   const submitFlight = useRef(new SingleFlight());
   const pendingFloorTransition = useRef<FloorTransitionProposal | null>(null);
   const detailsRef = useRef(captureDetails);
@@ -110,7 +130,7 @@ export default function SummaryScreen() {
     );
   };
   
-  const handleFinish = async () => {
+  const handleFinish = async (includeCapturedDetails = false) => {
     await submitFlight.current.run(async () => {
       setSubmitting(true);
       try {
@@ -119,6 +139,28 @@ export default function SummaryScreen() {
           return;
         }
 
+        if (
+          isBasicApartmentFollowUp
+          && !includeCapturedDetails
+          && (hasApartmentDetailsToPreserve(captureDetails) || Boolean(draft.description?.value))
+        ) {
+          Alert.alert(
+            language === 'ar' ? 'توجد تفاصيل محفوظة في المسودة' : 'This draft has saved details',
+            language === 'ar'
+              ? 'تحتوي هذه المسودة على مواصفات أو موقع دقيق أو مرفقات. تم إيقاف الحفظ الأساسي لحمايتها. احفظ التفاصيل مع العقار الآن أو ألغِ للاحتفاظ بالمسودة.'
+              : 'This draft contains specifications, precise location, or attachments. BASIC save is paused to protect them. Save the details with the property now, or cancel to keep the draft.',
+            [
+              { text: language === 'ar' ? 'الاحتفاظ بالمسودة' : 'Keep draft', style: 'cancel' },
+              {
+                text: language === 'ar' ? 'حفظ التفاصيل الآن' : 'Save details now',
+                onPress: () => { void handleFinish(true); },
+              },
+            ],
+          );
+          return;
+        }
+
+        const saveBasicOnly = isBasicApartmentFollowUp && !includeCapturedDetails;
         const hasPendingRecovery = saveRecoveryStatus === 'retry_required'
           || saveRecoveryStatus === 'cleanup_pending';
         const projection = hasPendingRecovery ? null : projectToProperty();
@@ -130,13 +172,13 @@ export default function SummaryScreen() {
           );
           return;
         }
-        if (invalidQuickPickFields.size > 0) {
+        if (!saveBasicOnly && invalidQuickPickFields.size > 0) {
           Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
           return;
         }
         let candidate: Property | undefined;
         try {
-          candidate = projection && projection.ok
+          candidate = !saveBasicOnly && projection && projection.ok
             ? buildPropertyWithCaptureDetails(projection.property, captureDetails, true)
             : undefined;
         } catch (error) {
@@ -163,7 +205,7 @@ export default function SummaryScreen() {
 
         const recoveryPropertyCoreId = draft.propertyCoreId;
         let preparedDetails = null;
-        if (candidate && projection?.ok) {
+        if (!saveBasicOnly && candidate && projection?.ok) {
           try {
             preparedDetails = await prepareCapturedDetails(projection.property, candidate);
           } catch (error) {
@@ -244,7 +286,12 @@ export default function SummaryScreen() {
         }
         router.replace({
           pathname: '/capture/success',
-          params: savedId ? { propertyCoreId: savedId, ...(linkPersonId ? { linkPersonId } : {}), ...(selectedSourceRole ? { sourceRole: selectedSourceRole } : {}) } : {},
+          params: savedId ? {
+            propertyCoreId: savedId,
+            ...(saveBasicOnly ? { basicApartmentFollowUp: '1' } : {}),
+            ...(linkPersonId ? { linkPersonId } : {}),
+            ...(selectedSourceRole ? { sourceRole: selectedSourceRole } : {}),
+          } : {},
         } as never);
       } finally {
         setSubmitting(false);
@@ -291,22 +338,22 @@ export default function SummaryScreen() {
             label={t('summary.transaction')}
             value={draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''} 
           />
-          {PROPERTY_FORM_CATALOG.map(({ field }) => [field, previewDetails[field]] as const)
+          {!isBasicApartmentFollowUp ? PROPERTY_FORM_CATALOG.map(({ field }) => [field, previewDetails[field]] as const)
             .filter(([, value]) => value !== undefined && value !== '')
             .map(([field, value]) => (
-            <SummaryRow
-              key={field}
-              label={propertyDetailLabels[field as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? field}
-              value={formatPropertyDetailValue(
-                field as PropertyDetailField,
-                typeof value === 'object' && value && 'value' in value
-                  ? String((value as { value: unknown }).value)
-                  : String(value),
-                language,
-                key => t(key as keyof Translations),
-              )}
-            />
-          ))}
+              <SummaryRow
+                key={field}
+                label={propertyDetailLabels[field as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? field}
+                value={formatPropertyDetailValue(
+                  field as PropertyDetailField,
+                  typeof value === 'object' && value && 'value' in value
+                    ? String((value as { value: unknown }).value)
+                    : String(value),
+                  language,
+                  key => t(key as keyof Translations),
+                )}
+              />
+            )) : null}
           <SummaryRow 
             label={t('summary.property_type')}
             value={draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : ''} 
@@ -349,7 +396,7 @@ export default function SummaryScreen() {
                 ? 'summary.retry_save'
                 : 'summary.submit'
           )}
-          onPress={handleFinish} 
+          onPress={() => { void handleFinish(); }}
           loading={submitting}
           size="large"
           testID="btn-submit"

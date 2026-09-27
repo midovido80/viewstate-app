@@ -11,7 +11,15 @@ import { getPropertySuccessRoutes } from '@/services/propertyDetailPresentation'
 export default function SuccessScreen() {
   const router = useRouter();
   const navigationStartedRef = useRef(false);
-  const { propertyCoreId, linkPersonId } = useLocalSearchParams<{ propertyCoreId?: string; linkPersonId?: string }>();
+  const {
+    propertyCoreId,
+    linkPersonId,
+    basicApartmentFollowUp,
+  } = useLocalSearchParams<{
+    propertyCoreId?: string;
+    linkPersonId?: string;
+    basicApartmentFollowUp?: string;
+  }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
@@ -54,30 +62,54 @@ export default function SuccessScreen() {
         {t('summary.success_detail')}
       </Text>
       <View style={styles.spacer} />
-      {propertyCoreId ? (
+      {basicApartmentFollowUp === '1' && propertyCoreId ? (
+        <>
+          <Button
+            title={t('summary.add_details')}
+            onPress={() => navigateOnce(`/property/${encodeURIComponent(propertyCoreId)}/enrich`)}
+            size="large"
+            testID="btn-add-property-details"
+          />
+          <Button
+            title={t('summary.later')}
+            onPress={() => navigateOnce(destinations.home, true)}
+            variant="outline"
+            size="large"
+            testID="btn-finish-later"
+          />
+        </>
+      ) : propertyCoreId ? (
+        <>
+          <Button
+            title={t('summary.view_property')}
+            onPress={() => destinations.detail && navigateOnce(destinations.detail)}
+            size="large"
+            testID="btn-view-property"
+          />
+          <Button
+            title={t('summary.view_properties')}
+            onPress={() => destinations.properties && navigateOnce(destinations.properties)}
+            variant="outline"
+            size="large"
+            testID="btn-view-properties"
+          />
+          <Button
+            title={t('summary.done')}
+            onPress={() => navigateOnce('/', true)}
+            variant="outline"
+            size="large"
+            testID="btn-later"
+          />
+        </>
+      ) : (
         <Button
-          title={t('summary.view_property')}
-          onPress={() => destinations.detail && navigateOnce(destinations.detail)}
-          size="large"
-          testID="btn-view-property"
-        />
-      ) : null}
-      {propertyCoreId ? (
-        <Button
-          title={t('summary.view_properties')}
-          onPress={() => destinations.properties && navigateOnce(destinations.properties)}
+          title={t('summary.done')}
+          onPress={() => navigateOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/', true)}
           variant="outline"
           size="large"
-          testID="btn-view-properties"
+          testID="btn-later"
         />
-      ) : null}
-      <Button
-        title={t('summary.done')}
-        onPress={() => navigateOnce(linkPersonId && !propertyCoreId ? `/person/${encodeURIComponent(linkPersonId)}` : '/', true)}
-        variant="outline"
-        size="large"
-        testID="btn-later"
-      />
+      )}
     </View>
   );
 }

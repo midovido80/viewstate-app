@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   createLiteralText,
   createPrivacyMetadata,
@@ -23,6 +24,32 @@ test('Property detail web navigation resolves same-ID action routes and a safe H
   assert.equal(getPropertyDetailActionHref('property /exact', 'edit'), '/property/property%20%2Fexact/edit');
   assert.equal(getPropertyDetailActionHref('property /exact', 'share'), '/property/property%20%2Fexact/share');
   assert.equal(getPropertyDetailBackRoute(), '/properties');
+});
+
+test('Saved Property Details exposes Home in detail and edit headers while retaining Back actions', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  const homeActionCount = (source.match(/testID="property-home-action"/g) ?? []).length;
+  const backActionCount = (source.match(/testID="property-detail-back"/g) ?? []).length;
+  assert.equal(homeActionCount, 2, 'one Home action belongs in each saved/detail and edit header');
+  assert.equal(backActionCount, 3, 'loading fallback, saved detail, and edit retain their Back actions');
+  assert.equal(
+    (source.match(/onPress=\{\(\) => router\.replace\('\/' as never\)\}/g) ?? []).length,
+    homeActionCount + 1,
+    'the third route action is the existing loading/missing-state Back fallback, not a duplicate Home',
+  );
+  assert.equal((source.match(/accessibilityLabel=\{language === 'ar' \? 'الرئيسية' : 'Home'\}/g) ?? []).length, homeActionCount);
+  assert.match(source, /onPress=\{\(\) => router\.replace\(getPropertyDetailBackRoute\(\) as never\)\}/);
+  assert.match(source, /onPress=\{leaveEditor\}/);
+});
+
+test('Property Details gallery resolves web blob refs and reports missing image blobs visibly', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  assert.match(source, /createIndexedDbWebAttachmentBlobStore\(\)/);
+  assert.match(source, /resolveWebAttachmentImageSources\(images, webBlobStore\.current!\)/);
+  assert.match(source, /source=\{\{ uri: Platform\.OS === 'web' \? galleryImageSources\[img\.id\] : img\.managedUri \}\}/);
+  assert.match(source, /testID="property-gallery-resolution-error"/);
+  assert.match(source, /setGalleryResolutionError\(message\)/);
+  assert.match(source, /revokeSources\(\)/);
 });
 
 test('Property detail web Maps href accepts only validated Google links or bounded coordinates', () => {
@@ -240,6 +267,15 @@ test('Web property gallery resolves persisted IndexedDB refs and revokes transie
   resolved.revoke();
   resolved.revoke();
   assert.deepEqual(revoked, ['blob:test-1']);
+
+  // A saved reference still resolves on a later detail-screen visit; object
+  // URLs are recreated from the persisted blob rather than reusing a dead URL.
+  const afterReload = await resolveWebAttachmentImageSources([
+    { id: 'image', kind: 'image', uri: 'viewstate-web-attachment:core:image' },
+  ], blobStore, objectUrls);
+  assert.deepEqual(afterReload.sources, { image: 'blob:test-2' });
+  afterReload.revoke();
+  assert.deepEqual(revoked, ['blob:test-1', 'blob:test-2']);
 
   await assert.rejects(
     resolveWebAttachmentImageSources([

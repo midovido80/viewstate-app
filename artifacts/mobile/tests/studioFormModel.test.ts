@@ -27,11 +27,30 @@ test('STRUCTURAL: Studio-only facts are hidden from generic apartments without a
   }
 });
 
+test('REGRESSION: the reported Offered Studio values pass review validation', () => {
+  const values = {
+    ...createStudioFormValues('offered', 'rent'),
+    locationAreaId: 'salmiya',
+    price: '1200',
+    rentalPeriodId: 'monthly' as const,
+    areaSquareMeters: '40',
+    floorNumber: '2',
+    description: 'Studio test notes',
+    privateNotes: 'Private showing note',
+    mapsLink: 'https://maps.google.com/?q=29.3759,47.9774',
+  };
+  assert.deepEqual(validateStudioForm(values), { ok: true, errors: [] });
+  const property = buildStudioProperty(values, '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222');
+  assert.equal(property.core.locationArea.id, 'salmiya');
+  assert.equal(property.activeOffer.transaction === 'rent' ? property.activeOffer.rentalPrice.amount : 0, 1200);
+  assert.equal(property.typeDetails?.propertyType === 'apartment' ? property.typeDetails.builtUpAreaSquareMeters : undefined, 40);
+  assert.equal(property.locationEnrichment?.mapsLink?.value, values.mapsLink);
+});
+
 test('STRUCTURAL: the shared Studio catalog bounds applicability, order, labels, and mode-specific quick picks', () => {
-  assert.deepEqual(STUDIO_FORM_FIELD_ORDER.offered.slice(0, 5), [
+  assert.deepEqual(STUDIO_FORM_FIELD_ORDER.offered.slice(0, 4), [
     'transaction',
     'locationAreaId',
-    'mapsLink',
     'price',
     'rentalPeriodId',
   ]);
@@ -95,6 +114,7 @@ test('BEHAVIOR: offered Studio builder writes canonical facts, private map metad
     hall: 'no' as const,
     parking: 'unknown' as const,
     mapsLink: 'https://www.google.com/maps/place/Kuwait',
+    privateNotes: 'Call before visiting',
     description: 'Bright studio',
   };
   assert.equal(validateStudioForm(values).ok, true);
@@ -115,6 +135,8 @@ test('BEHAVIOR: offered Studio builder writes canonical facts, private map metad
   assert.equal(property.activeOffer.transaction, 'rent');
   assert.equal(property.activeOffer.transaction === 'rent' ? property.activeOffer.rentalPeriodId : '', 'daily');
   assert.equal(property.locationEnrichment?.mapsLink?.privacy.classification, 'exact_location');
+  assert.equal(property.core.privateNotes?.value, 'Call before visiting');
+  assert.equal(property.core.privateNotes?.privacy.classification, 'private_notes');
   assert.deepEqual(readStudioProperty(property), values);
 });
 
@@ -130,6 +152,7 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
     kitchen: 'must_not_have' as const,
     hall: 'required' as const,
     parking: 'not_important' as const,
+    mapsLink: 'https://www.google.com/maps/place/Salmiya',
     description: 'Near work',
   };
   assert.equal(validateStudioForm(values).ok, true);
@@ -142,6 +165,7 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
   assert.equal(requirement.preferredAreaMode, 'all_kuwait');
   assert.deepEqual(requirement.preferredAreaIds, []);
   assert.equal(requirement.bathroomsMinimum, 1);
+  assert.equal(requirement.studioMapsLink, values.mapsLink);
   assert.deepEqual(requirement.catalogPreferences, [
     { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
     { field: 'builtUpAreaSquareMeters', kind: 'number', comparison: 'minimum', value: 30 },
@@ -152,6 +176,22 @@ test('BEHAVIOR: wanted Studio builder uses native limits and feature preferences
   assert.equal('bedroomsMinimum' in requirement, false);
   assert.equal(requirement.catalogPreferences?.some(item => item.field === 'bathroomCount'), false);
   assert.deepEqual(readStudioRequirement(requirement), values);
+});
+
+test('BEHAVIOR: Wanted exact location link validates, persists outside catalog preferences, and hydrates', () => {
+  const values = {
+    ...createStudioFormValues('wanted', 'rent'),
+    preferredAreaMode: 'all_kuwait' as const,
+    budgetMinimum: '0',
+    budgetMaximum: '500',
+    mapsLink: 'https://maps.app.goo.gl/kuwait-studio',
+  };
+  const requirement = buildStudioRequirement(values, '11111111-1111-4111-8111-111111111112', 'seeker-1');
+  assert.equal(requirement.studioMapsLink, values.mapsLink);
+  assert.equal(requirement.catalogPreferences?.some(preference => preference.field.includes('maps')), false);
+  assert.equal(readStudioRequirement(requirement).mapsLink, values.mapsLink);
+  assert.ok(validateStudioForm({ ...values, mapsLink: 'https://attacker.example/coordinates' }).errors
+    .some(error => error.field === 'mapsLink' && error.code === 'invalid_location_link'));
 });
 
 test('BEHAVIOR: Studio validation rejects noncanonical locations and invalid map links', () => {

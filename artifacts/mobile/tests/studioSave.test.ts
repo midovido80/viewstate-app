@@ -16,6 +16,7 @@ import {
   readStudioRequirement,
 } from '../services/studioFormModel.ts';
 import { createPerson, type Person } from '../services/people.ts';
+import type { AttachmentFileStore, LocalAttachment } from '../services/attachmentOperations.ts';
 import {
   basicStudioProperty,
   prepareStudioPropertyEditCandidate,
@@ -175,6 +176,32 @@ test('Studio offered editing updates the existing ID through durable CAS recover
   assert.equal(memory.properties.size, 1);
 });
 
+test('Studio offered save commits attachment metadata in the exact confirmed Property candidate', async () => {
+  const built = offeredCandidate('studio-property-attachments', 'studio-offer-attachments');
+  const attachment = {
+    id: 'studio-cover-attachment',
+    kind: 'image' as const,
+    originalName: 'studio-cover.jpg',
+    mimeType: 'image/jpeg',
+    order: 0,
+    managedUri: 'file:///properties/studio-property-attachments/cover.jpg',
+    isCover: true,
+    privacy: createPrivacyMetadata('normal', 'normal'),
+  };
+  const candidate: Property = { ...built, attachments: [attachment] };
+  const memory = propertyStore();
+  const outcome = await saveStudioProperty({
+    candidate,
+    store: memory.store,
+    storage: storage(),
+  });
+  assert.equal(outcome.status, 'saved');
+  if (outcome.status !== 'saved') return;
+  assert.deepEqual(outcome.property.attachments, [attachment]);
+  assert.deepEqual(await memory.store.getProperty(candidate.core.id), candidate);
+  assert.deepEqual(memory.writes, ['basic', 'cas']);
+});
+
 test('Studio recovery refuses a pending update with a different exact candidate', async () => {
   const baseline = offeredCandidate('studio-property-recovery-collision', 'studio-offer-collision');
   const pendingCandidate = offeredCandidate(
@@ -324,12 +351,16 @@ test('Studio edit isolates legacy building fields without losing opaque metadata
     },
     createdAt: '2025-01-01T00:00:00.000Z',
   } as unknown as Property;
-  const built = offeredCandidate(
+  const builtWithoutNotes = offeredCandidate(
     'studio-property-legacy-building',
     'studio-offer-legacy-building',
     '150',
     'https://www.google.com/maps/place/Kuwait',
   );
+  const built = {
+    ...builtWithoutNotes,
+    core: { ...builtWithoutNotes.core, privateNotes },
+  };
   const candidate = prepareStudioPropertyEditCandidate(baseline, built);
 
   assert(validateProperty(candidate).ok, 'Sanitized Studio edit candidate must pass production Property validation');
@@ -495,4 +526,81 @@ test('Studio Requirement duplicate-ID collision is rejected after exact-ID readb
   assert.deepEqual(memory.writes, ['save', 'save']);
   assert.equal(memory.requirements.size, 1);
   assert.equal(navigationCount.value, 0);
+});
+
+test('Studio Requirement attachment save keeps the seeker gate and exact-ID readback', async () => {
+  const values = {
+    ...createStudioFormValues('wanted', 'rent'),
+    preferredAreaMode: 'all_kuwait' as const,
+    budgetMinimum: '100',
+    budgetMaximum: '300',
+  };
+  const candidate = buildStudioRequirement(values, '66666666-6666-4666-8666-666666666666', seeker.id);
+  const memory = requirementStore(seeker);
+  const events: string[] = [];
+  const fileStore: AttachmentFileStore = {
+    copyToProperty: async () => 'file:///unused',
+    copyToRequirement: async () => `file:///requirements/${candidate.id}/attachments/studio-requirement-image`,
+    delete: async uri => { events.push(`delete:${uri}`); },
+  };
+  const staged: LocalAttachment = {
+    id: 'studio-requirement-image',
+    kind: 'image',
+    originalName: 'studio.jpg',
+    mimeType: 'image/jpeg',
+    uri: `file:///requirements/${candidate.id}/attachments/studio-requirement-image`,
+    order: 0,
+    isCover: true,
+  };
+  const saved = await saveStudioRequirement({
+    candidate,
+    baseline: null,
+    store: memory.store,
+    navigate: () => undefined,
+    attachmentPersistence: { fileStore, preparedAttachments: [staged] },
+  });
+  assert.deepEqual(saved, { status: 'saved' });
+  assert.deepEqual(memory.writes, ['save']);
+  const readback = await memory.store.getRequirement(candidate.id);
+  assert.equal(readback?.attachments?.[0].id, staged.id);
+  assert.equal(readback?.attachments?.[0].managedUri, staged.uri);
+  assert.equal(readback?.attachments?.[0].isCover, true);
+  assert.deepEqual(events, []);
+  assert.equal(memory.requirements.size, 1);
+  const edited = await saveStudioRequirement({
+    candidate: { ...readback!, notes: 'Edited while retaining its media' },
+    baseline: readback,
+    store: memory.store,
+    navigate: () => undefined,
+    attachmentPersistence: { fileStore, preparedAttachments: [] },
+  });
+  assert.deepEqual(edited, { status: 'saved' });
+  assert.deepEqual((await memory.store.getRequirement(candidate.id))?.attachments, readback?.attachments);
+  assert.deepEqual(events, []);
+
+  const owner = createPerson({
+    id: 'person-studio-attachment-owner',
+    classifications: ['owner'],
+    name: 'Not a seeker',
+    displayPhone: '55512347',
+  });
+  const blockedStore = requirementStore(owner);
+  let copiedOrDeleted = false;
+  const blocked = await saveStudioRequirement({
+    candidate: { ...candidate, id: '77777777-7777-4777-8777-777777777777', seekerId: owner.id },
+    baseline: null,
+    store: blockedStore.store,
+    navigate: () => undefined,
+    attachmentPersistence: {
+      fileStore: {
+        ...fileStore,
+        copyToRequirement: async () => { copiedOrDeleted = true; return staged.uri; },
+        delete: async () => { copiedOrDeleted = true; },
+      },
+      preparedAttachments: [staged],
+    },
+  });
+  assert.deepEqual(blocked, { status: 'non_seeker' });
+  assert.deepEqual(blockedStore.writes, []);
+  assert.equal(copiedOrDeleted, false);
 });

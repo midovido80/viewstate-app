@@ -31,6 +31,7 @@ export interface StudioFormValues {
   readonly preferredAreaMode: RequirementAreaMode;
   readonly preferredAreaIds: readonly string[];
   readonly mapsLink: string;
+  readonly privateNotes: string;
   readonly price: string;
   readonly budgetMinimum: string;
   readonly budgetMaximum: string;
@@ -87,6 +88,7 @@ export function createStudioFormValues(
     preferredAreaMode: 'specific_areas',
     preferredAreaIds: [],
     mapsLink: '',
+    privateNotes: '',
     price: '',
     budgetMinimum: '',
     budgetMaximum: '',
@@ -191,9 +193,6 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
   } else {
     if (values.locationAreaId !== '') {
       errors.push(formError('locationAreaId', 'invalid_choice', 'A single offered area is not used for wanted Studio forms.'));
-    }
-    if (values.mapsLink !== '') {
-      errors.push(formError('mapsLink', 'invalid_choice', 'Maps links are only stored for offered Studio properties.'));
     }
     if (values.price !== '') {
       errors.push(formError('price', 'invalid_choice', 'A single price is not used for wanted Studio forms.'));
@@ -310,6 +309,9 @@ export function buildStudioProperty(
     ...(values.description !== ''
       ? { description: createLiteralText(values.description, PRIVACY_NORMAL) }
       : {}),
+    ...(values.privateNotes !== ''
+      ? { privateNotes: createLiteralText(values.privateNotes, createPrivacyMetadata('private_notes', 'never')) }
+      : {}),
   };
   const details = {
     propertyType: 'apartment' as const,
@@ -398,6 +400,7 @@ export function buildStudioRequirement(
       : {}),
     ...(preferences.length > 0 ? { catalogPreferences: preferences } : {}),
     ...(values.transaction === 'rent' ? { rentalPeriodId: values.rentalPeriodId } : {}),
+    ...(values.mapsLink !== '' ? { studioMapsLink: values.mapsLink } : {}),
   };
   const checked = validateSeekerRequirement(candidate, {
     isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
@@ -448,6 +451,7 @@ export function readStudioProperty(property: Property): StudioFormValues {
     ...createStudioFormValues('offered', transaction),
     locationAreaId: property.core.locationArea.id,
     mapsLink: property.locationEnrichment?.mapsLink?.value ?? '',
+    privateNotes: property.core.privateNotes?.value ?? '',
     price: String(transaction === 'sale'
       ? property.activeOffer.salePrice.amount
       : property.activeOffer.rentalPrice.amount),
@@ -561,5 +565,6 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
     hall: wantedSelection(requirement, 'hasHall'),
     parking: wantedSelection(requirement, 'hasParking'),
     description: requirement.notes,
+    mapsLink: requirement.studioMapsLink ?? '',
   };
 }

@@ -54,6 +54,17 @@ export function getPropertyMapsWebHref(
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+function isSafeMapsRootQuery(search: string): boolean {
+  const match = search.match(/^\?q=([^&]*)$/);
+  if (!match) return false;
+  try {
+    const query = decodeURIComponent(match[1].replace(/\+/g, ' '));
+    return query.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(query);
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeGoogleMapsLink(link: string): string {
   const normalized = link.trim();
   if (
@@ -74,6 +85,10 @@ export function normalizeGoogleMapsLink(link: string): string {
     (host === 'google.com' || host === 'www.google.com' || host === 'maps.google.com')
     && parsed.pathname.toLowerCase().startsWith('/maps')
   );
+  const isSupportedMapsRootQuery = host === 'maps.google.com'
+    && parsed.pathname === '/'
+    && parsed.hash.length === 0
+    && isSafeMapsRootQuery(parsed.search);
   const isShortMapsLink = (
     (host === 'goo.gl' && parsed.pathname.toLowerCase().startsWith('/maps/'))
     || (host === 'maps.app.goo.gl' && parsed.pathname.length > 1)
@@ -81,9 +96,10 @@ export function normalizeGoogleMapsLink(link: string): string {
   if (
     parsed.protocol !== 'https:'
     || !GOOGLE_MAPS_HOSTS.has(host)
-    || (!isGoogleMapsPath && !isShortMapsLink)
+    || (!isGoogleMapsPath && !isSupportedMapsRootQuery && !isShortMapsLink)
     || parsed.username
     || parsed.password
+    || parsed.port.length > 0
   ) {
     throw new Error('INVALID_LOCATION_LINK');
   }

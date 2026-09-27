@@ -32,8 +32,10 @@ test('Person Details route binds the exact eligible seeker and defaults to Rent'
   });
 
   const screen = await source('../app/person/[personId].tsx');
-  assert.match(screen, /onPress=\{\(\) => router\.push\(getPersonWantedStudioRoute\(person\.id\)/);
-  assert.match(screen, /person\.classifications\.includes\('seeker'\)/);
+  assert.match(screen, /if \(classification === 'seeker'\) \{\s*router\.push\(getPersonWantedStudioRoute\(person\.id\)/);
+  assert.match(screen, /person\.classifications\.map\(classification =>/);
+  assert.match(screen, /testID=\{`person-classification-action-\$\{classification\}`\}/);
+  assert.doesNotMatch(screen, /person-add-wanted-studio|person-add-requirement/);
 });
 
 test('legacy and normal Property edit URLs forward Studio by same ID; other properties remain generic', async () => {
