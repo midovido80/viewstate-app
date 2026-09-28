@@ -9,6 +9,7 @@ import { CaptureHeader } from '@/components/CaptureHeader';
 import { SelectCard } from '@/components/SelectCard';
 import { Button } from '@/components/Button';
 import { PROPERTY_TYPES, type Transaction } from '@workspace/property-domain';
+import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
 
 type OfferMode = 'offered' | 'wanted';
 type ApartmentSubtypeChoice = 'studio' | 'standard';
@@ -50,14 +51,6 @@ export default function PropertyTypeScreen() {
   const seekerId = firstParam(params.seekerId);
   const linkPersonId = firstParam(params.linkPersonId);
   const sourceRole = firstParam(params.sourceRole);
-  const routeParams = {
-    mode,
-    ...(transaction ? { transaction } : {}),
-    ...(seekerId ? { seekerId } : {}),
-    ...(linkPersonId ? { linkPersonId } : {}),
-    ...(sourceRole ? { sourceRole } : {}),
-  };
-
   const choosePropertyType = (nextType: typeof PROPERTY_TYPES[number]) => {
     setPropertyType(nextType);
     if (nextType !== 'apartment') {
@@ -69,34 +62,24 @@ export default function PropertyTypeScreen() {
 
   const handleNext = () => {
     if (!propertyType) return;
-    if (propertyType === 'apartment') {
-      router.push({
-        pathname: '/capture/apartment-subtype',
-        params: {
-          ...routeParams,
-          propertyType: 'apartment',
-          ...(apartmentSubtype ? { apartmentSubtype } : {}),
-        },
-      } as never);
-      return;
-    }
-
-    if (mode === 'wanted') {
-      router.push({
-        pathname: '/requirement/new',
-        params: {
-          ...routeParams,
-          propertyType,
-          ...(transaction ? { purpose: transaction === 'sale' ? 'buy' : 'rent' } : {}),
-        },
-      } as never);
+    const target = getPropertyFormRoute({
+      mode,
+      ...(transaction ? { transaction } : {}),
+      propertyType,
+      ...(apartmentSubtype ? { apartmentSubtype } : {}),
+      ...(seekerId ? { seekerId } : {}),
+      ...(linkPersonId ? { linkPersonId } : {}),
+      ...(sourceRole ? { sourceRole } : {}),
+    });
+    if (target.kind === 'apartment-subtype' || target.kind === 'studio' || target.kind === 'wanted') {
+      router.push({ pathname: target.pathname, params: target.params } as never);
       return;
     }
 
     if (!updateDraft({ propertyType, ...(transaction ? { transaction } : {}) })) return;
     router.push({
-      pathname: '/capture/price',
-      params: routeParams,
+      pathname: target.pathname,
+      params: target.params,
     } as never);
   };
 

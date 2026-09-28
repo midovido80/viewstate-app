@@ -9,6 +9,7 @@ import { CaptureHeader } from '@/components/CaptureHeader';
 import { SelectCard } from '@/components/SelectCard';
 import { Button } from '@/components/Button';
 import type { Transaction } from '@workspace/property-domain';
+import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
 
 type ApartmentSubtypeChoice = 'studio' | 'standard';
 type OfferMode = 'offered' | 'wanted';
@@ -66,32 +67,25 @@ export default function ApartmentSubtypeScreen() {
 
   const handleNext = () => {
     if (!apartmentSubtype) return;
-    if (apartmentSubtype === 'studio') {
-      router.push({
-        pathname: '/capture/studio',
-        params: { ...routeParams, propertyType: 'apartment', apartmentSubtype: 'studio' },
-      } as never);
-      return;
-    }
-
-    if (mode === 'wanted') {
-      router.push({
-        pathname: '/requirement/new',
-        params: {
-          ...routeParams,
-          propertyType: 'apartment',
-          apartmentSubtype: 'standard',
-          ...(transaction ? { purpose: transaction === 'sale' ? 'buy' : 'rent' } : {}),
-        },
-      } as never);
+    const target = getPropertyFormRoute({
+      mode,
+      ...(transaction ? { transaction } : {}),
+      propertyType: 'apartment',
+      apartmentSubtype,
+      ...(seekerId ? { seekerId } : {}),
+      ...(linkPersonId ? { linkPersonId } : {}),
+      ...(sourceRole ? { sourceRole } : {}),
+    });
+    if (target.kind === 'studio' || target.kind === 'wanted') {
+      router.push({ pathname: target.pathname, params: target.params } as never);
       return;
     }
 
     if (!updateDraft({ propertyType: 'apartment', ...(transaction ? { transaction } : {}) })) return;
     if (!updateCaptureDetails({ apartmentSubtype: 'standard_apartment' })) return;
     router.push({
-      pathname: '/capture/price',
-      params: { ...routeParams, propertyType: 'apartment', apartmentSubtype: 'standard' },
+      pathname: target.pathname,
+      params: target.params,
     } as never);
   };
 

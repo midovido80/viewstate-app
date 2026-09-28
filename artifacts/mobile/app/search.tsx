@@ -16,9 +16,14 @@ import { Button } from '@/components/Button';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { useI18n, type Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
-import { searchGlobalData, type GlobalSearchData } from '@/services/globalSearch';
+import {
+  searchGlobalDataWithMatchReasons,
+  type GlobalSearchData,
+  type SearchMatchReason,
+} from '@/services/globalSearch';
 import type { Person } from '@/services/people';
 import { store } from '@/services/persistence';
+import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
 
 type SearchState =
   | { readonly status: 'loading' }
@@ -102,8 +107,36 @@ function requirementSubtitle(
   return [
     t(`requirements.purpose.${requirement.purpose}` as keyof Translations),
     t(`propertyType.${requirement.propertyType}` as keyof Translations),
+    ...(isWantedStudio(requirement) ? [t('enrich.apartment_subtype.studio')] : []),
     ...areaLabels,
   ].join(' · ');
+}
+
+function matchReasonLabel(reason: SearchMatchReason, t: (key: keyof Translations) => string): string {
+  return `${t(`search.match.${reason.kind}` as keyof Translations)} · ${t(`search.match.${reason.field}` as keyof Translations)}`;
+}
+
+function propertyTitle(
+  property: Property,
+  language: 'en' | 'ar',
+  t: (key: keyof Translations) => string,
+) {
+  return [
+    t(`propertyType.${property.core.propertyType}` as keyof Translations),
+    ...(isOfferedStudio(property) ? [t('enrich.apartment_subtype.studio')] : []),
+    propertyAreaLabel(property, language, t),
+  ].join(' · ');
+}
+
+function propertySubtitle(
+  property: Property,
+  reason: SearchMatchReason,
+  t: (key: keyof Translations) => string,
+) {
+  return [
+    property.core.description?.value?.trim(),
+    matchReasonLabel(reason, t),
+  ].filter(Boolean).join(' · ');
 }
 
 export default function GlobalSearchScreen() {
@@ -141,10 +174,12 @@ export default function GlobalSearchScreen() {
   }, [loadRecords]));
 
   const results = useMemo(
-    () => state.status === 'ready' ? searchGlobalData(state.data, query) : null,
+    () => state.status === 'ready' ? searchGlobalDataWithMatchReasons(state.data, query) : null,
     [query, state],
   );
   const hasQuery = query.trim().length > 0;
+  const hasRecords = !!state.status && state.status === 'ready'
+    && (state.data.people.length + state.data.properties.length + state.data.requirements.length > 0);
   const hasResults = !!results && (
     results.people.length + results.properties.length + results.requirements.length > 0
   );
@@ -276,6 +311,13 @@ export default function GlobalSearchScreen() {
             </Text>
             <Button title={t('search.retry')} onPress={() => void loadRecords()} variant="outline" />
           </View>
+        ) : !hasRecords ? (
+          <View style={styles.centerState} testID="search-empty">
+            <Feather name="inbox" size={34} color={colors.mutedForeground} />
+            <Text style={[styles.stateText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
+              {t('search.empty')}
+            </Text>
+          </View>
         ) : !hasQuery ? (
           <View style={styles.centerState} testID="search-prompt">
             <View style={[styles.largeIcon, { backgroundColor: `${colors.primary}12` }]}>
@@ -304,7 +346,7 @@ export default function GlobalSearchScreen() {
                     key={person.id}
                     icon="user"
                     title={person.name}
-                    subtitle={person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
+                    subtitle={`${person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')} · ${matchReasonLabel(results.why.people.get(person.id)!, t)}`}
                     onPress={() => void openPerson(person)}
                     testID={`search-person-${person.id}`}
                   />
@@ -321,8 +363,8 @@ export default function GlobalSearchScreen() {
                   <ResultCard
                     key={property.core.id}
                     icon="home"
-                    title={`${t(`propertyType.${property.core.propertyType}` as keyof Translations)} · ${propertyAreaLabel(property, language, t)}`}
-                    subtitle={property.core.description?.value?.trim() || t('search.property_description_unknown')}
+                    title={propertyTitle(property, language, t)}
+                    subtitle={propertySubtitle(property, results.why.properties.get(property.core.id)!, t)}
                     onPress={() => void openProperty(property)}
                     testID={`search-property-${property.core.id}`}
                   />
@@ -340,7 +382,7 @@ export default function GlobalSearchScreen() {
                     key={requirement.id}
                     icon="target"
                     title={seeker?.name ?? t('search.requirement_owner_unknown')}
-                    subtitle={requirementSubtitle(requirement, language, t)}
+                    subtitle={`${requirementSubtitle(requirement, language, t)} · ${matchReasonLabel(results.why.requirements.get(requirement.id)!, t)}`}
                     onPress={() => void openRequirement(requirement, seeker)}
                     testID={`search-requirement-${requirement.id}`}
                   />

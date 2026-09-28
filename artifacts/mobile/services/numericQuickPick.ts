@@ -3,6 +3,7 @@ import { toEnglishDigits } from '@/constants/market';
 
 export const NUMERIC_QUICK_PICK_VALUES = [1, 2, 3, 4, 5] as const;
 export const FLOOR_NUMBER_QUICK_PICK_VALUES = [0, ...NUMERIC_QUICK_PICK_VALUES] as const;
+export const DEMO_NUMERIC_QUICK_PICK_VALUES = [0, ...NUMERIC_QUICK_PICK_VALUES] as const;
 
 const UNAMBIGUOUS_RESIDENTIAL_TYPES = new Set<PropertyType>([
   'apartment',
@@ -92,26 +93,25 @@ export function synchronizeNumericQuickPickValue(
   };
 }
 
-export function openNumericExactEntry(value: string): {
+export function openNumericQuickPickMore(): {
   readonly expanded: true;
   readonly value: string;
+  readonly invalid: false;
 } {
-  return { expanded: true, value };
+  return { expanded: true, value: '6', invalid: false };
 }
 
-export function openRequiredNumericExactEntry(
-  value: string,
+export function selectNumericQuickPickState(
+  current: NumericQuickPickLocalState,
+  value: number,
   quickPickValues: readonly number[] = NUMERIC_QUICK_PICK_VALUES,
-): {
-  readonly expanded: true;
-  readonly value: string;
-  readonly invalid: boolean;
-} {
-  const parsed = parseExactIntegerInput(value);
+): NumericQuickPickLocalState {
+  const selected = selectNumericQuickPick(value, quickPickValues);
   return {
-    ...openNumericExactEntry(value),
-    invalid: parsed.kind !== 'valid'
-      || parsed.value < 6 && !(parsed.value === 0 && quickPickValues.includes(0)),
+    ...current,
+    pending: selected,
+    expanded: false,
+    invalid: false,
   };
 }
 
@@ -131,7 +131,7 @@ export function resolveExactIntegerInput(
   ) {
     return {
       pending: parsed.normalized,
-      committedValue,
+      committedValue: parsed.kind === 'blank' ? '' : committedValue,
       invalid: true,
     };
   }

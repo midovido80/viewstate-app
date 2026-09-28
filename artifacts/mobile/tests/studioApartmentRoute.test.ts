@@ -77,6 +77,7 @@ const stubSources = new Map<string, string>([
   ['@/components/Button', "export const Button = 'Button';"],
   ['@workspace/property-domain', `
     export const PROPERTY_TYPES = ['whole_building', 'commercial_complex', 'apartment', 'floor', 'house', 'villa', 'office', 'shop', 'warehouse', 'chalet', 'other_built_property'];
+    export const APARTMENT_SUBTYPES = ['studio', 'standard_apartment', 'duplex'];
   `],
 ]);
 

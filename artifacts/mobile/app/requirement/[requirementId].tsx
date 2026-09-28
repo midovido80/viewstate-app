@@ -51,6 +51,10 @@ import {
   getRequirementPresentationFields,
   type GenericRequirementApartmentSubtype,
 } from '@/services/requirementFieldMap';
+import {
+  getPropertyFormRoute,
+  getRequirementEditFormTarget,
+} from '@/services/propertyFormRoutes';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { getApplicablePropertyFormFields } from '@/services/propertyFormCatalog';
 import { canHydrateStudioRequirement, getWantedApartmentSubtypeLabel, getWantedStudioContextRows, getWantedStudioDisplayRows, isWantedStudio } from '@/services/propertyDetailPresentation';
@@ -87,12 +91,9 @@ export function getStudioRequirementRouteTarget(
   studio: boolean,
   hydratable: boolean,
 ): { readonly kind: 'studio'; readonly href: string } | { readonly kind: 'blocked' } | { readonly kind: 'generic' } {
-  if (!studio) return { kind: 'generic' };
-  if (!hydratable) return { kind: 'blocked' };
-  return {
-    kind: 'studio',
-    href: `/capture/studio?editRequirementId=${encodeURIComponent(requirementId)}`,
-  };
+  const target = getRequirementEditFormTarget(requirementId, '', studio, hydratable);
+  if (target.kind === 'generic') return { kind: 'generic' };
+  return target;
 }
 
 const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
@@ -162,6 +163,7 @@ export default function RequirementEditor() {
   const [notes, setNotes] = useState('');
   const draftId = useRef(editing ? routeRequirementId : generateDomainId());
   const studioForwardedId = useRef<string | null>(null);
+  const newStudioForwardedKey = useRef<string | null>(null);
   const saveFlight = useRef(false);
   const confirmedRequirement = useRef<SeekerRequirement | null>(null);
   const uncertainRequirement = useRef<SeekerRequirement | null>(null);
@@ -227,6 +229,23 @@ export default function RequirementEditor() {
   }, [editing, routeRequirementId, ownerFromRoute, initialPurpose, initialPropertyType, initialApartmentSubtype, startsAtSpecifications]);
 
   const editRequested = (Array.isArray(edit) ? edit[0] : edit) === '1';
+  useEffect(() => {
+    if (editing || routePropertyType !== 'apartment' || routeApartmentSubtype !== 'studio') return;
+    const key = `${ownerFromRoute ?? ''}:${routePurpose ?? ''}`;
+    if (newStudioForwardedKey.current === key) return;
+    const target = getPropertyFormRoute({
+      mode: 'wanted',
+      transaction: initialPurpose === 'buy' ? 'sale' : 'rent',
+      propertyType: 'apartment',
+      apartmentSubtype: 'studio',
+      ...(ownerFromRoute ? { seekerId: ownerFromRoute } : {}),
+    });
+    if (target.kind === 'studio') {
+      newStudioForwardedKey.current = key;
+      router.replace({ pathname: target.pathname, params: target.params } as never);
+    }
+  }, [editing, routePropertyType, routeApartmentSubtype, ownerFromRoute, routePurpose, initialPurpose, router]);
+
   useEffect(() => {
     if (!editRequested || !recordLoaded || !baseline || !isWantedStudio(baseline)) return;
     const target = getStudioRequirementRouteTarget(

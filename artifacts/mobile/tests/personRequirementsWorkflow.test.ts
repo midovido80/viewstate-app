@@ -292,3 +292,18 @@ test('Person and Requirement navigation keep normal history and provide bounded 
    assert.match(requirement, /const candidate = \(\) =>/);
    assert.match(requirement, /<TouchableOpacity onPress=\{\(\) =>/);
 });
+
+test('People search remains name/phone-only and distinguishes an empty database from no matches', async () => {
+  const [people, strings] = await Promise.all([
+    readFile('app/(tabs)/people.tsx', 'utf8'),
+    readFile('contexts/I18nContext.tsx', 'utf8'),
+  ]);
+  assert.match(people, /const allPeople = store\.getPeople\(\)/);
+  assert.match(people, /store\.searchPeople\(search\)/);
+  assert.match(people, /setTotalPeople\(all\.length\)/);
+  assert.match(people, /totalPeople === 0 \? t\('people\.empty'\) : search\.trim\(\) \? t\('people\.no_search_results'\)/);
+  assert.match(people, /testID=\{totalPeople === 0 \? 'people-empty' : 'people-no-search-results'\}/);
+  assert.match(strings, /'people\.search': 'Search People by name or phone/);
+  assert.match(strings, /'people\.no_search_results': 'No People match this name or phone search/);
+  assert.match(strings, /'people\.no_search_results': 'لا يوجد أشخاص يطابقون بحث الاسم أو الهاتف/);
+});

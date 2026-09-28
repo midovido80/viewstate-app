@@ -16,7 +16,7 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import type { Property, PropertyAttachmentMetadata, PropertySourceRole, SeekerRequirement, Transaction } from '@workspace/property-domain';
+import type { Property, PropertyAttachmentMetadata, SeekerRequirement, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
@@ -51,6 +51,8 @@ import {
 } from '@/services/studioCatalog';
 import {
   prepareStudioPropertyEditCandidate,
+  ensureStudioPropertySourceLink,
+  getStudioPersonSourceRole,
   retryStudioPropertyRecovery,
   saveStudioProperty,
   saveStudioRequirement,
@@ -191,6 +193,7 @@ export default function StudioCaptureRoute() {
     message: string;
   } | null>(null);
   const [savedProperty, setSavedProperty] = useState<Property | null>(null);
+  const [propertySourceConfirmed, setPropertySourceConfirmed] = useState(false);
   const [savedRequirement, setSavedRequirement] = useState<SeekerRequirement | null>(null);
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState('');
@@ -682,31 +685,20 @@ export default function StudioCaptureRoute() {
     return result.ok && wantedIdentityReady;
   };
 
-  const navigateAfterPropertySave = async (property: Property) => {
-    if (linkPersonId && !editing) {
-      await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: property.core.id });
-      if (sourceRole) {
-        await store.setPropertySource({
-          propertyCoreId: property.core.id,
-          personId: linkPersonId,
-          role: sourceRole as PropertySourceRole,
-        });
-      }
-    }
-    router.replace({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: property.core.id } } as never);
-  };
-
   const linkPropertySourceIfNeeded = async (property: Property) => {
     if (linkPersonId && !editing) {
-      await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: property.core.id });
-      if (sourceRole) {
-        await store.setPropertySource({
-          propertyCoreId: property.core.id,
-          personId: linkPersonId,
-          role: sourceRole as PropertySourceRole,
-        });
-      }
+      const person = await store.getPerson(linkPersonId);
+      if (!person) throw new Error('STUDIO_SOURCE_PERSON_NOT_FOUND');
+      const role = getStudioPersonSourceRole(person, sourceRole);
+      if (!role) throw new Error('STUDIO_SOURCE_ROLE_NOT_AVAILABLE');
+      await ensureStudioPropertySourceLink(property.core.id, person.id, role, store);
     }
+    setPropertySourceConfirmed(true);
+  };
+
+  const navigateAfterPropertySave = async (property: Property) => {
+    await linkPropertySourceIfNeeded(property);
+    router.replace({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: property.core.id } } as never);
   };
 
   const finishPropertySave = async (property: Property) => {
@@ -958,6 +950,27 @@ export default function StudioCaptureRoute() {
     const labels = getStudioCatalogFieldLabel(id, mode);
     return labels[language === 'ar' ? 1 : 0];
   };
+  const transactionLabel = () => {
+    const choice = getStudioCatalogField('transaction').quickPicks?.find(
+      candidate => candidate.modeValues[mode] === values.transaction,
+    );
+    const label = choice ? getStudioCatalogChoiceLabel(choice, mode) : undefined;
+    return label?.[language === 'ar' ? 1 : 0] ?? t(`studio.${values.transaction}`);
+  };
+  const changeWantedTransaction = () => {
+    const personId = selectedPersonId || seekerParam;
+    if (!personId) {
+      setError(t('studio.person_required'));
+      focusField('person');
+      return;
+    }
+    // Returning through the shared chooser discards this mounted draft; a
+    // fresh Studio form is initialized from the newly chosen transaction.
+    router.replace({
+      pathname: '/capture/transaction',
+      params: { mode: 'wanted', seekerId: personId },
+    } as never);
+  };
 
   const binaryPreference = (field: 'kitchen' | 'hall' | 'parking') => {
     const catalogField = getStudioCatalogField(field);
@@ -1069,6 +1082,7 @@ export default function StudioCaptureRoute() {
   const renderCatalogField = (fieldId: StudioCatalogFieldId) => {
     switch (fieldId) {
       case 'transaction':
+        if (mode === 'wanted') return null;
         return (
           <View key={fieldId} style={styles.field} testID="studio-transaction-field">
             <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
@@ -1178,6 +1192,24 @@ export default function StudioCaptureRoute() {
       {mode === 'wanted' ? renderPersonSelector() : null}
       {mode === 'wanted' && !wantedIdentityReady ? null : (
         <>
+          {mode === 'wanted' ? (
+            <View style={styles.field} testID="studio-transaction-summary">
+              <Text style={[styles.label, labelStyle]}>{catalogLabel('transaction')}</Text>
+              <View style={[styles.transactionSummary, { flexDirection: isRTL ? 'row-reverse' : 'row', backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+                  {transactionLabel()}
+                </Text>
+                {!editing ? (
+                  <Button
+                    title={language === 'ar' ? 'تغيير' : 'Change'}
+                    variant="outline"
+                    onPress={changeWantedTransaction}
+                    testID="studio-transaction-change"
+                  />
+                ) : null}
+              </View>
+            </View>
+          ) : null}
           {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}
           {mode === 'offered'
             ? textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })
@@ -1370,6 +1402,7 @@ export default function StudioCaptureRoute() {
   const renderReview = () => (
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
+      {mode === 'wanted' ? reviewItem(catalogLabel('transaction'), transactionLabel()) : null}
       {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderReviewCatalogField(fieldId))}
       {mode === 'offered' && values.privateNotes
         ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes)
@@ -1437,7 +1470,7 @@ export default function StudioCaptureRoute() {
                 {mode === 'offered' ? renderStudioAttachments() : null}
               </>
             )}
-            {savedProperty ? (
+            {savedProperty && propertySourceConfirmed ? (
               <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                 <Button
                   title={language === 'ar' ? 'عرض العقار' : 'View Property'}
@@ -1536,6 +1569,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 15, lineHeight: 20 },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
   staticValue: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 },
+  transactionSummary: { minHeight: 56, justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 },
   chips: { flexWrap: 'wrap', gap: 8 },
   flexChip: { flexGrow: 1, flexBasis: '28%', minWidth: 78, paddingHorizontal: 10 },
   row: { gap: 10, alignItems: 'flex-start' },

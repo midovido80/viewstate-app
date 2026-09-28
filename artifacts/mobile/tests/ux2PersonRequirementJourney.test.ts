@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import './platformModuleStubs.ts';
 import { PROPERTY_TYPES, normalizeSeekerRequirement, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement } from '../services/personRequirementWorkflow.ts';
+import { getPropertyTypeSelectionRoute } from '../services/propertyFormRoutes.ts';
 import { PERSON_CLASSIFICATIONS, createPerson, personCanBePropertySource } from '../services/people.ts';
 import { getApplicablePropertyFormFields } from '../services/propertyFormCatalog.ts';
 import {
@@ -167,7 +168,7 @@ test('UX-2 Buy and Floor preferences persist under canonical applicability witho
 });
 
 test('UX-2 source role travels with the Person through every existing capture route', async () => {
-  for (const route of ['index', 'transaction', 'property-type', 'price', 'location', 'summary']) {
+  for (const route of ['index', 'transaction', 'property-type', 'apartment-subtype', 'price', 'location', 'summary']) {
     const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
     assert.match(source, /useLocalSearchParams/, `${route} must read its route context`);
     assert.match(source, /linkPersonId/, `${route} must retain the Person link`);
@@ -177,23 +178,30 @@ test('UX-2 source role travels with the Person through every existing capture ro
   const transaction = await readFile('app/capture/transaction.tsx', 'utf8');
   assert.match(transaction, /firstParam\(params\.linkPersonId\)/);
   assert.match(transaction, /firstParam\(params\.sourceRole\)/);
-  assert.match(transaction, /pathname: '\/capture\/property-type'/);
-  assert.match(transaction, /params:\s*\{[\s\S]*firstParam\(params\.linkPersonId\)[\s\S]*firstParam\(params\.sourceRole\)[\s\S]*\}/);
+  assert.match(transaction, /router\.push\(getPropertyTypeSelectionRoute\(\{[\s\S]*linkPersonId: firstParam\(params\.linkPersonId\)[\s\S]*sourceRole: firstParam\(params\.sourceRole\)/);
+  assert.deepEqual(getPropertyTypeSelectionRoute({
+    mode: 'offered',
+    transaction: 'rent',
+    linkPersonId: 'person / exact',
+    sourceRole: 'broker',
+  }), {
+    pathname: '/capture/property-type',
+    params: { mode: 'offered', transaction: 'rent', linkPersonId: 'person / exact', sourceRole: 'broker' },
+  });
 
   const propertyType = await readFile('app/capture/property-type.tsx', 'utf8');
   assert.match(propertyType, /const linkPersonId = firstParam\(params\.linkPersonId\)/);
   assert.match(propertyType, /const sourceRole = firstParam\(params\.sourceRole\)/);
-  assert.match(propertyType, /const routeParams = \{[\s\S]*\.\.\.\(linkPersonId \? \{ linkPersonId \} : \{\}\),[\s\S]*\.\.\.\(sourceRole \? \{ sourceRole \} : \{\}\),[\s\S]*\};/);
-  assert.match(propertyType, /params:\s*\{\s*\.\.\.routeParams/);
+  assert.match(propertyType, /getPropertyFormRoute\(\{[\s\S]*\.\.\.\(linkPersonId \? \{ linkPersonId \} : \{\}\),[\s\S]*\.\.\.\(sourceRole \? \{ sourceRole \} : \{\}\),[\s\S]*\}\)/);
 
   const entry = await readFile('app/person/[personId].tsx', 'utf8');
   assert.match(entry, /const eligibleSourceRoles = person\.classifications\.filter/);
   assert.match(entry, /eligibleSourceRoles\.map\(role =>/);
   assert.match(entry, /person\.classifications\.map\(classification =>/);
   assert.match(entry, /person\.classifications\.includes\(selectedSourceRole\)/);
-  assert.match(entry, /pathname: '\/capture'/);
-  assert.match(entry, /linkPersonId: person\.id/);
-  assert.match(entry, /sourceRole: role/);
+  assert.match(entry, /pathname: '\/capture\/transaction'/);
+  assert.match(entry, /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: 'owner' \}/);
+  assert.match(entry, /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: role \}/);
   assert.match(entry, /role: selectedSourceRole/);
   assert.doesNotMatch(entry, /person-saved-add-property|person-add-wanted-studio|person-add-requirement/);
   for (const route of ['index', 'summary']) {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
-import type { Person, PropertySource } from '../services/people.ts';
+import type { Person, PersonPropertyLink, PropertySource } from '../services/people.ts';
 import { getAreaById } from '../constants/kuwait-areas.ts';
 import {
   deriveOfferedWantedRows,
@@ -13,6 +13,12 @@ import {
   loadOfferedWantedPresentation,
 } from '../services/offeredWantedPresentation.ts';
 import type { OfferedWantedStoreReader } from '../services/offeredWantedPresentation.ts';
+import {
+  getPersonActivityMoreLabel,
+  getPersonDirectActivityLines,
+  getPropertyCardSummary,
+  getRequirementCardSummary,
+} from '../services/cardSummaryPresentation.ts';
 
 const property = (id: string, transaction: 'sale' | 'rent'): Property => ({
   core: {
@@ -63,7 +69,7 @@ test('offered and wanted rows retain kind-qualified identity, transaction, route
 
   assert.deepEqual(rows.map(row => [row.key, row.kind, row.transaction, row.href]), [
     ['offered:same /identity', 'offered', 'rent', '/property/same%20%2Fidentity'],
-    ['wanted:same /identity', 'wanted', 'buy', '/requirement/same%20%2Fidentity'],
+    ['wanted:same /identity', 'wanted', 'buy', '/requirement/view/same%20%2Fidentity'],
   ]);
   assert.equal(rows[0].person?.id, person.id);
   assert.equal(rows[1].person?.id, person.id);
@@ -73,7 +79,146 @@ test('offered and wanted rows retain kind-qualified identity, transaction, route
   assert.equal(rows[1].transaction, 'buy');
   assert.equal(getOfferedWantedTransactionLabelKey(rows[1]), 'transaction.sale');
   assert.equal(getOfferedWantedHref('offered', 'a/b'), '/property/a%2Fb');
-  assert.equal(getOfferedWantedHref('wanted', 'a/b'), '/requirement/a%2Fb');
+  assert.equal(getOfferedWantedHref('wanted', 'a/b'), '/requirement/view/a%2Fb');
+});
+
+test('offered cards resolve linked Person when no source exists, with source taking precedence', () => {
+  const secondPerson = { ...person, id: 'person-2', name: 'Bilal' };
+  const rows = deriveOfferedWantedRows(
+    [property('linked-property', 'sale'), property('source-property', 'rent')],
+    [],
+    {
+      propertyLinks: [
+        { personId: secondPerson.id, propertyCoreId: 'linked-property' },
+        { personId: secondPerson.id, propertyCoreId: 'source-property' },
+      ],
+      propertySources: [{ personId: person.id, propertyCoreId: 'source-property', role: 'owner' }],
+      people: [person, secondPerson],
+    },
+  );
+  assert.equal(rows[0]?.person?.id, secondPerson.id);
+  assert.deepEqual(rows[1]?.personTargets?.map(target => target.id), [person.id, secondPerson.id]);
+  assert.equal(rows[1]?.person?.id, person.id, 'the source Person is the primary card target');
+});
+
+test('shared card summaries derive localized property and Requirement facts without private data', () => {
+  const formatters = {
+    language: 'en' as const,
+    translate: (key: string) => ({
+      'propertyType.apartment': 'Apartment',
+      'transaction.sale': 'Sale',
+      'transaction.rent': 'Rent',
+      'enrich.apartment_subtype.studio': 'Studio',
+      'properties.all_kuwait': 'All Kuwait',
+    }[key] ?? key),
+    formatPrice: (amount: number, currency: string) => `${amount} ${currency}`,
+    formatRentalPrice: (amount: number, currency: string, period?: string) => `${amount} ${currency} ${period ?? ''}`.trim(),
+  };
+  const studioOffer = {
+    ...property('studio-offer', 'rent'),
+    typeDetails: { apartmentSubtype: 'studio', builtUpAreaSquareMeters: 42 },
+    core: { ...property('studio-offer', 'rent').core, privateNotes: { value: 'private' } },
+  } as Property;
+  assert.deepEqual(getPropertyCardSummary(studioOffer, formatters), {
+    typeLabel: 'Apartment',
+    subtypeLabel: 'Studio',
+    transactionLabel: 'Rent',
+    areaLabel: 'Salmiya',
+    studioAreaLabel: 'Actual Studio area (m²): 42',
+    valueLabel: '20 KWD monthly',
+  });
+  assert.equal(JSON.stringify(getPropertyCardSummary(studioOffer, formatters)).includes('private'), false);
+  const editedStudioOffer = {
+    ...studioOffer,
+    areaSquareMeters: 48,
+    areaUnit: 'square_meter',
+    typeDetails: { apartmentSubtype: 'studio', builtUpAreaSquareMeters: 42 },
+  } as Property;
+  assert.equal(
+    getPropertyCardSummary(editedStudioOffer, formatters).studioAreaLabel,
+    'Actual Studio area (m²): 48',
+    'canonical top-level Studio area takes precedence over stale type details',
+  );
+  const studioRequest = {
+    ...requirement('studio-request', 'rent'),
+    preferredAreaMode: 'all_kuwait' as const,
+    preferredAreaIds: [],
+    catalogPreferences: [
+      { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
+      { field: 'builtUpAreaSquareMeters', kind: 'number', comparison: 'minimum', value: 35 },
+    ],
+  } as SeekerRequirement;
+  assert.deepEqual(getRequirementCardSummary(studioRequest, formatters), {
+    typeLabel: 'Apartment',
+    subtypeLabel: 'Studio',
+    transactionLabel: 'Rent',
+    areaLabel: 'All Kuwait',
+    studioAreaLabel: 'Minimum Studio area (m²): 35',
+    valueLabel: '50 KWD – 500 KWD',
+  });
+  const arabicFormatters = {
+    ...formatters,
+    language: 'ar' as const,
+    translate: (key: string) => ({
+      'propertyType.apartment': 'شقة',
+      'transaction.rent': 'للإيجار',
+      'enrich.apartment_subtype.studio': 'استوديو',
+      'properties.all_kuwait': 'كل الكويت',
+    }[key] ?? key),
+  };
+  const arabic = getRequirementCardSummary(studioRequest, arabicFormatters);
+  assert.equal(arabic.typeLabel, 'شقة');
+  assert.equal(arabic.subtypeLabel, 'استوديو');
+  assert.equal(arabic.transactionLabel, 'للإيجار');
+  assert.equal(arabic.areaLabel, 'كل الكويت');
+  assert.equal(arabic.studioAreaLabel, 'الحد الأدنى لمساحة الاستوديو (م²): 35');
+  assert.equal(
+    getPropertyCardSummary(studioOffer, arabicFormatters).studioAreaLabel,
+    'مساحة الاستوديو الفعلية (م²): 42',
+  );
+});
+
+test('Person activity comes from exact linked/source and Requirement identity, deduplicates offers, and caps compact output', () => {
+  const offer = {
+    ...property('offer / exact', 'sale'),
+    areaSquareMeters: 42,
+    areaUnit: 'square_meter',
+    typeDetails: { apartmentSubtype: 'studio' },
+  } as Property;
+  const duplicateLink: PersonPropertyLink[] = [
+    { personId: person.id, propertyCoreId: offer.core.id },
+    { personId: person.id, propertyCoreId: offer.core.id },
+  ];
+  const reqs = [
+    { ...requirement('request-1', 'rent'), seekerId: person.id },
+    { ...requirement('request-2', 'buy'), seekerId: person.id },
+  ];
+  const formatters = {
+    language: 'en' as const,
+    translate: (key: string) => key.endsWith('.apartment') ? 'Apartment'
+      : key === 'enrich.apartment_subtype.studio' ? 'Studio'
+      : key.endsWith('.rent') ? 'Rent'
+        : key.endsWith('.sale') ? 'Sale' : key,
+    formatPrice: (amount: number) => `KWD ${amount}`,
+    formatRentalPrice: (amount: number) => `KWD ${amount}/month`,
+  };
+  const lines = getPersonDirectActivityLines(
+    person.id,
+    [offer],
+    reqs,
+    duplicateLink,
+    [{ personId: person.id, propertyCoreId: offer.core.id, role: 'owner' }],
+    formatters,
+  );
+  assert.deepEqual(lines.map(line => [line.kind, line.id, line.href]), [
+    ['request', 'request-1', '/requirement/view/request-1'],
+    ['offer', 'offer / exact', '/property/offer%20%2F%20exact'],
+    ['request', 'request-2', '/requirement/view/request-2'],
+  ]);
+  assert.match(lines[0]!.label, /Requests · Rent · Apartment · Salmiya · KWD 50 – KWD 500/);
+  assert.match(lines[1]!.label, /Offers · Sale · Apartment · Studio · Salmiya · Actual Studio area \(m²\): 42 · KWD 100/);
+  assert.equal(getPersonActivityMoreLabel(lines.length - 2, 'en'), '+1 more');
+  assert.equal(getPersonActivityMoreLabel(lines.length - 2, 'ar'), '+1 أخرى');
 });
 
 test('filters cover All, Offered, Wanted, Sale, Rent and search canonical row content', () => {
@@ -183,6 +328,7 @@ function makePresentationReader(
     getProperties: async () => [property('saved-property', 'sale')],
     getRequirements: async () => [requirement('saved-requirement', 'rent')],
     getPeople: async () => [person],
+    getPersonPropertyLinks: async () => [],
     getPropertySource: async propertyCoreId => ({
       propertyCoreId,
       personId: person.id,
@@ -208,6 +354,7 @@ test('independent reader failures retain available rows and report each unavaila
     requirements: true,
     people: true,
     sources: true,
+    links: false,
     search: true,
   });
   assert.deepEqual(
@@ -216,6 +363,22 @@ test('independent reader failures retain available rows and report each unavaila
     }),
     [],
   );
+});
+
+test('presentation loader attaches live links as well as sources and surfaces link-read failures', async () => {
+  const linked = await loadOfferedWantedPresentation(makePresentationReader({
+    getPropertySource: async () => null,
+    getPersonPropertyLinks: async () => [{ personId: person.id, propertyCoreId: 'saved-property' }],
+  }));
+  assert.equal(linked.rows.find(row => row.kind === 'offered')?.person?.id, person.id);
+  assert.equal(linked.errors.links, false);
+
+  const failed = await loadOfferedWantedPresentation(makePresentationReader({
+    getPropertySource: async () => null,
+    getPersonPropertyLinks: async () => { throw new Error('links unavailable'); },
+  }));
+  assert.equal(failed.rows.find(row => row.kind === 'offered')?.person, undefined);
+  assert.equal(failed.errors.links, true);
 });
 
 test('failed property inventory clears offered rows while independent requirements stay available', async () => {
@@ -231,6 +394,7 @@ test('failed property inventory clears offered rows while independent requiremen
     requirements: false,
     people: false,
     sources: false,
+    links: false,
     search: false,
   });
 });

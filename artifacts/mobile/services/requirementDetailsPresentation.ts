@@ -3,6 +3,7 @@ import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, toEnglishDigits } from '@/constants/market';
 import { getRequirementCatalogFields } from '@/services/requirementFieldMap';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';
+import { getStudioCatalogFieldLabel } from '@/services/studioCatalog';
 import {
   formatPropertyDetailValue,
   getWantedApartmentSubtypeLabel,
@@ -131,9 +132,16 @@ export function getRequirementDetailsRows(
       if (!definition.wanted) continue;
     }
     const definition = getPropertyFormField(preference.field);
-    const value = formatPreference(preference, requirement, language, translate);
+    const isStudioArea = studio && preference.field === 'builtUpAreaSquareMeters' && preference.kind === 'number';
+    const value = isStudioArea
+      ? toEnglishDigits(String(preference.value))
+      : formatPreference(preference, requirement, language, translate);
     add(definition.group === 'amenity' ? 'preferences' : 'specifications',
-      preference.field, definition.label[language === 'ar' ? 1 : 0], value);
+      preference.field,
+      isStudioArea
+        ? getStudioCatalogFieldLabel('areaSquareMeters', 'wanted')[language === 'ar' ? 1 : 0]
+        : definition.label[language === 'ar' ? 1 : 0],
+      value);
   }
 
   if (requirement.purpose === 'rent') {

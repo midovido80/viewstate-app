@@ -5,22 +5,20 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { store } from '@/services/persistence';
-import { getAreaById } from '@/constants/kuwait-areas';
 import { Button } from '@/components/Button';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
   filterOfferedWantedRows,
-  formatWantedBudget,
   getOfferedWantedHref,
   getOfferedWantedTransactionLabelKey,
-  getWantedAreaDisplayValues,
   loadOfferedWantedPresentation,
 } from '@/services/offeredWantedPresentation';
 import type { OfferedWantedFilter, OfferedWantedRow } from '@/services/offeredWantedPresentation';
 import type { OfferedWantedLoadResult } from '@/services/offeredWantedPresentation';
 import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
+import { getPropertyCardSummary, getRequirementCardSummary } from '@/services/cardSummaryPresentation';
 
 export default function PropertiesScreen() {
   const router = useRouter();
@@ -74,27 +72,21 @@ export default function PropertiesScreen() {
     const type = property?.core.propertyType ?? requirement?.propertyType;
     const isStudio = property ? isOfferedStudio(property) : requirement ? isWantedStudio(requirement) : false;
     const transaction = item.transaction;
-    const propertyArea = property ? getAreaById(property.core.locationArea.id) : undefined;
-    const areaNames = property
-      ? [propertyArea ? (language === 'ar' ? propertyArea.ar : propertyArea.en) : property.core.locationArea.id]
-      : requirement
-        ? getWantedAreaDisplayValues(requirement, language, t('properties.all_kuwait'))
-        : [];
-    const propertyPrice = property
-      ? property.activeOffer.transaction === 'sale'
-        ? property.activeOffer.salePrice
-        : property.activeOffer.rentalPrice
-      : undefined;
-    const priceLabel = propertyPrice
-      ? property?.activeOffer.transaction === 'rent'
-        ? formatRentalPrice(propertyPrice.amount, propertyPrice.currencyCode, property.activeOffer.rentalPeriodId, language, t)
-        : formatPrice(propertyPrice.amount, propertyPrice.currencyCode, language)
-      : requirement
-        ? formatWantedBudget(
-          requirement.budget,
-          amount => formatPrice(amount, requirement.budget.currencyCode, language),
-        ) ?? ''
-        : '';
+    const summaryFormatters = {
+      language,
+      translate: (key: string) => t(key as keyof Translations),
+      formatPrice: (amount: number, currencyCode: string) => formatPrice(amount, currencyCode, language),
+      formatRentalPrice: (amount: number, currencyCode: string, period?: string) =>
+        formatRentalPrice(amount, currencyCode, period, language, key => t(key as keyof Translations)),
+    };
+    const summary = property
+      ? getPropertyCardSummary(property, summaryFormatters)
+      : requirement ? getRequirementCardSummary(requirement, summaryFormatters) : null;
+    const areaLabel = summary?.areaLabel ?? '';
+    const priceLabel = summary?.valueLabel ?? '';
+    const personTargets = item.kind === 'offered'
+      ? item.personTargets ?? (item.person ? [item.person] : [])
+      : item.person ? [item.person] : [];
 
     return (
       <View
@@ -104,13 +96,20 @@ export default function PropertiesScreen() {
           onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
           testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
           accessibilityRole="button"
-          accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${isStudio ? t('enrich.apartment_subtype.studio') : type ? t(`propertyType.${type}` as keyof Translations) : ''}, ${areaNames.join(', ')}`}
+          accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${summary?.subtypeLabel ?? (type ? t(`propertyType.${type}` as keyof Translations) : '')}, ${areaLabel}`}
         >
         <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
             <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-              {type ? t(`propertyType.${type}` as keyof Translations) : ''}
+              {summary?.typeLabel ?? (type ? t(`propertyType.${type}` as keyof Translations) : '')}
             </Text>
+            {summary?.subtypeLabel ? (
+              <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]}>
+                <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
+                  {summary.subtypeLabel}
+                </Text>
+              </View>
+            ) : null}
             {isHighlighted ? (
               <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
@@ -125,10 +124,10 @@ export default function PropertiesScreen() {
             </View>
             <View style={[styles.badge, { backgroundColor: colors.accent + '1A' }]}>
               <Text style={[styles.badgeText, { color: colors.accent, fontFamily: fonts.medium }]}>
-                {t(getOfferedWantedTransactionLabelKey(item) as keyof Translations)}
+                {summary?.transactionLabel ?? t(getOfferedWantedTransactionLabelKey(item) as keyof Translations)}
               </Text>
             </View>
-            {isStudio ? (
+            {isStudio && !summary?.subtypeLabel ? (
               <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]} testID={`studio-badge-${item.kind}-${item.id}`}>
                 <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
                   {t('enrich.apartment_subtype.studio')}
@@ -143,27 +142,36 @@ export default function PropertiesScreen() {
             {priceLabel}
           </Text>
           <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-            {areaNames.join(' · ')}
+            {areaLabel}
           </Text>
+          {summary?.studioAreaLabel ? (
+            <Text testID={`studio-area-summary-${item.kind}-${item.id}`}
+              style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {summary.studioAreaLabel}
+            </Text>
+          ) : null}
         </View>
         </TouchableOpacity>
-        {item.person ? (
-            <TouchableOpacity
-              onPress={event => {
-                event.stopPropagation();
-                router.push(`/person/${encodeURIComponent(item.person!.id)}` as any);
-              }}
-              style={[styles.personTarget, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]}
-              testID={`person-target-${item.kind}-${item.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`${t('properties.person_target')}: ${item.person.name}`}
-            >
-              <Feather name="user" size={14} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontFamily: fonts.medium, fontSize: 13 }}>
-                {item.person.name}
-              </Text>
-            </TouchableOpacity>
-        ) : null}
+        {personTargets.map((person, index) => (
+          <TouchableOpacity
+            key={person.id}
+            onPress={event => {
+              event.stopPropagation();
+              router.push(`/person/${encodeURIComponent(person.id)}` as any);
+            }}
+            style={[styles.personTarget, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]}
+            testID={index === 0
+              ? `person-target-${item.kind}-${item.id}`
+              : `person-target-${item.kind}-${item.id}-${person.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('properties.person_target')}: ${person.name}`}
+          >
+            <Feather name="user" size={14} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontFamily: fonts.medium, fontSize: 13 }}>
+              {person.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
     );
   };
@@ -183,6 +191,7 @@ export default function PropertiesScreen() {
             {loadResult.errors.requirements ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.requirements_unavailable')}</Text> : null}
             {loadResult.errors.people ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.people_unavailable')}</Text> : null}
             {loadResult.errors.sources ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.sources_unavailable')}</Text> : null}
+            {loadResult.errors.links ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{language === 'ar' ? 'تعذر تحميل روابط الأشخاص بالعقارات.' : 'Property links could not be loaded.'}</Text> : null}
             {loadResult.errors.search ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.search_failed')}</Text> : null}
           </View>
         ) : null

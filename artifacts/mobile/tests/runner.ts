@@ -60,6 +60,7 @@ import {
   deleteSavedProperty,
   deleteSavedPropertySnapshot,
 } from '../services/propertyDeletion.ts';
+import { getPropertyEditFormHref } from '../services/propertyFormRoutes.ts';
 import {
   STAGE_01B1_DRAFT_MIGRATION_KEY,
   STAGE_01B1_WEB_MIGRATION_KEY,
@@ -399,8 +400,11 @@ test('Synthetic enrichment recovery and detail/share routes are wired fail-close
   assert.match(recovery, /writeGeneration/);
   assert.match(recovery, /clearConfirmedPropertyEnrichmentDraft/);
   assert.match(detail, /getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
-  assert.match(detail, /\/capture\/studio\?editPropertyId=\$\{encodeURIComponent\(propertyCoreId\)\}/);
-  assert.match(detail, /\/property\/\$\{encodeURIComponent\(propertyCoreId\)\}\/edit/);
+  assert.match(detail, /getPropertyEditFormHref\(/);
+  assert.equal(getPropertyEditFormHref('property / exact', 'apartment', 'studio'),
+    '/capture/studio?editPropertyId=property%20%2F%20exact');
+  assert.equal(getPropertyEditFormHref('property / exact', 'apartment', 'standard_apartment'),
+    '/property/property%20%2F%20exact/edit');
   assert.match(detail, /property-share-action/);
   assert.match(share, /createPropertyShareSelection/);
   assert.match(share, /buildPropertySharePreview/);

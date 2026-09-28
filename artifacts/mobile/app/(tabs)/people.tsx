@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,12 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { Person } from '@/services/people';
 import { store } from '@/services/persistence';
-import { toEnglishDigits } from '@/constants/market';
+import { formatPrice, formatRentalPrice, toEnglishDigits } from '@/constants/market';
+import {
+  getPersonActivityMoreLabel,
+  getPersonDirectActivityLines,
+  type PersonActivityLine,
+} from '@/services/cardSummaryPresentation';
 
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 
@@ -16,19 +21,50 @@ export default function PeopleScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { t, isRTL, fonts } = useI18n();
+  const { t, language, isRTL, fonts } = useI18n();
   const [people, setPeople] = useState<Person[]>([]);
+  const [activityByPerson, setActivityByPerson] = useState<Map<string, PersonActivityLine[]>>(new Map());
+  const [totalPeople, setTotalPeople] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    const load = search.trim() ? store.searchPeople(search) : store.getPeople();
-    void load.then(items => active && setPeople(items)).catch(() => {
-      if (active) setError(t('people.load_failed'));
+    setLoading(true);
+    setError('');
+    const allPeople = store.getPeople();
+    const filteredPeople = search.trim() ? store.searchPeople(search) : allPeople;
+    void Promise.all([
+      allPeople, filteredPeople, store.getProperties(), store.getRequirements(),
+      store.getPersonPropertyLinks(),
+    ]).then(async ([all, filtered, properties, requirements, links]) => {
+      const sources = (await Promise.all(properties.map(property =>
+        store.getPropertySource(property.core.id)))).filter(source => source !== null);
+      const formatters = {
+        language,
+        translate: (key: string) => t(key as keyof Translations),
+        formatPrice: (amount: number, currencyCode: string) => formatPrice(amount, currencyCode, language),
+        formatRentalPrice: (amount: number, currencyCode: string, period?: string) =>
+          formatRentalPrice(amount, currencyCode, period, language, key => t(key as keyof Translations)),
+      };
+      const activity = new Map(filtered.map(person => [
+        person.id,
+        getPersonDirectActivityLines(person.id, properties, requirements, links, sources, formatters),
+      ] as const));
+      if (!active) return;
+      setTotalPeople(all.length);
+      setPeople(filtered);
+      setActivityByPerson(activity);
+      setLoading(false);
+    }).catch(() => {
+      if (active) {
+        setError(t('people.load_failed'));
+        setLoading(false);
+      }
     });
     return () => { active = false; };
-  }, [search, t]));
+  }, [search, t, language]));
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -60,7 +96,14 @@ export default function PeopleScreen() {
           styles.list,
           { paddingBottom: insets.bottom + 96 },
         ]}
-        ListEmptyComponent={<Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('people.empty')}</Text>}
+        ListEmptyComponent={error ? null : loading
+          ? <ActivityIndicator style={styles.empty} color={colors.primary} testID="people-loading" />
+          : <Text
+            style={[styles.empty, { color: colors.mutedForeground, fontFamily: fonts.medium }]}
+            testID={totalPeople === 0 ? 'people-empty' : 'people-no-search-results'}
+          >
+            {totalPeople === 0 ? t('people.empty') : search.trim() ? t('people.no_search_results') : t('people.empty')}
+          </Text>}
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() => router.push(`/person/${encodeURIComponent(item.id)}` as never)}
@@ -74,6 +117,26 @@ export default function PeopleScreen() {
             <Text style={[styles.classes, { color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
               {item.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
+            {(activityByPerson.get(item.id) ?? []).slice(0, 2).map(line => (
+              <TouchableOpacity
+                key={line.key}
+                onPress={event => {
+                  event.stopPropagation();
+                  router.push(line.href as never);
+                }}
+                testID={`person-activity-${line.key}`}
+                accessibilityRole="link"
+              >
+                <Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+                  {line.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {(activityByPerson.get(item.id)?.length ?? 0) > 2 ? (
+              <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
+                {getPersonActivityMoreLabel(activityByPerson.get(item.id)!.length - 2, language)}
+              </Text>
+            ) : null}
           </TouchableOpacity>
         )}
       />

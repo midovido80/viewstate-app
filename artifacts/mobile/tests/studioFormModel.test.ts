@@ -15,6 +15,7 @@ import { isPropertyFormFieldApplicable } from '@/services/propertyFormCatalog';
 import {
   getStudioCatalogField,
   getStudioCatalogChoiceLabel,
+  getStudioCatalogFieldLabel,
   isStudioCatalogFieldApplicable,
   STUDIO_FORM_CATALOG,
   STUDIO_FORM_FIELD_ORDER,
@@ -54,12 +55,18 @@ test('STRUCTURAL: the shared Studio catalog bounds applicability, order, labels,
     'price',
     'rentalPeriodId',
   ]);
-  assert.deepEqual(STUDIO_FORM_FIELD_ORDER.wanted.slice(0, 5), [
+  assert.deepEqual(STUDIO_FORM_FIELD_ORDER.wanted.slice(0, 4), [
     'locationAreaId',
-    'transaction',
     'budgetMinimum',
     'budgetMaximum',
     'rentalPeriodId',
+  ]);
+  assert.equal(STUDIO_FORM_FIELD_ORDER.wanted.includes('transaction'), false);
+  assert.deepEqual(getStudioCatalogFieldLabel('areaSquareMeters', 'offered'), [
+    'Actual Studio area (m²)', 'مساحة الاستوديو الفعلية (م²)',
+  ]);
+  assert.deepEqual(getStudioCatalogFieldLabel('areaSquareMeters', 'wanted'), [
+    'Minimum Studio area (m²)', 'الحد الأدنى لمساحة الاستوديو (م²)',
   ]);
   assert.equal(isStudioCatalogFieldApplicable('price', 'offered'), true);
   assert.equal(isStudioCatalogFieldApplicable('price', 'wanted'), false);
@@ -99,6 +106,25 @@ test('STRUCTURAL: the shared Studio catalog bounds applicability, order, labels,
     getStudioCatalogChoiceLabel(transactionPicks[1], 'wanted'),
     ['Buy', 'للشراء'],
   );
+});
+
+test('BEHAVIOR: Wanted Studio uses the prior transaction as its saved purpose without a second selector', () => {
+  const rent = buildStudioRequirement({
+    ...createStudioFormValues('wanted', 'rent'),
+    preferredAreaMode: 'all_kuwait',
+    budgetMinimum: '0',
+    budgetMaximum: '800',
+  }, '11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333');
+  const purchase = buildStudioRequirement({
+    ...createStudioFormValues('wanted', 'sale'),
+    preferredAreaMode: 'all_kuwait',
+    budgetMinimum: '0',
+    budgetMaximum: '120000',
+  }, '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333');
+  assert.equal(rent.purpose, 'rent');
+  assert.equal(rent.seekerId, '33333333-3333-4333-8333-333333333333');
+  assert.equal(purchase.purpose, 'buy');
+  assert.equal(purchase.seekerId, '33333333-3333-4333-8333-333333333333');
 });
 
 test('BEHAVIOR: offered Studio builder writes canonical facts, private map metadata, and reads back', () => {

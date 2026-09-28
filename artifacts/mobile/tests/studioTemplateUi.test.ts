@@ -26,12 +26,19 @@ test('BEHAVIOR: shared Studio catalog supplies both mode-specific sequences and 
     'parking', 'floorNumber', 'description',
   ]);
   assert.deepEqual(STUDIO_FORM_FIELD_ORDER.wanted, [
-    'locationAreaId', 'transaction', 'budgetMinimum', 'budgetMaximum',
+    'locationAreaId', 'budgetMinimum', 'budgetMaximum',
     'rentalPeriodId', 'areaSquareMeters', 'studioRoomCount', 'bathrooms',
     'kitchen', 'hall', 'parking', 'floorNumber', 'description',
   ]);
   assert.equal(getStudioCatalogFieldLabel('locationAreaId', 'wanted')[0], 'Preferred area');
   assert.equal(getStudioCatalogFieldLabel('locationAreaId', 'wanted')[1], 'المنطقة المفضلة');
+  assert.deepEqual(getStudioCatalogFieldLabel('areaSquareMeters', 'offered'), [
+    'Actual Studio area (m²)', 'مساحة الاستوديو الفعلية (م²)',
+  ]);
+  assert.deepEqual(getStudioCatalogFieldLabel('areaSquareMeters', 'wanted'), [
+    'Minimum Studio area (m²)', 'الحد الأدنى لمساحة الاستوديو (م²)',
+  ]);
+  assert.equal(STUDIO_FORM_FIELD_ORDER.wanted.includes('transaction'), false);
   assert.equal(getStudioCatalogField('studioRoomCount').fixedValue, '1');
   assert.equal(getStudioCatalogField('bathrooms').fixedValue, '1');
   assert.equal(isStudioCatalogFieldApplicable('rentalPeriodId', 'offered', 'sale'), false);
@@ -43,6 +50,41 @@ test('BEHAVIOR: shared Studio catalog supplies both mode-specific sequences and 
   const transactionChoices = getStudioCatalogField('transaction').quickPicks!;
   assert.deepEqual(getStudioCatalogChoiceLabel(transactionChoices[1], 'offered'), ['Sale', 'للبيع']);
   assert.deepEqual(getStudioCatalogChoiceLabel(transactionChoices[1], 'wanted'), ['Buy', 'للشراء']);
+});
+
+test('STRUCTURAL: Wanted Studio shows its prior transaction read-only and returns changes to the shared chooser', async () => {
+  const studio = await readFile(resolveSourcePath('../app/capture/studio.tsx', import.meta.url), 'utf8');
+  const form = studio.slice(studio.indexOf('const renderForm ='), studio.indexOf('const reviewItem ='));
+  assert.match(form, /studio-transaction-summary/);
+  assert.match(form, /transactionLabel\(\)/);
+  assert.match(form, /testID="studio-transaction-change"/);
+  assert.match(studio, /router\.replace\(\{\s*pathname: '\/capture\/transaction',\s*params: \{ mode: 'wanted', seekerId: personId \}/);
+  assert.match(studio, /if \(mode === 'wanted'\) return null/);
+  assert.match(studio, /\{!editing \? \([\s\S]*testID="studio-transaction-change"[\s\S]*\) : null\}/);
+  assert.match(studio, /mode === 'wanted' \? reviewItem\(catalogLabel\('transaction'\), transactionLabel\(\)\)/);
+});
+
+test('REGRESSION: failed Offered Studio source linking blocks property and Home navigation until verified retry', async () => {
+  const studio = await readFile(resolveSourcePath('../app/capture/studio.tsx', import.meta.url), 'utf8');
+  assert.match(studio, /const \[propertySourceConfirmed, setPropertySourceConfirmed\] = useState\(false\)/);
+  const linkFlow = studio.slice(
+    studio.indexOf('const linkPropertySourceIfNeeded ='),
+    studio.indexOf('const finishPropertySave ='),
+  );
+  assert.match(linkFlow, /await ensureStudioPropertySourceLink\(property\.core\.id, person\.id, role, store\);[\s\S]*setPropertySourceConfirmed\(true\)/);
+  assert.match(studio, /savedProperty && propertySourceConfirmed \? \(/);
+  const successActions = studio.slice(
+    studio.indexOf('{savedProperty && propertySourceConfirmed ? ('),
+    studio.indexOf('{savedRequirement ? ('),
+  );
+  assert.match(successActions, /testID="studio-view-saved-property"/);
+  assert.match(successActions, /testID="studio-home"/);
+  const retry = studio.slice(
+    studio.indexOf("{savedProperty && error === t('"),
+    studio.indexOf('{committedRequirement.current'),
+  );
+  assert.match(retry, /navigateAfterPropertySave\(savedProperty\)/);
+  assert.match(studio, /await linkPropertySourceIfNeeded\(property\);[\s\S]*router\.replace/);
 });
 
 test('STRUCTURAL: Offered Studio keeps its exact-location and media controls; Wanted omits them', async () => {

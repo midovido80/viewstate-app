@@ -33,10 +33,16 @@ import {
   PropertySourceRole,
 } from '@/services/people';
 import { deleteSavedProperty } from '@/services/propertyDeletion';
+import { getStudioCatalogFieldLabel } from '@/services/studioCatalog';
 import { clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, type PropertyEnrichmentDraftV1 } from '@/services/propertyEnrichmentRecovery';
 import { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, createWebAttachmentFileStore, createWebFileAttachments, openAttachment, pickAndStoreMedia, pickAndStorePdfs, persistAttachmentsThenDeleteRemoved, type LocalAttachment, type WebAttachmentBlobStore } from '@/services/attachments';
 import { reorderAttachments, resolveWebAttachmentImageSources, setAttachmentCover } from '@/services/attachmentOperations';
-import { projectPropertyFacts, isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
+import {
+  projectPropertyFacts,
+  isDemoFeatureSuppressed,
+  isMappedTemplateField,
+  squareFeetToSquareMeters,
+} from '@/services/propertyFactProjection';
 import { normalizeGoogleMapsLink, openGoogleMapsQuery, openPastedLocationLink, pastedMapLocation, requestCurrentCoordinates, openSavedPropertyMapsLocation } from '@/services/location';
 import { openStudioWebFilePicker, openStudioWebMapsLocation } from '@/services/studioWebActions';
 import {
@@ -70,11 +76,21 @@ import {
 } from '@/services/propertyTypeTransition';
 import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, isOfferedStudio } from '@/services/propertyDetailPresentation';
 import { discardPropertyEditDraftAndCleanupOwnedAttachments, getPropertyDetailMapsHref, getPropertyEditMapsFieldError, propertyEditChoicesAreDirty, shouldShowPropertyGallery } from '@/services/propertyDetailEditorUx';
+import { getPropertyEditFormHref } from '@/services/propertyFormRoutes';
 
 export function getPropertyEditRouteHref(propertyCoreId: string, offeredStudio: boolean): string {
-  return offeredStudio
-    ? `/capture/studio?editPropertyId=${encodeURIComponent(propertyCoreId)}`
-    : `/property/${encodeURIComponent(propertyCoreId)}/edit`;
+  return getPropertyEditFormHref(
+    propertyCoreId,
+    'apartment',
+    offeredStudio ? 'studio' : 'standard_apartment',
+  );
+}
+
+function readNumericDetail(value: unknown): number | undefined {
+  const unwrapped = typeof value === 'object' && value !== null && 'value' in value
+    ? (value as { value: unknown }).value
+    : value;
+  return typeof unwrapped === 'number' && Number.isFinite(unwrapped) ? unwrapped : undefined;
 }
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
@@ -1132,6 +1148,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
   const propertyFacts = projectPropertyFacts(property);
   const offeredStudio = isOfferedStudio(property);
+  const studioAreaSquareMeters = offeredStudio
+    ? property.areaSquareMeters !== undefined
+      ? property.areaUnit === 'square_foot'
+        ? squareFeetToSquareMeters(property.areaSquareMeters)
+        : property.areaSquareMeters
+      : undefined
+    : undefined;
   const visibleContent = getPropertyDetailVisibleContent(property);
 
   const galleryImages = (property?.attachments ?? []).filter(a => a.kind === 'image');
@@ -1186,11 +1209,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   if (propertyFacts.templateFacts.livingRoomCount !== undefined) addSpec('livingRoomCount', propertyFacts.templateFacts.livingRoomCount, 'sofa-outline', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.parkingSpaceCount !== undefined) addSpec('parkingSpaceCount', propertyFacts.templateFacts.parkingSpaceCount, 'car', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.floorNumber !== undefined) addSpec('floorNumber', propertyFacts.templateFacts.floorNumber, 'stairs', 'MaterialCommunityIcons');
-  if (propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square', 'MaterialCommunityIcons');
+  if (!offeredStudio && propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square', 'MaterialCommunityIcons');
 
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
     : visibleContent.typeDetails) as Record<string, unknown>;
+  const actualStudioAreaSquareMeters = studioAreaSquareMeters
+    ?? (offeredStudio ? readNumericDetail(detailValues.builtUpAreaSquareMeters) : undefined);
   const locationArea = getAreaById(property.core.locationArea.id);
   const locationDisplay = getPropertyDetailLocationDisplay({
     governorate: locationArea ? (language === 'ar' ? locationArea.governorateAr : locationArea.governorateEn) : undefined,
@@ -1223,6 +1248,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
     .filter(item =>
       !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
+      && !(offeredStudio && item.field === 'builtUpAreaSquareMeters')
       && !numericSpecTiles.some(tile => tile.fieldId === item.field)
       && !existingSupplementalFields.has(item.field))
   const studioFacilityDetails = offeredStudio
@@ -1237,12 +1263,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }])
     : [];
   const studioAreaDetails = offeredStudio
-    && propertyFacts.areaSquareMeters === undefined
-    && detailValues.builtUpAreaSquareMeters !== undefined
+    && actualStudioAreaSquareMeters !== undefined
     ? [{
       field: 'builtUpAreaSquareMeters',
-      label: propertyDetailLabels.builtUpAreaSquareMeters[language === 'ar' ? 1 : 0],
-      value: `${formatPropertyDetailValue('builtUpAreaSquareMeters', detailValues.builtUpAreaSquareMeters, language)} ${language === 'ar' ? 'م²' : 'm²'}`,
+      label: getStudioCatalogFieldLabel('areaSquareMeters', 'offered')[language === 'ar' ? 1 : 0],
+      value: `${formatPropertyDetailValue('builtUpAreaSquareMeters', actualStudioAreaSquareMeters, language)} ${language === 'ar' ? 'م²' : 'm²'}`,
     }]
     : [];
   const propertySupplementalDetails = [...supplementalDetails, ...categoryDetails, ...studioFacilityDetails, ...studioAreaDetails];

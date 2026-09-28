@@ -15,15 +15,19 @@ import {
   readStudioProperty,
   readStudioRequirement,
 } from '../services/studioFormModel.ts';
-import { createPerson, type Person } from '../services/people.ts';
+import { createPerson, type Person, type PropertySource } from '../services/people.ts';
+import { getPropertyCardSummary } from '../services/cardSummaryPresentation.ts';
 import type { AttachmentFileStore, LocalAttachment } from '../services/attachmentOperations.ts';
 import {
   basicStudioProperty,
+  ensureStudioPropertySourceLink,
+  getStudioPersonSourceRole,
   prepareStudioPropertyEditCandidate,
   retryStudioPropertyRecovery,
   saveStudioProperty,
   saveStudioRequirement,
   type StudioPropertyStore,
+  type StudioPropertySourceStore,
   type StudioRequirementStore,
 } from '../services/studioSave.ts';
 import {
@@ -157,6 +161,40 @@ test('Studio offered creation writes BASIC first, enriches by CAS, and confirms 
   });
   assert.equal(recovered.status, 'saved');
   assert.deepEqual(uncertain.writes, ['basic', 'cas']);
+});
+
+test('Offered Studio from a Person keeps one exact source and property link across retry/readback', async () => {
+  const person = createPerson({
+    id: 'person-studio-owner-exact',
+    classifications: ['owner', 'broker'],
+    name: 'Exact source',
+    displayPhone: '55588888',
+  });
+  const property = offeredCandidate('studio-property-source-exact', 'studio-offer-source-exact');
+  const links: Array<{ personId: string; propertyCoreId: string }> = [];
+  let source: PropertySource | null = null;
+  let sourceWrites = 0;
+  const store: StudioPropertySourceStore = {
+    getPerson: async id => id === person.id ? person : null,
+    getPropertySource: async id => id === property.core.id ? source : null,
+    getLinksForProperty: async id => links.filter(link => link.propertyCoreId === id),
+    linkPersonToProperty: async link => {
+      if (!links.some(existing => existing.personId === link.personId && existing.propertyCoreId === link.propertyCoreId)) links.push(link);
+    },
+    setPropertySource: async next => {
+      sourceWrites += 1;
+      source = next;
+    },
+  };
+  const role = getStudioPersonSourceRole(person, 'broker');
+  assert.equal(role, 'broker', 'an explicit source role is retained');
+  assert.equal(getStudioPersonSourceRole(person), 'owner', 'a missing role is deterministically derived from the Person');
+  await ensureStudioPropertySourceLink(property.core.id, person.id, role!, store);
+  await ensureStudioPropertySourceLink(property.core.id, person.id, role!, store);
+  assert.deepEqual(links, [{ personId: person.id, propertyCoreId: property.core.id }]);
+  assert.deepEqual(source, { propertyCoreId: property.core.id, personId: person.id, role: 'broker' });
+  assert.equal(sourceWrites, 1, 'exact readback retry does not duplicate or rewrite the source');
+  assert.equal(property.core.id, 'studio-property-source-exact');
 });
 
 test('Studio offered editing updates the existing ID through durable CAS recovery', async () => {
@@ -303,6 +341,28 @@ test('Studio edit reconciles legacy top-level area and reads back one canonical 
   assert.equal(
     (outcome.property.typeDetails as Record<string, unknown> | undefined)?.builtUpAreaSquareMeters,
     undefined,
+  );
+  const formatters = {
+    language: 'en' as const,
+    translate: (key: string) => key === 'propertyType.apartment' ? 'Apartment'
+      : key === 'enrich.apartment_subtype.studio' ? 'Studio' : key,
+    formatPrice: (amount: number, currencyCode: string) => `${amount} ${currencyCode}`,
+    formatRentalPrice: (amount: number, currencyCode: string) => `${amount} ${currencyCode}`,
+  };
+  assert.equal(
+    getPropertyCardSummary(outcome.property, formatters).studioAreaLabel,
+    'Actual Studio area (m²): 48',
+    'edited Studio area remains visible from the retained canonical top-level area',
+  );
+  const arabicFormatters = {
+    ...formatters,
+    language: 'ar' as const,
+    translate: (key: string) => key === 'propertyType.apartment' ? 'شقة'
+      : key === 'enrich.apartment_subtype.studio' ? 'استوديو' : key,
+  };
+  assert.equal(
+    getPropertyCardSummary(outcome.property, arabicFormatters).studioAreaLabel,
+    'مساحة الاستوديو الفعلية (م²): 48',
   );
   assert.deepEqual(memory.properties.get(baseline.core.id), outcome.property);
 });

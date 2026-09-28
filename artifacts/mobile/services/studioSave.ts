@@ -29,7 +29,13 @@ import {
   type RequirementSaveStore,
 } from '@/services/requirementSaveOutcome';
 import type { PropertyStore } from '@/services/persistence';
-import type { Person } from '@/services/people';
+import {
+  PROPERTY_SOURCE_ROLES,
+  type Person,
+  type PersonStore,
+  type PropertySource,
+  type PropertySourceRole,
+} from '@/services/people';
 import { getAreaById } from '@/constants/kuwait-areas';
 
 export interface StudioRequirementStore extends RequirementSaveStore {
@@ -40,6 +46,55 @@ export interface StudioPropertyStore extends Pick<
   PropertyStore,
   'saveProperty' | 'getProperty' | 'getProperties' | 'compareAndUpdate'
 > {}
+
+export interface StudioPropertySourceStore extends Pick<
+  PersonStore,
+  'getPerson' | 'getPropertySource' | 'getLinksForProperty' | 'linkPersonToProperty' | 'setPropertySource'
+> {}
+
+export function getStudioPersonSourceRole(
+  person: Person,
+  requestedRole?: string,
+): PropertySourceRole | null {
+  if (requestedRole && PROPERTY_SOURCE_ROLES.includes(requestedRole as PropertySourceRole)) {
+    return requestedRole as PropertySourceRole;
+  }
+  return person.classifications.find((classification): classification is PropertySourceRole =>
+    PROPERTY_SOURCE_ROLES.includes(classification as PropertySourceRole)) ?? null;
+}
+
+/** Idempotently keep one source relation and one Person-property link for a saved Studio. */
+export async function ensureStudioPropertySourceLink(
+  propertyCoreId: string,
+  personId: string,
+  role: PropertySourceRole,
+  store: StudioPropertySourceStore,
+): Promise<void> {
+  const [person, source, links] = await Promise.all([
+    store.getPerson(personId),
+    store.getPropertySource(propertyCoreId),
+    store.getLinksForProperty(propertyCoreId),
+  ]);
+  if (!person) throw new Error('STUDIO_SOURCE_PERSON_NOT_FOUND');
+  if (source && source.personId !== personId) throw new Error('STUDIO_SOURCE_PERSON_CONFLICT');
+  if (!links.some(link => link.personId === personId)) {
+    await store.linkPersonToProperty({ personId, propertyCoreId });
+  }
+  if (!source) {
+    await store.setPropertySource({ propertyCoreId, personId, role } satisfies PropertySource);
+  } else if (source.role !== role) {
+    await store.setPropertySource({ propertyCoreId, personId, role });
+  }
+
+  const [readbackSource, readbackLinks] = await Promise.all([
+    store.getPropertySource(propertyCoreId),
+    store.getLinksForProperty(propertyCoreId),
+  ]);
+  if (readbackSource?.personId !== personId || readbackSource.role !== role
+    || !readbackLinks.some(link => link.personId === personId)) {
+    throw new Error('STUDIO_SOURCE_LINK_READBACK_FAILED');
+  }
+}
 
 export type StudioPropertySaveResult =
   | { readonly status: 'saved'; readonly property: Property }

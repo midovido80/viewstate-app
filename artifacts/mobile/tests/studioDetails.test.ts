@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { validateSeekerRequirement, type Property, type SeekerRequirement } from '@workspace/property-domain';
 import {
   getOfferedStudioDetailValues,
@@ -12,6 +13,9 @@ import {
   isOfferedStudio,
   isWantedStudio,
 } from '../services/propertyDetailPresentation.ts';
+import { resolveSourcePath } from './sourcePath.ts';
+
+const readSource = (path: string) => readFile(resolveSourcePath(path, import.meta.url), 'utf8');
 
 test('Offered Studio is recognized from canonical apartment subtype and omits generic totals', () => {
   const property = {
@@ -48,6 +52,16 @@ test('Offered Studio is recognized from canonical apartment subtype and omits ge
     ...property,
     core: { ...property.core, propertyType: 'house' },
   }), false);
+});
+
+test('Offered Studio read-only details use canonical actual area wording without a generic duplicate', async () => {
+  const source = await readSource('../app/property/[propertyCoreId].tsx');
+  assert.match(source, /!offeredStudio && propertyFacts\.areaSquareMeters !== undefined/);
+  assert.match(source, /const actualStudioAreaSquareMeters = studioAreaSquareMeters\s*\?\?\s*\(offeredStudio \? readNumericDetail\(detailValues\.builtUpAreaSquareMeters\) : undefined\)/);
+  assert.match(source, /const studioAreaSquareMeters = offeredStudio[\s\S]*?property\.areaSquareMeters !== undefined[\s\S]*?property\.areaUnit === 'square_foot'/);
+  assert.match(source, /const studioAreaDetails = offeredStudio[\s\S]*?actualStudioAreaSquareMeters !== undefined/);
+  assert.match(source, /getStudioCatalogFieldLabel\('areaSquareMeters', 'offered'\)/);
+  assert.match(source, /offeredStudio && item\.field === 'builtUpAreaSquareMeters'/);
 });
 
 test('Offered Studio details keep zero and false distinct from absent legacy facts', () => {

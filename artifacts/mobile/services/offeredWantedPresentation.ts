@@ -1,5 +1,5 @@
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
-import type { Person, PropertySource } from '@/services/people';
+import type { Person, PersonPropertyLink, PropertySource } from '@/services/people';
 import { getAreaById, normalizeAreaSearchText } from '@/constants/kuwait-areas';
 
 export type OfferedWantedFilter = 'all' | 'offered' | 'wanted' | 'sale' | 'rent';
@@ -8,6 +8,7 @@ interface PresentationBase {
   readonly key: string;
   readonly transaction: 'sale' | 'rent' | 'buy';
   readonly person?: Person;
+  readonly personTargets?: readonly Person[];
 }
 
 export interface OfferedPropertyRow extends PresentationBase {
@@ -33,6 +34,7 @@ export interface OfferedWantedFilterOptions {
 
 export interface OfferedWantedAssociations {
   readonly propertySources?: readonly PropertySource[];
+  readonly propertyLinks?: readonly PersonPropertyLink[];
   readonly people?: readonly Person[];
 }
 
@@ -41,6 +43,7 @@ export interface OfferedWantedStoreReader {
   getRequirements(): Promise<SeekerRequirement[]>;
   getPeople(): Promise<Person[]>;
   getPropertySource(propertyCoreId: string): Promise<PropertySource | null>;
+  getPersonPropertyLinks?(): Promise<PersonPropertyLink[]>;
   searchProperties(query: string): Promise<Property[]>;
 }
 
@@ -49,6 +52,7 @@ export interface OfferedWantedLoadErrors {
   readonly requirements: boolean;
   readonly people: boolean;
   readonly sources: boolean;
+  readonly links: boolean;
   readonly search: boolean;
 }
 
@@ -80,10 +84,13 @@ export async function loadOfferedWantedPresentation(
   reader: OfferedWantedStoreReader,
   query = '',
 ): Promise<OfferedWantedLoadResult> {
-  const [propertyRead, requirementRead, peopleRead, searchRead] = await Promise.all([
+  const [propertyRead, requirementRead, peopleRead, linkRead, searchRead] = await Promise.all([
     safelyRead(() => reader.getProperties(), []),
     safelyRead(() => reader.getRequirements(), []),
     safelyRead(() => reader.getPeople(), []),
+    reader.getPersonPropertyLinks
+      ? safelyRead(() => reader.getPersonPropertyLinks!(), [])
+      : Promise.resolve({ value: [] as const, failed: false }),
     query.trim()
       ? safelyRead(() => reader.searchProperties(query), [])
       : Promise.resolve({ value: null, failed: false } as const),
@@ -95,6 +102,7 @@ export async function loadOfferedWantedPresentation(
   const propertySources = sourceReads.flatMap(read => read.value ? [read.value] : []);
   const rows = deriveOfferedWantedRows(propertyRead.value, requirementRead.value, {
     propertySources,
+    propertyLinks: linkRead.value,
     people: peopleRead.value,
   });
 
@@ -108,6 +116,7 @@ export async function loadOfferedWantedPresentation(
       requirements: requirementRead.failed,
       people: peopleRead.failed,
       sources: sourceReads.some(read => read.failed),
+      links: linkRead.failed,
       search: searchRead.failed,
     },
   };
@@ -152,7 +161,7 @@ export function getOfferedWantedHref(
   id: string,
 ): string {
   const encodedId = encodeURIComponent(id);
-  return kind === 'offered' ? `/property/${encodedId}` : `/requirement/${encodedId}`;
+  return kind === 'offered' ? `/property/${encodedId}` : `/requirement/view/${encodedId}`;
 }
 
 export function deriveOfferedWantedRows(
@@ -164,10 +173,21 @@ export function deriveOfferedWantedRows(
   const sourceByPropertyId = new Map(
     (associations.propertySources ?? []).map(source => [source.propertyCoreId, source.personId]),
   );
+  const personByLinkedPropertyId = new Map<string, string[]>();
+  for (const link of associations.propertyLinks ?? []) {
+    const ids = personByLinkedPropertyId.get(link.propertyCoreId) ?? [];
+    if (!ids.includes(link.personId)) ids.push(link.personId);
+    personByLinkedPropertyId.set(link.propertyCoreId, ids);
+  }
   const offered: OfferedPropertyRow[] = properties.map(property => {
     const id = property.core.id;
     const sourcePersonId = sourceByPropertyId.get(id);
-    const person = sourcePersonId ? peopleById.get(sourcePersonId) : undefined;
+    const targets = [
+      sourcePersonId ? peopleById.get(sourcePersonId) : undefined,
+      ...(personByLinkedPropertyId.get(id) ?? []).map(personId => peopleById.get(personId)),
+    ].filter((candidate, index, all): candidate is Person =>
+      candidate !== undefined && all.findIndex(person => person?.id === candidate.id) === index);
+    const person = targets[0];
     return {
       kind: 'offered',
       id,
@@ -176,6 +196,7 @@ export function deriveOfferedWantedRows(
       property,
       href: getOfferedWantedHref('offered', id),
       ...(person ? { person } : {}),
+      ...(targets.length ? { personTargets: targets } : {}),
     };
   });
   const wanted: WantedRequirementRow[] = requirements.map(requirement => {

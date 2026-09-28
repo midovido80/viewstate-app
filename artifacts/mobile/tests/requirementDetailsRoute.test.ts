@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import type { SeekerRequirement } from '@workspace/property-domain';
 import { getRequirementDetailIdentity, getRequirementDetailsRows } from '../services/requirementDetailsPresentation.ts';
 import { getStudioRequirementEditHref } from '../services/propertyDetailPresentation.ts';
+import { getRequirementEditFormTarget } from '../services/propertyFormRoutes.ts';
 import { resolveSourcePath } from './sourcePath.ts';
 
 const readSource = (path: string) =>
@@ -84,7 +85,15 @@ test('Person View and Edit actions retain the exact saved Requirement identity',
   assert.match(person, /testID=\{`requirement-view-\$\{requirement\.id\}`\}/);
   assert.match(person, /testID=\{`requirement-edit-\$\{requirement\.id\}`\}/);
   assert.match(requirementRoute, /getStudioRequirementRouteTarget\(/);
-  assert.match(requirementRoute, /encodeURIComponent\(requirementId\)/);
+  assert.match(requirementRoute, /getRequirementEditFormTarget\(requirementId/);
+  assert.deepEqual(
+    getRequirementEditFormTarget('requirement / exact', 'seeker / exact', true, true),
+    { kind: 'studio', href: '/capture/studio?editRequirementId=requirement%20%2F%20exact' },
+  );
+  assert.deepEqual(
+    getRequirementEditFormTarget('requirement / exact', 'seeker / exact', false, true),
+    { kind: 'generic', href: '/requirement/requirement%20%2F%20exact?seekerId=seeker%20%2F%20exact&edit=1' },
+  );
 });
 
 test('saved Studio View remains a View route and Edit forwards its exact id', async () => {
@@ -168,10 +177,13 @@ test('Studio catalog preferences are shown once with localized labels; absent Re
   assert.equal(row(rent, 'bathroomsMinimum').value, '0');
   assert.equal(row(rent, 'hasKitchen').value, 'No');
   assert.equal(row(rent, 'hasHall').value, 'Yes');
-  assert.equal(row(rent, 'builtUpAreaSquareMeters').value, 'At least 0');
+  assert.equal(row(rent, 'builtUpAreaSquareMeters').label, 'Minimum Studio area (m²)');
+  assert.equal(row(rent, 'builtUpAreaSquareMeters').value, '0');
   assert.equal(row(rent, 'furnishing').value, 'Semi-furnished');
   assert.equal(row(rent, 'hasKitchen', 'ar').label, 'مطبخ');
   assert.equal(row(rent, 'hasKitchen', 'ar').value, 'لا');
+  assert.equal(row(rent, 'builtUpAreaSquareMeters', 'ar').label, 'الحد الأدنى لمساحة الاستوديو (م²)');
+  assert.equal(row(rent, 'builtUpAreaSquareMeters', 'ar').value, '0');
   assert.equal(row(rent, 'preferredAreaIds').value, 'Not applicable — all Kuwait');
   assert.equal(row(rent, 'swimmingPool').value, 'No');
   assert.equal(row(rent, 'driverRoom').value, 'Not specified');

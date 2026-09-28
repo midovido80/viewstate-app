@@ -28,6 +28,7 @@ import { transitionCaptureAreaValidation } from '@/services/captureAreaValidatio
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
 import { getPropertySuccessRoutes } from '@/services/propertyDetailPresentation';
 import { hasPopulatedCategoryCapture } from '@/services/propertyDemoCatalog';
+import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -307,7 +308,23 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   assert.equal(isBasicApartmentFollowUpCapture('apartment', 'studio', 'standard_apartment'), false);
   assert.equal(isBasicApartmentFollowUpCapture('floor', 'standard', undefined), false);
   assert.match(apartmentSubtype, /updateCaptureDetails\(\{ apartmentSubtype: 'standard_apartment' \}\)/);
-  assert.match(apartmentSubtype, /pathname: '\/capture\/price'[\s\S]*apartmentSubtype: 'standard'/);
+  assert.match(apartmentSubtype, /getPropertyFormRoute\(\{/);
+  assert.match(apartmentSubtype, /apartmentSubtype,\s*\.\.\.\(seekerId \? \{ seekerId \} : \{\}\)/);
+  assert.deepEqual(getPropertyFormRoute({
+    mode: 'offered',
+    transaction: 'sale',
+    propertyType: 'apartment',
+    apartmentSubtype: 'standard',
+  }), {
+    kind: 'offered',
+    pathname: '/capture/price',
+    params: {
+      mode: 'offered',
+      transaction: 'sale',
+      propertyType: 'apartment',
+      apartmentSubtype: 'standard',
+    },
+  });
   assert.match(price, /apartmentSubtype\?: string/);
   assert.match(price, /pathname: '\/capture\/location'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
   assert.match(location, /apartmentSubtype\?: string/);

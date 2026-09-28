@@ -58,7 +58,6 @@ export const STUDIO_FORM_FIELD_ORDER: Readonly<Record<StudioCatalogMode, readonl
   ],
   wanted: [
     'locationAreaId',
-    'transaction',
     'budgetMinimum',
     'budgetMaximum',
     'rentalPeriodId',
@@ -128,6 +127,10 @@ export const STUDIO_FORM_CATALOG: readonly StudioCatalogField[] = [
   {
     id: 'areaSquareMeters',
     label: ['Studio area (m²)', 'مساحة الاستوديو (م²)'],
+    modeLabels: {
+      offered: ['Actual Studio area (m²)', 'مساحة الاستوديو الفعلية (م²)'],
+      wanted: ['Minimum Studio area (m²)', 'الحد الأدنى لمساحة الاستوديو (م²)'],
+    },
     modes: ['offered', 'wanted'],
   },
   {

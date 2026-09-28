@@ -9,6 +9,7 @@ import { CaptureHeader } from '@/components/CaptureHeader';
 import { SelectCard } from '@/components/SelectCard';
 import { Button } from '@/components/Button';
 import { Transaction } from '@workspace/property-domain';
+import { getPropertyTypeSelectionRoute } from '@/services/propertyFormRoutes';
 
 type OfferMode = 'offered' | 'wanted';
 
@@ -42,16 +43,13 @@ export default function TransactionScreen() {
 
   const handleNext = () => {
     if (!offerMode || !transaction) return;
-    router.push({
-      pathname: '/capture/property-type',
-      params: {
-        mode: offerMode,
-        transaction,
-        ...(firstParam(params.seekerId) ? { seekerId: firstParam(params.seekerId) } : {}),
-        ...(firstParam(params.linkPersonId) ? { linkPersonId: firstParam(params.linkPersonId) } : {}),
-        ...(firstParam(params.sourceRole) ? { sourceRole: firstParam(params.sourceRole) } : {}),
-      },
-    } as never);
+    router.push(getPropertyTypeSelectionRoute({
+      mode: offerMode,
+      transaction,
+      ...(firstParam(params.seekerId) ? { seekerId: firstParam(params.seekerId) } : {}),
+      ...(firstParam(params.linkPersonId) ? { linkPersonId: firstParam(params.linkPersonId) } : {}),
+      ...(firstParam(params.sourceRole) ? { sourceRole: firstParam(params.sourceRole) } : {}),
+    }) as never);
   };
 
   const label = (english: string, arabic: string) => language === 'ar' ? arabic : english;

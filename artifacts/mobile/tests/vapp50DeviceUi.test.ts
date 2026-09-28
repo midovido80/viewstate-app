@@ -170,7 +170,10 @@ test('SOURCE ASSERTION: Search presentation never falls back to internal IDs', a
   assert.doesNotMatch(search, /description\?\.value \?\? property\.core\.id/);
   assert.doesNotMatch(search, /: property\.core\.locationArea\.id/);
   assert.doesNotMatch(search, /: areaId;/);
-  assert.match(search, /search\.property_description_unknown/);
+  // Optional public descriptions are omitted, not described as unavailable.
+  // The localized match explanation still supplies useful result context.
+  assert.doesNotMatch(search, /search\.property_description_unknown/);
+  assert.match(search, /matchReasonLabel/);
   assert.match(search, /search\.area_unknown/);
   assert.match(i18n, /'search\.property_description_unknown'/);
 });

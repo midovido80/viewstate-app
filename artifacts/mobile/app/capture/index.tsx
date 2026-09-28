@@ -66,6 +66,11 @@ import { PROPERTY_DEMO_CATALOG, getDemoCategory, getGenericCaptureTypesForTransa
 import { PROPERTY_SOURCE_ROLES } from '@/services/people';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
+import {
+  DEMO_NUMERIC_QUICK_PICK_VALUES,
+  openNumericQuickPickMore,
+  selectNumericQuickPick,
+} from '@/services/numericQuickPick';
 
 function hasApartmentDetailsToPreserve(details: CaptureDetailValues): boolean {
   const { apartmentSubtype: _subtype, ...optionalDetails } = details;
@@ -73,12 +78,66 @@ function hasApartmentDetailsToPreserve(details: CaptureDetailValues): boolean {
     || hasPopulatedCategoryCapture(optionalDetails as Record<string, unknown>);
 }
 
+export function isGenericStudioCaptureBlocked(
+  routeApartmentSubtype?: string,
+  draftPropertyType?: string,
+  savedApartmentSubtype?: string,
+  categoryApartmentSubtype?: string,
+): boolean {
+  return routeApartmentSubtype === 'studio'
+    || (draftPropertyType === 'apartment' && savedApartmentSubtype === 'studio')
+    || categoryApartmentSubtype === 'studio';
+}
+
+export function getLegacyStudioCaptureEscapeTarget(
+  transaction: string | undefined,
+  linkPersonId?: string,
+  sourceRole?: string,
+):
+  | {
+    readonly pathname: '/capture/studio';
+    readonly params: Readonly<Record<string, string>>;
+  }
+  | {
+    readonly pathname: '/capture/transaction';
+    readonly params: Readonly<Record<string, string>>;
+  } {
+  const context = {
+    mode: 'offered',
+    ...(linkPersonId ? { linkPersonId } : {}),
+    ...(sourceRole ? { sourceRole } : {}),
+  };
+  if (transaction === 'sale' || transaction === 'rent') {
+    return {
+      pathname: '/capture/studio',
+      params: { ...context, transaction },
+    };
+  }
+  return {
+    pathname: '/capture/transaction',
+    params: context,
+  };
+}
+
+function firstCaptureParam(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 // The capture child routes preserve the person link in their params. Keep the
 // selected source role alongside it for installations where child routes
 // replace (rather than inherit) parent params.
 export default function CaptureWorkflow() {
   const router = useRouter();
-  const { linkPersonId, sourceRole } = useLocalSearchParams<{ linkPersonId?: string; sourceRole?: string }>();
+  const routeParams = useLocalSearchParams<{
+    linkPersonId?: string | string[];
+    sourceRole?: string | string[];
+    apartmentSubtype?: string | string[];
+    transaction?: string | string[];
+  }>();
+  const linkPersonId = firstCaptureParam(routeParams.linkPersonId);
+  const sourceRole = firstCaptureParam(routeParams.sourceRole);
+  const routeApartmentSubtype = firstCaptureParam(routeParams.apartmentSubtype);
+  const routeTransaction = firstCaptureParam(routeParams.transaction);
   // sourceRole remains on the capture route contract for the summary handoff.
   const insets = useSafeAreaInsets();
   const colors = useColors();
@@ -128,6 +187,29 @@ export default function CaptureWorkflow() {
   } | null>(null);
   const demoMetadata = captureDetails.demoMetadata;
   const demoCategory = getDemoCategory(demoMetadata?.categoryId);
+  const isStudioCaptureBlocked = isGenericStudioCaptureBlocked(
+    routeApartmentSubtype,
+    draft.propertyType,
+    captureDetails.apartmentSubtype,
+    demoMetadata?.categoryId ? canonicalApartmentSubtypeForCategory(demoMetadata.categoryId) : undefined,
+  );
+  const studioCaptureBlockedMessage = language === 'ar'
+    ? 'تحتوي هذه المسودة على بيانات استوديو. الحفظ من نموذج العقار العام متوقف؛ لا تتابع الحفظ من هنا.'
+    : 'This draft contains Studio data. Saving from the generic Property form is disabled; do not save it here.';
+  const studioDraftTransferWarning = language === 'ar'
+    ? 'سيتم فتح مسودة استوديو جديدة. لن تُنقل تفاصيل مسودة العقار العامة، وستبقى المسودة العامة متاحة عند الرجوع.'
+    : 'This opens a new Studio draft. Details from the generic Property draft will not be copied; the generic draft remains available if you go back.';
+  const openDedicatedStudio = () => {
+    const transaction = routeTransaction === undefined
+      ? draft.transaction === 'sale' || draft.transaction === 'rent'
+        ? draft.transaction
+        : undefined
+      : routeTransaction === 'sale' || routeTransaction === 'rent'
+        ? routeTransaction
+        : undefined;
+    const target = getLegacyStudioCaptureEscapeTarget(transaction, linkPersonId, sourceRole);
+    router.push({ pathname: target.pathname, params: target.params } as never);
+  };
   const webBlobStore = useRef<WebAttachmentBlobStore | null>(null);
   if (Platform.OS === 'web' && !webBlobStore.current) webBlobStore.current = createIndexedDbWebAttachmentBlobStore();
   const attachmentStore = Platform.OS === 'web'
@@ -450,6 +532,7 @@ export default function CaptureWorkflow() {
   };
 
   const openPreview = () => {
+    if (isStudioCaptureBlocked) return;
     if (!draft.locationAreaId) {
       setAreaValidation(current => transitionCaptureAreaValidation(current, {
         type: 'preview',
@@ -495,6 +578,7 @@ export default function CaptureWorkflow() {
   };
 
   const save = async () => {
+    if (isStudioCaptureBlocked) return;
     if (saveFlight.current) return;
     saveFlight.current = true;
     setSaveError(null);
@@ -624,6 +708,27 @@ export default function CaptureWorkflow() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 96 }]}
       >
+        {isStudioCaptureBlocked ? (
+          <View
+            accessibilityRole="alert"
+            testID="capture-studio-route-blocked"
+            style={[styles.saveError, { borderColor: colors.destructive, backgroundColor: colors.destructive + '0F' }]}
+          >
+            <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+              {studioCaptureBlockedMessage}
+            </Text>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left', marginTop: 8 }}>
+              {studioDraftTransferWarning}
+            </Text>
+            <Button
+              title={language === 'ar' ? 'فتح نموذج الاستوديو' : 'Open Studio form'}
+              onPress={openDedicatedStudio}
+              variant="secondary"
+              style={{ marginTop: 12 }}
+              testID="capture-open-dedicated-studio"
+            />
+          </View>
+        ) : null}
         {stage === 1 && (
           <>
             <Text style={[styles.intro, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>
@@ -933,7 +1038,7 @@ export default function CaptureWorkflow() {
       </Modal>
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage === 2 ? <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <Button title={t('capture.back')} onPress={() => setStage(stage === 3 ? 2 : 1)} variant="outline" testID="capture-back" />}
-        {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={!draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} testID="capture-save-property" />}
+      {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}
       </View>
     </KeyboardAvoidingView>
   );
@@ -1006,7 +1111,7 @@ function QuickCount({ field, value, decimal, colors, fonts, error, onValidity, o
     setExpanded(isExpanded);
     if (isExpanded) setExact(String(value));
   }, [value]);
-  return <View><View style={styles.chips}>{[0, 1, 2, 3, 4, 5].map(number => <Choice key={number} testID={`capture-quick-${field}-${number}`} selected={value === number} label={String(number)} onPress={() => { setExpanded(false); setExact(''); onValidity(field, false); onChange(number); }} colors={colors} fonts={fonts} />)}<Choice testID={`capture-quick-${field}-more`} selected={value !== undefined && value > 5} label="+6 More" onPress={() => { setExpanded(true); if (value !== undefined && value > 5) setExact(String(value)); }} colors={colors} fonts={fonts} /></View>{(expanded || value !== undefined && value > 5) && <><TextInput testID={`capture-quick-${field}-exact`} value={exact} onChangeText={text => { setExact(text); if (text === '') { onValidity(field, false); onChange(undefined); return; } const number = parseDemoNumericInput(text, decimal); const valid = number !== null && number >= 6; onValidity(field, !valid); if (valid) onChange(number); }} keyboardType={decimal ? 'decimal-pad' : 'number-pad'} placeholder="6+" placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: error ? colors.destructive : colors.border, backgroundColor: colors.card }]} />{error ? <Text testID={`capture-quick-${field}-error`} style={{ color: colors.destructive, marginTop: 4 }}>{error}</Text> : null}</>}</View>;
+  return <View><View style={styles.chips}>{DEMO_NUMERIC_QUICK_PICK_VALUES.map(number => <Choice key={number} testID={`capture-quick-${field}-${number}`} selected={value === number} label={String(number)} onPress={() => { const selected = selectNumericQuickPick(number, DEMO_NUMERIC_QUICK_PICK_VALUES); setExpanded(false); setExact(''); onValidity(field, false); onChange(Number(selected)); }} colors={colors} fonts={fonts} />)}<Choice testID={`capture-quick-${field}-more`} selected={expanded && value !== undefined && value >= 6} label="+6" onPress={() => { const transition = openNumericQuickPickMore(); setExpanded(transition.expanded); setExact(transition.value); onValidity(field, false); onChange(Number(transition.value)); }} colors={colors} fonts={fonts} /></View>{(expanded || value !== undefined && value >= 6) && <><TextInput testID={`capture-quick-${field}-exact`} value={exact} onChangeText={text => { setExact(text); if (text === '') { onValidity(field, false); onChange(undefined); return; } const number = parseDemoNumericInput(text, decimal); const valid = number !== null && number >= 6; onValidity(field, !valid); if (valid) onChange(number); }} keyboardType={decimal ? 'decimal-pad' : 'number-pad'} placeholder="6+" placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: error ? colors.destructive : colors.border, backgroundColor: colors.card }]} />{error ? <Text testID={`capture-quick-${field}-error`} style={{ color: colors.destructive, marginTop: 4 }}>{error}</Text> : null}</>}</View>;
 }
 
 const styles = StyleSheet.create({

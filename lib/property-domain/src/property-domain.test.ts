@@ -354,6 +354,25 @@ test("building aggregate counts validate only for whole buildings and commercial
     );
   }
 
+  const aggregateFields = ["unitCount", "apartmentCount", "shopCount", "officeCount"] as const;
+  for (const propertyType of PROPERTY_TYPES) {
+    const applicable = aggregateFields.every(field =>
+      PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)
+        ?.appliesTo.includes(propertyType) === true,
+    );
+    const result = validateTypeDetails(
+      { propertyType, ...invalidBuildingCounts } as unknown as TypeDetails,
+      core(propertyType),
+    );
+    const hasAggregateIssue = !result.ok
+      && result.issues.some(item => item.message === "Known apartment, shop, and office counts cannot exceed unitCount.");
+    assertEqual(
+      hasAggregateIssue,
+      applicable,
+      `${propertyType} aggregate validation must follow field applicability`,
+    );
+  }
+
   const legacyStudio = validateTypeDetails({
     propertyType: "apartment",
     apartmentSubtype: "studio",

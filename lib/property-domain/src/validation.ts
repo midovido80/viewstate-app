@@ -292,8 +292,13 @@ export function validateTypeDetails(
     }
   }
 
+  const aggregateUnitFields = ["unitCount", "apartmentCount", "shopCount", "officeCount"] as const;
+  const aggregateUnitCountsApplicable = aggregateUnitFields.every(field =>
+    PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)
+      ?.appliesTo.includes(details.propertyType) === true,
+  );
   if (
-    (details.propertyType === "whole_building" || details.propertyType === "commercial_complex") &&
+    aggregateUnitCountsApplicable &&
     typeof candidate.unitCount === "number" &&
     ["apartmentCount", "shopCount", "officeCount"].reduce(
       (sum, field) => sum + (typeof candidate[field] === "number" ? candidate[field] as number : 0),

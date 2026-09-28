@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import {
   NUMERIC_QUICK_PICK_VALUES,
   createNumericQuickPickLocalState,
-  openNumericExactEntry,
-  openRequiredNumericExactEntry,
+  openNumericQuickPickMore,
   parseExactIntegerInput,
   reconcileNumericQuickPickScope,
   resolveExactIntegerInput,
-  selectNumericQuickPick,
+  selectNumericQuickPickState,
   synchronizeNumericQuickPickValue,
 } from '@/services/numericQuickPick';
 
@@ -53,7 +52,6 @@ export function NumericQuickPick({
   const { expanded, pending, invalid } = visibleState;
 
   const parsedValue = parseExactIntegerInput(value);
-  const exactActionLabel = language === 'ar' ? 'إدخال قيمة دقيقة' : 'Enter exact value';
   const exactInputLabel = language === 'ar' ? `${label}: قيمة دقيقة` : `${label}: exact value`;
   const invalidLabel = requireExactValue
     ? quickPickValues.includes(0)
@@ -80,12 +78,11 @@ export function NumericQuickPick({
             label={String(option)}
             selected={parsedValue.kind === 'valid' && parsedValue.value === option}
             onPress={() => {
-              const next = selectNumericQuickPick(option, quickPickValues);
               setLocalState(current => current.scopeKey === scopeKey
-                ? { ...current, pending: next, expanded: false, invalid: false }
+                ? selectNumericQuickPickState(current, option, quickPickValues)
                 : current);
               setValidity(false);
-              onChangeText(next);
+              onChangeText(String(option));
             }}
             testID={`${testID}-${option}`}
             role="radio"
@@ -94,43 +91,22 @@ export function NumericQuickPick({
         ))}
         <ChoiceChip
           label="+6"
-          accessibilityLabel={language === 'ar' ? 'إدخال قيمة دقيقة ستة أو أكثر' : 'Enter an exact value of six or more'}
+          accessibilityLabel={language === 'ar' ? 'قيمة مخصصة، ستة فأكثر' : 'Custom value, six or more'}
           selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
           onPress={() => {
-            const transition = requireExactValue
-              ? openRequiredNumericExactEntry(value, quickPickValues)
-              : { ...openNumericExactEntry(value), invalid: false };
+            const transition = openNumericQuickPickMore();
             setLocalState(current => current.scopeKey === scopeKey
               ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
               : current);
-            setValidity(transition.invalid);
+            setValidity(false);
+            onChangeText(transition.value);
           }}
           testID={`${testID}-6-plus`}
           role="button"
           style={styles.choice}
         />
       </View>
-      {!expanded ? (
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={exactActionLabel}
-          style={styles.exactActionButton}
-          onPress={() => {
-            const transition = requireExactValue
-              ? openRequiredNumericExactEntry(value, quickPickValues)
-              : { ...openNumericExactEntry(value), invalid: false };
-            setLocalState(current => current.scopeKey === scopeKey
-              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
-              : current);
-            setValidity(transition.invalid);
-          }}
-          testID={`${testID}-exact-open`}
-        >
-          <Text style={[styles.exactAction, { color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
-            {exactActionLabel}
-          </Text>
-        </TouchableOpacity>
-      ) : (
+      {expanded ? (
         <>
           <TextInput
             value={pending}
@@ -172,7 +148,7 @@ export function NumericQuickPick({
             </Text>
           ) : null}
         </>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -193,14 +169,6 @@ const styles = StyleSheet.create({
     minWidth: 46,
     minHeight: 44,
     paddingHorizontal: 12,
-  },
-  exactActionButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  exactAction: {
-    paddingVertical: 4,
-    fontSize: 14,
   },
   input: {
     minHeight: 48,
