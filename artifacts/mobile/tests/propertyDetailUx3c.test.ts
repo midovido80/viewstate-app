@@ -21,6 +21,7 @@ import { reorderAttachments, resolveWebAttachmentImageSources, setAttachmentCove
 import { getPropertyMapsWebHref } from '../services/mapsLink.ts';
 import { openStudioWebMapsLocation } from '../services/studioWebActions.ts';
 import {
+  confirmCommittedPropertyReadback,
   discardPropertyEditDraftAndCleanupOwnedAttachments,
   getPropertyDetailMapsHref,
   getPropertyEditMapsFieldError,
@@ -29,6 +30,7 @@ import {
 } from '../services/propertyDetailEditorUx.ts';
 import type { PropertyEditChoices, PropertyEditDraftV1 } from '../services/propertyUpdateRecovery.ts';
 import { buildPropertyUpdateCandidate, createEditDraft } from '../services/propertyUpdateRecovery.ts';
+import { getPropertyEditFormHref } from '../services/propertyFormRoutes.ts';
 
 test('Property detail web navigation resolves same-ID action routes and a safe Home fallback', () => {
   assert.equal(getPropertyDetailActionHref('property /exact', 'edit'), '/property/property%20%2Fexact/edit');
@@ -50,6 +52,112 @@ test('Saved Property Details exposes Home in detail and edit headers while retai
   assert.equal((source.match(/accessibilityLabel=\{language === 'ar' \? 'الرئيسية' : 'Home'\}/g) ?? []).length, homeActionCount);
   assert.match(source, /onPress=\{\(\) => router\.replace\(getPropertyDetailBackRoute\(\) as never\)\}/);
   assert.match(source, /onPress=\{leaveEditor\}/);
+});
+
+test('Enrichment save confirms exact readback before offering same-ID View Property and Home', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  const enrichmentRoute = await readFile('app/property/[propertyCoreId]/enrich.tsx', 'utf8');
+  const editorUx = await readFile('services/propertyDetailEditorUx.ts', 'utf8');
+  const save = source.slice(
+    source.indexOf('const save = async () =>'),
+    source.indexOf('const confirmDelete = async () =>'),
+  );
+  const readbackIndex = save.indexOf('confirmCommittedPropertyReadback(');
+  const completionIndex = save.indexOf('setSaveCompletionVisible(true)');
+
+  assert.match(enrichmentRoute, /\/edit\?completion=enrichment/);
+  assert.ok(readbackIndex >= 0 && readbackIndex < completionIndex);
+  assert.match(editorUx, /readback\?\.core\.id === candidate\.core\.id && exactPropertyEqual\(readback, candidate\)/);
+  assert.match(save, /if \(!readback \|\| readback\.core\.id !== id\) \{[\s\S]*setError\(t\('edit\.save_failed'\)\);[\s\S]*setDraft\(null\);[\s\S]*setMode\('detail'\);[\s\S]*router\.replace\(`\/property\/\$\{encodeURIComponent\(id!\)\}` as never\);[\s\S]*return;/);
+  assert.match(save, /if \(completionOrigin === 'enrichment'\) \{\s*setSaveCompletionVisible\(true\)/);
+  assert.match(save, /if \(!draft \|\| saving \|\| saveFlight\.current\) return/);
+  assert.match(source, /visible=\{saveCompletionVisible && completionOrigin === 'enrichment' && property\?\.core\.id === id\}/);
+  assert.match(source, /testID="property-enrichment-save-completion"/);
+  assert.match(source, /testID="property-enrichment-view-property"/);
+  assert.match(source, /router\.replace\(`\/property\/\$\{encodeURIComponent\(property\.core\.id\)\}` as never\)/);
+  assert.match(source, /testID="property-enrichment-home"/);
+  assert.match(source, /router\.replace\('\/' as never\)/);
+  assert.match(source, /summary\.view_property/);
+  assert.match(source, /t\('home\.title'\)/);
+});
+
+test('A successful enrichment CAS with failed exact readback retries verification only and stays unconfirmed', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  const save = source.slice(
+    source.indexOf('const save = async () =>'),
+    source.indexOf('const confirmDelete = async () =>'),
+  );
+  const candidate = {
+    core: {
+      id: 'committed-readback-failure',
+      propertyType: 'apartment',
+      locationArea: { id: 'salmiya' },
+    },
+    activeOffer: {
+      id: 'committed-readback-failure-offer',
+      propertyCoreId: 'committed-readback-failure',
+      transaction: 'sale',
+      salePrice: { amount: 100, currencyCode: 'KWD' },
+    },
+  } as Property;
+  let committed: Property | null = null;
+  let compareAndUpdateCalls = 0;
+  let readbackCalls = 0;
+  const compareAndUpdate = async (replacement: Property) => {
+    compareAndUpdateCalls += 1;
+    committed = replacement;
+    return true;
+  };
+
+  assert.equal(await compareAndUpdate(candidate), true);
+  const readback = await confirmCommittedPropertyReadback(candidate, async id => {
+    readbackCalls += 1;
+    assert.equal(id, candidate.core.id);
+    throw new Error('transient read failure');
+  });
+
+  assert.equal(committed, candidate, 'the write remains committed despite failed verification');
+  assert.equal(compareAndUpdateCalls, 1, 'verification failure must not retry the obsolete CAS');
+  assert.equal(readbackCalls, 2, 'exact-ID verification gets one retry');
+  assert.equal(readback, null, 'no success candidate exists without exact readback');
+  assert.match(save, /setMode\('detail'\)[\s\S]*router\.replace\(`\/property\/\$\{encodeURIComponent\(id!\)\}` as never\)/);
+});
+
+test('Standard Apartment subtype survives enrichment edit reopen and uses the marked completion flow', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  const save = source.slice(
+    source.indexOf('const save = async () =>'),
+    source.indexOf('const confirmDelete = async () =>'),
+  );
+  const baseline = {
+    core: { id: 'standard-subtype-enrichment', propertyType: 'apartment', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'standard-subtype-offer',
+      propertyCoreId: 'standard-subtype-enrichment',
+      transaction: 'sale',
+      salePrice: { amount: 100, currencyCode: 'KWD' },
+    },
+    typeDetails: { propertyType: 'apartment', apartmentSubtype: 'standard_apartment' },
+  } as Property;
+  assert.equal(
+    getPropertyEditFormHref(baseline.core.id, 'apartment', 'standard_apartment'),
+    '/property/standard-subtype-enrichment/edit',
+  );
+  const draft = createEditDraft(baseline);
+  const candidate = buildPropertyUpdateCandidate(baseline, {
+    ...draft.choices,
+    description: 'Saved standard apartment enrichment',
+  });
+  assert.equal(candidate.core.id, baseline.core.id);
+  const reopened = createEditDraft(candidate);
+  assert.equal(reopened.propertyCoreId, baseline.core.id);
+  assert.equal(reopened.choices.canonicalDetails?.apartmentSubtype, 'standard_apartment');
+  assert.match(save, /completionOrigin === 'enrichment'\) \{\s*setSaveCompletionVisible\(true\)/);
+  assert.doesNotMatch(
+    save.slice(save.indexOf("if (completionOrigin === 'enrichment')")),
+    /standardApartment/,
+    'completion applies to the marked supported-type editor, including reopened Standard Apartments',
+  );
 });
 
 test('Property Details gallery resolves web blob refs and reports missing image blobs visibly', async () => {
@@ -504,6 +612,15 @@ test('Apartment gallery is omitted without images, including PDF-only attachment
   assert.equal(shouldShowPropertyGallery(1), true);
 });
 
+test('Property detail gallery is image-only for every type and omits empty/PDF-only media placeholders', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  assert.match(source, /const galleryImages = \(property\?\.attachments \?\? \[\]\)\.filter\(a => a\.kind === 'image'\)/);
+  assert.match(source, /\{shouldShowPropertyGallery\(galleryImages\.length\) \?/);
+  assert.doesNotMatch(source, /shouldShowPropertyGallery\(galleryImages\.length\)\s*\|\|\s*!standardApartment/);
+  assert.doesNotMatch(source, /height: 260, borderRadius: 20, backgroundColor: colors\.card, alignItems: 'center', justifyContent: 'center'/);
+  assert.match(source, /const otherFiles = \(property\?\.attachments \?\? \[\]\)\.filter\(a => a\.kind !== 'image'\)/);
+});
+
 test('Apartment route wires verified Maps opening, platform-specific attachment pickers, previews, and clean Back', async () => {
   const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
   assert.match(source, /getPropertyDetailMapsHref/);
@@ -517,4 +634,15 @@ test('Apartment route wires verified Maps opening, platform-specific attachment 
   assert.match(source, /if \(!standardApartment \|\| editDirty\) \{\s*setLeaveVisible\(true\)/);
   assert.match(source, /testID=\"property-edit-maps-link-error\"/);
   assert.match(source, /persistAttachmentsThenDeleteRemoved/);
+});
+
+test('Property Details displays the persisted source role, not the role-picker default', async () => {
+  const screen = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  const sourceCard = screen.slice(
+    screen.indexOf('testID="property-source-person"'),
+    screen.indexOf('testID="property-source-unlink"'),
+  );
+  assert.match(sourceCard, /source\.role\.\$\{source\?\.role\}/);
+  assert.doesNotMatch(sourceCard, /source\.role\.\$\{sourceRole\}/);
+  assert.match(screen, /store\.getPropertySource\(id\)/);
 });

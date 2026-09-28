@@ -7,6 +7,12 @@ import { PROPERTY_TYPES, normalizeSeekerRequirement, type SeekerRequirement } fr
 import { buildPersonRequirement, formValuesFromRequirement } from '../services/personRequirementWorkflow.ts';
 import { getPropertyTypeSelectionRoute } from '../services/propertyFormRoutes.ts';
 import { PERSON_CLASSIFICATIONS, createPerson, personCanBePropertySource } from '../services/people.ts';
+import type { PropertySource } from '../services/people.ts';
+import {
+  ensureStudioPropertySourceLink,
+  getStudioPersonSourceRole,
+  type StudioPropertySourceStore,
+} from '../services/studioSave.ts';
 import { getApplicablePropertyFormFields } from '../services/propertyFormCatalog.ts';
 import {
   getGenericRequirementApartmentSubtype,
@@ -202,13 +208,131 @@ test('UX-2 source role travels with the Person through every existing capture ro
   assert.match(entry, /pathname: '\/capture\/transaction'/);
   assert.match(entry, /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: 'owner' \}/);
   assert.match(entry, /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: role \}/);
-  assert.match(entry, /role: selectedSourceRole/);
+  assert.match(entry, /const role = selectedSourceRole;[\s\S]*sourceRole: role/);
   assert.doesNotMatch(entry, /person-saved-add-property|person-add-wanted-studio|person-add-requirement/);
   for (const route of ['index', 'summary']) {
     const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
-    assert.match(source, /setPropertySource\(/);
-    assert.match(source, /linkPersonToProperty\(/);
+    assert.match(
+      source,
+      /ensureStudioPropertySourceLink\(/,
+      `${route} persists the Person-property relationship through its owned save path`,
+    );
   }
+  const genericCapture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(genericCapture, /getStudioPersonSourceRole\(linkedPerson, sourceRole\)/);
+  assert.match(genericCapture, /const pendingSourceLink = sourceLinkRecoveryRef\.current;[\s\S]*?ensureStudioPropertySourceLink\([\s\S]*?const projection = projectToProperty\(\)/);
+  assert.match(genericCapture, /savePropertyWithRecovery\(projection\.property\)[\s\S]*?sourceLinkRecoveryRef\.current = sourceRecovery;[\s\S]*?ensureStudioPropertySourceLink\(/);
+  assert.match(genericCapture, /await ensureStudioPropertySourceLink\([\s\S]*?const detailsCleared = await clearCaptureDetails/);
+  assert.doesNotMatch(genericCapture, /store\.setPropertySource\(|store\.linkPersonToProperty\(/);
+  const summary = await readFile('app/capture/summary.tsx', 'utf8');
+  const sourceLink = await readFile('services/studioSave.ts', 'utf8');
+  assert.match(summary, /getStudioPersonSourceRole\(linkedPerson, selectedSourceRole\)/);
+  assert.match(summary, /ensureStudioPropertySourceLink\(savedId, linkPersonId, resolvedSourceRole, store\)/);
+  assert.match(sourceLink, /store\.setPropertySource\(\{ propertyCoreId, personId, role \} satisfies PropertySource\)/);
+  assert.match(sourceLink, /readbackSource\?\.personId !== personId \|\| readbackSource\.role !== role/);
+  assert.match(sourceLink, /exactReadbackLinks\.length !== 1/);
+});
+
+test('generic Person-origin Floor save validates role before commit and retries only the exact source link', async () => {
+  const sourceText = await readFile('app/capture/index.tsx', 'utf8');
+  const person = createPerson({
+    id: 'capture-floor-multi-role-person',
+    classifications: ['owner', 'broker'],
+    name: 'Multi-role contact',
+    displayPhone: '55500011',
+  });
+  const propertyCoreId = 'capture-floor-person-property';
+  const originalCaptureDetails = {
+    floorUse: 'residential',
+    bedroomCount: '3',
+    description: 'Preserve these Floor details',
+  };
+  let captureDetails: typeof originalCaptureDetails | null = { ...originalCaptureDetails };
+  const properties = new Map<string, { propertyCoreId: string; captureDetails: typeof originalCaptureDetails }>();
+  const links: Array<{ personId: string; propertyCoreId: string }> = [];
+  let propertyWrites = 0;
+  let sourceWrites = 0;
+  let rejectSourceAfterCommit = true;
+  let staleSourceReadback = false;
+  let source: PropertySource | null = null;
+  let sourceRecovery: {
+    propertyCoreId: string;
+    personId: string;
+    role: NonNullable<ReturnType<typeof getStudioPersonSourceRole>>;
+  } | null = null;
+
+  const store: StudioPropertySourceStore = {
+    getPerson: async id => id === person.id ? person : null,
+    getPropertySource: async () => {
+      if (staleSourceReadback) {
+        staleSourceReadback = false;
+        return null;
+      }
+      return source;
+    },
+    getLinksForProperty: async id => links.filter(link => link.propertyCoreId === id),
+    linkPersonToProperty: async link => {
+      if (!links.some(existing => existing.personId === link.personId && existing.propertyCoreId === link.propertyCoreId)) {
+        links.push(link);
+      }
+    },
+    setPropertySource: async next => {
+      sourceWrites += 1;
+      source = next;
+      if (rejectSourceAfterCommit) {
+        rejectSourceAfterCommit = false;
+        staleSourceReadback = true;
+        throw new Error('source acknowledgement lost after commit');
+      }
+    },
+  };
+
+  const submitCapture = async (requestedRole?: string) => {
+    if (sourceRecovery) {
+      await ensureStudioPropertySourceLink(
+        sourceRecovery.propertyCoreId,
+        sourceRecovery.personId,
+        sourceRecovery.role,
+        store,
+      );
+      sourceRecovery = null;
+      captureDetails = null;
+      return;
+    }
+    const role = getStudioPersonSourceRole(person, requestedRole);
+    if (!role) throw new Error('SOURCE_ROLE_MISMATCH');
+    propertyWrites += 1;
+    properties.set(propertyCoreId, {
+      propertyCoreId,
+      captureDetails: { ...originalCaptureDetails },
+    });
+    sourceRecovery = { propertyCoreId, personId: person.id, role };
+    await ensureStudioPropertySourceLink(propertyCoreId, person.id, role, store);
+    sourceRecovery = null;
+    captureDetails = null;
+  };
+
+  assert.match(sourceText, /resolvedSourceRole = getStudioPersonSourceRole\(linkedPerson, sourceRole\)/);
+  assert.ok(
+    sourceText.indexOf('resolvedSourceRole = getStudioPersonSourceRole(linkedPerson, sourceRole)')
+      < sourceText.indexOf('savePropertyWithRecovery(projection.property)'),
+    'the exact role is validated before property creation',
+  );
+  assert.equal(getStudioPersonSourceRole(person), null, 'a multi-role Person has no implicit default role');
+  await assert.rejects(submitCapture(), /SOURCE_ROLE_MISMATCH/);
+  assert.equal(propertyWrites, 0, 'ambiguous role is rejected before the Property save');
+
+  await assert.rejects(submitCapture('broker'), /source acknowledgement lost after commit/);
+  assert.equal(propertyWrites, 1);
+  assert.deepEqual(captureDetails, originalCaptureDetails, 'capture details remain available while source readback is uncertain');
+  assert.deepEqual(properties.get(propertyCoreId)?.captureDetails, originalCaptureDetails);
+
+  await submitCapture();
+  assert.equal(propertyWrites, 1, 'retry confirms the committed Property without creating another');
+  assert.equal(sourceWrites, 1, 'retry reads back the exact committed role instead of writing another');
+  assert.deepEqual(links, [{ personId: person.id, propertyCoreId }], 'the Person-property relation remains unique');
+  assert.deepEqual(source, { propertyCoreId, personId: person.id, role: 'broker' });
+  assert.equal(captureDetails, null, 'draft details clear only after exact source/link readback succeeds');
 });
 
 test('UX-2 Requirement save requires an existing Person with seeker classification', async () => {

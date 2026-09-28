@@ -25,6 +25,7 @@ import {
   prepareStudioPropertyEditCandidate,
   retryStudioPropertyRecovery,
   saveStudioProperty,
+  saveStudioPropertyFromPersonSource,
   saveStudioRequirement,
   type StudioPropertyStore,
   type StudioPropertySourceStore,
@@ -188,13 +189,189 @@ test('Offered Studio from a Person keeps one exact source and property link acro
   };
   const role = getStudioPersonSourceRole(person, 'broker');
   assert.equal(role, 'broker', 'an explicit source role is retained');
-  assert.equal(getStudioPersonSourceRole(person), 'owner', 'a missing role is deterministically derived from the Person');
+  assert.equal(getStudioPersonSourceRole(person), null, 'multiple valid roles require an explicit selection');
+  assert.equal(getStudioPersonSourceRole(person, 'company'), null, 'an unavailable explicit role is never substituted');
+  const seekerOnly = createPerson({
+    id: 'person-studio-seeker-owner-source',
+    classifications: ['seeker'],
+    name: 'Role independent',
+    displayPhone: '55588555',
+  });
+  assert.equal(
+    getStudioPersonSourceRole(seekerOnly, 'owner'),
+    'owner',
+    'the chosen source role remains independent from Person classifications',
+  );
   await ensureStudioPropertySourceLink(property.core.id, person.id, role!, store);
   await ensureStudioPropertySourceLink(property.core.id, person.id, role!, store);
   assert.deepEqual(links, [{ personId: person.id, propertyCoreId: property.core.id }]);
   assert.deepEqual(source, { propertyCoreId: property.core.id, personId: person.id, role: 'broker' });
   assert.equal(sourceWrites, 1, 'exact readback retry does not duplicate or rewrite the source');
   assert.equal(property.core.id, 'studio-property-source-exact');
+});
+
+test('Person-origin Offered Studio rejects missing or ambiguous source context before saving a Property', async () => {
+  const person = createPerson({
+    id: 'person-studio-source-context',
+    classifications: ['owner', 'broker'],
+    name: 'Choose source role',
+    displayPhone: '55588444',
+  });
+  const property = offeredCandidate('studio-property-source-context', 'studio-offer-source-context');
+  const memory = propertyStore();
+  let currentPerson: Person | null = null;
+  const store: StudioPropertyStore & StudioPropertySourceStore = {
+    ...memory.store,
+    getPerson: async id => id === person.id ? currentPerson : null,
+    getPropertySource: async () => null,
+    getLinksForProperty: async () => [],
+    linkPersonToProperty: async () => undefined,
+    setPropertySource: async () => undefined,
+  };
+  const invalidContexts: Array<{
+    person: Person | null;
+    requestedRole: string | undefined;
+    expectedError: string;
+  }> = [
+    { person: null, requestedRole: 'owner', expectedError: 'STUDIO_SOURCE_PERSON_NOT_FOUND' },
+    { person, requestedRole: 'unknown_role', expectedError: 'STUDIO_SOURCE_ROLE_NOT_AVAILABLE' },
+    { person, requestedRole: undefined, expectedError: 'STUDIO_SOURCE_ROLE_NOT_AVAILABLE' },
+  ];
+
+  for (const invalid of invalidContexts) {
+    currentPerson = invalid.person;
+    await assert.rejects(
+      saveStudioPropertyFromPersonSource({
+        candidate: property,
+        store,
+        personId: person.id,
+        requestedRole: invalid.requestedRole,
+        storage: storage(),
+      }),
+      new RegExp(invalid.expectedError),
+    );
+    assert.equal(memory.properties.size, 0);
+    assert.deepEqual(memory.writes, []);
+  }
+});
+
+test('Person-origin Offered Studio saves once then links exact source and Person relation', async () => {
+  const person = createPerson({
+    id: 'person-studio-source-success',
+    classifications: ['owner', 'broker'],
+    name: 'Exact Studio source',
+    displayPhone: '55588333',
+  });
+  const property = offeredCandidate('studio-property-source-success', 'studio-offer-source-success');
+  const memory = propertyStore();
+  const links: Array<{ personId: string; propertyCoreId: string }> = [];
+  let source: PropertySource | null = null;
+  const store: StudioPropertyStore & StudioPropertySourceStore = {
+    ...memory.store,
+    getPerson: async id => id === person.id ? person : null,
+    getPropertySource: async id => id === property.core.id ? source : null,
+    getLinksForProperty: async id => links.filter(link => link.propertyCoreId === id),
+    linkPersonToProperty: async link => {
+      if (!links.some(existing => existing.personId === link.personId && existing.propertyCoreId === link.propertyCoreId)) {
+        links.push(link);
+      }
+    },
+    setPropertySource: async next => { source = next; },
+  };
+
+  const result = await saveStudioPropertyFromPersonSource({
+    candidate: property,
+    store,
+    personId: person.id,
+    requestedRole: 'broker',
+    storage: storage(),
+  });
+  assert.equal(result.outcome.status, 'saved');
+  if (result.outcome.status !== 'saved') return;
+  await ensureStudioPropertySourceLink(result.outcome.property.core.id, result.sourceContext.personId, result.sourceContext.role, store);
+  assert.equal(memory.properties.size, 1);
+  assert.deepEqual(source, { propertyCoreId: property.core.id, personId: person.id, role: 'broker' });
+  assert.deepEqual(links, [{ personId: person.id, propertyCoreId: property.core.id }]);
+});
+
+test('Offered Studio source-link retry resolves writes that committed before rejecting', async () => {
+  const person = createPerson({
+    id: 'person-studio-source-rejected-write',
+    classifications: ['broker'],
+    name: 'Retry source',
+    displayPhone: '55588777',
+  });
+  const property = offeredCandidate('studio-property-source-rejected-write', 'studio-offer-source-rejected-write');
+  const links: Array<{ personId: string; propertyCoreId: string }> = [];
+  let source: PropertySource | null = null;
+  let rejectLinkAfterCommit = true;
+  let rejectSourceAfterCommit = true;
+  let linkWrites = 0;
+  let sourceWrites = 0;
+  const store: StudioPropertySourceStore = {
+    getPerson: async id => id === person.id ? person : null,
+    getPropertySource: async id => id === property.core.id ? source : null,
+    getLinksForProperty: async id => links.filter(link => link.propertyCoreId === id),
+    linkPersonToProperty: async link => {
+      linkWrites += 1;
+      if (!links.some(existing => existing.personId === link.personId && existing.propertyCoreId === link.propertyCoreId)) {
+        links.push(link);
+      }
+      if (rejectLinkAfterCommit) {
+        rejectLinkAfterCommit = false;
+        throw new Error('link commit acknowledgement lost');
+      }
+    },
+    setPropertySource: async next => {
+      sourceWrites += 1;
+      source = next;
+      if (rejectSourceAfterCommit) {
+        rejectSourceAfterCommit = false;
+        throw new Error('source commit acknowledgement lost');
+      }
+    },
+  };
+
+  await ensureStudioPropertySourceLink(property.core.id, person.id, 'broker', store);
+  await ensureStudioPropertySourceLink(property.core.id, person.id, 'broker', store);
+  assert.deepEqual(links, [{ personId: person.id, propertyCoreId: property.core.id }]);
+  assert.deepEqual(source, { propertyCoreId: property.core.id, personId: person.id, role: 'broker' });
+  assert.equal(linkWrites, 1);
+  assert.equal(sourceWrites, 1);
+});
+
+test('Offered Studio does not replace another Person source when linking an existing Property', async () => {
+  const person = createPerson({
+    id: 'person-studio-source-new',
+    classifications: ['owner'],
+    name: 'New source',
+    displayPhone: '55588666',
+  });
+  const property = offeredCandidate('studio-property-existing-source', 'studio-offer-existing-source');
+  const existingSource: PropertySource = {
+    propertyCoreId: property.core.id,
+    personId: 'person-studio-source-original',
+    role: 'broker',
+  };
+  const links: Array<{ personId: string; propertyCoreId: string }> = [];
+  const store: StudioPropertySourceStore = {
+    getPerson: async id => id === person.id ? person : null,
+    getPropertySource: async () => existingSource,
+    getLinksForProperty: async () => links,
+    linkPersonToProperty: async link => { links.push(link); },
+    setPropertySource: async () => { throw new Error('must not replace existing source'); },
+  };
+
+  await assert.rejects(
+    ensureStudioPropertySourceLink(property.core.id, person.id, 'owner', store),
+    /STUDIO_SOURCE_PERSON_CONFLICT/,
+  );
+  assert.deepEqual(links, []);
+  assert.deepEqual(existingSource, {
+    propertyCoreId: property.core.id,
+    personId: 'person-studio-source-original',
+    role: 'broker',
+  });
 });
 
 test('Studio offered editing updates the existing ID through durable CAS recovery', async () => {

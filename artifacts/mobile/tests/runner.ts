@@ -289,10 +289,11 @@ test('New domain identity creation is centralized on Expo secure UUID v4', async
 test('People source exposes selected contact import, actions, links, and confirmations', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
-  const [form, batchImport, detail, persistence, translations] = await Promise.all([
+  const [form, batchImport, detail, peopleList, persistence, translations] = await Promise.all([
     readFile(sourcePath('../app/person/new.tsx'), 'utf8'),
     readFile(sourcePath('../components/BatchContactImportModal.tsx'), 'utf8'),
     readFile(sourcePath('../app/person/[personId].tsx'), 'utf8'),
+    readFile(sourcePath('../app/(tabs)/people.tsx'), 'utf8'),
     readFile(sourcePath('../services/persistence.ts'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
@@ -313,7 +314,12 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(detail, /person-remove-dialog/);
   assert.match(detail, /unlinkPersonFromProperty/);
   assert.match(detail, /Alert\.alert\([\s\S]*people\.unlink_title[\s\S]*people\.unlink_confirm/);
-  assert.match(detail, /linkPersonToProperty/);
+  assert.match(detail, /ensureStudioPropertySourceLink\(selectedProperty\.core\.id, person\.id, selectedSourceRole, store\)/);
+  assert.match(detail, /testID=\{`person-requirement-\$\{requirement\.id\}`\}/);
+  assert.match(detail, /testID=\{`linked-property-\$\{property\.core\.id\}`\}/);
+  assert.match(detail, /testID=\{`source-property-\$\{property\.core\.id\}`\}/);
+  assert.doesNotMatch(detail, /person-direct-activity|personActivity/);
+  assert.match(peopleList, /testID=\{`person-activity-\$\{line\.key\}`\}/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
   assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
@@ -322,7 +328,7 @@ test('People source exposes selected contact import, actions, links, and confirm
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Done action', async () => {
   const sourcePath = (relativePath: string) =>
     resolveSourcePath(relativePath, import.meta.url);
-  const [successSource, summarySource, legacyCaptureSource, enrichmentSource, fieldSource, catalogSource, detailPresentationSource, detailSource, translations] = await Promise.all([
+  const [successSource, summarySource, legacyCaptureSource, enrichmentSource, fieldSource, catalogSource, detailPresentationSource, detailSource, detailEditorUxSource, translations] = await Promise.all([
     readFile(sourcePath('../app/capture/success.tsx'), 'utf8'),
     readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
     readFile(sourcePath('../app/capture/index.tsx'), 'utf8'),
@@ -331,18 +337,19 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
     readFile(sourcePath('../services/propertyFormCatalog.ts'), 'utf8'),
     readFile(sourcePath('../services/propertyDetailPresentation.ts'), 'utf8'),
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
+    readFile(sourcePath('../services/propertyDetailEditorUx.ts'), 'utf8'),
     readFile(sourcePath('../contexts/I18nContext.tsx'), 'utf8'),
   ]);
   const basicSuccessActions = successSource
-    .split("basicApartmentFollowUp === '1' && propertyCoreId ?")[1]
+    .split('showCaptureFollowUp && propertyCoreId ?')[1]
     ?.split(') : propertyCoreId ? (')[0] ?? '';
   const otherSuccessActions = successSource
     .split(') : propertyCoreId ? (')[1]
     ?.split(') : (')[0] ?? '';
   assert.match(summarySource, /isBasicApartmentFollowUpCapture\(/);
-  assert.match(summarySource, /saveBasicOnly \? \{ basicApartmentFollowUp: '1' \}/);
-  assert.match(legacyCaptureSource, /isBasicApartmentFollowUp \? \{ basicApartmentFollowUp: '1' \}/);
-  assert.match(successSource, /basicApartmentFollowUp === '1' && propertyCoreId \?/);
+  assert.match(summarySource, /saveBasicOnly \? \{ basicCaptureFollowUp: '1' \}/);
+  assert.match(legacyCaptureSource, /basicCaptureFollowUp: '1'/);
+  assert.match(successSource, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
   assert.match(basicSuccessActions, /btn-add-property-details/);
   assert.match(basicSuccessActions, /btn-finish-later/);
   assert.doesNotMatch(basicSuccessActions, /btn-view-property|btn-view-properties|btn-later/);
@@ -357,7 +364,23 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(successSource, /getPropertySuccessRoutes/);
   assert.match(successSource, /router\.push/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
-  assert.match(enrichmentSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\?edit=1`/);
+  assert.match(enrichmentSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
+  assert.match(detailSource, /visible=\{saveCompletionVisible && completionOrigin === 'enrichment' && property\?\.core\.id === id\}/);
+  assert.match(detailSource, /testID="property-enrichment-view-property"/);
+  assert.match(detailSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(property\.core\.id\)\}` as never\)/);
+  assert.match(detailSource, /testID="property-enrichment-home"/);
+  const enrichmentSave = detailSource.slice(
+    detailSource.indexOf('const save = async () =>'),
+    detailSource.indexOf('const confirmDelete = async () =>'),
+  );
+  const readbackIndex = enrichmentSave.indexOf('confirmCommittedPropertyReadback(');
+  const successIndex = enrichmentSave.indexOf('setSaveCompletionVisible(true)');
+  assert.ok(
+    readbackIndex >= 0 && successIndex > readbackIndex,
+    'the success actions appear only after exact-ID save readback',
+  );
+  assert.match(detailEditorUxSource, /readback\?\.core\.id === candidate\.core\.id && exactPropertyEqual\(readback, candidate\)/);
+  assert.match(enrichmentSave, /if \(!readback \|\| readback\.core\.id !== id\) \{[\s\S]*setMode\('detail'\)[\s\S]*router\.replace\(`\/property\/\$\{encodeURIComponent\(id!\)\}` as never\)/);
   assert.match(detailSource, /property-edit-action/);
   assert.match(detailSource, /getPropertyDetailVisibleContent/);
   assert.doesNotMatch(detailSource, /property-enrich-action|detail\.add_details/);
@@ -368,7 +391,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(translations, /'detail\.continue_details': 'Continue details'/);
   assert.match(translations, /'detail\.continue_details': 'متابعة التفاصيل'/);
   assert.match(enrichmentSource, /router\.replace/);
-  assert.match(enrichmentSource, /edit=1/);
+  assert.match(enrichmentSource, /completion=enrichment/);
   assert.match(fieldSource, /getApplicablePropertyFormFields/);
   assert.match(catalogSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS\.map/);
   assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));

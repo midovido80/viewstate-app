@@ -36,6 +36,11 @@ export type PropertyFormRoute =
     readonly params: Readonly<Record<string, string>>;
   }
   | {
+    readonly kind: 'floor';
+    readonly pathname: '/capture';
+    readonly params: Readonly<Record<string, string>>;
+  }
+  | {
     readonly kind: 'offered';
     readonly pathname: '/capture/price';
     readonly params: Readonly<Record<string, string>>;
@@ -54,10 +59,10 @@ function getSelectionParams(selection: PropertyFormSelection): Record<string, st
 }
 
 function canonicalSubtype(subtype?: PropertyFormSubtype): ApartmentSubtype | undefined {
+  if (subtype === undefined) return undefined;
   if (subtype === 'standard') return 'standard_apartment';
-  return subtype && APARTMENT_SUBTYPES.includes(subtype as ApartmentSubtype)
-    ? subtype as ApartmentSubtype
-    : undefined;
+  if (APARTMENT_SUBTYPES.includes(subtype as ApartmentSubtype)) return subtype as ApartmentSubtype;
+  throw new Error('UNSUPPORTED_APARTMENT_SUBTYPE');
 }
 
 /** The single catalog-backed selector for create and legacy/deep-link form routing. */
@@ -87,6 +92,9 @@ export function getPropertyFormRoute(selection: PropertyFormSelection): Property
         ...(subtype ? { apartmentSubtype: subtype === 'standard_apartment' ? 'standard' : subtype } : {}),
       },
     };
+  }
+  if (selection.propertyType === 'floor') {
+    return { kind: 'floor', pathname: '/capture', params };
   }
   return {
     kind: 'offered',

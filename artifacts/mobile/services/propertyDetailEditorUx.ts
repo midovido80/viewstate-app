@@ -1,7 +1,24 @@
-import type { PropertyEditChoices } from './propertyUpdateRecovery';
-import type { PropertyEditDraftV1 } from './propertyUpdateRecovery';
+import type { Property } from '@workspace/property-domain';
+import { exactPropertyEqual, type PropertyEditChoices, type PropertyEditDraftV1 } from './propertyUpdateRecovery';
 import { getPropertyMapsWebHref, normalizeGoogleMapsLink, type MapCoordinates } from './mapsLink';
 import { getStudioWebMapsUrl } from './studioWebActions';
+
+export async function confirmCommittedPropertyReadback(
+  candidate: Property,
+  getProperty: (id: string) => Promise<Property | null>,
+): Promise<Property | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const readback = await getProperty(candidate.core.id);
+      if (readback?.core.id === candidate.core.id && exactPropertyEqual(readback, candidate)) {
+        return readback;
+      }
+    } catch {
+      // A transient post-commit read failure gets one exact-ID retry.
+    }
+  }
+  return null;
+}
 
 export function propertyEditChoicesAreDirty(
   cleanChoices: PropertyEditChoices | null,

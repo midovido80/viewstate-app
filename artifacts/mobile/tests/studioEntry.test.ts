@@ -42,6 +42,9 @@ test('shared Property form routing is deterministic for every catalog type/subty
     } else if (selection.mode === 'wanted') {
       assert.equal(first.kind, 'wanted');
       assert.equal(first.pathname, '/requirement/new');
+    } else if (selection.propertyType === 'floor') {
+      assert.equal(first.kind, 'floor');
+      assert.equal(first.pathname, '/capture');
     } else {
       assert.equal(first.kind, 'offered');
       assert.equal(first.pathname, '/capture/price');
@@ -104,7 +107,7 @@ test('shared create and edit routes preserve exact context and keep Studio out o
 
 test('Apartment selection structurally enables Next before choosing a subtype', async () => {
   const propertyType = await source('../app/capture/property-type.tsx');
-  assert.match(propertyType, /disabled=\{!propertyType\}/);
+  assert.match(propertyType, /disabled=\{!propertyType \|\| !mode \|\| \(rawTransaction !== undefined && !transaction\)\}/);
   assert.match(propertyType, /getPropertyFormRoute\(/);
   assert.doesNotMatch(propertyType, /select-apartment-studio|select-apartment-standard/);
   assert.doesNotMatch(propertyType, /propertyType === 'apartment' && !apartmentSubtype/);

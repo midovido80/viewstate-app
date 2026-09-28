@@ -4,8 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
 /**
- * Compatibility deep link only. The old enrichment form is retired; all
- * normal and historical links enter the identity-preserving modern editor.
+ * Compatibility deep link only. Enter the hydrated editor directly so the
+ * user does not briefly see the detail presentation before editing.
  */
 export default function PropertyEnrichmentRedirect() {
   const params = useLocalSearchParams<{ propertyCoreId?: string | string[] }>();
@@ -17,7 +17,7 @@ export default function PropertyEnrichmentRedirect() {
   useEffect(() => {
     if (!id || redirected.current) return;
     redirected.current = true;
-    router.replace(`/property/${encodeURIComponent(id)}?edit=1` as never);
+    router.replace(`/property/${encodeURIComponent(id)}/edit?completion=enrichment` as never);
   }, [id, router]);
 
   return (

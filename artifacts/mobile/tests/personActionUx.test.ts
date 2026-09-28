@@ -126,10 +126,28 @@ test('Link Property modal orders valid role selection before search and requires
 
   const link = source.slice(source.indexOf('const link = async () =>'), source.indexOf('const unlink = async'));
   assert.match(link, /person\.classifications\.includes\(selectedSourceRole\)/);
-  assert.match(link, /getLinksForPerson\(person\.id\)/);
-  assert.match(link, /if \(!currentLinks\.some/);
-  assert.match(link, /setPropertySource\(\{/);
-  assert.match(link, /role: selectedSourceRole/);
+  assert.match(link, /ensureStudioPropertySourceLink\(selectedProperty\.core\.id, person\.id, selectedSourceRole, store\)/);
+  assert.match(source, /const openLink = async \(preferredRole\?: PropertySource\['role'\] \| null\)/);
+  assert.match(source, /void openLink\(role\)/);
+  assert.match(source, /selectedSourceRole === role/);
+});
+
+test('Person Details omits duplicate activity links but retains dedicated linked cards', async () => {
+  const source = await readFile('app/person/[personId].tsx', 'utf8');
+  assert.doesNotMatch(source, /person-direct-activity|personActivity|person-activity-/);
+  assert.match(source, /testID=\{`person-requirement-\$\{requirement\.id\}`\}/);
+  assert.match(source, /testID=\{`linked-property-\$\{property\.core\.id\}`\}/);
+  assert.match(source, /testID=\{`source-property-\$\{property\.core\.id\}`\}/);
+  const peopleList = await readFile('app/(tabs)/people.tsx', 'utf8');
+  assert.match(peopleList, /testID=\{`person-activity-\$\{line\.key\}`\}/);
+});
+
+test('Person-origin Summary preserves an exact role and creates both source directions', async () => {
+  const source = await readFile('app/capture/summary.tsx', 'utf8');
+  assert.match(source, /getStudioPersonSourceRole\(linkedPerson, selectedSourceRole\)/);
+  assert.match(source, /if \(!resolvedSourceRole\)/);
+  assert.match(source, /ensureStudioPropertySourceLink\(savedId, linkPersonId, resolvedSourceRole, store\)/);
+  assert.doesNotMatch(source, /store\.linkPersonToProperty\(|store\.setPropertySource\(/);
 });
 
 test('post-save success uses brief localized feedback instead of a large action panel', async () => {
@@ -145,4 +163,16 @@ test('post-save success uses brief localized feedback instead of a large action 
   assert.match(source, /params\.requirementSaved !== '1'[\s\S]*setConfirmation\(language === 'ar' \? 'تم حفظ الطلب' : 'Requirement saved'\)/);
   assert.match(source, /confirmation: \{ alignSelf: 'flex-start'[\s\S]*borderWidth: 1/);
   assert.doesNotMatch(source, /savedBox|person-saved-next-step|person-saved-add-property/);
+});
+
+test('Person and Requirement saved confirmation uses neutral success styling', async () => {
+  const source = await readFile('app/person/[personId].tsx', 'utf8');
+  const confirmation = source.slice(
+    source.indexOf('testID="person-action-confirmation"') - 360,
+    source.indexOf('testID="person-action-confirmation"') + 500,
+  );
+  assert.match(confirmation, /backgroundColor: colors\.secondary/);
+  assert.match(confirmation, /borderColor: colors\.success/);
+  assert.match(confirmation, /color: colors\.success/);
+  assert.doesNotMatch(confirmation, /colors\.accent|colors\.destructive/);
 });

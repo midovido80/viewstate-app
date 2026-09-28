@@ -1,5 +1,6 @@
 import {
   validateProperty,
+  APARTMENT_SUBTYPES,
   type Property,
   type PropertyDetailField,
   type PropertyDraft,
@@ -10,6 +11,7 @@ import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
 import { normalizeGoogleMapsLink } from '@/services/mapsLink';
 import { optionalClassifiedLiteral } from '@/services/literalText';
 import { squareFeetToSquareMeters } from '@/services/propertyFactProjection';
+import { hasPopulatedCategoryCapture } from '@/services/propertyDemoCatalog';
 
 const normalPrivacy = {
   classification: 'normal' as const,
@@ -56,9 +58,33 @@ export function isBasicApartmentFollowUpCapture(
   storedSubtype: string | undefined,
 ): boolean {
   if (propertyType !== 'apartment') return false;
-  if (selectedRouteSubtype === 'standard') return true;
-  if (selectedRouteSubtype === 'studio') return false;
-  return storedSubtype !== 'studio' && storedSubtype !== 'duplex';
+  if (selectedRouteSubtype !== undefined) {
+    if (selectedRouteSubtype === 'standard' || selectedRouteSubtype === 'standard_apartment') return true;
+    return false;
+  }
+  if (storedSubtype === 'standard' || storedSubtype === 'standard_apartment') return true;
+  if (storedSubtype === undefined) return true;
+  return false;
+}
+
+export function hasCaptureEnrichmentValues(
+  details: CaptureDetailValues,
+  description?: string,
+): boolean {
+  const { apartmentSubtype: _subtype, ...optionalDetails } = details;
+  return details.areaSquareMeters !== undefined
+    || hasPopulatedCategoryCapture(optionalDetails as Record<string, unknown>)
+    || Boolean(description?.trim());
+}
+
+export function shouldSaveBasicCapture(
+  details: CaptureDetailValues,
+  description?: string,
+  forceBasic = false,
+  includeCapturedDetails = false,
+): boolean {
+  return !includeCapturedDetails
+    && (forceBasic || !hasCaptureEnrichmentValues(details, description));
 }
 
 export function buildPropertyWithCaptureDetails(
@@ -70,6 +96,13 @@ export function buildPropertyWithCaptureDetails(
     ...((baseline.typeDetails ?? {}) as unknown as Record<string, unknown>),
     propertyType: baseline.core.propertyType,
   };
+  const rawSubtype = fields.apartmentSubtype;
+  const apartmentSubtype = baseline.core.propertyType === 'apartment' && rawSubtype
+    ? APARTMENT_SUBTYPES.find(subtype => subtype === rawSubtype)
+    : undefined;
+  if (baseline.core.propertyType === 'apartment' && rawSubtype && !apartmentSubtype) {
+    throw new Error('UNSUPPORTED_APARTMENT_SUBTYPE');
+  }
   const knownFields = new Set<PropertyDetailField>(
     PROPERTY_FORM_CATALOG.map(definition => definition.field),
   );
@@ -78,7 +111,19 @@ export function buildPropertyWithCaptureDetails(
   const applicable = getApplicablePropertyFormFields(
     baseline.core.propertyType,
     fields.floorUse as 'residential' | 'commercial' | undefined,
+    apartmentSubtype,
   );
+  if (strict && baseline.core.propertyType === 'floor') {
+    const applicableFields = new Set(applicable.map(definition => definition.field));
+    const populatedFloorFields = PROPERTY_FORM_CATALOG
+      .filter(({ field }) => field !== 'floorUse' && fields[field]?.trim())
+    if (!fields.floorUse?.trim() && populatedFloorFields.length > 0) {
+      throw new Error('FLOOR_USE_REQUIRED');
+    }
+    if (populatedFloorFields.some(({ field }) => !applicableFields.has(field))) {
+      throw new Error('FLOOR_CAPTURE_DETAIL_INCOMPATIBLE');
+    }
+  }
   for (const { field } of applicable) {
     const raw = fields[field];
     if (!raw?.trim()) continue;

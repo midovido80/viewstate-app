@@ -52,15 +52,36 @@ export interface StudioPropertySourceStore extends Pick<
   'getPerson' | 'getPropertySource' | 'getLinksForProperty' | 'linkPersonToProperty' | 'setPropertySource'
 > {}
 
+export interface StudioPersonSourceContext {
+  readonly personId: string;
+  readonly role: PropertySourceRole;
+}
+
 export function getStudioPersonSourceRole(
   person: Person,
   requestedRole?: string,
 ): PropertySourceRole | null {
-  if (requestedRole && PROPERTY_SOURCE_ROLES.includes(requestedRole as PropertySourceRole)) {
-    return requestedRole as PropertySourceRole;
+  const eligibleRoles = person.classifications.filter((classification): classification is PropertySourceRole =>
+    PROPERTY_SOURCE_ROLES.includes(classification as PropertySourceRole));
+  if (requestedRole !== undefined) {
+    return PROPERTY_SOURCE_ROLES.includes(requestedRole as PropertySourceRole)
+      ? requestedRole as PropertySourceRole
+      : null;
   }
-  return person.classifications.find((classification): classification is PropertySourceRole =>
-    PROPERTY_SOURCE_ROLES.includes(classification as PropertySourceRole)) ?? null;
+  return eligibleRoles.length === 1 ? eligibleRoles[0] : null;
+}
+
+/** Resolve the exact Person and source role before a Person-origin Property write. */
+export async function resolveStudioPersonSourceContext(
+  personId: string,
+  requestedRole: string | undefined,
+  store: Pick<StudioPropertySourceStore, 'getPerson'>,
+): Promise<StudioPersonSourceContext> {
+  const person = await store.getPerson(personId);
+  if (!person || person.id !== personId) throw new Error('STUDIO_SOURCE_PERSON_NOT_FOUND');
+  const role = getStudioPersonSourceRole(person, requestedRole);
+  if (!role) throw new Error('STUDIO_SOURCE_ROLE_NOT_AVAILABLE');
+  return { personId: person.id, role };
 }
 
 /** Idempotently keep one source relation and one Person-property link for a saved Studio. */
@@ -77,21 +98,37 @@ export async function ensureStudioPropertySourceLink(
   ]);
   if (!person) throw new Error('STUDIO_SOURCE_PERSON_NOT_FOUND');
   if (source && source.personId !== personId) throw new Error('STUDIO_SOURCE_PERSON_CONFLICT');
-  if (!links.some(link => link.personId === personId)) {
-    await store.linkPersonToProperty({ personId, propertyCoreId });
+  const existingLinks = links.filter(link => link.personId === personId);
+  if (existingLinks.length > 1) throw new Error('STUDIO_SOURCE_DUPLICATE_PERSON_PROPERTY_LINK');
+  const alreadyLinked = existingLinks.length === 1;
+  const alreadySourced = source?.personId === personId && source.role === role;
+  if (!alreadyLinked) {
+    try {
+      await store.linkPersonToProperty({ personId, propertyCoreId });
+    } catch (error) {
+      // A rejected write may have committed. Confirm the exact relation before
+      // allowing a caller to retry the same Person/property pair.
+      const readback = await store.getLinksForProperty(propertyCoreId);
+      const exactLinks = readback.filter(link => link.personId === personId);
+      if (exactLinks.length !== 1) throw error;
+    }
   }
-  if (!source) {
-    await store.setPropertySource({ propertyCoreId, personId, role } satisfies PropertySource);
-  } else if (source.role !== role) {
-    await store.setPropertySource({ propertyCoreId, personId, role });
+  if (!alreadySourced) {
+    try {
+      await store.setPropertySource({ propertyCoreId, personId, role } satisfies PropertySource);
+    } catch (error) {
+      const readback = await store.getPropertySource(propertyCoreId);
+      if (readback?.personId !== personId || readback.role !== role) throw error;
+    }
   }
 
   const [readbackSource, readbackLinks] = await Promise.all([
     store.getPropertySource(propertyCoreId),
     store.getLinksForProperty(propertyCoreId),
   ]);
+  const exactReadbackLinks = readbackLinks.filter(link => link.personId === personId);
   if (readbackSource?.personId !== personId || readbackSource.role !== role
-    || !readbackLinks.some(link => link.personId === personId)) {
+    || exactReadbackLinks.length !== 1) {
     throw new Error('STUDIO_SOURCE_LINK_READBACK_FAILED');
   }
 }
@@ -102,6 +139,27 @@ export type StudioPropertySaveResult =
   | { readonly status: 'recovery_required'; readonly propertyId: string; readonly reason: string }
   | { readonly status: 'conflict'; readonly propertyId: string }
   | { readonly status: 'storage_failure'; readonly propertyId: string; readonly retryAllowed: boolean };
+
+/** Source validation runs before saveStudioProperty can persist any candidate. */
+export async function saveStudioPropertyFromPersonSource(options: {
+  readonly candidate: Property;
+  readonly baseline?: Property | null;
+  readonly store: StudioPropertyStore & StudioPropertySourceStore;
+  readonly personId: string;
+  readonly requestedRole?: string;
+  readonly storage?: UpdateStorage;
+}): Promise<{
+  readonly outcome: StudioPropertySaveResult;
+  readonly sourceContext: StudioPersonSourceContext;
+}> {
+  const sourceContext = await resolveStudioPersonSourceContext(
+    options.personId,
+    options.requestedRole,
+    options.store,
+  );
+  const outcome = await saveStudioProperty(options);
+  return { outcome, sourceContext };
+}
 
 export type StudioRequirementSaveResult =
   | Exclude<RequirementSaveOutcome, { readonly status: 'saved' }>

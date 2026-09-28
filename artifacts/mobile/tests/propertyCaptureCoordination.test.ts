@@ -5,8 +5,10 @@ import {
   applyCaptureTransactionDefaults,
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  hasCaptureEnrichmentValues,
   isBasicApartmentFollowUpCapture,
   preserveCaptureOwnershipAndEvidence,
+  shouldSaveBasicCapture,
 } from '@/services/propertyCaptureDetails';
 import {
   finalizeCapturedDetails,
@@ -29,6 +31,13 @@ import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkVal
 import { getPropertySuccessRoutes } from '@/services/propertyDetailPresentation';
 import { hasPopulatedCategoryCapture } from '@/services/propertyDemoCatalog';
 import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
+import {
+  getPropertyEditFormHref,
+  getPropertyTypeSelectionRoute,
+  getSupportedPropertyFormSelections,
+} from '@/services/propertyFormRoutes';
+import { APARTMENT_SUBTYPES, PROPERTY_TYPES } from '@workspace/property-domain';
+import { createEditDraft } from '@/services/propertyUpdateRecovery';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -264,6 +273,7 @@ test('BEHAVIOR: removed attachment metadata persists before retired file deletio
 test('SOURCE ASSERTION: web attachment controls and native media filters are explicit', async () => {
   const source = await readFile('services/attachments.ts', 'utf8');
   const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(capture, /const selectedPropertyType: PropertyType \| undefined = routePropertyTypeParam === undefined/);
   assert.match(source, /createWebFileAttachments/);
   assert.match(source, /WEB_ATTACHMENT_MAX_BYTES/);
   assert.match(source, /createIndexedDbWebAttachmentBlobStore|indexedDB\.open/);
@@ -296,7 +306,7 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   const enrichment = await readFile('app/property/[propertyCoreId]/enrich.tsx', 'utf8');
   const propertyId = 'apartment-basic-follow-up';
   const basicActions = success
-    .split("basicApartmentFollowUp === '1' && propertyCoreId ?")[1]
+    .split('showCaptureFollowUp && propertyCoreId ?')[1]
     ?.split(') : propertyCoreId ?')[0] ?? '';
 
   assert.deepEqual(getPropertySuccessRoutes(propertyId), {
@@ -308,6 +318,7 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   assert.equal(isBasicApartmentFollowUpCapture('apartment', 'studio', 'standard_apartment'), false);
   assert.equal(isBasicApartmentFollowUpCapture('floor', 'standard', undefined), false);
   assert.match(apartmentSubtype, /updateCaptureDetails\(\{ apartmentSubtype: 'standard_apartment' \}\)/);
+  assert.match(apartmentSubtype, /apartmentSubtype: 'standard_apartment'/);
   assert.match(apartmentSubtype, /getPropertyFormRoute\(\{/);
   assert.match(apartmentSubtype, /apartmentSubtype,\s*\.\.\.\(seekerId \? \{ seekerId \} : \{\}\)/);
   assert.deepEqual(getPropertyFormRoute({
@@ -330,17 +341,19 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   assert.match(location, /apartmentSubtype\?: string/);
   assert.match(location, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
   assert.match(summary, /isBasicApartmentFollowUpCapture\(\s*draft\.propertyType,\s*apartmentSubtype,\s*captureDetails\.apartmentSubtype/);
-  assert.match(summary, /hasApartmentDetailsToPreserve\(captureDetails\)/);
-  assert.match(legacyCapture, /hasApartmentDetailsToPreserve\(captureDetails\)/);
+  assert.match(summary, /hasCaptureEnrichmentValues\(captureDetails, draft\.description\?\.value\)/);
+  assert.match(summary, /shouldSaveBasicCapture\(/);
+  assert.match(legacyCapture, /hasCaptureEnrichmentValues\(captureDetails, draft\.description\?\.value \|\| description\)/);
+  assert.match(legacyCapture, /shouldSaveBasicCapture\(/);
   assert.match(legacyCapture, /\{!isBasicApartmentFollowUp && \(/);
-  assert.match(summary, /candidate = !saveBasicOnly && projection && projection\.ok/);
-  assert.match(summary, /if \(!saveBasicOnly && candidate && projection\?\.ok\)/);
+  assert.match(summary, /candidate = \(!saveBasicOnly \|\| !isBasicApartmentFollowUp\) && projection && projection\.ok/);
+  assert.match(summary, /if \(candidate && projection\?\.ok\)/);
   assert.match(summary, /savePropertyWithRecovery\(\s*projection && projection\.ok \? projection\.property : undefined/);
-  assert.match(summary, /propertyCoreId: savedId,[\s\S]*basicApartmentFollowUp: '1'/);
+  assert.match(summary, /propertyCoreId: savedId,[\s\S]*basicCaptureFollowUp: '1'/);
   assert.match(legacyCapture, /candidate = isBasicApartmentFollowUp[\s\S]*buildPropertyWithCaptureDetails/);
   assert.match(legacyCapture, /!isBasicApartmentFollowUp && getCaptureMapsLinkValidationError/);
-  assert.match(legacyCapture, /basicApartmentFollowUp: '1'/);
-  assert.match(success, /basicApartmentFollowUp === '1' && propertyCoreId \?/);
+  assert.match(legacyCapture, /basicCaptureFollowUp: '1'/);
+  assert.match(success, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
   assert.match(basicActions, /btn-add-property-details/);
   assert.match(basicActions, /btn-finish-later/);
   assert.doesNotMatch(basicActions, /btn-view-property|btn-view-properties|btn-later/);
@@ -348,48 +361,182 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   assert.match(success, /title=\{t\('summary\.later'\)\}[\s\S]*navigateOnce\(destinations\.home, true\)/);
   assert.match(success, /testID="btn-add-property-details"/);
   assert.match(success, /testID="btn-finish-later"/);
-  assert.match(enrichment, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\?edit=1`/);
+  assert.match(enrichment, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
 });
 
-test('REGRESSION: native Summary press ignores its event and routes to the two BASIC success actions', async () => {
-  const summary = await readFile('app/capture/summary.tsx', 'utf8');
+test('REGRESSION: capture success check uses success green with a contrasting foreground', async () => {
   const success = await readFile('app/capture/success.tsx', 'utf8');
-  const saveExpression = summary.match(/const saveBasicOnly = ([^;]+);/)?.[1];
-  const onPressExpression = summary.match(/onPress=\{(\(\) => \{ void handleFinish\(\); \})\}/)?.[1];
-  const markerSpread = summary.match(/(\.\.\.\(saveBasicOnly \? \{ basicApartmentFollowUp: '1' \} : \{\}\))/)?.[1];
+  const palette = await readFile('constants/colors.ts', 'utf8');
+  assert.match(success, /backgroundColor: colors\.success/);
+  assert.match(success, /<Feather name="check" size=\{42\} color=\{colors\.primaryForeground\}/);
+  assert.doesNotMatch(success, /backgroundColor: colors\.accent/);
+  assert.match(palette, /success: '#16A34A'/);
+  assert.match(palette, /primaryForeground: '#FFFFFF'/);
+});
 
-  assert.ok(saveExpression, 'Summary production save decision must be present');
-  assert.ok(onPressExpression, 'Summary must wrap handleFinish instead of passing it as Button onPress');
-  assert.ok(markerSpread, 'BASIC save must emit the production success marker');
+test('BEHAVIOR: full Offered and Wanted route matrix preserves each selected property type', async () => {
+  const selections = getSupportedPropertyFormSelections();
+  assert.equal(selections.length, 2 * 2 * (PROPERTY_TYPES.length - 1 + APARTMENT_SUBTYPES.length));
 
-  const calculateSaveBasicOnly = new Function(
-    'isBasicApartmentFollowUp',
-    'includeCapturedDetails',
-    `return ${saveExpression};`,
-  ) as (isBasicApartmentFollowUp: boolean, includeCapturedDetails?: unknown) => boolean;
-  const buildSuccessParams = new Function(
-    'saveBasicOnly',
-    `return ({ ${markerSpread} });`,
-  ) as (saveBasicOnly: boolean) => Record<string, string>;
+  for (const selection of selections) {
+    const target = getPropertyFormRoute(selection);
+    assert.equal(target.params.mode, selection.mode);
+    assert.equal(target.params.transaction, selection.transaction);
+    assert.equal(target.params.propertyType, selection.propertyType);
 
-  const nativePressEvent = { nativeEvent: { target: 1 } };
-  assert.equal(calculateSaveBasicOnly(true, nativePressEvent), false,
-    'Passing a truthy React Native press event directly would select the details path');
+    if (selection.propertyType === 'apartment' && selection.apartmentSubtype === 'studio') {
+      assert.equal(target.kind, 'studio');
+      assert.equal(target.pathname, '/capture/studio');
+      assert.equal(target.params.apartmentSubtype, 'studio');
+    } else if (selection.mode === 'wanted') {
+      assert.equal(target.kind, 'wanted');
+      assert.equal(target.pathname, '/requirement/new');
+      assert.equal(target.params.purpose, selection.transaction === 'sale' ? 'buy' : 'rent');
+    } else if (selection.propertyType === 'floor') {
+      assert.equal(target.kind, 'floor');
+      assert.equal(target.pathname, '/capture');
+    } else {
+      assert.equal(target.kind, 'offered');
+      assert.equal(target.pathname, '/capture/price');
+    }
+  }
 
-  let successParams: Record<string, string> | undefined;
-  const handleFinish = (includeCapturedDetails = false) => {
-    const saveBasicOnly = calculateSaveBasicOnly(true, includeCapturedDetails);
-    successParams = buildSuccessParams(saveBasicOnly);
+  const context = {
+    mode: 'wanted' as const,
+    transaction: 'rent' as const,
+    seekerId: 'person / selected',
+    linkPersonId: 'person / linked',
+    sourceRole: 'owner',
   };
-  const productionOnPress = new Function(
-    'handleFinish',
-    `return ${onPressExpression};`,
-  )(handleFinish) as (event: typeof nativePressEvent) => void;
-  productionOnPress(nativePressEvent);
+  assert.deepEqual(getPropertyTypeSelectionRoute(context), {
+    pathname: '/capture/property-type',
+    params: context,
+  });
 
-  assert.deepEqual(successParams, { basicApartmentFollowUp: '1' });
+  for (const mode of ['offered', 'wanted'] as const) {
+    const floor = getPropertyFormRoute({
+      mode,
+      transaction: 'sale',
+      propertyType: 'floor',
+      apartmentSubtype: 'standard',
+    });
+    assert.equal(floor.params.propertyType, 'floor');
+    assert.equal(floor.params.apartmentSubtype, undefined);
+    assert.notEqual(floor.kind, 'apartment-subtype');
+    assert.notEqual(floor.kind, 'studio');
+    assert.equal(
+      floor.pathname,
+      mode === 'wanted' ? '/requirement/new' : '/capture',
+      'Floor selection stays on the existing offered/wanted floor form route',
+    );
+  }
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(capture, /<ModernPropertyForm[\s\S]*onChange=\{\(field: PropertyDetailField, value: string\) => field === 'floorUse' \? chooseFloorUse\(value\)/);
+  const enrichmentFields = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
+  assert.match(enrichmentFields, /field === 'floorUse' \? \['residential', 'commercial'\]/);
+});
+
+test('REGRESSION: Standard Apartment BASIC completion persists canonical subtype and reopens its editor directly', async () => {
+  const projection = projectDraftToProperty({
+    propertyCoreId: 'standard-basic-projection',
+    offerId: 'standard-basic-offer',
+    propertyType: 'apartment',
+    apartmentSubtype: 'standard_apartment',
+    transaction: 'rent',
+    rentalPrice: { amount: 800, currencyCode: 'KWD' },
+    rentalPeriodId: 'monthly',
+    locationAreaId: 'salmiya',
+  });
+  assert.equal(projection.ok, true);
+  if (projection.ok) {
+    assert.deepEqual(projection.value.typeDetails, {
+      propertyType: 'apartment',
+      apartmentSubtype: 'standard_apartment',
+    });
+  }
+
+  const apartment = {
+    ...baseline,
+    core: { ...baseline.core, propertyType: 'apartment' as const },
+  } as Property;
+  const basicCandidate = buildPropertyWithCaptureDetails(apartment, {
+    apartmentSubtype: 'standard_apartment',
+  });
+  assert.equal(basicCandidate.core.id, apartment.core.id);
+  assert.deepEqual(basicCandidate.typeDetails, {
+    propertyType: 'apartment',
+    apartmentSubtype: 'standard_apartment',
+  });
+  assert.equal(createEditDraft(basicCandidate).choices.canonicalDetails?.apartmentSubtype, 'standard_apartment');
+  assert.equal(getPropertyEditFormHref(apartment.core.id, 'apartment', 'standard_apartment'), `/property/${apartment.core.id}/edit`);
+  assert.throws(
+    () => buildPropertyWithCaptureDetails(apartment, { apartmentSubtype: 'unsupported-subtype' }),
+    /UNSUPPORTED_APARTMENT_SUBTYPE/,
+  );
+
+  assert.throws(
+    () => getPropertyFormRoute({
+      mode: 'offered',
+      transaction: 'sale',
+      propertyType: 'apartment',
+      apartmentSubtype: 'unsupported-subtype' as never,
+    }),
+    /UNSUPPORTED_APARTMENT_SUBTYPE/,
+  );
+  assert.equal(getPropertyFormRoute({
+    mode: 'offered',
+    transaction: 'rent',
+    propertyType: 'floor',
+    apartmentSubtype: 'duplex',
+  }).pathname, '/capture', 'stale Apartment subtype cannot change the explicit Floor route');
+  assert.throws(
+    () => getPropertyEditFormHref(apartment.core.id, 'apartment', 'unsupported-subtype' as never),
+    /UNSUPPORTED_APARTMENT_SUBTYPE/,
+  );
+});
+
+test('BEHAVIOR: non-Apartment BASIC capture enables Add details follow-up without losing full saves', async () => {
+  const summary = await readFile('app/capture/summary.tsx', 'utf8');
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  const success = await readFile('app/capture/success.tsx', 'utf8');
+  const floorBasic = buildPropertyWithCaptureDetails(baseline, {});
+  assert.equal(shouldSaveBasicCapture({}), true);
+  assert.equal(hasCaptureEnrichmentValues({}), false);
+  assert.equal(floorBasic.core.propertyType, 'floor');
+  assert.equal(floorBasic.typeDetails, undefined,
+    'Floor can be saved BASIC without requiring Residential/Commercial use');
+  assert.equal(shouldSaveBasicCapture({}, undefined, false, true), false,
+    'explicitly including details selects the full-save path even with no detail values');
+  assert.throws(
+    () => buildPropertyWithCaptureDetails(baseline, { bedroomCount: '2' }),
+    /FLOOR_USE_REQUIRED/,
+    'Floor use is required only when enriched Floor facts are saved',
+  );
+  const floorFull = buildPropertyWithCaptureDetails(baseline, {
+    floorUse: 'residential',
+    bedroomCount: '2',
+  });
+  assert.equal((floorFull.typeDetails as Record<string, unknown> | undefined)?.floorUse, 'residential');
+  assert.equal(shouldSaveBasicCapture({ floorUse: 'residential', bedroomCount: '2' }), false);
+
+  const villa = {
+    ...baseline,
+    core: { ...baseline.core, propertyType: 'villa' as const },
+  } as Property;
+  assert.equal(buildPropertyWithCaptureDetails(villa, {}).typeDetails, undefined);
+  assert.equal(shouldSaveBasicCapture({}), true,
+    'another existing non-Apartment type can use the same BASIC follow-up');
+  const villaFull = buildPropertyWithCaptureDetails(villa, { bedroomCount: '3' });
+  assert.equal((villaFull.typeDetails as Record<string, unknown> | undefined)?.bedroomCount, 3);
+  assert.equal(shouldSaveBasicCapture({ bedroomCount: '3' }), false);
+
+  assert.match(summary, /candidate = \(!saveBasicOnly \|\| !isBasicApartmentFollowUp\) && projection && projection\.ok/);
+  assert.match(summary, /basicCaptureFollowUp: '1'/);
+  assert.match(capture, /isBasicCaptureFollowUp = shouldSaveBasicCapture\(/);
+  assert.match(capture, /basicCaptureFollowUp: '1'/);
+  assert.match(success, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
   const basicSuccessActions = success
-    .split("basicApartmentFollowUp === '1' && propertyCoreId ?")[1]
+    .split('showCaptureFollowUp && propertyCoreId ?')[1]
     ?.split(') : propertyCoreId ?')[0] ?? '';
   assert.equal((basicSuccessActions.match(/testID="btn-/g) ?? []).length, 2);
   assert.match(basicSuccessActions, /testID="btn-add-property-details"/);
@@ -461,12 +608,14 @@ test('BEHAVIOR: Floor transition scopes are record-owned for stale protection', 
   assert.notEqual(captureDetailsScopeKey('property-a'), captureDetailsScopeKey('property-b'));
 });
 
-test('BEHAVIOR: incompatible detail values are omitted from the candidate', () => {
-  const candidate = buildPropertyWithCaptureDetails(baseline, {
-    floorUse: 'commercial',
-    bedroomCount: '3',
-  });
-  assert.equal((candidate.typeDetails as unknown as Record<string, unknown>).bedroomCount, undefined);
+test('BEHAVIOR: incompatible Floor details block save instead of being silently omitted', () => {
+  assert.throws(
+    () => buildPropertyWithCaptureDetails(baseline, {
+      floorUse: 'commercial',
+      bedroomCount: '3',
+    }),
+    /FLOOR_CAPTURE_DETAIL_INCOMPATIBLE/,
+  );
 });
 
 test('BEHAVIOR: capture detail CAS success clears evidence after stored round trip', async () => {

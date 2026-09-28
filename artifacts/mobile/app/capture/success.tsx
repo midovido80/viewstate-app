@@ -14,10 +14,12 @@ export default function SuccessScreen() {
   const {
     propertyCoreId,
     linkPersonId,
+    basicCaptureFollowUp,
     basicApartmentFollowUp,
   } = useLocalSearchParams<{
     propertyCoreId?: string;
     linkPersonId?: string;
+    basicCaptureFollowUp?: string;
     basicApartmentFollowUp?: string;
   }>();
   const colors = useColors();
@@ -30,6 +32,7 @@ export default function SuccessScreen() {
     else router.push(destination as never);
   };
   const destinations = getPropertySuccessRoutes(propertyCoreId);
+  const showCaptureFollowUp = basicCaptureFollowUp === '1' || basicApartmentFollowUp === '1';
 
   return (
     <View
@@ -42,8 +45,8 @@ export default function SuccessScreen() {
         },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
-        <Feather name="check" size={42} color={colors.accentForeground} />
+      <View style={[styles.iconWrap, { backgroundColor: colors.success }]}>
+        <Feather name="check" size={42} color={colors.primaryForeground} />
       </View>
       <Text
         style={[
@@ -62,7 +65,7 @@ export default function SuccessScreen() {
         {t('summary.success_detail')}
       </Text>
       <View style={styles.spacer} />
-      {basicApartmentFollowUp === '1' && propertyCoreId ? (
+      {showCaptureFollowUp && propertyCoreId ? (
         <>
           <Button
             title={t('summary.add_details')}

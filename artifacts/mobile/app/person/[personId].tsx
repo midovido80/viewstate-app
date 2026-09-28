@@ -42,10 +42,9 @@ import {
 import { store } from '@/services/persistence';
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 import {
-  getPersonActivityMoreLabel,
-  getPersonDirectActivityLines,
   getPropertyCardSummary,
 } from '@/services/cardSummaryPresentation';
+import { ensureStudioPropertySourceLink } from '@/services/studioSave';
 
 export function getPersonWantedRequirementRoute(personId: string) {
   return {
@@ -204,14 +203,18 @@ export default function PersonDetailScreen() {
     }
   };
 
-  const openLink = async () => {
+  const openLink = async (preferredRole?: PropertySource['role'] | null) => {
     setPropertySearch('');
     setSelectedProperty(null);
     const eligibleRoles = person?.classifications.filter(
       (classification): classification is PropertySource['role'] =>
         sourceRoles.includes(classification as PropertySource['role']),
     ) ?? [];
-    setSelectedSourceRole(eligibleRoles.length === 1 ? eligibleRoles[0] : null);
+    setSelectedSourceRole(
+      preferredRole && eligibleRoles.includes(preferredRole)
+        ? preferredRole
+        : eligibleRoles.length === 1 ? eligibleRoles[0] : null,
+    );
     setProperties(await store.getProperties());
     setLinkOpen(true);
   };
@@ -229,15 +232,7 @@ export default function PersonDetailScreen() {
       if (!person.classifications.includes(selectedSourceRole)) {
         throw new Error('SOURCE_ROLE_MISMATCH');
       }
-      const currentLinks = await store.getLinksForPerson(person.id);
-      if (!currentLinks.some(item => item.propertyCoreId === selectedProperty.core.id)) {
-        await store.linkPersonToProperty({ personId: person.id, propertyCoreId: selectedProperty.core.id });
-      }
-      await store.setPropertySource({
-        personId: person.id,
-        propertyCoreId: selectedProperty.core.id,
-        role: selectedSourceRole,
-      });
+      await ensureStudioPropertySourceLink(selectedProperty.core.id, person.id, selectedSourceRole, store);
       setLinkOpen(false);
       setSelectedProperty(null);
       setConfirmation(language === 'ar' ? 'تم ربط العقار بالشخص' : 'Property linked to person');
@@ -354,16 +349,6 @@ export default function PersonDetailScreen() {
     formatRentalPrice: (amount: number, currencyCode: string, period?: string) =>
       formatRentalPrice(amount, currencyCode, period, language, key => t(key as keyof Translations)),
   };
-  const personActivity = person
-    ? getPersonDirectActivityLines(
-      person.id,
-      [...linked, ...sourced.map(item => item.property)],
-      requirements,
-      linked.map(property => ({ personId: person.id, propertyCoreId: property.core.id })),
-      sourced.map(item => item.source),
-      cardSummaryFormatters,
-    )
-    : [];
   const inputStyle = [styles.input, {
     color: colors.foreground,
     backgroundColor: colors.card,
@@ -481,27 +466,6 @@ export default function PersonDetailScreen() {
             <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
               {person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            {personActivity.length ? (
-              <View style={[styles.property, { backgroundColor: colors.card, borderColor: colors.border }]} testID="person-direct-activity">
-                {personActivity.slice(0, 2).map(activity => (
-                  <TouchableOpacity
-                    key={activity.key}
-                    onPress={() => router.push(activity.href as never)}
-                    testID={`person-activity-${activity.kind}-${activity.id}`}
-                    accessibilityRole="link"
-                  >
-                    <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
-                      {activity.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                {personActivity.length > 2 ? (
-                  <Text testID="person-activity-more" style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
-                    {getPersonActivityMoreLabel(personActivity.length - 2, language)}
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
             <Button
               title={primaryActionLabel}
               onPress={activatePrimaryAction}
@@ -509,13 +473,13 @@ export default function PersonDetailScreen() {
             />
             {confirmation ? (
               <View
-                style={[styles.confirmation, { backgroundColor: colors.accent, borderColor: colors.border }]}
+                style={[styles.confirmation, { backgroundColor: colors.secondary, borderColor: colors.success }]}
                 accessibilityRole="text"
                 accessible
                 accessibilityLiveRegion="polite"
                 testID="person-action-confirmation"
               >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
+                <Text style={{ color: colors.success, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
               </View>
             ) : null}
             <View style={styles.actions}>
@@ -656,7 +620,7 @@ export default function PersonDetailScreen() {
           <View style={[styles.dialog, { backgroundColor: colors.card, borderColor: colors.border }]} testID="person-property-action-chooser">
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{language === 'ar' ? 'إضافة أو ربط عقار' : 'Add or link property'}</Text>
             <Button title={language === 'ar' ? 'إضافة عقار' : 'Add property'} onPress={() => { const role = selectedSourceRole; setPropertyActionChooserOpen(false); if (role && person.classifications.includes(role)) router.push({ pathname: '/capture/transaction', params: { mode: 'offered', linkPersonId: person.id, sourceRole: role } } as never); }} testID="person-add-property" />
-            <Button title={t('people.link')} onPress={() => { setPropertyActionChooserOpen(false); void openLink(); }} variant="outline" testID="person-link-existing-property" />
+            <Button title={t('people.link')} onPress={() => { const role = selectedSourceRole; setPropertyActionChooserOpen(false); void openLink(role); }} variant="outline" testID="person-link-existing-property" />
             <Button title={t('capture.cancel')} onPress={() => setPropertyActionChooserOpen(false)} variant="outline" />
           </View>
         </View>

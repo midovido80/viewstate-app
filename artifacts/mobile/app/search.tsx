@@ -216,8 +216,8 @@ export default function GlobalSearchScreen() {
         return recordMissing();
       }
       router.push({
-        pathname: '/requirement/[requirementId]',
-        params: { requirementId: requirement.id, seekerId: seeker.id },
+        pathname: '/requirement/view/[requirementId]',
+        params: { requirementId: requirement.id },
       } as never);
     } catch {
       setState({ status: 'error' });
@@ -346,7 +346,10 @@ export default function GlobalSearchScreen() {
                     key={person.id}
                     icon="user"
                     title={person.name}
-                    subtitle={`${person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')} · ${matchReasonLabel(results.why.people.get(person.id)!, t)}`}
+                    subtitle={[
+                      ...person.classifications.map(value => t(`people.classification.${value}` as keyof Translations)),
+                      matchReasonLabel(results.why.people.get(person.id)!, t),
+                    ].join(' · ')}
                     onPress={() => void openPerson(person)}
                     testID={`search-person-${person.id}`}
                   />

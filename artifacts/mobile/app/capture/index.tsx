@@ -38,7 +38,10 @@ import {
 import {
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  hasCaptureEnrichmentValues,
+  isBasicApartmentFollowUpCapture,
   preserveCaptureOwnershipAndEvidence,
+  shouldSaveBasicCapture,
   type CaptureDetailValues,
 } from '@/services/propertyCaptureDetails';
 import {
@@ -60,10 +63,11 @@ import {
 } from '@/services/attachments';
 import { requestCurrentCoordinates, normalizeGoogleMapsLink, pastedMapLocation, openPastedLocationLink } from '@/services/location';
 import { getAreaById } from '@/constants/kuwait-areas';
-import type { Transaction, PropertyDetailField } from '@workspace/property-domain';
+import type { Transaction, PropertyDetailField, PropertyType } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
 import { PROPERTY_DEMO_CATALOG, getDemoCategory, getGenericCaptureTypesForTransaction, DEMO_NEARBY_SERVICES, parseDemoNumericInput, hasPopulatedCategoryCapture, createDemoCategoryTransitionProposal, applyDemoCategoryTransition, createDemoTransactionTransitionProposal, applyDemoTransactionTransition, canonicalApartmentSubtypeForCategory } from '@/services/propertyDemoCatalog';
-import { PROPERTY_SOURCE_ROLES } from '@/services/people';
+import type { PropertySourceRole } from '@/services/people';
+import { ensureStudioPropertySourceLink, getStudioPersonSourceRole } from '@/services/studioSave';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
 import {
@@ -72,21 +76,17 @@ import {
   selectNumericQuickPick,
 } from '@/services/numericQuickPick';
 
-function hasApartmentDetailsToPreserve(details: CaptureDetailValues): boolean {
-  const { apartmentSubtype: _subtype, ...optionalDetails } = details;
-  return details.areaSquareMeters !== undefined
-    || hasPopulatedCategoryCapture(optionalDetails as Record<string, unknown>);
-}
-
 export function isGenericStudioCaptureBlocked(
   routeApartmentSubtype?: string,
   draftPropertyType?: string,
   savedApartmentSubtype?: string,
   categoryApartmentSubtype?: string,
 ): boolean {
-  return routeApartmentSubtype === 'studio'
-    || (draftPropertyType === 'apartment' && savedApartmentSubtype === 'studio')
-    || categoryApartmentSubtype === 'studio';
+  if (draftPropertyType !== undefined && draftPropertyType !== 'apartment') return false;
+  if (routeApartmentSubtype === 'standard' || routeApartmentSubtype === 'standard_apartment') return false;
+  if (routeApartmentSubtype !== undefined) return true;
+  return (draftPropertyType === 'apartment' && savedApartmentSubtype === 'studio')
+    || (draftPropertyType === 'apartment' && categoryApartmentSubtype === 'studio');
 }
 
 export function getLegacyStudioCaptureEscapeTarget(
@@ -132,11 +132,15 @@ export default function CaptureWorkflow() {
     linkPersonId?: string | string[];
     sourceRole?: string | string[];
     apartmentSubtype?: string | string[];
+    propertyType?: string | string[];
     transaction?: string | string[];
   }>();
   const linkPersonId = firstCaptureParam(routeParams.linkPersonId);
   const sourceRole = firstCaptureParam(routeParams.sourceRole);
   const routeApartmentSubtype = firstCaptureParam(routeParams.apartmentSubtype);
+  const routePropertyTypeParam = firstCaptureParam(routeParams.propertyType);
+  const routePropertyType = PROPERTY_FORM_TYPES.find(type => type === routePropertyTypeParam);
+  const hasInvalidExplicitPropertyType = routePropertyTypeParam !== undefined && routePropertyType === undefined;
   const routeTransaction = firstCaptureParam(routeParams.transaction);
   // sourceRole remains on the capture route contract for the summary handoff.
   const insets = useSafeAreaInsets();
@@ -156,9 +160,14 @@ export default function CaptureWorkflow() {
     getCurrentCaptureDetails,
     getCurrentDraft,
   } = useCapture();
-  const isStandardApartmentCapture = draft.propertyType === 'apartment'
-    && captureDetails.apartmentSubtype !== 'studio'
-    && captureDetails.apartmentSubtype !== 'duplex';
+  const selectedPropertyType: PropertyType | undefined = routePropertyTypeParam === undefined
+    ? draft.propertyType
+    : routePropertyType;
+  const isStandardApartmentCapture = isBasicApartmentFollowUpCapture(
+    selectedPropertyType,
+    routeApartmentSubtype,
+    captureDetails.apartmentSubtype,
+  );
   const [reviewApartmentDetails, setReviewApartmentDetails] = useState(false);
   const isBasicApartmentFollowUp = isStandardApartmentCapture && !reviewApartmentDetails;
   const [stage, setStage] = useState<1 | 2 | 3>(draft.propertyType && draft.transaction ? 2 : 1);
@@ -170,10 +179,22 @@ export default function CaptureWorkflow() {
     }
   });
   const [description, setDescription] = useState(draft.description?.value ?? '');
+  const isBasicCaptureFollowUp = shouldSaveBasicCapture(
+    captureDetails,
+    draft.description?.value || description,
+    isBasicApartmentFollowUp,
+  );
   const [block, setBlock] = useState(draft.block ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
+  const sourceLinkRecoveryRef = useRef<{
+    propertyCoreId: string;
+    personId: string;
+    role: PropertySourceRole;
+    basicCaptureFollowUp: boolean;
+    sourceConfirmed: boolean;
+  } | null>(null);
   const [pendingFloorTransition, setPendingFloorTransition] = useState<FloorTransitionProposal | null>(null);
   const [quickErrors, setQuickErrors] = useState<Record<string, string>>({});
   const [areaValidation, setAreaValidation] = useState({ required: false });
@@ -187,9 +208,9 @@ export default function CaptureWorkflow() {
   } | null>(null);
   const demoMetadata = captureDetails.demoMetadata;
   const demoCategory = getDemoCategory(demoMetadata?.categoryId);
-  const isStudioCaptureBlocked = isGenericStudioCaptureBlocked(
+  const isStudioCaptureBlocked = hasInvalidExplicitPropertyType || isGenericStudioCaptureBlocked(
     routeApartmentSubtype,
-    draft.propertyType,
+    selectedPropertyType,
     captureDetails.apartmentSubtype,
     demoMetadata?.categoryId ? canonicalApartmentSubtypeForCategory(demoMetadata.categoryId) : undefined,
   );
@@ -546,7 +567,7 @@ export default function CaptureWorkflow() {
     if (!draft.locationAreaId) return;
     if (
       isBasicApartmentFollowUp
-      && (hasApartmentDetailsToPreserve(captureDetails) || Boolean(draft.description?.value) || Boolean(description))
+      && hasCaptureEnrichmentValues(captureDetails, draft.description?.value || description)
     ) {
       Alert.alert(
         language === 'ar' ? 'توجد تفاصيل محفوظة في المسودة' : 'This draft has saved details',
@@ -577,32 +598,76 @@ export default function CaptureWorkflow() {
     setStage(3);
   };
 
+  const replaceWithCaptureSuccess = (
+    propertyCoreId: string,
+    basicFollowUp: boolean,
+    personId?: string,
+    role?: PropertySourceRole,
+  ) => {
+    router.replace({
+      pathname: '/capture/success',
+      params: {
+        propertyCoreId,
+        ...(basicFollowUp ? { basicCaptureFollowUp: '1' } : {}),
+        ...(personId ? { linkPersonId: personId } : {}),
+        ...(role ? { sourceRole: role } : {}),
+      },
+    } as never);
+  };
+
   const save = async () => {
     if (isStudioCaptureBlocked) return;
     if (saveFlight.current) return;
     saveFlight.current = true;
     setSaveError(null);
-    const projection = projectToProperty();
-    if (!projection.ok) {
-      saveFlight.current = false;
-      Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
-      return;
-    }
     setSubmitting(true);
     try {
-      // Validate the private relationship before creating the property. This
-      // prevents an invalid source selection from leaving an unowned save.
-      if (linkPersonId && sourceRole) {
-        if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) {
-          throw new Error('SOURCE_ROLE_MISMATCH');
+      const pendingSourceLink = sourceLinkRecoveryRef.current;
+      if (pendingSourceLink) {
+        if (!pendingSourceLink.sourceConfirmed) {
+          await ensureStudioPropertySourceLink(
+            pendingSourceLink.propertyCoreId,
+            pendingSourceLink.personId,
+            pendingSourceLink.role,
+            store,
+          );
+          sourceLinkRecoveryRef.current = { ...pendingSourceLink, sourceConfirmed: true };
         }
+        const detailsCleared = await clearCaptureDetails(pendingSourceLink.propertyCoreId);
+        if (!detailsCleared && Object.keys(captureDetails).length > 0) {
+          throw new Error('CAPTURE_DETAILS_CLEANUP_FAILED');
+        }
+        sourceLinkRecoveryRef.current = null;
+        replaceWithCaptureSuccess(
+          pendingSourceLink.propertyCoreId,
+          pendingSourceLink.basicCaptureFollowUp,
+          pendingSourceLink.personId,
+          pendingSourceLink.role,
+        );
+        return;
+      }
+
+      const projection = projectToProperty();
+      if (!projection.ok) {
+        Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
+        return;
+      }
+
+      // Resolve the exact source role before creating the Property. Missing or
+      // ambiguous Person context is rejected; no default owner is inferred.
+      let resolvedSourceRole: PropertySourceRole | null = null;
+      if (linkPersonId) {
         const linkedPerson = await store.getPerson(linkPersonId);
         if (!linkedPerson) {
           throw new Error('SOURCE_ROLE_MISMATCH');
         }
+        resolvedSourceRole = getStudioPersonSourceRole(linkedPerson, sourceRole);
+        if (!resolvedSourceRole) {
+          throw new Error('SOURCE_ROLE_MISMATCH');
+        }
       }
       const candidate = isBasicApartmentFollowUp
-        ? undefined
+        ? buildPropertyWithCaptureDetails(projection.property, { apartmentSubtype: 'standard_apartment' }, true)
         : buildPropertyWithCaptureDetails(projection.property, captureDetails, true);
       const evidence = candidate
         ? await prepareCapturedDetails(projection.property, candidate)
@@ -615,35 +680,61 @@ export default function CaptureWorkflow() {
       if (evidence) {
         await finalizeCapturedDetails(store, evidence);
       }
-      if (linkPersonId) {
-        if (sourceRole) {
-          if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) throw new Error('SOURCE_ROLE_MISMATCH');
-          const linkedPerson = await store.getPerson(linkPersonId);
-          if (!linkedPerson) {
-            throw new Error('SOURCE_ROLE_MISMATCH');
-          }
-          await store.setPropertySource({
-            personId: linkPersonId,
-            propertyCoreId: projection.property.core.id,
-            role: sourceRole as import('@/services/people').PropertySourceRole,
-          });
-        }
-        await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: projection.property.core.id });
-      }
-      await clearCaptureDetails(projection.property.core.id);
-      router.replace({
-        pathname: '/capture/success',
-        params: {
+      if (linkPersonId && resolvedSourceRole) {
+        const sourceRecovery = {
           propertyCoreId: projection.property.core.id,
-          ...(isBasicApartmentFollowUp ? { basicApartmentFollowUp: '1' } : {}),
-          ...(linkPersonId ? { linkPersonId } : {}),
-          ...(sourceRole ? { sourceRole } : {}),
-        },
-      } as never);
+          personId: linkPersonId,
+          role: resolvedSourceRole,
+          basicCaptureFollowUp: isBasicCaptureFollowUp,
+          sourceConfirmed: false,
+        };
+        sourceLinkRecoveryRef.current = sourceRecovery;
+        await ensureStudioPropertySourceLink(
+          projection.property.core.id,
+          linkPersonId,
+          resolvedSourceRole,
+          store,
+        );
+        sourceLinkRecoveryRef.current = {
+          ...sourceRecovery,
+          sourceConfirmed: true,
+        };
+      }
+      const detailsCleared = await clearCaptureDetails(projection.property.core.id);
+      if (!detailsCleared && Object.keys(captureDetails).length > 0) {
+        throw new Error('CAPTURE_DETAILS_CLEANUP_FAILED');
+      }
+      sourceLinkRecoveryRef.current = null;
+      replaceWithCaptureSuccess(
+        projection.property.core.id,
+        isBasicCaptureFollowUp,
+        linkPersonId,
+        resolvedSourceRole ?? undefined,
+      );
     } catch (error) {
       console.error('Capture workflow save failed:', error);
-      const message = error instanceof Error && error.message === 'INVALID_LOCATION_LINK'
+      const message = sourceLinkRecoveryRef.current && !sourceLinkRecoveryRef.current.sourceConfirmed
+        ? (language === 'ar'
+          ? 'تم حفظ العقار، لكن لم يتم تأكيد ربط الشخص. أعد المحاولة لتأكيد الربط نفسه؛ لن يُحفظ العقار مرة أخرى.'
+          : 'The property was saved, but the Person link was not confirmed. Retry to verify the same link; the property will not be saved again.')
+        : sourceLinkRecoveryRef.current
+        ? (language === 'ar'
+          ? 'تم تأكيد ربط الشخص، لكن تعذر تنظيف بيانات المسودة. أعد المحاولة لإكمال الحفظ.'
+          : 'The Person link is confirmed, but capture-draft cleanup failed. Retry to complete the save.')
+        : error instanceof Error && error.message === 'SOURCE_ROLE_MISMATCH'
+        ? (language === 'ar'
+          ? 'تعذر التحقق من دور الشخص المحدد. اختر دوراً صالحاً وحاول مرة أخرى.'
+          : 'The selected Person source role could not be verified. Choose a valid role and try again.')
+        : error instanceof Error && error.message === 'INVALID_LOCATION_LINK'
         ? t('enrich.maps_link_invalid')
+        : error instanceof Error && error.message === 'FLOOR_USE_REQUIRED'
+        ? (language === 'ar'
+          ? 'اختر الاستخدام السكني أو التجاري للدور قبل حفظ تفاصيله.'
+          : 'Choose Residential or Commercial Floor use before saving Floor details.')
+        : error instanceof Error && error.message === 'FLOOR_CAPTURE_DETAIL_INCOMPATIBLE'
+        ? (language === 'ar'
+          ? 'بعض تفاصيل الدور لا تتوافق مع الاستخدام المحدد. صحح التفاصيل ثم أعد المحاولة.'
+          : 'Some Floor details do not match the selected use. Correct them before saving.')
         : error instanceof Error && error.message.startsWith('INVALID_CAPTURE_DETAILS:')
         ? (language === 'ar'
           ? 'تحقق من أعداد الوحدات: يجب ألا يتجاوز مجموع الشقق والمحلات والمكاتب عدد الوحدات، ثم أعد المحاولة.'

@@ -81,7 +81,11 @@ export default function ApartmentSubtypeScreen() {
       return;
     }
 
-    if (!updateDraft({ propertyType: 'apartment', ...(transaction ? { transaction } : {}) })) return;
+    if (!updateDraft({
+      propertyType: 'apartment',
+      apartmentSubtype: 'standard_apartment',
+      ...(transaction ? { transaction } : {}),
+    })) return;
     if (!updateCaptureDetails({ apartmentSubtype: 'standard_apartment' })) return;
     router.push({
       pathname: target.pathname,

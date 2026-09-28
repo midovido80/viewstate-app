@@ -52,6 +52,22 @@ test('legacy and normal Property edit URLs forward Studio by same ID; other prop
   assert.match(screen, /router\.push\(getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
 });
 
+test('Person-origin Offered Studio validates its exact source context before Property save', async () => {
+  const screen = await source('../app/capture/studio.tsx');
+  const saveFlow = screen.slice(
+    screen.indexOf('const doSave = async () =>'),
+    screen.indexOf('const retryPropertySave = async () =>'),
+  );
+  const sourceValidation = saveFlow.indexOf('saveStudioPropertyFromPersonSource(');
+  const propertySave = saveFlow.indexOf('saveStudioProperty({');
+  assert.ok(sourceValidation >= 0 && propertySave >= 0 && sourceValidation < propertySave);
+  assert.match(saveFlow, /if \(linkPersonId && !editing\)/);
+  assert.match(saveFlow, /requestedRole: sourceRole/);
+  assert.match(screen, /sourceContext\.current = sourceSave\.sourceContext/);
+  assert.match(screen, /ensureStudioPropertySourceLink\(property\.core\.id, context\.personId, context\.role, store\)/);
+  assert.match(screen, /const context = sourceContext\.current\?\.personId === linkPersonId[\s\S]*resolveStudioPersonSourceContext\(linkPersonId, sourceRole, store\)/);
+});
+
 test('generic Requirement edit forwards only hydratable Studio IDs and fails closed otherwise', async () => {
   const requirementId = 'requirement / typed β?ref=exact';
   const encoded = encodeURIComponent(requirementId);
@@ -88,14 +104,20 @@ test('legacy generic capture blocks Studio saves when values cannot be forwarded
     'an in-flow Studio subtype query cannot be saved by the generic form');
   assert.equal(shouldBlock(undefined as never, 'apartment' as never, 'studio' as never, undefined as never), true,
     'a saved Studio subtype in the capture draft is protected');
-  assert.equal(shouldBlock(undefined as never, 'villa' as never, undefined as never, 'studio' as never), true,
-    'legacy Studio category metadata is also protected');
+  assert.equal(shouldBlock(undefined as never, 'villa' as never, undefined as never, 'studio' as never), false,
+    'a stale Studio category cannot override an explicitly selected non-Apartment type');
+  assert.equal(shouldBlock('standard' as never, 'apartment' as never, 'studio' as never, 'studio' as never), false,
+    'an explicit Standard Apartment selection outranks stale Studio draft metadata');
+  assert.equal(shouldBlock('studio' as never, 'floor' as never, 'studio' as never, 'studio' as never), false,
+    'an explicit Floor route outranks stale Apartment subtype metadata');
+  assert.equal(shouldBlock('unsupported' as never, 'apartment' as never, undefined as never, undefined as never), true,
+    'unsupported explicit subtypes fail closed');
   assert.equal(shouldBlock(undefined as never, 'apartment' as never, 'standard_apartment' as never, undefined as never), false);
   assert.equal(shouldBlock(undefined as never, 'villa' as never, 'studio' as never, undefined as never), false,
     'stale subtype metadata on a different property type does not block that form');
 
   const screen = await source('../app/capture/index.tsx');
-  assert.match(screen, /isGenericStudioCaptureBlocked\(\s*routeApartmentSubtype,\s*draft\.propertyType,\s*captureDetails\.apartmentSubtype/);
+  assert.match(screen, /isGenericStudioCaptureBlocked\(\s*routeApartmentSubtype,\s*selectedPropertyType,\s*captureDetails\.apartmentSubtype/);
   assert.match(screen, /canonicalApartmentSubtypeForCategory\(demoMetadata\.categoryId\)/);
   assert.match(screen, /testID="capture-studio-route-blocked"/);
   assert.match(screen, /disabled=\{isStudioCaptureBlocked \|\|/);

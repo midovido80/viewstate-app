@@ -20,8 +20,10 @@ interface RouteHarness {
   };
   capture: {
     draft: Record<string, unknown>;
+    readonly captureDetails: Record<string, unknown>;
     updateDraft: (draft: Record<string, unknown>) => boolean;
     updateCaptureDetails: (details: Record<string, unknown>) => boolean;
+    replaceCaptureDetails: (details: Record<string, unknown>) => void;
   };
 }
 
@@ -116,6 +118,7 @@ const routeHarness = (params: RouteHarness['params'] = {}): RouteHarness => {
   };
   harness.capture = {
     draft: {},
+    get captureDetails() { return harness.captureDetails; },
     updateDraft: draft => {
       harness.draftUpdates.push(draft);
       return true;
@@ -124,6 +127,10 @@ const routeHarness = (params: RouteHarness['params'] = {}): RouteHarness => {
       harness.detailUpdates.push(details);
       Object.assign(harness.captureDetails, details);
       return true;
+    },
+    replaceCaptureDetails: details => {
+      harness.detailUpdates.push(details);
+      harness.captureDetails = details;
     },
   };
   return harness;
@@ -320,7 +327,11 @@ test('production subtype route keeps Standard on existing offered and wanted des
   const offeredScreen = renderRoute(route, offered);
   (findByTestId(offeredScreen, 'select-apartment-standard').props.onSelect as () => void)();
   (findByTestId(renderRoute(route, offered), 'btn-next').props.onPress as () => void)();
-  assert.deepEqual(offered.draftUpdates, [{ propertyType: 'apartment', transaction: 'rent' }]);
+  assert.deepEqual(offered.draftUpdates, [{
+    propertyType: 'apartment',
+    apartmentSubtype: 'standard_apartment',
+    transaction: 'rent',
+  }]);
   assert.deepEqual(offered.detailUpdates, [{ apartmentSubtype: 'standard_apartment' }]);
   assert.equal(offered.captureDetails.apartmentSubtype, 'standard_apartment');
   assert.deepEqual(offered.pushes[0], {
@@ -380,5 +391,31 @@ test('production property type route clears only subtype when changing away from
       propertyType: 'villa',
       purpose: 'buy',
     },
+  });
+});
+
+test('production Offered Floor selection opens the existing floor form and preserves only shared capture data', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  const harness = routeHarness({ mode: 'offered', transaction: 'rent', propertyType: 'floor', apartmentSubtype: 'studio' });
+  harness.capture.draft = { propertyType: 'apartment', transaction: 'rent' };
+  harness.captureDetails = {
+    apartmentSubtype: 'studio',
+    bedroomCount: '2',
+    areaSquareMeters: 120,
+    mapsLink: 'https://maps.example.test/?q=1',
+    attachments: [{ id: 'private-evidence' }],
+  };
+  const screen = renderRoute(route, harness);
+  (findByTestId(screen, 'btn-next').props.onPress as () => void)();
+
+  assert.deepEqual(harness.draftUpdates, [{ propertyType: 'floor', apartmentSubtype: undefined, transaction: 'rent' }]);
+  assert.deepEqual(harness.captureDetails, {
+    areaSquareMeters: 120,
+    mapsLink: 'https://maps.example.test/?q=1',
+    attachments: [{ id: 'private-evidence' }],
+  });
+  assert.deepEqual(harness.pushes[0], {
+    pathname: '/capture',
+    params: { mode: 'offered', transaction: 'rent', propertyType: 'floor' },
   });
 });

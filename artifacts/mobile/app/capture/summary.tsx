@@ -20,7 +20,9 @@ import {
 import {
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
+  hasCaptureEnrichmentValues,
   isBasicApartmentFollowUpCapture,
+  shouldSaveBasicCapture,
   type CaptureDetailValues,
 } from '@/services/propertyCaptureDetails';
 import {
@@ -29,16 +31,9 @@ import {
   prepareCapturedDetails,
 } from '@/services/propertyCaptureSave';
 import type { Property, PropertyDetailField } from '@workspace/property-domain';
-import { PROPERTY_SOURCE_ROLES } from '@/services/people';
+import { ensureStudioPropertySourceLink, getStudioPersonSourceRole } from '@/services/studioSave';
 import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
-import { hasPopulatedCategoryCapture } from '@/services/propertyDemoCatalog';
-
-function hasApartmentDetailsToPreserve(details: CaptureDetailValues): boolean {
-  const { apartmentSubtype: _subtype, ...optionalDetails } = details;
-  return details.areaSquareMeters !== undefined
-    || hasPopulatedCategoryCapture(optionalDetails as Record<string, unknown>);
-}
 
 export default function SummaryScreen() {
   const router = useRouter();
@@ -47,7 +42,7 @@ export default function SummaryScreen() {
     sourceRole?: string;
     apartmentSubtype?: string;
   }>();
-  const selectedSourceRole = sourceRole;
+  const selectedSourceRole = Array.isArray(sourceRole) ? sourceRole[0] : sourceRole;
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -142,7 +137,7 @@ export default function SummaryScreen() {
         if (
           isBasicApartmentFollowUp
           && !includeCapturedDetails
-          && (hasApartmentDetailsToPreserve(captureDetails) || Boolean(draft.description?.value))
+          && hasCaptureEnrichmentValues(captureDetails, draft.description?.value)
         ) {
           Alert.alert(
             language === 'ar' ? 'توجد تفاصيل محفوظة في المسودة' : 'This draft has saved details',
@@ -160,7 +155,12 @@ export default function SummaryScreen() {
           return;
         }
 
-        const saveBasicOnly = isBasicApartmentFollowUp && !includeCapturedDetails;
+        const saveBasicOnly = shouldSaveBasicCapture(
+          captureDetails,
+          draft.description?.value,
+          isBasicApartmentFollowUp,
+          includeCapturedDetails,
+        );
         const hasPendingRecovery = saveRecoveryStatus === 'retry_required'
           || saveRecoveryStatus === 'cleanup_pending';
         const projection = hasPendingRecovery ? null : projectToProperty();
@@ -178,26 +178,39 @@ export default function SummaryScreen() {
         }
         let candidate: Property | undefined;
         try {
-          candidate = !saveBasicOnly && projection && projection.ok
+          candidate = (!saveBasicOnly || !isBasicApartmentFollowUp) && projection && projection.ok
             ? buildPropertyWithCaptureDetails(projection.property, captureDetails, true)
             : undefined;
         } catch (error) {
-          const message = error instanceof Error && error.message === 'OTHER_CLARIFICATION_REQUIRED'
-            ? t('errors.capture_incomplete')
-            : t('errors.capture_incomplete');
+          const message = error instanceof Error && error.message === 'FLOOR_USE_REQUIRED'
+            ? (language === 'ar'
+              ? 'اختر الاستخدام السكني أو التجاري للدور قبل حفظ تفاصيله.'
+              : 'Choose Residential or Commercial Floor use before saving Floor details.')
+            : error instanceof Error && error.message === 'FLOOR_CAPTURE_DETAIL_INCOMPATIBLE'
+              ? (language === 'ar'
+                ? 'بعض تفاصيل الدور لا تتوافق مع الاستخدام المحدد. صحح التفاصيل ثم أعد المحاولة.'
+                : 'Some Floor details do not match the selected use. Correct them before saving.')
+              : t('errors.capture_incomplete');
           Alert.alert(t('errors.validation_title'), message);
           return;
         }
 
-        // Check the selected private relationship before saving the property;
-        // a stale Person or role must not produce an unowned property.
-        if (linkPersonId && sourceRole) {
-          if (!(PROPERTY_SOURCE_ROLES as readonly string[]).includes(sourceRole)) {
+        // Resolve the exact role before saving: Person-origin Offered capture
+        // must not create an unowned Property if its source context is stale.
+        let resolvedSourceRole: ReturnType<typeof getStudioPersonSourceRole> = null;
+        if (linkPersonId) {
+          try {
+            const linkedPerson = await store.getPerson(linkPersonId);
+            if (!linkedPerson) {
+              Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
+              return;
+            }
+            resolvedSourceRole = getStudioPersonSourceRole(linkedPerson, selectedSourceRole);
+          } catch {
             Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
             return;
           }
-          const linkedPerson = await store.getPerson(linkPersonId);
-          if (!linkedPerson) {
+          if (!resolvedSourceRole) {
             Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
             return;
           }
@@ -205,7 +218,7 @@ export default function SummaryScreen() {
 
         const recoveryPropertyCoreId = draft.propertyCoreId;
         let preparedDetails = null;
-        if (!saveBasicOnly && candidate && projection?.ok) {
+        if (candidate && projection?.ok) {
           try {
             preparedDetails = await prepareCapturedDetails(projection.property, candidate);
           } catch (error) {
@@ -265,20 +278,8 @@ export default function SummaryScreen() {
         const savedId = projection && projection.ok ? projection.property.core.id : draft.propertyCoreId;
         if (linkPersonId && savedId) {
           try {
-            // A source is private metadata; preserve its selected role and
-            // require that the referenced Person still exists.
-            if (selectedSourceRole && (PROPERTY_SOURCE_ROLES as readonly string[]).includes(selectedSourceRole)) {
-              const linkedPerson = await store.getPerson(linkPersonId);
-              if (!linkedPerson) throw new Error('SOURCE_ROLE_MISMATCH');
-              await store.setPropertySource({
-                personId: linkPersonId,
-                propertyCoreId: savedId,
-                role: selectedSourceRole as typeof PROPERTY_SOURCE_ROLES[number],
-              });
-            } else if (selectedSourceRole) {
-              throw new Error('SOURCE_ROLE_MISMATCH');
-            }
-            await store.linkPersonToProperty({ personId: linkPersonId, propertyCoreId: savedId });
+            if (!resolvedSourceRole) throw new Error('SOURCE_ROLE_MISMATCH');
+            await ensureStudioPropertySourceLink(savedId, linkPersonId, resolvedSourceRole, store);
           } catch {
             Alert.alert(t('people.link_failed'), t('people.link_failed_message'));
             return;
@@ -288,7 +289,7 @@ export default function SummaryScreen() {
           pathname: '/capture/success',
           params: savedId ? {
             propertyCoreId: savedId,
-            ...(saveBasicOnly ? { basicApartmentFollowUp: '1' } : {}),
+            ...(saveBasicOnly ? { basicCaptureFollowUp: '1' } : {}),
             ...(linkPersonId ? { linkPersonId } : {}),
             ...(selectedSourceRole ? { sourceRole: selectedSourceRole } : {}),
           } : {},

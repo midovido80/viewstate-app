@@ -71,7 +71,8 @@ test('REGRESSION: failed Offered Studio source linking blocks property and Home 
     studio.indexOf('const linkPropertySourceIfNeeded ='),
     studio.indexOf('const finishPropertySave ='),
   );
-  assert.match(linkFlow, /await ensureStudioPropertySourceLink\(property\.core\.id, person\.id, role, store\);[\s\S]*setPropertySourceConfirmed\(true\)/);
+  assert.match(linkFlow, /await resolveStudioPersonSourceContext\(linkPersonId, sourceRole, store\)/);
+  assert.match(linkFlow, /await ensureStudioPropertySourceLink\(property\.core\.id, context\.personId, context\.role, store\);[\s\S]*setPropertySourceConfirmed\(true\)/);
   assert.match(studio, /savedProperty && propertySourceConfirmed \? \(/);
   const successActions = studio.slice(
     studio.indexOf('{savedProperty && propertySourceConfirmed ? ('),

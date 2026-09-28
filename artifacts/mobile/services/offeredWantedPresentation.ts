@@ -63,6 +63,23 @@ export interface OfferedWantedLoadResult {
   readonly errors: OfferedWantedLoadErrors;
 }
 
+/** Prevents slower loads from an earlier focus/search state replacing a newer inventory snapshot. */
+export function createOfferedWantedLoadCoordinator() {
+  let currentSequence = 0;
+  return {
+    begin(): number {
+      currentSequence += 1;
+      return currentSequence;
+    },
+    isCurrent(sequence: number): boolean {
+      return sequence === currentSequence;
+    },
+    invalidate(sequence: number): void {
+      if (sequence === currentSequence) currentSequence += 1;
+    },
+  };
+}
+
 interface ReadOutcome<T> {
   readonly value: T;
   readonly failed: boolean;
@@ -109,7 +126,7 @@ export async function loadOfferedWantedPresentation(
   return {
     rows,
     matchingPropertyIds: searchRead.value
-      ? searchRead.value.map(property => property.core.id)
+      ? [...new Set(searchRead.value.map(property => property.core.id))]
       : searchRead.value === null ? null : [],
     errors: {
       properties: propertyRead.failed,
@@ -169,6 +186,8 @@ export function deriveOfferedWantedRows(
   requirements: readonly SeekerRequirement[],
   associations: OfferedWantedAssociations = {},
 ): OfferedWantedRow[] {
+  const uniqueProperties = uniqueByExactId(properties, property => property.core.id);
+  const uniqueRequirements = uniqueByExactId(requirements, requirement => requirement.id);
   const peopleById = new Map((associations.people ?? []).map(person => [person.id, person]));
   const sourceByPropertyId = new Map(
     (associations.propertySources ?? []).map(source => [source.propertyCoreId, source.personId]),
@@ -179,7 +198,7 @@ export function deriveOfferedWantedRows(
     if (!ids.includes(link.personId)) ids.push(link.personId);
     personByLinkedPropertyId.set(link.propertyCoreId, ids);
   }
-  const offered: OfferedPropertyRow[] = properties.map(property => {
+  const offered: OfferedPropertyRow[] = uniqueProperties.map(property => {
     const id = property.core.id;
     const sourcePersonId = sourceByPropertyId.get(id);
     const targets = [
@@ -199,7 +218,7 @@ export function deriveOfferedWantedRows(
       ...(targets.length ? { personTargets: targets } : {}),
     };
   });
-  const wanted: WantedRequirementRow[] = requirements.map(requirement => {
+  const wanted: WantedRequirementRow[] = uniqueRequirements.map(requirement => {
     const person = peopleById.get(requirement.seekerId);
     return {
       kind: 'wanted',
@@ -212,6 +231,16 @@ export function deriveOfferedWantedRows(
     };
   });
   return [...offered, ...wanted];
+}
+
+function uniqueByExactId<T>(records: readonly T[], getId: (record: T) => string): T[] {
+  const seen = new Set<string>();
+  return records.filter(record => {
+    const id = getId(record);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 function searchableText(row: OfferedWantedRow): string {

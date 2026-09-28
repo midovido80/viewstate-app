@@ -52,10 +52,12 @@ import {
 import {
   prepareStudioPropertyEditCandidate,
   ensureStudioPropertySourceLink,
-  getStudioPersonSourceRole,
+  resolveStudioPersonSourceContext,
+  saveStudioPropertyFromPersonSource,
   retryStudioPropertyRecovery,
   saveStudioProperty,
   saveStudioRequirement,
+  type StudioPersonSourceContext,
   type StudioPropertySaveResult,
 } from '@/services/studioSave';
 import {
@@ -201,6 +203,7 @@ export default function StudioCaptureRoute() {
   const [webImageSources, setWebImageSources] = useState<Readonly<Record<string, string>>>({});
   const [peopleError, setPeopleError] = useState(false);
   const flight = useRef(false);
+  const sourceContext = useRef<StudioPersonSourceContext | null>(null);
   const committedRequirement = useRef<SeekerRequirement | null>(null);
   const uncertainRequirement = useRef<SeekerRequirement | null>(null);
   const inputRefs = useRef<Record<string, InputRef>>({});
@@ -687,11 +690,11 @@ export default function StudioCaptureRoute() {
 
   const linkPropertySourceIfNeeded = async (property: Property) => {
     if (linkPersonId && !editing) {
-      const person = await store.getPerson(linkPersonId);
-      if (!person) throw new Error('STUDIO_SOURCE_PERSON_NOT_FOUND');
-      const role = getStudioPersonSourceRole(person, sourceRole);
-      if (!role) throw new Error('STUDIO_SOURCE_ROLE_NOT_AVAILABLE');
-      await ensureStudioPropertySourceLink(property.core.id, person.id, role, store);
+      const context = sourceContext.current?.personId === linkPersonId
+        ? sourceContext.current
+        : await resolveStudioPersonSourceContext(linkPersonId, sourceRole, store);
+      sourceContext.current = context;
+      await ensureStudioPropertySourceLink(property.core.id, context.personId, context.role, store);
     }
     setPropertySourceConfirmed(true);
   };
@@ -738,11 +741,24 @@ export default function StudioCaptureRoute() {
             ? { attachments: attachments.map(propertyAttachmentMetadata) }
             : { attachments: undefined }),
         };
-        const outcome = await saveStudioProperty({
-          candidate,
-          baseline: baselineProperty,
-          store,
-        });
+        let outcome: StudioPropertySaveResult;
+        if (linkPersonId && !editing) {
+          const sourceSave = await saveStudioPropertyFromPersonSource({
+            candidate,
+            baseline: baselineProperty,
+            store,
+            personId: linkPersonId,
+            requestedRole: sourceRole,
+          });
+          sourceContext.current = sourceSave.sourceContext;
+          outcome = sourceSave.outcome;
+        } else {
+          outcome = await saveStudioProperty({
+            candidate,
+            baseline: baselineProperty,
+            store,
+          });
+        }
         if (outcome.status === 'saved') {
           try {
             await finishPropertySave(outcome.property);
@@ -830,9 +846,12 @@ export default function StudioCaptureRoute() {
         }
       }
     } catch (saveError) {
-      setError(saveError instanceof Error && saveError.message.startsWith('INVALID_STUDIO_REQUIREMENT:')
+      const message = saveError instanceof Error ? saveError.message : '';
+      setError(message.startsWith('INVALID_STUDIO_REQUIREMENT:')
         ? localizedRequirementIssue({ code: 'invalid_requirement' }, language)
-        : t('studio.save_failed'));
+        : message.startsWith('STUDIO_SOURCE_')
+          ? t('studio.link_failed')
+          : t('studio.save_failed'));
     } finally {
       flight.current = false;
       setSaving(false);

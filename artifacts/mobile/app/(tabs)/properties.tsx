@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -13,6 +13,7 @@ import {
   filterOfferedWantedRows,
   getOfferedWantedHref,
   getOfferedWantedTransactionLabelKey,
+  createOfferedWantedLoadCoordinator,
   loadOfferedWantedPresentation,
 } from '@/services/offeredWantedPresentation';
 import type { OfferedWantedFilter, OfferedWantedRow } from '@/services/offeredWantedPresentation';
@@ -28,7 +29,7 @@ export default function PropertiesScreen() {
   const colors = useColors();
   const { t, isRTL, language, fonts } = useI18n();
   const insets = useSafeAreaInsets();
-  const loadSequenceRef = useRef(0);
+  const loadCoordinatorRef = useRef(createOfferedWantedLoadCoordinator());
 
   const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
   const [search, setSearch] = useState('');
@@ -43,12 +44,13 @@ export default function PropertiesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const requestSequence = ++loadSequenceRef.current;
+      const requestSequence = loadCoordinatorRef.current.begin();
+      setLoadResult(null);
       void loadOfferedWantedPresentation(store, search).then(result => {
-        if (requestSequence === loadSequenceRef.current) setLoadResult(result);
+        if (loadCoordinatorRef.current.isCurrent(requestSequence)) setLoadResult(result);
       });
       return () => {
-        if (requestSequence === loadSequenceRef.current) loadSequenceRef.current += 1;
+        loadCoordinatorRef.current.invalidate(requestSequence);
       };
     }, [highlightedId, search])
   );
@@ -263,8 +265,16 @@ export default function PropertiesScreen() {
         ]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('properties.empty_all')}</Text>
+            {loadResult === null ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : loadResult.errors.properties || loadResult.errors.requirements ? null : (
+              <>
+                <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
+                  {t(rows.length === 0 ? 'properties.empty_all' : 'properties.no_matches')}
+                </Text>
+              </>
+            )}
           </View>
         }
       />

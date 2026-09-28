@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import type { Person, PersonPropertyLink, PropertySource } from '../services/people.ts';
 import { getAreaById } from '../constants/kuwait-areas.ts';
 import {
   deriveOfferedWantedRows,
   filterOfferedWantedRows,
+  createOfferedWantedLoadCoordinator,
   formatWantedBudget,
   getOfferedWantedHref,
   getOfferedWantedTransactionLabelKey,
@@ -365,6 +367,57 @@ test('independent reader failures retain available rows and report each unavaila
   );
 });
 
+test('focus refresh keeps the canonical saved row once, preserves distinct IDs, and ignores stale loads', async () => {
+  let releaseStaleRead!: (records: Property[]) => void;
+  const staleProperties = new Promise<Property[]>(resolve => { releaseStaleRead = resolve; });
+  let inventory = [
+    property('saved-after-view', 'sale'),
+    property('saved-after-view', 'rent'),
+    property('another-distinct-record', 'rent'),
+  ];
+  const reader = makePresentationReader({
+    getProperties: async () => inventory,
+    getRequirements: async () => [
+      requirement('same-kind-qualified-id', 'buy'),
+      requirement('same-kind-qualified-id', 'rent'),
+    ],
+  });
+  const coordinator = createOfferedWantedLoadCoordinator();
+
+  // A prior focus load is still waiting when the screen blurs.
+  const staleSequence = coordinator.begin();
+  const staleLoad = loadOfferedWantedPresentation({
+    ...reader,
+    getProperties: async () => staleProperties,
+  });
+  coordinator.invalidate(staleSequence);
+
+  // Returning from View Property reads the canonical store snapshot again.
+  inventory = [
+    property('saved-after-view', 'sale'),
+    property('saved-after-view', 'rent'),
+    property('another-distinct-record', 'rent'),
+  ];
+  const focusedSequence = coordinator.begin();
+  const focusedResult = await loadOfferedWantedPresentation(reader);
+  let displayedRows: typeof focusedResult.rows = [];
+  if (coordinator.isCurrent(focusedSequence)) displayedRows = focusedResult.rows;
+
+  releaseStaleRead([property('old-snapshot-only', 'sale')]);
+  const staleResult = await staleLoad;
+  if (coordinator.isCurrent(staleSequence)) displayedRows = staleResult.rows;
+
+  assert.equal(displayedRows.filter(row => row.kind === 'offered' && row.id === 'saved-after-view').length, 1);
+  assert.equal(displayedRows.filter(row => row.kind === 'offered' && row.id === 'another-distinct-record').length, 1);
+  assert.equal(displayedRows.filter(row => row.kind === 'wanted' && row.id === 'same-kind-qualified-id').length, 1);
+  assert.equal(
+    filterOfferedWantedRows(displayedRows, 'all', '').length,
+    3,
+    'empty search and All show each exact record once while retaining distinct records',
+  );
+  assert.equal(displayedRows.some(row => row.id === 'old-snapshot-only'), false);
+});
+
 test('presentation loader attaches live links as well as sources and surfaces link-read failures', async () => {
   const linked = await loadOfferedWantedPresentation(makePresentationReader({
     getPropertySource: async () => null,
@@ -406,4 +459,17 @@ test('successful metadata-backed property search results are independently expos
 
   assert.deepEqual(result.matchingPropertyIds, ['metadata-only-match']);
   assert.equal(result.errors.search, false);
+});
+
+test('Properties list distinguishes loading, empty inventory, and filtered no-match states', async () => {
+  const [screen, messages] = await Promise.all([
+    readFile('app/(tabs)/properties.tsx', 'utf8'),
+    readFile('contexts/I18nContext.tsx', 'utf8'),
+  ]);
+  assert.match(screen, /setLoadResult\(null\)/);
+  assert.match(screen, /loadResult === null \? \(\s*<ActivityIndicator/);
+  assert.match(screen, /rows\.length === 0 \? 'properties\.empty_all' : 'properties\.no_matches'/);
+  assert.match(messages, /'properties\.empty_all': 'No properties or Requirements saved yet\.'/);
+  assert.match(messages, /'properties\.no_matches': 'No properties or Requirements match this search or filter\.'/);
+  assert.match(messages, /'properties\.empty_all': 'لم يتم حفظ عقارات أو متطلبات بعد\.'/);
 });

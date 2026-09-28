@@ -75,7 +75,7 @@ import {
   type PropertyTransitionState,
 } from '@/services/propertyTypeTransition';
 import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, isOfferedStudio } from '@/services/propertyDetailPresentation';
-import { discardPropertyEditDraftAndCleanupOwnedAttachments, getPropertyDetailMapsHref, getPropertyEditMapsFieldError, propertyEditChoicesAreDirty, shouldShowPropertyGallery } from '@/services/propertyDetailEditorUx';
+import { confirmCommittedPropertyReadback, discardPropertyEditDraftAndCleanupOwnedAttachments, getPropertyDetailMapsHref, getPropertyEditMapsFieldError, propertyEditChoicesAreDirty, shouldShowPropertyGallery } from '@/services/propertyDetailEditorUx';
 import { getPropertyEditFormHref } from '@/services/propertyFormRoutes';
 
 export function getPropertyEditRouteHref(propertyCoreId: string, offeredStudio: boolean): string {
@@ -94,8 +94,13 @@ function readNumericDetail(value: unknown): number | undefined {
 }
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
-  const { propertyCoreId, edit } = useLocalSearchParams<{ propertyCoreId?: string | string[]; edit?: string | string[] }>();
+  const { propertyCoreId, edit, completion } = useLocalSearchParams<{
+    propertyCoreId?: string | string[];
+    edit?: string | string[];
+    completion?: string | string[];
+  }>();
   const id = Array.isArray(propertyCoreId) ? propertyCoreId[0] : propertyCoreId;
+  const completionOrigin = Array.isArray(completion) ? completion[0] : completion;
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -117,6 +122,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     message: string;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveCompletionVisible, setSaveCompletionVisible] = useState(false);
   const saveFlight = useRef(false);
   const draftMutationFlight = useRef<Promise<boolean>>(Promise.resolve(true));
   const [areaOpen, setAreaOpen] = useState(false);
@@ -1064,15 +1070,43 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
          setError(result.status === 'conflict' ? t('edit.recovery_conflict') : result.status === 'cleanup_failed' ? t('edit.recovery_cleanup') : t('edit.save_failed'));
         return;
       }
+      let savedProperty = candidate;
+      if (completionOrigin === 'enrichment') {
+        const readback = await confirmCommittedPropertyReadback(
+          candidate,
+          propertyCoreId => store.getProperty(propertyCoreId),
+        );
+        if (!readback || readback.core.id !== id) {
+          setError(t('edit.save_failed'));
+          // CAS has committed; do not leave the obsolete draft in an editor
+          // where Save could retry against its old baseline.
+          setNewAttachmentUris([]);
+          setDraft(null);
+          draftRef.current = null;
+          cleanChoicesRef.current = null;
+          setEditDirty(false);
+          setMode('detail');
+          setSaveCompletionVisible(false);
+          setProperty(null);
+          setStatus('loading');
+          router.replace(`/property/${encodeURIComponent(id!)}` as never);
+          return;
+        }
+        savedProperty = readback;
+      }
       if (legacyEnrichmentDraft) await clearConfirmedPropertyEnrichmentDraft(legacyEnrichmentDraft);
       setNewAttachmentUris([]);
-      setProperty(candidate);
+      setProperty(savedProperty);
       setDraft(null);
       draftRef.current = null;
       cleanChoicesRef.current = null;
       setEditDirty(false);
       setMode('detail');
-      router.replace(`/property/${encodeURIComponent(id!)}` as never);
+      if (completionOrigin === 'enrichment') {
+        setSaveCompletionVisible(true);
+      } else {
+        router.replace(`/property/${encodeURIComponent(id!)}` as never);
+      }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : '';
       setError(
@@ -1087,6 +1121,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       saveFlight.current = false;
       setSaving(false);
     }
+  };
+
+  const viewSavedProperty = () => {
+    if (!property || !id || property.core.id !== id) return;
+    setSaveCompletionVisible(false);
+    router.replace(`/property/${encodeURIComponent(property.core.id)}` as never);
   };
 
   const confirmDelete = async () => {
@@ -1358,9 +1398,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
         {mode === 'detail' ? (
           <>
-            {shouldShowPropertyGallery(galleryImages.length) || !standardApartment ? (
+            {shouldShowPropertyGallery(galleryImages.length) ? (
               <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
-                {galleryImages.length > 0 ? (
                   <View style={{ height: 260, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
                   <ScrollView
                     horizontal
@@ -1427,11 +1466,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     <Feather name="maximize" size={20} color="#fff" />
                   </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={{ height: 260, borderRadius: 20, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }}>
-                    <Feather name="image" size={56} color={colors.mutedForeground} />
-                  </View>
-                )}
               </View>
             ) : null}
 
@@ -1578,7 +1612,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 {sourcePerson ? (
                   <View style={{ gap: 8 }}>
                     <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16, textAlign: isRTL ? 'right' : 'left' }} testID="property-source-person">{sourcePerson.name}</Text>
-                    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 14, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${sourceRole}` as any)}</Text>
+                     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 14, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source?.role}` as any)}</Text>
                     <TouchableOpacity onPress={() => setSourceConfirmVisible(true)} accessibilityRole="button" testID="property-source-unlink" style={{ marginTop: 8, padding: 10, borderWidth: 1, borderColor: colors.destructive, borderRadius: 10 }}>
                       <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('source.unlink')}</Text>
                     </TouchableOpacity>
@@ -2062,6 +2096,52 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </TouchableOpacity>
             </View>
           ) : null}
+        </View>
+      </Modal>
+
+      <Modal
+        visible={saveCompletionVisible && completionOrigin === 'enrichment' && property?.core.id === id}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}
+            testID="property-enrichment-save-completion"
+            accessibilityRole="alert"
+            accessibilityViewIsModal
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('summary.success')}
+            </Text>
+            <Text style={[styles.modalMessage, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('summary.success_detail')}
+            </Text>
+            <TouchableOpacity
+              onPress={viewSavedProperty}
+              style={[styles.modalAction, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              testID="property-enrichment-view-property"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.modalActionText, { color: colors.primaryForeground, fontFamily: fonts.semiBold }]}>
+                {t('summary.view_property')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setSaveCompletionVisible(false);
+                router.replace('/' as never);
+              }}
+              style={[styles.modalAction, { borderColor: colors.border }]}
+              testID="property-enrichment-home"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.modalActionText, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+                {t('home.title')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 

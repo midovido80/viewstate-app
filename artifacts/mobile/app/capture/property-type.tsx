@@ -8,11 +8,11 @@ import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { SelectCard } from '@/components/SelectCard';
 import { Button } from '@/components/Button';
-import { PROPERTY_TYPES, type Transaction } from '@workspace/property-domain';
+import { APARTMENT_SUBTYPES, PROPERTY_TYPES, type ApartmentSubtype, type Transaction } from '@workspace/property-domain';
 import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
 
 type OfferMode = 'offered' | 'wanted';
-type ApartmentSubtypeChoice = 'studio' | 'standard';
+type ApartmentSubtypeChoice = ApartmentSubtype | 'standard';
 
 function firstParam(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -31,7 +31,7 @@ export default function PropertyTypeScreen() {
   }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { draft, updateDraft } = useCapture();
+  const { draft, updateDraft, captureDetails, replaceCaptureDetails } = useCapture();
   const { t, fonts, isRTL } = useI18n();
   const initialType = firstParam(params.propertyType);
   const [propertyType, setPropertyType] = useState<typeof PROPERTY_TYPES[number] | undefined>(
@@ -40,14 +40,19 @@ export default function PropertyTypeScreen() {
       : firstParam(params.mode) ? undefined : draft.propertyType,
   );
   const rawSubtype = firstParam(params.apartmentSubtype);
-  const apartmentSubtype: ApartmentSubtypeChoice | undefined =
-    rawSubtype === 'studio' || rawSubtype === 'standard' ? rawSubtype : undefined;
+  const apartmentSubtype: ApartmentSubtypeChoice | undefined = rawSubtype === 'standard'
+    ? 'standard'
+    : APARTMENT_SUBTYPES.includes(rawSubtype as ApartmentSubtype)
+      ? rawSubtype as ApartmentSubtype
+      : undefined;
   const rawMode = firstParam(params.mode);
-  const mode: OfferMode = rawMode === 'wanted' ? 'wanted' : 'offered';
+  const mode: OfferMode | undefined = rawMode === 'wanted'
+    ? 'wanted'
+    : rawMode === 'offered' || rawMode === undefined ? 'offered' : undefined;
   const rawTransaction = firstParam(params.transaction);
   const transaction: Transaction | undefined = rawTransaction === 'sale' || rawTransaction === 'rent'
     ? rawTransaction
-    : mode === 'wanted' ? undefined : draft.transaction;
+    : rawTransaction === undefined && rawMode === undefined ? draft.transaction : undefined;
   const seekerId = firstParam(params.seekerId);
   const linkPersonId = firstParam(params.linkPersonId);
   const sourceRole = firstParam(params.sourceRole);
@@ -61,7 +66,7 @@ export default function PropertyTypeScreen() {
   };
 
   const handleNext = () => {
-    if (!propertyType) return;
+    if (!propertyType || !mode || (rawTransaction !== undefined && !transaction)) return;
     const target = getPropertyFormRoute({
       mode,
       ...(transaction ? { transaction } : {}),
@@ -76,7 +81,24 @@ export default function PropertyTypeScreen() {
       return;
     }
 
-    if (!updateDraft({ propertyType, ...(transaction ? { transaction } : {}) })) return;
+    if (!updateDraft({
+      propertyType,
+      apartmentSubtype: propertyType === 'apartment'
+        ? apartmentSubtype === 'standard' ? 'standard_apartment' : apartmentSubtype
+        : undefined,
+      ...(transaction ? { transaction } : {}),
+    })) return;
+    if (target.kind === 'floor' && draft.propertyType !== propertyType) {
+      replaceCaptureDetails({
+        ...(captureDetails.areaSquareMeters !== undefined ? { areaSquareMeters: captureDetails.areaSquareMeters } : {}),
+        ...(captureDetails.areaUnit ? { areaUnit: captureDetails.areaUnit } : {}),
+        ...(captureDetails.nearbyServices ? { nearbyServices: captureDetails.nearbyServices } : {}),
+        ...(captureDetails.manualLocationText ? { manualLocationText: captureDetails.manualLocationText } : {}),
+        ...(captureDetails.mapsLink ? { mapsLink: captureDetails.mapsLink } : {}),
+        ...(captureDetails.coordinates ? { coordinates: captureDetails.coordinates } : {}),
+        ...(captureDetails.attachments ? { attachments: captureDetails.attachments } : {}),
+      });
+    }
     router.push({
       pathname: target.pathname,
       params: target.params,
@@ -104,7 +126,7 @@ export default function PropertyTypeScreen() {
         <Button
           title={t('capture.next')}
           onPress={handleNext}
-          disabled={!propertyType}
+          disabled={!propertyType || !mode || (rawTransaction !== undefined && !transaction)}
           size="large"
           testID="btn-next"
         />

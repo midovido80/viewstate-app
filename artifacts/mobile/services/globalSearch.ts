@@ -61,8 +61,8 @@ export interface GlobalSearchResultsWithReasons extends GlobalSearchResults {
 }
 
 const ALIAS_GROUPS: readonly (readonly string[])[] = [
-  ['studio', 'استوديو', 'ستوديو', 'استديو', 'ستديو', 'ستيديو'],
-  ['shop', 'store', 'shops', 'stores', 'محل', 'محلات'],
+  ['studio', 'studios', 'استوديو', 'ستوديو', 'استديو', 'ستديو', 'ستيديو', 'استوديوهات', 'ستوديوهات'],
+  ['shop', 'shops', 'store', 'stores', 'محل', 'محلات', 'متجر', 'متاجر', 'دكان', 'دكاكين'],
 ];
 
 function normalizeSearchText(value: string): string {
@@ -74,6 +74,9 @@ function normalizeSearchText(value: string): string {
       if (/[\u064b-\u065f\u0670\u0640]/u.test(character)) return '';
       if (/[أإآٱ]/u.test(character)) return 'ا';
       if (character === 'ى') return 'ي';
+      if (character === 'ة') return 'ه';
+      if (character === 'ک') return 'ك';
+      if (character === 'ی') return 'ي';
       return character;
     })
     .join('');
@@ -84,11 +87,12 @@ export function searchTerms(query: string): string[] {
 }
 
 function aliasTerms(term: string): string[] {
-  for (const group of ALIAS_GROUPS) {
+  return ALIAS_GROUPS.flatMap(group => {
     const normalized = group.map(normalizeSearchText);
-    if (normalized.includes(term)) return normalized.filter(value => value !== term);
-  }
-  return [];
+    return normalized.some(value => directMatch(value, term) !== undefined)
+      ? normalized.filter(value => value !== term)
+      : [];
+  });
 }
 
 function boundedEditDistanceAtMostOne(left: string, right: string): boolean {
@@ -189,6 +193,14 @@ function areaFields(areaId: string): string[] {
     : [areaId];
 }
 
+function searchableDescription(property: Property): string {
+  const description = property.core.description;
+  if (!description
+    || description.privacy.classification !== 'normal'
+    || description.privacy.disclosurePolicy !== 'normal') return '';
+  return description.value;
+}
+
 function rankedUnique<T>(
   values: readonly T[],
   id: (value: T) => string,
@@ -247,7 +259,7 @@ export function searchGlobalDataWithMatchReasons(data: GlobalSearchData, query: 
     ...propertyTypeLabels[property.core.propertyType].map(value => ({ field: 'type' as const, value })),
     ...(isOfferedStudio(property) ? [{ field: 'type' as const, value: 'studio' }] : []),
     ...areaFields(property.core.locationArea.id).map(value => ({ field: 'area' as const, value })),
-    { field: 'description', value: property.core.description?.value ?? '' },
+    { field: 'description', value: searchableDescription(property) },
   ], terms);
 
   const peopleById = new Map(data.people.map(person => [person.id, person]));
