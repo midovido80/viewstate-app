@@ -15,11 +15,25 @@ import {
   createOfferedWantedLoadCoordinator,
   loadOfferedWantedPresentation,
 } from '@/services/offeredWantedPresentation';
-import type { OfferedWantedFilter, OfferedWantedRow } from '@/services/offeredWantedPresentation';
+import type { OfferedWantedRow } from '@/services/offeredWantedPresentation';
 import type { OfferedWantedLoadResult } from '@/services/offeredWantedPresentation';
 import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
 import { getPropertyCardSummary, getRequirementCardSummary } from '@/services/cardSummaryPresentation';
 import { projectRecordCardBadges, projectRecordIntent } from '@/services/recordIntentPresentation';
+import {
+  EMPTY_COMPOSABLE_RECORD_FILTER,
+  hasActiveRecordFilters,
+  toggleRecordFilter,
+  type ComposableRecordFilter,
+} from '@/services/composableRecordFilters';
+
+const PROPERTY_FILTER_OPTIONS = [
+  { key: 'all' },
+  { key: 'offered', dimension: 'directions', value: 'offered' },
+  { key: 'wanted', dimension: 'directions', value: 'wanted' },
+  { key: 'sale', dimension: 'transactions', value: 'sale' },
+  { key: 'rent', dimension: 'transactions', value: 'rent' },
+] as const;
 
 export default function PropertiesScreen() {
   const router = useRouter();
@@ -33,7 +47,7 @@ export default function PropertiesScreen() {
 
   const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<OfferedWantedFilter>('all');
+  const [filter, setFilter] = useState<ComposableRecordFilter>(EMPTY_COMPOSABLE_RECORD_FILTER);
   const rows = loadResult?.rows ?? [];
 
   useEffect(() => {
@@ -219,22 +233,28 @@ export default function PropertiesScreen() {
       </View>
 
       <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        {(['all', 'offered', 'wanted', 'sale', 'rent'] as const).map(value => {
-          const selected = filter === value;
+        {PROPERTY_FILTER_OPTIONS.map(option => {
+          const selected = option.key === 'all'
+            ? !hasActiveRecordFilters(filter)
+            : option.dimension === 'directions'
+              ? filter.directions.includes(option.value)
+              : filter.transactions.includes(option.value);
           return (
             <TouchableOpacity
-              key={value}
-              onPress={() => setFilter(value)}
+              key={option.key}
+              onPress={() => setFilter(current => option.key === 'all'
+                ? EMPTY_COMPOSABLE_RECORD_FILTER
+                : toggleRecordFilter(current, option.dimension, option.value))}
               style={[
                 styles.filterChip,
                 { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
               ]}
-              testID={`properties-filter-${value}`}
+              testID={`properties-filter-${option.key}`}
               accessibilityRole="button"
               accessibilityState={{ selected }}
             >
               <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
-                {t(`properties.filter.${value}` as keyof Translations)}
+                {t(`properties.filter.${option.key}` as keyof Translations)}
               </Text>
             </TouchableOpacity>
           );

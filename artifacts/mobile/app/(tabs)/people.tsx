@@ -16,6 +16,21 @@ import {
 } from '@/services/cardSummaryPresentation';
 
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
+import {
+  EMPTY_COMPOSABLE_RECORD_FILTER,
+  anyRecordIntentMatchesComposableFilter,
+  hasActiveRecordFilters,
+  toggleRecordFilter,
+  type ComposableRecordFilter,
+} from '@/services/composableRecordFilters';
+
+const PEOPLE_FILTER_OPTIONS = [
+  { key: 'all' },
+  { key: 'offered', dimension: 'directions', value: 'offered' },
+  { key: 'wanted', dimension: 'directions', value: 'wanted' },
+  { key: 'sale', dimension: 'transactions', value: 'sale' },
+  { key: 'rent', dimension: 'transactions', value: 'rent' },
+] as const;
 
 export default function PeopleScreen() {
   const router = useRouter();
@@ -27,6 +42,7 @@ export default function PeopleScreen() {
   const [totalPeople, setTotalPeople] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<ComposableRecordFilter>(EMPTY_COMPOSABLE_RECORD_FILTER);
   const [error, setError] = useState('');
 
   useFocusEffect(useCallback(() => {
@@ -66,6 +82,11 @@ export default function PeopleScreen() {
     return () => { active = false; };
   }, [search, t, language]));
 
+  const visiblePeople = people.filter(person => anyRecordIntentMatchesComposableFilter(
+    (activityByPerson.get(person.id) ?? []).map(line => line.intentId),
+    filter,
+  ));
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <PrimaryTabHeader title={t('people.title')} />
@@ -87,9 +108,37 @@ export default function PeopleScreen() {
           accessibilityLabel={t('people.search')}
         />
       </View>
+      <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]} testID="people-composable-filters">
+        {PEOPLE_FILTER_OPTIONS.map(option => {
+          const selected = option.key === 'all'
+            ? !hasActiveRecordFilters(filter)
+            : option.dimension === 'directions'
+              ? filter.directions.includes(option.value)
+              : filter.transactions.includes(option.value);
+          return (
+            <TouchableOpacity
+              key={option.key}
+              onPress={() => setFilter(current => option.key === 'all'
+                ? EMPTY_COMPOSABLE_RECORD_FILTER
+                : toggleRecordFilter(current, option.dimension, option.value))}
+              style={[
+                styles.filterChip,
+                { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
+              ]}
+              testID={`people-filter-${option.key}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+                {t(`properties.filter.${option.key}` as keyof Translations)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
       {error ? <Text style={[styles.error, { color: colors.destructive }]} testID="people-error">{error}</Text> : null}
       <FlatList
-        data={people}
+        data={visiblePeople}
         keyExtractor={item => item.id}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
@@ -102,7 +151,11 @@ export default function PeopleScreen() {
             style={[styles.empty, { color: colors.mutedForeground, fontFamily: fonts.medium }]}
             testID={totalPeople === 0 ? 'people-empty' : 'people-no-search-results'}
           >
-            {totalPeople === 0 ? t('people.empty') : search.trim() ? t('people.no_search_results') : t('people.empty')}
+            {totalPeople === 0
+              ? t('people.empty')
+              : search.trim() || hasActiveRecordFilters(filter)
+                ? t('people.no_filtered_results')
+                : t('people.empty')}
           </Text>}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -158,6 +211,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 18 },
   classes: { marginTop: 4, fontSize: 13 },
   empty: { textAlign: 'center', paddingTop: 60 },
+  filters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'wrap' },
+  filterChip: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   error: { paddingHorizontal: 20 },
   add: { position: 'absolute', left: 20, right: 20 },
 });

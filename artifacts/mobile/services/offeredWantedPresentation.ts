@@ -9,6 +9,11 @@ import {
   type FlexibleSearchField,
 } from '@/services/flexibleSearch';
 import { projectPropertyIntent, projectRequirementIntent } from '@/services/recordIntentPresentation';
+import {
+  EMPTY_COMPOSABLE_RECORD_FILTER,
+  recordIntentMatchesComposableFilter,
+  type ComposableRecordFilter,
+} from '@/services/composableRecordFilters';
 
 export type OfferedWantedFilter = 'all' | 'offered' | 'wanted' | 'sale' | 'rent';
 
@@ -326,25 +331,28 @@ function requirementSearchFields(row: WantedRequirementRow): FlexibleSearchField
   ];
 }
 
+function legacyFilterSelection(filter: OfferedWantedFilter): ComposableRecordFilter {
+  switch (filter) {
+    case 'offered': return { directions: ['offered'], transactions: [] };
+    case 'wanted': return { directions: ['wanted'], transactions: [] };
+    case 'sale': return { directions: [], transactions: ['sale'] };
+    case 'rent': return { directions: [], transactions: ['rent'] };
+    default: return EMPTY_COMPOSABLE_RECORD_FILTER;
+  }
+}
+
 export function filterOfferedWantedRows(
   rows: readonly OfferedWantedRow[],
-  filter: OfferedWantedFilter = 'all',
+  filter: OfferedWantedFilter | ComposableRecordFilter = EMPTY_COMPOSABLE_RECORD_FILTER,
   query = '',
 ): OfferedWantedRow[] {
+  const selection = typeof filter === 'string' ? legacyFilterSelection(filter) : filter;
   const meaningfulQuery = flexibleSearchTerms(query).length > 0;
   return rows.filter(row => {
-    if (filter === 'offered' && row.kind !== 'offered') return false;
-    if (filter === 'wanted' && row.kind !== 'wanted') return false;
-    if (filter === 'sale' || filter === 'rent') {
-      const intent = row.kind === 'offered'
-        ? projectPropertyIntent(row.property, 'en')
-        : projectRequirementIntent(row.requirement, 'en');
-      if (!intent.valid) return false;
-      const matchesIntent = filter === 'sale'
-        ? intent.id === 'offered_sale' || intent.id === 'wanted_buy'
-        : intent.id === 'offered_rent' || intent.id === 'wanted_rent';
-      if (!matchesIntent) return false;
-    }
+    const intent = row.kind === 'offered'
+      ? projectPropertyIntent(row.property, 'en')
+      : projectRequirementIntent(row.requirement, 'en');
+    if (!recordIntentMatchesComposableFilter(intent.id, selection)) return false;
     if (!meaningfulQuery) return true;
     return matchesFlexibleSearch(
       row.kind === 'offered' ? propertySearchFields(row) : requirementSearchFields(row),

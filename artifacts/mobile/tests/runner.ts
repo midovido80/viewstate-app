@@ -6,6 +6,7 @@ import { resolveSourcePath } from './sourcePath.ts';
 import './globalSearch.test.ts';
 import './recordIntentPresentation.test.ts';
 import './recordIntentCardConsumers.test.ts';
+import './composableRecordFilters.test.ts';
 import './vapp50DeviceUi.test.ts';
 import './package3aNumericQuickPicks.test.ts';
 import './propertyFactProjection.test.ts';

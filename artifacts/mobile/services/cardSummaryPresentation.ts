@@ -9,6 +9,7 @@ import { squareFeetToSquareMeters } from '@/services/propertyFactProjection';
 import {
   projectPropertyIntent,
   projectRequirementIntent,
+  type PresentedIntentId,
 } from '@/services/recordIntentPresentation';
 
 export type CardSummaryLanguage = 'en' | 'ar';
@@ -40,6 +41,7 @@ export interface PersonActivityLine {
   readonly key: string;
   readonly id: string;
   readonly kind: 'request' | 'offer';
+  readonly intentId: PresentedIntentId;
   readonly href: string;
   readonly label: string;
 }
@@ -121,8 +123,9 @@ export function getPersonDirectIntentActivityLines(
   const propertyById = new Map(properties.map(property => [property.core.id, property]));
   const requestLines: PersonActivityLine[] = requirementsForPerson.map(requirement => {
     const summary = getRequirementCardSummary(requirement, formatters);
+    const intent = projectRequirementIntent(requirement, language);
     const parts = [
-      projectRequirementIntent(requirement, language).label,
+      intent.label,
       summary.typeLabel,
       summary.subtypeLabel,
       summary.areaLabel,
@@ -133,6 +136,7 @@ export function getPersonDirectIntentActivityLines(
       key: `request:${requirement.id}`,
       id: requirement.id,
       kind: 'request',
+      intentId: intent.id,
       href: `/requirement/view/${encodeURIComponent(requirement.id)}`,
       label: localizedActivityLabel(parts),
     };
@@ -145,8 +149,9 @@ export function getPersonDirectIntentActivityLines(
     const property = propertyById.get(propertyId);
     if (!property) continue;
     const summary = getPropertyCardSummary(property, formatters);
+    const intent = projectPropertyIntent(property, language);
     const parts = [
-      projectPropertyIntent(property, language).label,
+      intent.label,
       summary.typeLabel,
       summary.subtypeLabel,
       summary.areaLabel,
@@ -157,6 +162,7 @@ export function getPersonDirectIntentActivityLines(
       key: `offer:${propertyId}`,
       id: propertyId,
       kind: 'offer',
+      intentId: intent.id,
       href: `/property/${encodeURIComponent(propertyId)}`,
       label: localizedActivityLabel(parts),
     });
