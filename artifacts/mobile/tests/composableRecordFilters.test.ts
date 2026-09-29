@@ -52,7 +52,7 @@ test('a Person passes only when one linked activity satisfies the complete filte
   assert.equal(anyRecordIntentMatchesComposableFilter([], EMPTY_COMPOSABLE_RECORD_FILTER), true);
 });
 
-test('Properties and People screens expose the same combinable filter controls', async () => {
+test('Properties and People screens expose the same combinable, accessible filter controls', async () => {
   const [properties, people] = await Promise.all([
     readFile(resolveSourcePath('../app/(tabs)/properties.tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/(tabs)/people.tsx', import.meta.url), 'utf8'),
@@ -62,6 +62,8 @@ test('Properties and People screens expose the same combinable filter controls',
     assert.match(source, /hasActiveRecordFilters/);
     assert.match(source, /directions/);
     assert.match(source, /transactions/);
+    assert.match(source, /accessibilityRole=\{option\.key === 'all' \? 'button' : 'checkbox'\}/);
+    assert.match(source, /aria-checked=\{option\.key === 'all' \? undefined : selected\}/);
   }
   assert.match(properties, /filterOfferedWantedRows\(rows, filter, search\)/);
   assert.match(people, /anyRecordIntentMatchesComposableFilter/);

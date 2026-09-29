@@ -250,8 +250,8 @@ export default function PropertiesScreen() {
                 { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
               ]}
               testID={`properties-filter-${option.key}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
+              accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
+              aria-checked={option.key === 'all' ? undefined : selected}
             >
               <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {t(`properties.filter.${option.key}` as keyof Translations)}

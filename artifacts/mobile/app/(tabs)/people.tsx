@@ -126,8 +126,8 @@ export default function PeopleScreen() {
                 { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
               ]}
               testID={`people-filter-${option.key}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
+              accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
+              aria-checked={option.key === 'all' ? undefined : selected}
             >
               <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {t(`properties.filter.${option.key}` as keyof Translations)}
@@ -153,9 +153,11 @@ export default function PeopleScreen() {
           >
             {totalPeople === 0
               ? t('people.empty')
-              : search.trim() || hasActiveRecordFilters(filter)
-                ? t('people.no_filtered_results')
-                : t('people.empty')}
+              : search.trim() && !hasActiveRecordFilters(filter)
+                ? t('people.no_search_results')
+                : hasActiveRecordFilters(filter)
+                  ? t('people.no_filtered_results')
+                  : t('people.empty')}
           </Text>}
         renderItem={({ item }) => (
           <TouchableOpacity
