@@ -34,6 +34,7 @@ import type { Property, PropertyDetailField } from '@workspace/property-domain';
 import { ensureStudioPropertySourceLink, getStudioPersonSourceRole } from '@/services/studioSave';
 import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
+import { projectRecordIntent } from '@/services/recordIntentPresentation';
 
 export default function SummaryScreen() {
   const router = useRouter();
@@ -337,7 +338,7 @@ export default function SummaryScreen() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}>
           <SummaryRow
             label={t('summary.transaction')}
-            value={draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''} 
+            value={projectRecordIntent('offered', draft.transaction, language).label}
           />
           {!isBasicApartmentFollowUp ? PROPERTY_FORM_CATALOG.map(({ field }) => [field, previewDetails[field]] as const)
             .filter(([, value]) => value !== undefined && value !== '')

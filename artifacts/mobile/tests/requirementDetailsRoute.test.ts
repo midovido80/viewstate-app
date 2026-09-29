@@ -5,6 +5,7 @@ import type { SeekerRequirement } from '@workspace/property-domain';
 import { getRequirementDetailIdentity, getRequirementDetailsRows } from '../services/requirementDetailsPresentation.ts';
 import { getStudioRequirementEditHref } from '../services/propertyDetailPresentation.ts';
 import { getRequirementEditFormTarget } from '../services/propertyFormRoutes.ts';
+import { projectRequirementIntent } from '../services/recordIntentPresentation.ts';
 import { resolveSourcePath } from './sourcePath.ts';
 
 const readSource = (path: string) =>
@@ -76,6 +77,23 @@ const row = (record: SeekerRequirement, field: string, language: 'en' | 'ar' = '
   assert.equal(matches.length, 1, `${field} is represented exactly once`);
   return matches[0]!;
 };
+
+test('Requirement Details and Review use the canonical Wanted intent without a Sale fallback', async () => {
+  const details = await readSource('../app/requirement/view/[requirementId].tsx');
+  const review = await readSource('../app/requirement/[requirementId].tsx');
+  assert.equal(projectRequirementIntent({ purpose: 'buy' }, 'en').label, 'Purchase Request');
+  assert.equal(projectRequirementIntent({ purpose: 'rent' }, 'ar').label, 'طلب استئجار');
+  assert.deepEqual(projectRequirementIntent({ purpose: 'sale' } as unknown as SeekerRequirement, 'en'), {
+    id: 'conflict',
+    label: 'Record intent conflict',
+    valid: false,
+  });
+  assert.match(details, /projectRequirementIntent\(record, language\)/);
+  assert.match(details, /row\.field === 'purpose'[\s\S]*requirementIntent!\.label/);
+  assert.match(details, /requirementIntent\?\.label[\s\S]*propertyType\.\$\{record\.propertyType\}/);
+  assert.match(review, /projectRequirementIntent\(\{ purpose \}, language\)\.label/);
+  assert.doesNotMatch(review, /purpose === 'rent' \? label\('Rent', 'إيجار'\) : label\('Buy', 'شراء'\)/);
+});
 
 test('Person View and Edit actions retain the exact saved Requirement identity', async () => {
   const person = await readSource('../app/person/[personId].tsx');

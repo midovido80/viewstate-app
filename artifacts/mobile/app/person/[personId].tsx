@@ -44,6 +44,7 @@ import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareInten
 import {
   getPropertyCardSummary,
 } from '@/services/cardSummaryPresentation';
+import { projectPropertyIntent, projectRequirementIntent } from '@/services/recordIntentPresentation';
 import { ensureStudioPropertySourceLink } from '@/services/studioSave';
 
 export function getPersonWantedRequirementRoute(personId: string) {
@@ -492,8 +493,11 @@ export default function PersonDetailScreen() {
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
             </View>
-            {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
-              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}{getWantedApartmentSubtypeLabel(requirement, language) ? ` · ${getWantedApartmentSubtypeLabel(requirement, language)}` : ''}</Text>
+            {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => {
+              const intent = projectRequirementIntent(requirement, language);
+              return (
+              <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
+              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{intent.label} · {t(`propertyType.${requirement.propertyType}`)}{getWantedApartmentSubtypeLabel(requirement, language) ? ` · ${getWantedApartmentSubtypeLabel(requirement, language)}` : ''}</Text>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
                 {requirement.preferredAreaMode === 'all_kuwait'
                   ? (language === 'ar' ? 'كل مناطق الكويت' : 'All Kuwait')
@@ -506,7 +510,9 @@ export default function PersonDetailScreen() {
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
               <View style={[styles.secondaryActions, styles.requirementActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><Button title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never)} style={styles.requirementAction} testID={`requirement-view-${requirement.id}`}/><Button title={t('requirements.find_matches')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} style={styles.requirementAction} testID={`requirement-find-${requirement.id}`}/><Button title={t('requirements.edit')} onPress={() => router.push(canHydrateStudioRequirement(requirement) ? getStudioRequirementEditHref(requirement.id) as never : { pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={styles.requirementAction} testID={`requirement-edit-${requirement.id}`}/></View>
-            </View>)}
+              </View>
+              );
+            })}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
               {eligibleSourceRoles.length ? <TouchableOpacity onPress={() => void openLink()} testID="person-link-property" accessibilityRole="button">
@@ -518,7 +524,7 @@ export default function PersonDetailScreen() {
               return (
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)} testID={`linked-property-${property.core.id}`} accessibilityRole="button">
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{summary.transactionLabel} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{projectPropertyIntent(property, language).label} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
                   {summary.studioAreaLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.studioAreaLabel}</Text> : null}
                   <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.valueLabel}</Text>
                   <Text style={[styles.ltrText, { color: colors.mutedForeground }]}>{toEnglishDigits(property.core.id)}</Text>
@@ -541,7 +547,7 @@ export default function PersonDetailScreen() {
                   testID={`source-property-${property.core.id}`}
                   accessibilityRole="button"
                 >
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{summary.transactionLabel} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{projectPropertyIntent(property, language).label} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
                   {summary.studioAreaLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.studioAreaLabel}</Text> : null}
                   <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.valueLabel} · {t(`source.role.${source.role}`)}</Text>
                 </TouchableOpacity>

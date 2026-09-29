@@ -49,6 +49,7 @@ import {
   STUDIO_FORM_FIELD_ORDER,
   type StudioCatalogFieldId,
 } from '@/services/studioCatalog';
+import { projectRecordIntent } from '@/services/recordIntentPresentation';
 import {
   prepareStudioPropertyEditCandidate,
   ensureStudioPropertySourceLink,
@@ -969,6 +970,11 @@ export default function StudioCaptureRoute() {
     const labels = getStudioCatalogFieldLabel(id, mode);
     return labels[language === 'ar' ? 1 : 0];
   };
+  const studioReviewIntent = () => projectRecordIntent(
+    mode,
+    mode === 'wanted' && values.transaction === 'sale' ? 'buy' : values.transaction,
+    language,
+  );
   const transactionLabel = () => {
     const choice = getStudioCatalogField('transaction').quickPicks?.find(
       candidate => candidate.modeValues[mode] === values.transaction,
@@ -1354,13 +1360,9 @@ export default function StudioCaptureRoute() {
   const renderReviewCatalogField = (fieldId: StudioCatalogFieldId) => {
     switch (fieldId) {
       case 'transaction': {
-        const choice = getStudioCatalogField(fieldId).quickPicks?.find(
-          candidate => candidate.modeValues[mode] === values.transaction,
-        );
-        const label = choice ? getStudioCatalogChoiceLabel(choice, mode) : undefined;
         return reviewItem(
           catalogLabel(fieldId),
-          label ? label[language === 'ar' ? 1 : 0] : t(`studio.${values.transaction}`),
+          studioReviewIntent().label,
         );
       }
       case 'locationAreaId':
@@ -1421,7 +1423,7 @@ export default function StudioCaptureRoute() {
   const renderReview = () => (
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
-      {mode === 'wanted' ? reviewItem(catalogLabel('transaction'), transactionLabel()) : null}
+      {mode === 'wanted' ? reviewItem(catalogLabel('transaction'), studioReviewIntent().label) : null}
       {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderReviewCatalogField(fieldId))}
       {mode === 'offered' && values.privateNotes
         ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes)

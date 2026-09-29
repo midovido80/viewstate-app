@@ -11,7 +11,7 @@ import { store } from '@/services/persistence';
 import { formatPrice, formatRentalPrice, toEnglishDigits } from '@/constants/market';
 import {
   getPersonActivityMoreLabel,
-  getPersonDirectActivityLines,
+  getPersonDirectIntentActivityLines,
   type PersonActivityLine,
 } from '@/services/cardSummaryPresentation';
 
@@ -50,7 +50,7 @@ export default function PeopleScreen() {
       };
       const activity = new Map(filtered.map(person => [
         person.id,
-        getPersonDirectActivityLines(person.id, properties, requirements, links, sources, formatters),
+        getPersonDirectIntentActivityLines(person.id, properties, requirements, links, sources, formatters),
       ] as const));
       if (!active) return;
       setTotalPeople(all.length);

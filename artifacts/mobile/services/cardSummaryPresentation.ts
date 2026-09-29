@@ -6,6 +6,10 @@ import { getWantedApartmentSubtypeLabel, isOfferedStudio, isWantedStudio } from 
 import { getStudioCatalogFieldLabel } from '@/services/studioCatalog';
 import { toEnglishDigits } from '@/constants/market';
 import { squareFeetToSquareMeters } from '@/services/propertyFactProjection';
+import {
+  projectPropertyIntent,
+  projectRequirementIntent,
+} from '@/services/recordIntentPresentation';
 
 export type CardSummaryLanguage = 'en' | 'ar';
 
@@ -19,7 +23,6 @@ export interface CardSummaryFormatters {
 export interface PropertyCardSummary {
   readonly typeLabel: string;
   readonly subtypeLabel?: string;
-  readonly transactionLabel: string;
   readonly areaLabel: string;
   readonly studioAreaLabel?: string;
   readonly valueLabel: string;
@@ -28,7 +31,6 @@ export interface PropertyCardSummary {
 export interface RequirementCardSummary {
   readonly typeLabel: string;
   readonly subtypeLabel?: string;
-  readonly transactionLabel: string;
   readonly areaLabel: string;
   readonly studioAreaLabel?: string;
   readonly valueLabel: string;
@@ -58,14 +60,14 @@ export function getPropertyCardSummary(
   const area = getAreaById(property.core.locationArea.id);
   const areaLabel = area ? (language === 'ar' ? area.ar : area.en) : property.core.locationArea.id;
   const offer = property.activeOffer;
-  const transactionLabel = translate(offer.transaction === 'rent' ? 'transaction.rent' : 'transaction.sale');
   const valueLabel = offer.transaction === 'rent'
     ? formatters.formatRentalPrice(offer.rentalPrice.amount, offer.rentalPrice.currencyCode, offer.rentalPeriodId)
-    : formatters.formatPrice(offer.salePrice.amount, offer.salePrice.currencyCode);
+    : offer.transaction === 'sale'
+      ? formatters.formatPrice(offer.salePrice.amount, offer.salePrice.currencyCode)
+      : language === 'ar' ? 'السعر غير متاح' : 'Price unavailable';
   return {
     typeLabel,
     ...(subtypeLabel ? { subtypeLabel } : {}),
-    transactionLabel,
     areaLabel,
     ...(studioAreaLabel ? { studioAreaLabel } : {}),
     valueLabel,
@@ -78,7 +80,7 @@ export function getRequirementCardSummary(
 ): RequirementCardSummary {
   const { language, translate } = formatters;
   const typeLabel = translate(`propertyType.${requirement.propertyType}`);
-  const subtypeLabel = getWantedApartmentSubtypeLabel(requirement, language);
+  const subtypeLabel = getRequirementCardSubtypeLabel(requirement, language);
   const studioArea = isWantedStudio(requirement)
     ? requirement.catalogPreferences?.find(preference =>
       preference.field === 'builtUpAreaSquareMeters' && preference.kind === 'number')
@@ -88,7 +90,6 @@ export function getRequirementCardSummary(
     : undefined;
   const areaLabel = getWantedAreaDisplayValues(requirement, language, translate('properties.all_kuwait')).join(' · ')
     || (language === 'ar' ? 'لم تحدد منطقة' : 'No preferred area');
-  const transactionLabel = translate(requirement.purpose === 'rent' ? 'transaction.rent' : 'transaction.sale');
   const valueLabel = formatWantedBudget(
     requirement.budget,
     amount => formatters.formatPrice(amount, requirement.budget.currencyCode),
@@ -96,15 +97,14 @@ export function getRequirementCardSummary(
   return {
     typeLabel,
     ...(subtypeLabel ? { subtypeLabel } : {}),
-    transactionLabel,
     areaLabel,
     ...(studioAreaLabel ? { studioAreaLabel } : {}),
     valueLabel,
   };
 }
 
-/** Derives Person activity exclusively from current linked/source/property and Requirement records. */
-export function getPersonDirectActivityLines(
+/** Derives Person activity with one canonical intent from linked/source/property and Requirement records. */
+export function getPersonDirectIntentActivityLines(
   personId: string,
   properties: readonly Property[],
   requirements: readonly SeekerRequirement[],
@@ -112,6 +112,7 @@ export function getPersonDirectActivityLines(
   sources: readonly PropertySource[],
   formatters: CardSummaryFormatters,
 ): PersonActivityLine[] {
+  const { language } = formatters;
   const requirementsForPerson = requirements.filter(requirement => requirement.seekerId === personId);
   const propertyIds = new Set([
     ...links.filter(link => link.personId === personId).map(link => link.propertyCoreId),
@@ -120,19 +121,20 @@ export function getPersonDirectActivityLines(
   const propertyById = new Map(properties.map(property => [property.core.id, property]));
   const requestLines: PersonActivityLine[] = requirementsForPerson.map(requirement => {
     const summary = getRequirementCardSummary(requirement, formatters);
+    const parts = [
+      projectRequirementIntent(requirement, language).label,
+      summary.typeLabel,
+      summary.subtypeLabel,
+      summary.areaLabel,
+      summary.studioAreaLabel,
+      summary.valueLabel,
+    ];
     return {
       key: `request:${requirement.id}`,
       id: requirement.id,
       kind: 'request',
       href: `/requirement/view/${encodeURIComponent(requirement.id)}`,
-      label: localizedActivityLabel(formatters.language, 'request', [
-        summary.transactionLabel,
-        summary.typeLabel,
-        summary.subtypeLabel,
-        summary.areaLabel,
-        summary.studioAreaLabel,
-        summary.valueLabel,
-      ]),
+      label: localizedActivityLabel(parts),
     };
   });
   const seenProperties = new Set<string>();
@@ -143,19 +145,20 @@ export function getPersonDirectActivityLines(
     const property = propertyById.get(propertyId);
     if (!property) continue;
     const summary = getPropertyCardSummary(property, formatters);
+    const parts = [
+      projectPropertyIntent(property, language).label,
+      summary.typeLabel,
+      summary.subtypeLabel,
+      summary.areaLabel,
+      summary.studioAreaLabel,
+      summary.valueLabel,
+    ];
     offerLines.push({
       key: `offer:${propertyId}`,
       id: propertyId,
       kind: 'offer',
       href: `/property/${encodeURIComponent(propertyId)}`,
-      label: localizedActivityLabel(formatters.language, 'offer', [
-        summary.transactionLabel,
-        summary.typeLabel,
-        summary.subtypeLabel,
-        summary.areaLabel,
-        summary.studioAreaLabel,
-        summary.valueLabel,
-      ]),
+      label: localizedActivityLabel(parts),
     });
   }
   if (requestLines.length && offerLines.length) {
@@ -182,10 +185,25 @@ function getPropertySubtype(property: Property, formatters: CardSummaryFormatter
     : String(value ?? '');
   const canonical = subtype === 'standard' ? 'standard_apartment' : subtype;
   if (canonical === 'studio' && isOfferedStudio(property)) return formatters.translate('enrich.apartment_subtype.studio');
-  if (canonical === 'standard_apartment' || canonical === 'duplex' || canonical === 'studio') {
+  if (canonical === 'standard_apartment') return formatters.language === 'ar' ? 'عادية' : 'Standard';
+  if (canonical === 'duplex' || canonical === 'studio') {
     return formatters.translate(`enrich.apartment_subtype.${canonical}`);
   }
   return undefined;
+}
+
+function getRequirementCardSubtypeLabel(
+  requirement: SeekerRequirement,
+  language: CardSummaryLanguage,
+): string | undefined {
+  const hasStandardApartmentSubtype = requirement.propertyType === 'apartment'
+    && requirement.catalogPreferences?.some(preference =>
+      preference.field === 'apartmentSubtype'
+      && preference.kind === 'choice'
+      && (preference.value === 'standard' || preference.value === 'standard_apartment'),
+    ) === true;
+  if (hasStandardApartmentSubtype) return language === 'ar' ? 'عادية' : 'Standard';
+  return getWantedApartmentSubtypeLabel(requirement, language);
 }
 
 function readNumber(value: unknown): number | undefined {
@@ -206,13 +224,6 @@ function getOfferedStudioAreaSquareMeters(property: Property): number | undefine
   );
 }
 
-function localizedActivityLabel(
-  language: CardSummaryLanguage,
-  kind: 'request' | 'offer',
-  parts: readonly (string | undefined)[],
-): string {
-  const action = language === 'ar'
-    ? kind === 'request' ? 'يطلب' : 'يعرض'
-    : kind === 'request' ? 'Requests' : 'Offers';
-  return `${action} · ${parts.filter((part): part is string => Boolean(part)).join(' · ')}`;
+function localizedActivityLabel(parts: readonly (string | undefined)[]): string {
+  return parts.filter((part): part is string => Boolean(part)).join(' · ');
 }

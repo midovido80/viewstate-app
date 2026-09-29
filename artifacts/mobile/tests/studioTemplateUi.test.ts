@@ -61,7 +61,8 @@ test('STRUCTURAL: Wanted Studio shows its prior transaction read-only and return
   assert.match(studio, /router\.replace\(\{\s*pathname: '\/capture\/transaction',\s*params: \{ mode: 'wanted', seekerId: personId \}/);
   assert.match(studio, /if \(mode === 'wanted'\) return null/);
   assert.match(studio, /\{!editing \? \([\s\S]*testID="studio-transaction-change"[\s\S]*\) : null\}/);
-  assert.match(studio, /mode === 'wanted' \? reviewItem\(catalogLabel\('transaction'\), transactionLabel\(\)\)/);
+  const review = studio.slice(studio.indexOf('const renderReview ='));
+  assert.match(review, /mode === 'wanted' \? reviewItem\(catalogLabel\('transaction'\), studioReviewIntent\(\)\.label\)/);
 });
 
 test('REGRESSION: failed Offered Studio source linking blocks property and Home navigation until verified retry', async () => {
@@ -201,4 +202,13 @@ test('BEHAVIOR: actual Studio field errors resolve to distinct English and Arabi
     assert.notEqual(englishMessage, arabicMessage);
     assert.match(arabicMessage, /[\u0600-\u06ff]/);
   }
+});
+
+test('Studio Offered and Wanted Review summaries share the canonical record-intent label', async () => {
+  const studio = await readFile(resolveSourcePath('../app/capture/studio.tsx', import.meta.url), 'utf8');
+  const review = studio.slice(studio.indexOf('const renderReviewCatalogField ='));
+  assert.match(studio, /projectRecordIntent\(\s*mode,\s*mode === 'wanted' && values\.transaction === 'sale' \? 'buy' : values\.transaction,\s*language,\s*\)/);
+  assert.match(review, /case 'transaction': \{[\s\S]*?studioReviewIntent\(\)\.label/);
+  assert.match(review, /mode === 'wanted' \? reviewItem\(catalogLabel\('transaction'\), studioReviewIntent\(\)\.label\)/);
+  assert.doesNotMatch(review, /transactionLabel\(\)/);
 });

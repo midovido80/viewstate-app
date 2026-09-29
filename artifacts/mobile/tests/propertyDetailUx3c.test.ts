@@ -31,6 +31,7 @@ import {
 import type { PropertyEditChoices, PropertyEditDraftV1 } from '../services/propertyUpdateRecovery.ts';
 import { buildPropertyUpdateCandidate, createEditDraft } from '../services/propertyUpdateRecovery.ts';
 import { getPropertyEditFormHref } from '../services/propertyFormRoutes.ts';
+import { projectPropertyIntent, projectRecordIntent } from '../services/recordIntentPresentation.ts';
 
 test('Property detail web navigation resolves same-ID action routes and a safe Home fallback', () => {
   assert.equal(getPropertyDetailActionHref('property /exact', 'edit'), '/property/property%20%2Fexact/edit');
@@ -52,6 +53,25 @@ test('Saved Property Details exposes Home in detail and edit headers while retai
   assert.equal((source.match(/accessibilityLabel=\{language === 'ar' \? 'الرئيسية' : 'Home'\}/g) ?? []).length, homeActionCount);
   assert.match(source, /onPress=\{\(\) => router\.replace\(getPropertyDetailBackRoute\(\) as never\)\}/);
   assert.match(source, /onPress=\{leaveEditor\}/);
+});
+
+test('Property Details uses the canonical intent label and never promotes an unknown transaction to sale', async () => {
+  const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
+  assert.equal(projectRecordIntent('offered', 'sale', 'en').label, 'Offered for Sale');
+  assert.equal(projectRecordIntent('offered', 'rent', 'ar').label, 'معروض للإيجار');
+  assert.deepEqual(projectRecordIntent('offered', 'buy', 'en'), {
+    id: 'conflict',
+    label: 'Record intent conflict',
+    valid: false,
+  });
+  assert.equal(projectPropertyIntent({
+    activeOffer: { transaction: 'sale' },
+  } as unknown as Property, 'ar').label, 'معروض للبيع');
+  assert.match(source, /const propertyIntent = projectPropertyIntent\(property, language\)/);
+  assert.match(source, /\{propertyIntent\.label\}/);
+  assert.match(source, /propertyIntent\.id === 'offered_sale'[\s\S]*property\.activeOffer\.salePrice\.amount/);
+  assert.match(source, /propertyIntent\.id === 'offered_rent'[\s\S]*property\.activeOffer\.rentalPrice\.amount/);
+  assert.doesNotMatch(source, /t\(`transaction\.\$\{property\.activeOffer\.transaction\}`\)/);
 });
 
 test('Enrichment save confirms exact readback before offering same-ID View Property and Home', async () => {

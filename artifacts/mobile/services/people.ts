@@ -2,6 +2,11 @@ import {
   PROPERTY_SOURCE_ROLES,
   PropertySourceRole,
 } from '@workspace/property-domain';
+import {
+  matchesFlexibleSearch,
+  personClassificationSearchValues,
+  type FlexibleSearchField,
+} from '@/services/flexibleSearch';
 
 export const PERSON_CLASSIFICATIONS = [
   'seeker',
@@ -117,9 +122,17 @@ export function getPersonSearchText(person: Person): string {
 }
 
 export function personMatchesSearch(person: Person, query: string): boolean {
+  const fields: FlexibleSearchField[] = [
+    { field: 'name', value: person.name },
+    { field: 'phone', value: person.displayPhone },
+    { field: 'phone', value: person.normalizedPhone },
+    ...personClassificationSearchValues(person.classifications)
+      .map(value => ({ field: 'classification', value })),
+  ];
   const literalQuery = query.toLocaleLowerCase();
   const normalizedQuery = normalizePersonPhone(query);
-  return getPersonSearchText(person).includes(literalQuery)
+  return matchesFlexibleSearch(fields, query)
+    || getPersonSearchText(person).toLocaleLowerCase().includes(literalQuery)
     || (normalizedQuery.replace('+', '').length > 0
       && person.normalizedPhone.includes(normalizedQuery));
 }

@@ -1,15 +1,18 @@
-import type { Property, PropertyType, RequirementPurpose, SeekerRequirement } from '@workspace/property-domain';
+import type { Property, PropertyType, SeekerRequirement } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
-import type { Person, PersonClassification } from '@/services/people';
+import type { Person } from '@/services/people';
 import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
-
-const classificationLabels: Record<PersonClassification, readonly string[]> = {
-  seeker: ['seeker', 'باحث'],
-  owner: ['owner', 'مالك'],
-  broker: ['broker', 'دلال'],
-  real_estate_company: ['real estate company', 'شركة عقارية'],
-  building_guard: ['building guard', 'حارس'],
-};
+import {
+  projectPropertyIntent,
+  projectRequirementIntent,
+} from '@/services/recordIntentPresentation';
+import {
+  flexibleSearchTerms,
+  personClassificationSearchValues,
+  recordIntentSearchValues,
+  scoreFlexibleSearchFields,
+  type FlexibleSearchField,
+} from '@/services/flexibleSearch';
 
 const propertyTypeLabels: Record<PropertyType, readonly string[]> = {
   apartment: ['apartment', 'شقة'],
@@ -25,15 +28,14 @@ const propertyTypeLabels: Record<PropertyType, readonly string[]> = {
   other_built_property: ['other', 'أخرى'],
 };
 
-const purposeLabels: Record<RequirementPurpose, readonly string[]> = {
-  rent: ['rent', 'إيجار'],
-  buy: ['buy', 'شراء'],
-};
-
 export interface GlobalSearchData {
   readonly people: readonly Person[];
   readonly properties: readonly Property[];
   readonly requirements: readonly SeekerRequirement[];
+  /** Canonical source and link relationships indexed by Property ID, if available. */
+  readonly linkedPeopleByProperty?: ReadonlyMap<string, readonly Person[]>;
+  /** Search remains useful for readable records, but no-results is unsafe if link search failed. */
+  readonly linkedPeopleUnavailable?: boolean;
 }
 
 export interface GlobalSearchResults {
@@ -46,7 +48,7 @@ export interface GlobalSearchResults {
 }
 
 export type SearchMatchField = 'identifier' | 'name' | 'phone' | 'classification' | 'type' | 'area' | 'description' | 'requirement' | 'notes';
-export type SearchMatchKind = 'exact' | 'prefix' | 'substring' | 'alias' | 'fuzzy';
+export type SearchMatchKind = 'exact' | 'prefix' | 'substring' | 'alias';
 export interface SearchMatchReason {
   readonly kind: SearchMatchKind;
   readonly field: SearchMatchField;
@@ -60,130 +62,21 @@ export interface GlobalSearchResultsWithReasons extends GlobalSearchResults {
   };
 }
 
-const ALIAS_GROUPS: readonly (readonly string[])[] = [
-  ['studio', 'studios', 'استوديو', 'ستوديو', 'استديو', 'ستديو', 'ستيديو', 'استوديوهات', 'ستوديوهات'],
-  ['shop', 'shops', 'store', 'stores', 'محل', 'محلات', 'متجر', 'متاجر', 'دكان', 'دكاكين'],
-];
-
-function normalizeSearchText(value: string): string {
-  return Array.from(value.normalize('NFKC').trim().toLocaleLowerCase())
-    .map(character => {
-      const code = character.charCodeAt(0);
-      if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
-      if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0);
-      if (/[\u064b-\u065f\u0670\u0640]/u.test(character)) return '';
-      if (/[أإآٱ]/u.test(character)) return 'ا';
-      if (character === 'ى') return 'ي';
-      if (character === 'ة') return 'ه';
-      if (character === 'ک') return 'ك';
-      if (character === 'ی') return 'ي';
-      return character;
-    })
-    .join('');
-}
-
-export function searchTerms(query: string): string[] {
-  return normalizeSearchText(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-}
-
-function aliasTerms(term: string): string[] {
-  return ALIAS_GROUPS.flatMap(group => {
-    const normalized = group.map(normalizeSearchText);
-    return normalized.some(value => directMatch(value, term) !== undefined)
-      ? normalized.filter(value => value !== term)
-      : [];
-  });
-}
-
-function boundedEditDistanceAtMostOne(left: string, right: string): boolean {
-  if (left === right) return true;
-  if (Math.abs(left.length - right.length) > 1) return false;
-  let leftIndex = 0;
-  let rightIndex = 0;
-  let edits = 0;
-  while (leftIndex < left.length && rightIndex < right.length) {
-    if (left[leftIndex] === right[rightIndex]) {
-      leftIndex++;
-      rightIndex++;
-      continue;
-    }
-    if (++edits > 1) return false;
-    if (leftIndex + 1 < left.length && rightIndex + 1 < right.length
-      && left[leftIndex] === right[rightIndex + 1]
-      && left[leftIndex + 1] === right[rightIndex]) {
-      leftIndex += 2;
-      rightIndex += 2;
-    } else if (left.length >= right.length) leftIndex++;
-    else rightIndex++;
-  }
-  return edits + Number(leftIndex < left.length || rightIndex < right.length) <= 1;
-}
+export const searchTerms = flexibleSearchTerms;
 
 const MATCH_RANK: Record<SearchMatchKind, number> = {
   exact: 0,
   prefix: 1,
   substring: 2,
   alias: 3,
-  fuzzy: 4,
 };
 
-interface SearchableField {
-  readonly field: SearchMatchField;
-  readonly value: string;
-}
+type SearchableField = FlexibleSearchField & { readonly field: SearchMatchField };
 
 interface ScoredMatch {
   readonly reason: SearchMatchReason;
   readonly worstRank: number;
   readonly rankSum: number;
-}
-
-function directMatch(value: string, term: string): SearchMatchKind | undefined {
-  if (value === term || value.split(/[^\p{L}\p{N}]+/u).includes(term)) return 'exact';
-  if (value.startsWith(term) || value.split(/[^\p{L}\p{N}]+/u).some(word => word.startsWith(term))) return 'prefix';
-  if (value.includes(term)) return 'substring';
-  return undefined;
-}
-
-function termMatch(fields: readonly SearchableField[], term: string): SearchMatchReason | undefined {
-  const normalized = fields.map(field => ({ ...field, value: normalizeSearchText(field.value) }));
-  for (const kind of ['exact', 'prefix', 'substring'] as const) {
-    const match = normalized.find(field => directMatch(field.value, term) === kind);
-    if (match) return { kind, field: match.field };
-  }
-
-  const aliases = aliasTerms(term);
-  if (aliases.length) {
-    const aliasMatch = normalized.find(field => aliases.some(alias => directMatch(field.value, alias) !== undefined));
-    if (aliasMatch) return { kind: 'alias', field: aliasMatch.field };
-  }
-
-  // Only allow a bounded one-edit/transposition typo for sufficiently long tokens.
-  if (term.length >= 4) {
-    for (const field of normalized) {
-      const words = field.value.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-      if (words.some(word => Math.abs(word.length - term.length) <= 1 && boundedEditDistanceAtMostOne(word, term))) {
-        return { kind: 'fuzzy', field: field.field };
-      }
-    }
-  }
-  return undefined;
-}
-
-function scoreFields(fields: readonly SearchableField[], terms: readonly string[]): ScoredMatch | undefined {
-  if (!terms.length) return undefined;
-  const reasons = terms.map(term => termMatch(fields, term));
-  if (reasons.some(reason => !reason)) return undefined;
-  const matches = reasons as SearchMatchReason[];
-  const bestReason = matches.reduce((best, current) =>
-    MATCH_RANK[current.kind] < MATCH_RANK[best.kind] ? current : best,
-  );
-  const ranks = matches.map(match => MATCH_RANK[match.kind]);
-  return {
-    reason: bestReason,
-    worstRank: Math.max(...ranks),
-    rankSum: ranks.reduce((sum, rank) => sum + rank, 0),
-  };
 }
 
 function areaFields(areaId: string): string[] {
@@ -201,6 +94,45 @@ function searchableDescription(property: Property): string {
   return description.value;
 }
 
+/** The exact safe description projection also governs result subtitles. */
+export function getSearchablePublicPropertyDescription(property: Property): string {
+  return searchableDescription(property);
+}
+
+function readSubtype(value: unknown): string {
+  if (typeof value === 'object' && value !== null && 'value' in value) {
+    return String((value as { readonly value: unknown }).value ?? '');
+  }
+  return String(value ?? '');
+}
+
+function offeredApartmentSubtype(property: Property): string[] {
+  if (property.core.propertyType !== 'apartment') return [];
+  const details = property.typeDetails as Readonly<Record<string, unknown>> | undefined;
+  const subtype = readSubtype(details?.apartmentSubtype).toLowerCase();
+  if (!subtype) return [];
+  return [
+    subtype,
+    subtype === 'standard_apartment' || subtype === 'standard' ? 'standard apartment' : '',
+    subtype === 'duplex' ? 'duplex apartment' : '',
+    subtype === 'studio' ? 'studio apartment' : '',
+  ].filter(Boolean);
+}
+
+function wantedApartmentSubtype(requirement: SeekerRequirement): string[] {
+  if (requirement.propertyType !== 'apartment') return [];
+  const subtype = requirement.catalogPreferences?.find(preference => preference.field === 'apartmentSubtype');
+  return subtype?.kind === 'choice' ? [subtype.value] : [];
+}
+
+function linkedPersonFields(people: readonly Person[]): SearchableField[] {
+  return people.flatMap(person => [
+    { field: 'name', value: person.name },
+    ...personClassificationSearchValues(person.classifications)
+      .map(value => ({ field: 'classification' as const, value })),
+  ]);
+}
+
 function rankedUnique<T>(
   values: readonly T[],
   id: (value: T) => string,
@@ -209,8 +141,13 @@ function rankedUnique<T>(
 ): { readonly values: T[]; readonly why: ReadonlyMap<string, SearchMatchReason> } {
   const byId = new Map<string, { value: T; score: ScoredMatch; index: number }>();
   values.forEach((value, index) => {
-    const score = scoreFields(fields(value), terms);
-    if (!score) return;
+    const match = scoreFlexibleSearchFields(fields(value), terms);
+    if (!match) return;
+    const score: ScoredMatch = {
+      reason: { kind: match.kind, field: match.field as SearchMatchField },
+      worstRank: match.worstRank,
+      rankSum: match.rankSum,
+    };
     const key = id(value);
     const existing = byId.get(key);
     if (!existing || score.worstRank < existing.score.worstRank
@@ -239,7 +176,7 @@ export function searchGlobalData(data: GlobalSearchData, query: string): GlobalS
 }
 
 export function searchGlobalDataWithMatchReasons(data: GlobalSearchData, query: string): GlobalSearchResultsWithReasons {
-  const terms = searchTerms(query);
+  const terms = flexibleSearchTerms(query);
   if (!terms.length) return {
     people: [], properties: [], requirements: [],
     why: { people: new Map(), properties: new Map(), requirements: new Map() },
@@ -249,31 +186,44 @@ export function searchGlobalDataWithMatchReasons(data: GlobalSearchData, query: 
     { field: 'name', value: person.name },
     { field: 'phone', value: person.displayPhone },
     { field: 'phone', value: person.normalizedPhone },
-    ...person.classifications.flatMap(value =>
-      classificationLabels[value].map(label => ({ field: 'classification' as const, value: label }))),
+    ...personClassificationSearchValues(person.classifications)
+      .map(value => ({ field: 'classification' as const, value })),
   ], terms);
 
-  const properties = rankedUnique(data.properties, property => property.core.id, property => [
-    { field: 'identifier', value: property.core.id },
-    { field: 'type', value: property.core.propertyType },
-    ...propertyTypeLabels[property.core.propertyType].map(value => ({ field: 'type' as const, value })),
-    ...(isOfferedStudio(property) ? [{ field: 'type' as const, value: 'studio' }] : []),
-    ...areaFields(property.core.locationArea.id).map(value => ({ field: 'area' as const, value })),
-    { field: 'description', value: searchableDescription(property) },
-  ], terms);
+  const properties = rankedUnique(data.properties, property => property.core.id, property => {
+    const intent = projectPropertyIntent(property, 'en');
+    const linkedPeople = data.linkedPeopleByProperty?.get(property.core.id) ?? [];
+    return [
+      { field: 'identifier', value: property.core.id },
+      { field: 'type', value: property.core.propertyType },
+      ...propertyTypeLabels[property.core.propertyType].map(value => ({ field: 'type' as const, value })),
+      ...offeredApartmentSubtype(property).map(value => ({ field: 'type' as const, value })),
+      ...(isOfferedStudio(property) ? [{ field: 'type' as const, value: 'studio' }] : []),
+      ...recordIntentSearchValues(intent.id).map(value => ({ field: 'type' as const, value })),
+      ...areaFields(property.core.locationArea.id).map(value => ({ field: 'area' as const, value })),
+      { field: 'description', value: searchableDescription(property) },
+      ...linkedPersonFields(linkedPeople),
+    ];
+  }, terms);
 
   const peopleById = new Map(data.people.map(person => [person.id, person]));
   const requirements = rankedUnique(data.requirements, requirement => requirement.id, requirement => {
     const seeker = peopleById.get(requirement.seekerId);
     const studio = isWantedStudio(requirement);
+    const intent = projectRequirementIntent(requirement, 'en');
+    const allKuwaitArea = requirement.preferredAreaMode === 'all_kuwait'
+      ? ['all kuwait', 'all_kuwait', 'كل مناطق الكويت'] : [];
     return [
       { field: 'name', value: seeker?.name ?? '' },
-      { field: 'requirement', value: requirement.purpose },
-      ...purposeLabels[requirement.purpose].map(value => ({ field: 'requirement' as const, value })),
+      ...recordIntentSearchValues(intent.id).map(value => ({ field: 'requirement' as const, value })),
       { field: 'type', value: requirement.propertyType },
       ...propertyTypeLabels[requirement.propertyType].map(value => ({ field: 'type' as const, value })),
+      ...wantedApartmentSubtype(requirement).map(value => ({ field: 'type' as const, value })),
       ...(studio ? [{ field: 'type' as const, value: 'studio' }] : []),
+      ...(seeker ? personClassificationSearchValues(seeker.classifications)
+        .map(value => ({ field: 'classification' as const, value })) : []),
       ...requirement.preferredAreaIds.flatMap(areaFields).map(value => ({ field: 'area' as const, value })),
+      ...allKuwaitArea.map(value => ({ field: 'area' as const, value })),
       { field: 'notes', value: requirement.notes },
     ];
   }, terms);

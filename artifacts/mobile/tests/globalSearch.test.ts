@@ -12,10 +12,15 @@ import {
   searchGlobalDataWithMatchReasons,
   searchTerms,
 } from '../services/globalSearch.ts';
-import { createPerson } from '../services/people.ts';
+import { createPerson, personMatchesSearch } from '../services/people.ts';
+import {
+  matchesFlexibleSearch,
+  normalizeFlexibleSearchText,
+  scoreFlexibleSearchFields,
+} from '../services/flexibleSearch.ts';
 import {
   getPersonActivityMoreLabel,
-  getPersonDirectActivityLines,
+  getPersonDirectIntentActivityLines,
 } from '../services/cardSummaryPresentation.ts';
 import type { PersonPropertyLink, PropertySource } from '../services/people.ts';
 
@@ -85,6 +90,25 @@ test('normalizes whitespace, case, Arabic-Indic, and Persian digits into substri
   assert.deepEqual(searchTerms('  AHMED   ٥۵٥٠  '), ['ahmed', '5550']);
 });
 
+test('one shared matcher handles punctuation, Arabic marks, aliases, partial tokens and record-level AND', () => {
+  assert.equal(normalizeFlexibleSearchText(' إِيجَــارٌ '), 'ايجار');
+  assert.equal(normalizeFlexibleSearchText('السالميّة'), 'السالميه');
+  assert.equal(normalizeFlexibleSearchText('  Store—Shop  '), 'store shop');
+
+  const fields = [
+    { field: 'name', value: 'Synthetic Broker Company' },
+    { field: 'area', value: 'Salmiya, Kuwait' },
+    { field: 'type', value: 'Studio apartment' },
+  ];
+  assert.equal(matchesFlexibleSearch(fields, 'broker-syn sal'), true);
+  assert.equal(matchesFlexibleSearch(fields, 'broker Hawalli'), false);
+  assert.equal(matchesFlexibleSearch([{ field: 'type', value: 'studio apartment' }], 'tud'), true);
+  assert.equal(matchesFlexibleSearch([{ field: 'type', value: 'shop' }], 'store'), true);
+  assert.equal(matchesFlexibleSearch([{ field: 'area', value: 'معروض للإيجار' }], 'إيجار'), true);
+  assert.equal(matchesFlexibleSearch([{ field: 'name', value: 'studio apartment' }], 'stduio'), false);
+  assert.equal(scoreFlexibleSearchFields(fields, ['broker', 'missing']), undefined);
+});
+
 test('matches every term against fields on the same record and preserves deduplicated input order', () => {
   const phone = searchGlobalData(data, 'Ahmed ٥٥٥٠');
   assert.deepEqual(phone.people.map(person => person.id), ['person-1']);
@@ -105,6 +129,18 @@ test('searches independent Requirements through seeker, purpose, type, area, and
 
   const arabic = searchGlobalData(data, 'إيجار شقة السالمية');
   assert.deepEqual(arabic.requirements.map(item => item.requirement.id), ['requirement-1']);
+
+  const allKuwait: SeekerRequirement = {
+    ...rentRequirement,
+    id: 'requirement-all-kuwait',
+    preferredAreaIds: [],
+    preferredAreaMode: 'all_kuwait',
+  };
+  assert.deepEqual(
+    searchGlobalData({ people: [], properties: [], requirements: [allKuwait] }, 'كل مناطق الكويت')
+      .requirements.map(item => item.requirement.id),
+    ['requirement-all-kuwait'],
+  );
 });
 
 test('does not index private notes or exact location fields', () => {
@@ -152,7 +188,7 @@ test('returns distinct empty groups for an empty query', () => {
   });
 });
 
-test('finds Offered and Wanted Studio records with English, Arabic variants, and bounded typos', () => {
+test('finds Offered and Wanted Studio records with approved English and Arabic spellings, not typos', () => {
   const offeredStudio = {
     ...property('studio-property', 'apartment', 'salmiya'),
     typeDetails: { apartmentSubtype: 'studio' },
@@ -167,21 +203,22 @@ test('finds Offered and Wanted Studio records with English, Arabic variants, and
     properties: [offeredStudio, offeredStudio],
     requirements: [wantedStudio, wantedStudio],
   };
-  for (const query of ['studio', 'استوديو', 'ستوديو', 'استديو', 'ستديو', 'ستيديو', 'stduio']) {
+  for (const query of ['studio', 'استوديو', 'ستوديو', 'استديو', 'ستديو', 'ستيديو']) {
     const result = searchGlobalDataWithMatchReasons(studioData, query);
     assert.deepEqual(result.properties.map(item => item.core.id), ['studio-property'], query);
     assert.deepEqual(result.requirements.map(item => item.requirement.id), ['studio-requirement'], query);
   }
   assert.equal(searchGlobalDataWithMatchReasons(studioData, 'ستديو').why.properties.get('studio-property')?.kind, 'alias');
-  assert.equal(searchGlobalDataWithMatchReasons(studioData, 'stduio').why.requirements.get('studio-requirement')?.kind, 'fuzzy');
+  assert.deepEqual(searchGlobalData(studioData, 'stduio').requirements, []);
   assert.deepEqual(searchGlobalData(studioData, 'studdxx').properties, [], 'two-edit weak overlap is excluded');
 });
 
 test('Global Search shows Studio subtype and omits missing-description fallback while retaining match reasons', async () => {
   const screen = await readFile('app/search.tsx', 'utf8');
   assert.match(screen, /function propertyTitle\([\s\S]*?isOfferedStudio\(property\)[\s\S]*?t\('enrich\.apartment_subtype\.studio'\)/);
-  assert.match(screen, /function propertySubtitle\([\s\S]*?property\.core\.description\?\.value\?\.trim\(\)[\s\S]*?matchReasonLabel\(reason, t\)/);
-  assert.match(screen, /function requirementSubtitle\([\s\S]*?isWantedStudio\(requirement\) \? \[t\('enrich\.apartment_subtype\.studio'\)\]/);
+  assert.match(screen, /function propertySubtitle\([\s\S]*?getSearchablePublicPropertyDescription\(property\)\.trim\(\)[\s\S]*?matchReasonLabel\(reason, t\)/);
+  assert.match(screen, /projectRequirementIntent\(requirement, language\)\.label/);
+  assert.match(screen, /projectPropertyIntent\(property, language\)\.label/);
   assert.match(screen, /subtitle=\{propertySubtitle\(property, results\.why\.properties\.get\(property\.core\.id\)!, t\)\}/);
   assert.doesNotMatch(screen, /search\.property_description_unknown/);
 });
@@ -297,6 +334,78 @@ test('match reasons identify the matched fields for people, properties and requi
   assert.deepEqual(arabic.why.requirements.get(requirement.id), { kind: 'exact', field: 'requirement' });
 });
 
+test('search indexes canonical intent, apartment subtype, and linked Person name/classification safely', () => {
+  const offeredRent = property('intent-rent', 'apartment', 'salmiya');
+  const offeredSale = {
+    ...offeredRent,
+    core: { ...offeredRent.core, id: 'intent-sale' },
+    activeOffer: {
+      id: 'sale-offer',
+      propertyCoreId: 'intent-sale',
+      transaction: 'sale',
+      salePrice: { amount: 100, currencyCode: 'KWD' },
+    },
+  } as Property;
+  const standard = {
+    ...offeredRent,
+    core: { ...offeredRent.core, id: 'standard-apartment' },
+    typeDetails: { apartmentSubtype: 'standard_apartment' },
+  } as Property;
+  const buy = { ...rentRequirement, id: 'intent-buy', purpose: 'buy' as const };
+  const linkedBroker = createPerson({
+    id: 'linked-broker',
+    name: 'Synthetic Broker',
+    displayPhone: '55000000',
+    classifications: ['broker'],
+  });
+  const searchData = {
+    people: [linkedBroker],
+    properties: [offeredRent, offeredSale, standard],
+    requirements: [buy, rentRequirement],
+    linkedPeopleByProperty: new Map([['intent-sale', [linkedBroker]]]),
+  };
+  assert.deepEqual(searchGlobalData(searchData, 'offered for sale').properties.map(item => item.core.id), ['intent-sale']);
+  assert.deepEqual(searchGlobalData(searchData, 'معروض للبيع').properties.map(item => item.core.id), ['intent-sale']);
+  assert.deepEqual(searchGlobalData(searchData, 'Purchase Request').requirements.map(item => item.requirement.id), ['intent-buy']);
+  assert.deepEqual(searchGlobalData(searchData, 'طلب شراء').requirements.map(item => item.requirement.id), ['intent-buy']);
+  assert.deepEqual(searchGlobalData(searchData, 'standard apartment').properties.map(item => item.core.id), ['standard-apartment']);
+  assert.deepEqual(searchGlobalData(searchData, 'Synthetic Broker').properties.map(item => item.core.id), ['intent-sale']);
+  assert.deepEqual(searchGlobalData(searchData, 'دلال').properties.map(item => item.core.id), ['intent-sale']);
+
+  const invalidOffer = {
+    ...offeredRent,
+    core: { ...offeredRent.core, id: 'invalid-direction' },
+    activeOffer: { ...offeredRent.activeOffer, transaction: 'buy' },
+  } as unknown as Property;
+  const invalidPurpose = { ...rentRequirement, id: 'invalid-purpose', purpose: 'sale' } as unknown as SeekerRequirement;
+  const conflicting = { people: [], properties: [invalidOffer], requirements: [invalidPurpose] };
+  assert.deepEqual(searchGlobalData(conflicting, 'rent').properties, []);
+  assert.deepEqual(searchGlobalData(conflicting, 'sale').requirements, []);
+  assert.equal(searchGlobalData(conflicting, 'Record intent conflict').properties[0]?.core.id, 'invalid-direction');
+  assert.equal(personMatchesSearch(linkedBroker, 'real estate'), false);
+  assert.equal(personMatchesSearch(linkedBroker, 'broker'), true);
+  assert.equal(personMatchesSearch(linkedBroker, '٥٥٠٠'), true, 'the established phone-search contract remains supported');
+});
+
+test('global and mixed Properties search never expose private descriptions or numeric Property area', async () => {
+  const privateOffer = {
+    ...property('private-offer', 'apartment', 'salmiya'),
+    core: {
+      ...property('private-offer-core', 'apartment', 'salmiya').core,
+      description: createLiteralText('owner private phrase', createPrivacyMetadata('private_notes', 'never')),
+    },
+    areaSquareMeters: 4242,
+  } as Property;
+  const safeData = { people: [], properties: [privateOffer], requirements: [] };
+  assert.deepEqual(searchGlobalData(safeData, 'owner private phrase').properties, []);
+  assert.deepEqual(searchGlobalData(safeData, '4242').properties, []);
+
+  const { deriveOfferedWantedRows, filterOfferedWantedRows } = await import('../services/offeredWantedPresentation.ts');
+  const rows = deriveOfferedWantedRows([privateOffer], []);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all', 'owner private phrase'), []);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all', '4242'), []);
+});
+
 test('search screen distinguishes an empty local database from a query with no hits and navigates to exact detail routes', async () => {
   const screen = await readFile('app/search.tsx', 'utf8');
   assert.match(screen, /!hasRecords \?[\s\S]*?testID="search-empty"[\s\S]*?!hasQuery \?[\s\S]*?!hasResults \?[\s\S]*?testID="search-no-results"/);
@@ -306,8 +415,12 @@ test('search screen distinguishes an empty local database from a query with no h
   assert.match(screen, /matchReasonLabel\(results\.why\.people\.get\(person\.id\)!, t\)/);
   assert.match(screen, /propertySubtitle\(property, results\.why\.properties\.get\(property\.core\.id\)!, t\)/);
   assert.match(screen, /matchReasonLabel\(results\.why\.requirements\.get\(requirement\.id\)!, t\)/);
+  assert.match(screen, /store\.getPersonPropertyLinks\(\)/);
+  assert.match(screen, /store\.getPropertySource\(property\.core\.id\)/);
+  assert.match(screen, /linkedPeopleUnavailable[\s\S]*?search\.load_failed/);
+  assert.match(screen, /testID="search-partial-results"/);
   const translations = await readFile('contexts/I18nContext.tsx', 'utf8');
-  for (const key of ['exact', 'prefix', 'substring', 'alias', 'fuzzy', 'name', 'phone', 'type', 'area', 'description', 'requirement', 'notes']) {
+  for (const key of ['exact', 'prefix', 'substring', 'alias', 'name', 'phone', 'type', 'area', 'description', 'requirement', 'notes']) {
     const bilingualKeys = translations.match(new RegExp(`'search\\.match\\.${key}':`, 'g')) ?? [];
     assert.equal(bilingualKeys.length, 2, `English and Arabic match labels exist for ${key}`);
   }
@@ -331,7 +444,7 @@ test('Person activity read model deduplicates linked/source offers, preserves ex
   const sources: PropertySource[] = [
     { personId, propertyCoreId: offered.core.id, role: 'owner' },
   ];
-  const lines = getPersonDirectActivityLines(
+  const lines = getPersonDirectIntentActivityLines(
     personId,
     [offered],
     requirements,
@@ -340,9 +453,8 @@ test('Person activity read model deduplicates linked/source offers, preserves ex
     {
       language: 'en',
       translate: (key: string) => key === 'propertyType.villa' ? 'Villa'
-        : key === 'transaction.rent' ? 'Rent'
-          : key === 'transaction.sale' ? 'Sale'
-            : key,
+        : key === 'propertyType.apartment' ? 'Apartment'
+          : key,
       formatPrice: (amount: number) => `${amount} KWD`,
       formatRentalPrice: (amount: number) => `${amount} KWD/month`,
     },
@@ -352,8 +464,9 @@ test('Person activity read model deduplicates linked/source offers, preserves ex
   assert.equal(lines.filter(line => line.kind === 'offer').length, 1, 'a linked and sourced property is one activity');
   assert.equal(lines[0]?.href, '/requirement/view/request%20%2F%20one');
   assert.equal(lines[1]?.href, '/property/offer%20%2F%20exact');
-  assert.match(lines[0]?.label ?? '', /Requests · Rent/);
-  assert.match(lines[1]?.label ?? '', /Offers · Rent · Villa/);
+  assert.match(lines[0]?.label ?? '', /Rental Request · Apartment/);
+  assert.match(lines[1]?.label ?? '', /Offered for Rent · Villa/);
+  assert.doesNotMatch(lines.map(line => line.label).join(' '), /Requests? · Rent|Offers? · Rent/);
   assert.equal(getPersonActivityMoreLabel(lines.length - 2, 'en'), '+2 more');
   assert.equal(getPersonActivityMoreLabel(lines.length - 2, 'ar'), '+2 أخرى');
   assert.doesNotMatch(lines.map(line => line.label).join(' '), /never-find-this-private-note/);
@@ -361,7 +474,7 @@ test('Person activity read model deduplicates linked/source offers, preserves ex
 
 test('People cards render only two activity lines, navigate exact children without parent presses, refresh on focus/search, and omit private notes', async () => {
   const screen = await readFile('app/(tabs)/people.tsx', 'utf8');
-  assert.match(screen, /getPersonDirectActivityLines\(person\.id, properties, requirements, links, sources, formatters\)/);
+  assert.match(screen, /getPersonDirectIntentActivityLines\(person\.id, properties, requirements, links, sources, formatters\)/);
   assert.match(screen, /\(activityByPerson\.get\(item\.id\) \?\? \[\]\)\.slice\(0,\s*2\)/);
   assert.match(screen, /activityByPerson\.get\(item\.id\)!\.length - 2/);
   assert.match(screen, /onPress=\{event => \{\s*event\.stopPropagation\(\);\s*router\.push\(line\.href as never\);/);

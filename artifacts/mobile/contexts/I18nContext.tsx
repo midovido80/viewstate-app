@@ -6,6 +6,7 @@ import {
   type SupportedLanguage,
 } from '@/services/languageHydration';
 import { AMENITY_TRANSITION_COPY } from '@/services/amenityTransitionCopy';
+import { RECORD_INTENT_LABELS } from '@/services/recordIntentPresentation';
 
 export type Language = SupportedLanguage;
 
@@ -35,6 +36,11 @@ const en: Translations = {
   'properties.all_kuwait': 'All Kuwait',
   'properties.badge.offered': 'Offered',
   'properties.badge.wanted': 'Wanted',
+  'intent.offered_sale': RECORD_INTENT_LABELS.offered_sale.en,
+  'intent.offered_rent': RECORD_INTENT_LABELS.offered_rent.en,
+  'intent.wanted_buy': RECORD_INTENT_LABELS.wanted_buy.en,
+  'intent.wanted_rent': RECORD_INTENT_LABELS.wanted_rent.en,
+  'intent.conflict': RECORD_INTENT_LABELS.conflict.en,
   'properties.person_target': 'Person',
   'properties.filter.all': 'All',
   'properties.filter.offered': 'Offered',
@@ -629,6 +635,11 @@ const ar: Translations = {
   'properties.all_kuwait': 'كل مناطق الكويت',
   'properties.badge.offered': 'معروض',
   'properties.badge.wanted': 'مطلوب',
+  'intent.offered_sale': RECORD_INTENT_LABELS.offered_sale.ar,
+  'intent.offered_rent': RECORD_INTENT_LABELS.offered_rent.ar,
+  'intent.wanted_buy': RECORD_INTENT_LABELS.wanted_buy.ar,
+  'intent.wanted_rent': RECORD_INTENT_LABELS.wanted_rent.ar,
+  'intent.conflict': RECORD_INTENT_LABELS.conflict.ar,
   'properties.person_target': 'الشخص',
   'properties.filter.all': 'الكل',
   'properties.filter.offered': 'معروض',

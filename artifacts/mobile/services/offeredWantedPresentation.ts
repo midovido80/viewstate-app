@@ -1,6 +1,14 @@
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import type { Person, PersonPropertyLink, PropertySource } from '@/services/people';
-import { getAreaById, normalizeAreaSearchText } from '@/constants/kuwait-areas';
+import { getAreaById } from '@/constants/kuwait-areas';
+import {
+  flexibleSearchTerms,
+  matchesFlexibleSearch,
+  personClassificationSearchValues,
+  recordIntentSearchValues,
+  type FlexibleSearchField,
+} from '@/services/flexibleSearch';
+import { projectPropertyIntent, projectRequirementIntent } from '@/services/recordIntentPresentation';
 
 export type OfferedWantedFilter = 'all' | 'offered' | 'wanted' | 'sale' | 'rent';
 
@@ -10,6 +18,20 @@ interface PresentationBase {
   readonly person?: Person;
   readonly personTargets?: readonly Person[];
 }
+
+const PROPERTY_TYPE_SEARCH_VALUES: Readonly<Record<Property['core']['propertyType'], readonly string[]>> = {
+  apartment: ['apartment', 'شقة'],
+  villa: ['villa', 'فيلا'],
+  house: ['house', 'بيت'],
+  floor: ['floor', 'دور'],
+  commercial_complex: ['commercial complex', 'مجمع تجاري'],
+  whole_building: ['whole building', 'عمارة كاملة'],
+  office: ['office', 'مكتب'],
+  shop: ['shop', 'محل'],
+  warehouse: ['warehouse', 'مستودع'],
+  chalet: ['chalet', 'شاليه'],
+  other_built_property: ['other built property', 'other', 'أخرى'],
+};
 
 export interface OfferedPropertyRow extends PresentationBase {
   readonly kind: 'offered';
@@ -27,11 +49,6 @@ export interface WantedRequirementRow extends PresentationBase {
 
 export type OfferedWantedRow = OfferedPropertyRow | WantedRequirementRow;
 
-export interface OfferedWantedFilterOptions {
-  /** Supplied when offered rows must follow the persistence search index. */
-  readonly offeredPropertySearchIds?: ReadonlySet<string>;
-}
-
 export interface OfferedWantedAssociations {
   readonly propertySources?: readonly PropertySource[];
   readonly propertyLinks?: readonly PersonPropertyLink[];
@@ -44,7 +61,6 @@ export interface OfferedWantedStoreReader {
   getPeople(): Promise<Person[]>;
   getPropertySource(propertyCoreId: string): Promise<PropertySource | null>;
   getPersonPropertyLinks?(): Promise<PersonPropertyLink[]>;
-  searchProperties(query: string): Promise<Property[]>;
 }
 
 export interface OfferedWantedLoadErrors {
@@ -53,13 +69,10 @@ export interface OfferedWantedLoadErrors {
   readonly people: boolean;
   readonly sources: boolean;
   readonly links: boolean;
-  readonly search: boolean;
 }
 
 export interface OfferedWantedLoadResult {
   readonly rows: OfferedWantedRow[];
-  /** null means no property search was requested; [] is a completed empty/failed search. */
-  readonly matchingPropertyIds: readonly string[] | null;
   readonly errors: OfferedWantedLoadErrors;
 }
 
@@ -99,24 +112,25 @@ async function safelyRead<T>(
 /** Reads independent stores independently so optional failures never discard inventory. */
 export async function loadOfferedWantedPresentation(
   reader: OfferedWantedStoreReader,
-  query = '',
 ): Promise<OfferedWantedLoadResult> {
-  const [propertyRead, requirementRead, peopleRead, linkRead, searchRead] = await Promise.all([
+  const [propertyRead, requirementRead, peopleRead, linkRead] = await Promise.all([
     safelyRead(() => reader.getProperties(), []),
     safelyRead(() => reader.getRequirements(), []),
     safelyRead(() => reader.getPeople(), []),
     reader.getPersonPropertyLinks
       ? safelyRead(() => reader.getPersonPropertyLinks!(), [])
-      : Promise.resolve({ value: [] as const, failed: false }),
-    query.trim()
-      ? safelyRead(() => reader.searchProperties(query), [])
-      : Promise.resolve({ value: null, failed: false } as const),
+      : Promise.resolve({ value: [] as const, failed: true }),
   ]);
 
   const sourceReads = await Promise.all(propertyRead.value.map(property =>
     safelyRead(() => reader.getPropertySource(property.core.id), null),
   ));
   const propertySources = sourceReads.flatMap(read => read.value ? [read.value] : []);
+  const personIds = new Set(peopleRead.value.map(person => person.id));
+  const unavailableLinkTargets = !peopleRead.failed
+    && linkRead.value.some(link => !personIds.has(link.personId));
+  const unavailableSourceTargets = !peopleRead.failed
+    && propertySources.some(source => !personIds.has(source.personId));
   const rows = deriveOfferedWantedRows(propertyRead.value, requirementRead.value, {
     propertySources,
     propertyLinks: linkRead.value,
@@ -125,16 +139,12 @@ export async function loadOfferedWantedPresentation(
 
   return {
     rows,
-    matchingPropertyIds: searchRead.value
-      ? [...new Set(searchRead.value.map(property => property.core.id))]
-      : searchRead.value === null ? null : [],
     errors: {
       properties: propertyRead.failed,
       requirements: requirementRead.failed,
       people: peopleRead.failed,
-      sources: sourceReads.some(read => read.failed),
-      links: linkRead.failed,
-      search: searchRead.failed,
+      sources: sourceReads.some(read => read.failed) || unavailableSourceTargets,
+      links: linkRead.failed || unavailableLinkTargets,
     },
   };
 }
@@ -243,59 +253,102 @@ function uniqueByExactId<T>(records: readonly T[], getId: (record: T) => string)
   });
 }
 
-function searchableText(row: OfferedWantedRow): string {
-  const personText = row.person
-    ? `${row.person.name} ${row.person.displayPhone} ${row.person.normalizedPhone}`
+function personFields(persons: readonly Person[]): FlexibleSearchField[] {
+  return persons.flatMap(person => [
+    { field: 'name', value: person.name },
+    // People phone search is already an approved local-search contract.
+    { field: 'phone', value: person.displayPhone },
+    { field: 'phone', value: person.normalizedPhone },
+    ...personClassificationSearchValues(person.classifications)
+      .map(value => ({ field: 'classification', value })),
+  ]);
+}
+
+function areaSearchFields(areaId: string): FlexibleSearchField[] {
+  const area = getAreaById(areaId);
+  return (area
+    ? [area.id, area.en, area.ar, area.governorateEn, area.governorateAr]
+    : [areaId]).map(value => ({ field: 'area', value }));
+}
+
+function propertySearchFields(row: OfferedPropertyRow): FlexibleSearchField[] {
+  const property = row.property;
+  const values = PROPERTY_TYPE_SEARCH_VALUES[property.core.propertyType] ?? [];
+  const details = property.typeDetails as Readonly<Record<string, unknown>> | undefined;
+  const wrappedSubtype = details?.apartmentSubtype;
+  const subtype = typeof wrappedSubtype === 'object' && wrappedSubtype !== null && 'value' in wrappedSubtype
+    ? String((wrappedSubtype as { readonly value: unknown }).value ?? '')
+    : String(wrappedSubtype ?? '');
+  const description = property.core.description;
+  const safeDescription = description
+    && description.privacy.classification === 'normal'
+    && description.privacy.disclosurePolicy === 'normal'
+    ? description.value
     : '';
-  if (row.kind === 'offered') {
-    return [
-      row.property.core.propertyType,
-      row.property.core.locationArea.id,
-      row.property.core.description?.value ?? '',
-      personText,
-    ].join(' ').toLocaleLowerCase();
-  }
-  const preferredAreaText = row.requirement.preferredAreaIds.flatMap(areaId => {
-    const area = getAreaById(areaId);
-    return area
-      ? [areaId, area.en, area.ar, area.governorateEn, area.governorateAr]
-      : [areaId];
-  });
-  const areaScopeText = row.requirement.preferredAreaMode === 'all_kuwait'
-    ? 'all kuwait all_kuwait كل مناطق الكويت'
-    : '';
+  const intent = projectPropertyIntent(property, 'en');
   return [
-    row.requirement.propertyType,
-    preferredAreaText.join(' '),
-    areaScopeText,
-    row.requirement.notes,
-    row.requirement.purpose,
-    row.requirement.budget.minimum,
-    row.requirement.budget.maximum,
-    personText,
-  ].join(' ').toLocaleLowerCase();
+    { field: 'type', value: property.core.propertyType },
+    ...values.map(value => ({ field: 'type', value })),
+    ...(subtype ? [{ field: 'subtype', value: subtype }] : []),
+    ...(subtype === 'standard_apartment' ? [{ field: 'subtype', value: 'standard apartment' }] : []),
+    ...(subtype === 'studio' ? [{ field: 'subtype', value: 'studio apartment' }] : []),
+    ...recordIntentSearchValues(intent.id).map(value => ({ field: 'intent', value })),
+    ...areaSearchFields(property.core.locationArea.id),
+    { field: 'description', value: safeDescription },
+    ...personFields(row.personTargets ?? (row.person ? [row.person] : [])),
+  ];
+}
+
+function requirementSearchFields(row: WantedRequirementRow): FlexibleSearchField[] {
+  const requirement = row.requirement;
+  const areaFields = requirement.preferredAreaIds.flatMap(areaId => areaSearchFields(areaId));
+  const scopeFields = requirement.preferredAreaMode === 'all_kuwait'
+    ? ['all kuwait', 'all_kuwait', 'كل مناطق الكويت'].map(value => ({ field: 'area', value }))
+    : [];
+  const subtype = requirement.catalogPreferences?.find(preference => preference.field === 'apartmentSubtype');
+  const intent = projectRequirementIntent(requirement, 'en');
+  const seeker = row.person ? [row.person] : [];
+  return [
+    { field: 'type', value: requirement.propertyType },
+    ...(PROPERTY_TYPE_SEARCH_VALUES[requirement.propertyType] ?? [])
+      .map(value => ({ field: 'type', value })),
+    ...(subtype?.kind === 'choice' ? [{ field: 'subtype', value: subtype.value }] : []),
+    ...(subtype?.kind === 'choice' && subtype.value === 'standard_apartment'
+      ? [{ field: 'subtype', value: 'standard apartment' }] : []),
+    ...recordIntentSearchValues(intent.id).map(value => ({ field: 'intent', value })),
+    ...areaFields,
+    ...scopeFields,
+    // Requirement notes were already an approved search field in these local lists.
+    { field: 'notes', value: requirement.notes },
+    { field: 'budget', value: requirement.budget.minimum?.toString() ?? '' },
+    { field: 'budget', value: requirement.budget.maximum?.toString() ?? '' },
+    ...personFields(seeker),
+  ];
 }
 
 export function filterOfferedWantedRows(
   rows: readonly OfferedWantedRow[],
   filter: OfferedWantedFilter = 'all',
   query = '',
-  options: OfferedWantedFilterOptions = {},
 ): OfferedWantedRow[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const meaningfulQuery = flexibleSearchTerms(query).length > 0;
   return rows.filter(row => {
     if (filter === 'offered' && row.kind !== 'offered') return false;
     if (filter === 'wanted' && row.kind !== 'wanted') return false;
-    if (filter === 'rent' && row.transaction !== 'rent') return false;
-    if (filter === 'sale' && row.transaction !== 'sale' && row.transaction !== 'buy') return false;
-    if (!normalizedQuery) return true;
-    if (row.kind === 'offered' && options.offeredPropertySearchIds) {
-      const associatedPersonText = row.person
-        ? `${row.person.name} ${row.person.displayPhone} ${row.person.normalizedPhone}`.toLocaleLowerCase()
-        : '';
-      return options.offeredPropertySearchIds.has(row.id)
-        || normalizeAreaSearchText(associatedPersonText).includes(normalizeAreaSearchText(query));
+    if (filter === 'sale' || filter === 'rent') {
+      const intent = row.kind === 'offered'
+        ? projectPropertyIntent(row.property, 'en')
+        : projectRequirementIntent(row.requirement, 'en');
+      if (!intent.valid) return false;
+      const matchesIntent = filter === 'sale'
+        ? intent.id === 'offered_sale' || intent.id === 'wanted_buy'
+        : intent.id === 'offered_rent' || intent.id === 'wanted_rent';
+      if (!matchesIntent) return false;
     }
-    return normalizeAreaSearchText(searchableText(row)).includes(normalizeAreaSearchText(query));
+    if (!meaningfulQuery) return true;
+    return matchesFlexibleSearch(
+      row.kind === 'offered' ? propertySearchFields(row) : requirementSearchFields(row),
+      query,
+    );
   });
 }

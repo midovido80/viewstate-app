@@ -364,6 +364,24 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   assert.match(enrichment, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
 });
 
+test('Capture Review summary uses the canonical Offered intent label', async () => {
+  const summary = await readFile('app/capture/summary.tsx', 'utf8');
+  const summaryView = summary.slice(summary.indexOf('<ScrollView'), summary.indexOf('</ScrollView>'));
+  assert.match(summary, /projectRecordIntent\('offered', draft\.transaction, language\)\.label/);
+  assert.match(summaryView, /value=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
+  assert.doesNotMatch(summaryView, /t\(`transaction\.\$\{draft\.transaction\}/);
+});
+
+test('Capture stage-3 Preview uses the canonical Offered intent presentation', async () => {
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  const preview = capture.slice(
+    capture.indexOf('{stage === 3 && ('),
+    capture.indexOf('</Section>', capture.indexOf('{stage === 3 && (')),
+  );
+  assert.match(preview, /<PreviewRow label=\{t\('summary\.transaction'\)\} value=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
+  assert.doesNotMatch(preview, /t\(`transaction\.\$\{draft\.transaction\}/);
+});
+
 test('REGRESSION: capture success check uses success green with a contrasting foreground', async () => {
   const success = await readFile('app/capture/success.tsx', 'utf8');
   const palette = await readFile('constants/colors.ts', 'utf8');

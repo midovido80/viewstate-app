@@ -17,13 +17,16 @@ import { getAreaById } from '@/constants/kuwait-areas';
 import { useI18n, type Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import {
+  getSearchablePublicPropertyDescription,
   searchGlobalDataWithMatchReasons,
   type GlobalSearchData,
   type SearchMatchReason,
 } from '@/services/globalSearch';
 import type { Person } from '@/services/people';
 import { store } from '@/services/persistence';
-import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
+import { getWantedApartmentSubtypeLabel, isOfferedStudio } from '@/services/propertyDetailPresentation';
+import { flexibleSearchTerms } from '@/services/flexibleSearch';
+import { projectPropertyIntent, projectRequirementIntent } from '@/services/recordIntentPresentation';
 
 type SearchState =
   | { readonly status: 'loading' }
@@ -105,11 +108,11 @@ function requirementSubtitle(
     return area ? (language === 'ar' ? area.ar : area.en) : t('search.area_unknown');
   });
   return [
-    t(`requirements.purpose.${requirement.purpose}` as keyof Translations),
+    projectRequirementIntent(requirement, language).label,
     t(`propertyType.${requirement.propertyType}` as keyof Translations),
-    ...(isWantedStudio(requirement) ? [t('enrich.apartment_subtype.studio')] : []),
+    getWantedApartmentSubtypeLabel(requirement, language),
     ...areaLabels,
-  ].join(' · ');
+  ].filter(Boolean).join(' · ');
 }
 
 function matchReasonLabel(reason: SearchMatchReason, t: (key: keyof Translations) => string): string {
@@ -122,6 +125,7 @@ function propertyTitle(
   t: (key: keyof Translations) => string,
 ) {
   return [
+    projectPropertyIntent(property, language).label,
     t(`propertyType.${property.core.propertyType}` as keyof Translations),
     ...(isOfferedStudio(property) ? [t('enrich.apartment_subtype.studio')] : []),
     propertyAreaLabel(property, language, t),
@@ -134,7 +138,7 @@ function propertySubtitle(
   t: (key: keyof Translations) => string,
 ) {
   return [
-    property.core.description?.value?.trim(),
+    getSearchablePublicPropertyDescription(property).trim(),
     matchReasonLabel(reason, t),
   ].filter(Boolean).join(' · ');
 }
@@ -158,8 +162,55 @@ export default function GlobalSearchScreen() {
         store.getProperties(),
         store.getRequirements(),
       ]);
+      const [linksRead, sourceReads] = await Promise.all([
+        store.getPersonPropertyLinks().then(
+          links => ({ links, failed: false }),
+          () => ({ links: [] as const, failed: true }),
+        ),
+        Promise.all(properties.map(property =>
+          store.getPropertySource(property.core.id).then(
+            source => ({ source, failed: false }),
+            () => ({ source: null, failed: true }),
+          ),
+        )),
+      ]);
+      const peopleById = new Map(people.map(person => [person.id, person]));
+      const linkedPersonIdsByProperty = new Map<string, string[]>();
+      for (const link of linksRead.links) {
+        const ids = linkedPersonIdsByProperty.get(link.propertyCoreId) ?? [];
+        ids.push(link.personId);
+        linkedPersonIdsByProperty.set(link.propertyCoreId, ids);
+      }
+      for (const { source } of sourceReads) {
+        if (!source) continue;
+        const ids = linkedPersonIdsByProperty.get(source.propertyCoreId) ?? [];
+        ids.push(source.personId);
+        linkedPersonIdsByProperty.set(source.propertyCoreId, ids);
+      }
+      const linkedPeopleByProperty = new Map<string, readonly Person[]>(
+        [...linkedPersonIdsByProperty].map(([propertyId, ids]) => [
+          propertyId,
+          [...new Set(ids)].flatMap(personId => {
+            const linkedPerson = peopleById.get(personId);
+            return linkedPerson ? [linkedPerson] : [];
+          }),
+        ]),
+      );
+      const linkedPersonMissing = [...linkedPersonIdsByProperty.values()]
+        .some(ids => ids.some(personId => !peopleById.has(personId)));
       if (loadGenerationRef.current === generation) {
-        setState({ status: 'ready', data: { people, properties, requirements } });
+        setState({
+          status: 'ready',
+          data: {
+            people,
+            properties,
+            requirements,
+            linkedPeopleByProperty,
+            linkedPeopleUnavailable: linksRead.failed
+              || sourceReads.some(read => read.failed)
+              || linkedPersonMissing,
+          },
+        });
       }
     } catch {
       if (loadGenerationRef.current === generation) setState({ status: 'error' });
@@ -177,7 +228,7 @@ export default function GlobalSearchScreen() {
     () => state.status === 'ready' ? searchGlobalDataWithMatchReasons(state.data, query) : null,
     [query, state],
   );
-  const hasQuery = query.trim().length > 0;
+  const hasQuery = flexibleSearchTerms(query).length > 0;
   const hasRecords = !!state.status && state.status === 'ready'
     && (state.data.people.length + state.data.properties.length + state.data.requirements.length > 0);
   const hasResults = !!results && (
@@ -298,6 +349,19 @@ export default function GlobalSearchScreen() {
           </View>
         ) : null}
 
+        {state.status === 'ready' && hasQuery && hasResults && state.data.linkedPeopleUnavailable ? (
+          <View
+            style={[styles.notice, { backgroundColor: colors.card, borderColor: colors.warning }]}
+            testID="search-partial-results"
+            accessibilityRole="alert"
+          >
+            <Feather name="alert-circle" size={18} color={colors.foreground} />
+            <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left', flex: 1 }}>
+              {t('search.load_failed')}
+            </Text>
+          </View>
+        ) : null}
+
         {state.status === 'loading' ? (
           <View style={styles.centerState} testID="search-loading">
             <ActivityIndicator color={colors.primary} />
@@ -331,7 +395,9 @@ export default function GlobalSearchScreen() {
           <View style={styles.centerState} testID="search-no-results">
             <Feather name="inbox" size={34} color={colors.mutedForeground} />
             <Text style={[styles.stateText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
-              {t('search.no_results')}
+              {t(state.status === 'ready' && state.data.linkedPeopleUnavailable
+                ? 'search.load_failed'
+                : 'search.no_results')}
             </Text>
           </View>
         ) : (

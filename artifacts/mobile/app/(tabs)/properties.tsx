@@ -12,7 +12,6 @@ import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
   filterOfferedWantedRows,
   getOfferedWantedHref,
-  getOfferedWantedTransactionLabelKey,
   createOfferedWantedLoadCoordinator,
   loadOfferedWantedPresentation,
 } from '@/services/offeredWantedPresentation';
@@ -20,6 +19,7 @@ import type { OfferedWantedFilter, OfferedWantedRow } from '@/services/offeredWa
 import type { OfferedWantedLoadResult } from '@/services/offeredWantedPresentation';
 import { isOfferedStudio, isWantedStudio } from '@/services/propertyDetailPresentation';
 import { getPropertyCardSummary, getRequirementCardSummary } from '@/services/cardSummaryPresentation';
+import { projectRecordCardBadges, projectRecordIntent } from '@/services/recordIntentPresentation';
 
 export default function PropertiesScreen() {
   const router = useRouter();
@@ -46,20 +46,16 @@ export default function PropertiesScreen() {
     useCallback(() => {
       const requestSequence = loadCoordinatorRef.current.begin();
       setLoadResult(null);
-      void loadOfferedWantedPresentation(store, search).then(result => {
+      void loadOfferedWantedPresentation(store).then(result => {
         if (loadCoordinatorRef.current.isCurrent(requestSequence)) setLoadResult(result);
       });
       return () => {
         loadCoordinatorRef.current.invalidate(requestSequence);
       };
-    }, [highlightedId, search])
+    }, [highlightedId])
   );
 
-  const visibleRows = filterOfferedWantedRows(rows, filter, search, {
-    offeredPropertySearchIds: search.trim()
-      ? new Set(loadResult?.matchingPropertyIds ?? [])
-      : undefined,
-  });
+  const visibleRows = filterOfferedWantedRows(rows, filter, search);
   const prioritizedRows = highlightedId
     ? [
       ...visibleRows.filter(row => row.kind === 'offered' && row.id === highlightedId),
@@ -86,6 +82,10 @@ export default function PropertiesScreen() {
       : requirement ? getRequirementCardSummary(requirement, summaryFormatters) : null;
     const areaLabel = summary?.areaLabel ?? '';
     const priceLabel = summary?.valueLabel ?? '';
+    const typeLabel = summary?.typeLabel ?? (type ? t(`propertyType.${type}` as keyof Translations) : '');
+    const subtypeLabel = summary?.subtypeLabel ?? (isStudio ? t('enrich.apartment_subtype.studio') : undefined);
+    const intent = projectRecordIntent(item.kind, transaction, language);
+    const badges = projectRecordCardBadges(intent, typeLabel, subtypeLabel);
     const personTargets = item.kind === 'offered'
       ? item.personTargets ?? (item.person ? [item.person] : [])
       : item.person ? [item.person] : [];
@@ -98,42 +98,33 @@ export default function PropertiesScreen() {
           onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
           testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
           accessibilityRole="button"
-          accessibilityLabel={`${t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}, ${summary?.subtypeLabel ?? (type ? t(`propertyType.${type}` as keyof Translations) : '')}, ${areaLabel}`}
+          accessibilityLabel={`${badges.map(badge => badge.label).join(', ')}, ${areaLabel}`}
         >
-        <View style={[styles.cardHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={[styles.propertyType, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-              {summary?.typeLabel ?? (type ? t(`propertyType.${type}` as keyof Translations) : '')}
-            </Text>
-            {summary?.subtypeLabel ? (
-              <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]}>
+        <View style={[styles.cardHeader, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]}>
+          <View
+            style={{ flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr', alignItems: 'center', gap: 8 }}
+            testID={`record-badges-${item.kind}-${item.id}`}
+          >
+            {badges.map(badge => (
+              <View
+                key={badge.key}
+                style={[styles.badge, { backgroundColor: colors.primary + '1A' }]}
+                testID={badge.key === 'intent'
+                  ? `record-intent-badge-${item.kind}-${item.id}`
+                  : badge.key === 'type'
+                    ? `record-type-badge-${item.kind}-${item.id}`
+                    : isStudio
+                      ? `studio-badge-${item.kind}-${item.id}`
+                      : `record-subtype-badge-${item.kind}-${item.id}`}
+              >
                 <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
-                  {summary.subtypeLabel}
+                  {badge.label}
                 </Text>
               </View>
-            ) : null}
+            ))}
             {isHighlighted ? (
               <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: 6 }}>
-            <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]}>
-              <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
-                {t(item.kind === 'offered' ? 'properties.badge.offered' : 'properties.badge.wanted')}
-              </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: colors.accent + '1A' }]}>
-              <Text style={[styles.badgeText, { color: colors.accent, fontFamily: fonts.medium }]}>
-                {summary?.transactionLabel ?? t(getOfferedWantedTransactionLabelKey(item) as keyof Translations)}
-              </Text>
-            </View>
-            {isStudio && !summary?.subtypeLabel ? (
-              <View style={[styles.badge, { backgroundColor: colors.primary + '1A' }]} testID={`studio-badge-${item.kind}-${item.id}`}>
-                <Text style={[styles.badgeText, { color: colors.primary, fontFamily: fonts.medium }]}>
-                  {t('enrich.apartment_subtype.studio')}
-                </Text>
               </View>
             ) : null}
           </View>
@@ -194,7 +185,6 @@ export default function PropertiesScreen() {
             {loadResult.errors.people ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.people_unavailable')}</Text> : null}
             {loadResult.errors.sources ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.sources_unavailable')}</Text> : null}
             {loadResult.errors.links ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{language === 'ar' ? 'تعذر تحميل روابط الأشخاص بالعقارات.' : 'Property links could not be loaded.'}</Text> : null}
-            {loadResult.errors.search ? <Text style={[styles.errorText, { color: colors.foreground, fontFamily: fonts.regular }]}>{t('properties.search_failed')}</Text> : null}
           </View>
         ) : null
       ) : null}
@@ -210,9 +200,6 @@ export default function PropertiesScreen() {
           value={search}
           onChangeText={query => {
             setSearch(query);
-            setLoadResult(previous => previous
-              ? { ...previous, matchingPropertyIds: query.trim() ? [] : null }
-              : previous);
           }}
           placeholder={t('properties.search')}
           placeholderTextColor={colors.mutedForeground}
@@ -267,7 +254,11 @@ export default function PropertiesScreen() {
           <View style={styles.emptyState}>
             {loadResult === null ? (
               <ActivityIndicator color={colors.primary} />
-            ) : loadResult.errors.properties || loadResult.errors.requirements ? null : (
+            ) : loadResult.errors.properties
+              || loadResult.errors.requirements
+              || loadResult.errors.people
+              || loadResult.errors.sources
+              || loadResult.errors.links ? null : (
               <>
                 <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
                 <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
@@ -355,9 +346,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-  },
-  propertyType: {
-    fontSize: 16,
   },
   badge: {
     paddingHorizontal: 8,

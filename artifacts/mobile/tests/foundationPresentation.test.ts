@@ -17,10 +17,11 @@ import {
 import type { OfferedWantedStoreReader } from '../services/offeredWantedPresentation.ts';
 import {
   getPersonActivityMoreLabel,
-  getPersonDirectActivityLines,
+  getPersonDirectIntentActivityLines,
   getPropertyCardSummary,
   getRequirementCardSummary,
 } from '../services/cardSummaryPresentation.ts';
+import { projectRequirementIntent } from '../services/recordIntentPresentation.ts';
 
 const property = (id: string, transaction: 'sale' | 'rent'): Property => ({
   core: {
@@ -108,8 +109,6 @@ test('shared card summaries derive localized property and Requirement facts with
     language: 'en' as const,
     translate: (key: string) => ({
       'propertyType.apartment': 'Apartment',
-      'transaction.sale': 'Sale',
-      'transaction.rent': 'Rent',
       'enrich.apartment_subtype.studio': 'Studio',
       'properties.all_kuwait': 'All Kuwait',
     }[key] ?? key),
@@ -124,7 +123,6 @@ test('shared card summaries derive localized property and Requirement facts with
   assert.deepEqual(getPropertyCardSummary(studioOffer, formatters), {
     typeLabel: 'Apartment',
     subtypeLabel: 'Studio',
-    transactionLabel: 'Rent',
     areaLabel: 'Salmiya',
     studioAreaLabel: 'Actual Studio area (m²): 42',
     valueLabel: '20 KWD monthly',
@@ -153,7 +151,6 @@ test('shared card summaries derive localized property and Requirement facts with
   assert.deepEqual(getRequirementCardSummary(studioRequest, formatters), {
     typeLabel: 'Apartment',
     subtypeLabel: 'Studio',
-    transactionLabel: 'Rent',
     areaLabel: 'All Kuwait',
     studioAreaLabel: 'Minimum Studio area (m²): 35',
     valueLabel: '50 KWD – 500 KWD',
@@ -163,7 +160,6 @@ test('shared card summaries derive localized property and Requirement facts with
     language: 'ar' as const,
     translate: (key: string) => ({
       'propertyType.apartment': 'شقة',
-      'transaction.rent': 'للإيجار',
       'enrich.apartment_subtype.studio': 'استوديو',
       'properties.all_kuwait': 'كل الكويت',
     }[key] ?? key),
@@ -171,7 +167,7 @@ test('shared card summaries derive localized property and Requirement facts with
   const arabic = getRequirementCardSummary(studioRequest, arabicFormatters);
   assert.equal(arabic.typeLabel, 'شقة');
   assert.equal(arabic.subtypeLabel, 'استوديو');
-  assert.equal(arabic.transactionLabel, 'للإيجار');
+  assert.equal(projectRequirementIntent(studioRequest, 'ar').label, 'طلب استئجار');
   assert.equal(arabic.areaLabel, 'كل الكويت');
   assert.equal(arabic.studioAreaLabel, 'الحد الأدنى لمساحة الاستوديو (م²): 35');
   assert.equal(
@@ -204,7 +200,7 @@ test('Person activity comes from exact linked/source and Requirement identity, d
     formatPrice: (amount: number) => `KWD ${amount}`,
     formatRentalPrice: (amount: number) => `KWD ${amount}/month`,
   };
-  const lines = getPersonDirectActivityLines(
+  const lines = getPersonDirectIntentActivityLines(
     person.id,
     [offer],
     reqs,
@@ -217,8 +213,8 @@ test('Person activity comes from exact linked/source and Requirement identity, d
     ['offer', 'offer / exact', '/property/offer%20%2F%20exact'],
     ['request', 'request-2', '/requirement/view/request-2'],
   ]);
-  assert.match(lines[0]!.label, /Requests · Rent · Apartment · Salmiya · KWD 50 – KWD 500/);
-  assert.match(lines[1]!.label, /Offers · Sale · Apartment · Studio · Salmiya · Actual Studio area \(m²\): 42 · KWD 100/);
+  assert.match(lines[0]!.label, /Rental Request · Apartment · Salmiya · KWD 50 – KWD 500/);
+  assert.match(lines[1]!.label, /Offered for Sale · Apartment · Studio · Salmiya · Actual Studio area \(m²\): 42 · KWD 100/);
   assert.equal(getPersonActivityMoreLabel(lines.length - 2, 'en'), '+1 more');
   assert.equal(getPersonActivityMoreLabel(lines.length - 2, 'ar'), '+1 أخرى');
 });
@@ -236,6 +232,74 @@ test('filters cover All, Offered, Wanted, Sale, Rent and search canonical row co
   assert.deepEqual(filterOfferedWantedRows(rows, 'sale').map(row => row.id), ['sale-home', 'buy-wanted']);
   assert.deepEqual(filterOfferedWantedRows(rows, 'rent').map(row => row.id), ['rental-home', 'rent-wanted']);
   assert.deepEqual(filterOfferedWantedRows(rows, 'all', 'coast').map(row => row.id), ['rent-wanted']);
+});
+
+test('Sale and Rent filters exclude Offered/Wanted records with contradictory intents while All retains them', () => {
+  const validSale = property('valid-sale', 'sale');
+  const validRent = property('valid-rent', 'rent');
+  const invalidOfferedBuy = {
+    ...property('invalid-offered-buy', 'rent'),
+    activeOffer: {
+      ...property('invalid-offered-buy', 'rent').activeOffer,
+      transaction: 'buy',
+    },
+  } as unknown as Property;
+  const validWantedBuy = requirement('valid-wanted-buy', 'buy');
+  const validWantedRent = requirement('valid-wanted-rent', 'rent');
+  const invalidWantedSale = {
+    ...requirement('invalid-wanted-sale', 'rent'),
+    purpose: 'sale',
+  } as unknown as SeekerRequirement;
+  const rows = deriveOfferedWantedRows(
+    [validSale, validRent, invalidOfferedBuy],
+    [validWantedBuy, validWantedRent, invalidWantedSale],
+  );
+
+  assert.deepEqual(filterOfferedWantedRows(rows, 'sale').map(row => row.id), ['valid-sale', 'valid-wanted-buy']);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'rent').map(row => row.id), ['valid-rent', 'valid-wanted-rent']);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all').map(row => row.id), [
+    'valid-sale',
+    'valid-rent',
+    'invalid-offered-buy',
+    'valid-wanted-buy',
+    'valid-wanted-rent',
+    'invalid-wanted-sale',
+  ]);
+});
+
+test('mixed search shares aliases and searches safe linked Person names and classifications', () => {
+  const broker: Person = {
+    ...person,
+    id: 'broker-person',
+    name: 'Agent Layla',
+    displayPhone: '55550000',
+    normalizedPhone: '55550000',
+    classifications: ['broker'],
+  };
+  const shop = {
+    ...property('linked-shop', 'sale'),
+    core: {
+      ...property('linked-shop', 'sale').core,
+      propertyType: 'shop',
+      description: {
+        value: 'Public storefront',
+        privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+      },
+    },
+  } as Property;
+  const rows = deriveOfferedWantedRows(
+    [shop],
+    [{ ...requirement('broker-request', 'buy'), seekerId: broker.id }],
+    {
+      propertyLinks: [{ personId: broker.id, propertyCoreId: shop.core.id }],
+      people: [broker],
+    },
+  );
+
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all', 'store').map(row => row.id), ['linked-shop']);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all', 'Agent Layla').map(row => row.id), ['linked-shop', 'broker-request']);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all', 'broker').map(row => row.id), ['linked-shop', 'broker-request']);
+  assert.deepEqual(filterOfferedWantedRows(rows, 'all', '٥٥٥٥٠').map(row => row.id), ['linked-shop', 'broker-request']);
 });
 
 test('derivation is read-only and source associations do not create duplicate property rows', () => {
@@ -261,7 +325,7 @@ test('derivation is read-only and source associations do not create duplicate pr
   assert.deepEqual(sourceRecords, beforeSources);
 });
 
-test('offered search can honor persistence metadata matches while person and wanted matches remain searchable', () => {
+test('offered search validates every candidate using its safe local fields', () => {
   const rows = deriveOfferedWantedRows(
     [property('metadata-match', 'sale')],
     [{ ...requirement('wanted-match', 'buy'), seekerId: person.id }],
@@ -272,21 +336,20 @@ test('offered search can honor persistence metadata matches while person and wan
   );
 
   assert.deepEqual(
-    filterOfferedWantedRows(rows, 'all', 'imported metadata phrase', {
-      offeredPropertySearchIds: new Set(['metadata-match']),
-    }).map(row => row.id),
+    filterOfferedWantedRows(rows, 'all', 'imported metadata phrase').map(row => row.id),
+    [],
+    'a persistence ID cannot authorize a match against fields outside the safe local projection',
+  );
+  assert.deepEqual(
+    filterOfferedWantedRows(rows, 'all', 'offered for sale').map(row => row.id),
     ['metadata-match'],
   );
   assert.deepEqual(
-    filterOfferedWantedRows(rows, 'all', 'Aisha', {
-      offeredPropertySearchIds: new Set(),
-    }).map(row => row.id),
+    filterOfferedWantedRows(rows, 'all', 'Aisha').map(row => row.id),
     ['metadata-match', 'wanted-match'],
   );
   assert.deepEqual(
-    filterOfferedWantedRows(rows, 'all', 'coast', {
-      offeredPropertySearchIds: new Set(),
-    }).map(row => row.id),
+    filterOfferedWantedRows(rows, 'all', 'coast').map(row => row.id),
     ['wanted-match'],
   );
 });
@@ -336,7 +399,6 @@ function makePresentationReader(
       personId: person.id,
       role: 'owner',
     }),
-    searchProperties: async () => [property('saved-property', 'sale')],
     ...overrides,
   };
 }
@@ -346,25 +408,16 @@ test('independent reader failures retain available rows and report each unavaila
     getRequirements: async () => { throw new Error('requirements unavailable'); },
     getPeople: async () => { throw new Error('people unavailable'); },
     getPropertySource: async () => { throw new Error('source unavailable'); },
-    searchProperties: async () => { throw new Error('search unavailable'); },
-  }), 'coast');
+  }));
 
   assert.deepEqual(result.rows.map(row => row.kind), ['offered']);
-  assert.deepEqual(result.matchingPropertyIds, []);
   assert.deepEqual(result.errors, {
     properties: false,
     requirements: true,
     people: true,
     sources: true,
     links: false,
-    search: true,
   });
-  assert.deepEqual(
-    filterOfferedWantedRows(result.rows, 'all', 'coast', {
-      offeredPropertySearchIds: new Set(result.matchingPropertyIds ?? []),
-    }),
-    [],
-  );
 });
 
 test('focus refresh keeps the canonical saved row once, preserves distinct IDs, and ignores stale loads', async () => {
@@ -437,28 +490,41 @@ test('presentation loader attaches live links as well as sources and surfaces li
 test('failed property inventory clears offered rows while independent requirements stay available', async () => {
   const result = await loadOfferedWantedPresentation(makePresentationReader({
     getProperties: async () => { throw new Error('properties unavailable'); },
-    searchProperties: async () => [property('search-only', 'sale')],
   }));
 
   assert.deepEqual(result.rows.map(row => row.kind), ['wanted']);
-  assert.deepEqual(result.matchingPropertyIds, null);
   assert.deepEqual(result.errors, {
     properties: true,
     requirements: false,
     people: false,
     sources: false,
     links: false,
-    search: false,
   });
 });
 
-test('successful metadata-backed property search results are independently exposed by the loader', async () => {
-  const result = await loadOfferedWantedPresentation(makePresentationReader({
-    searchProperties: async () => [property('metadata-only-match', 'rent')],
-  }), 'legacy template text');
+test('offered/wanted loading does not wait on the legacy Property search index', async () => {
+  let indexCalled = false;
+  const reader = {
+    ...makePresentationReader(),
+    searchProperties: () => {
+      indexCalled = true;
+      return new Promise<Property[]>(() => {});
+    },
+  };
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const outcome = await Promise.race([
+    loadOfferedWantedPresentation(reader).then(value => ({ kind: 'loaded' as const, value })),
+    new Promise<{ readonly kind: 'timed_out' }>(resolve => {
+      timeoutHandle = setTimeout(() => resolve({ kind: 'timed_out' }), 1000);
+    }),
+  ]);
+  if (timeoutHandle) clearTimeout(timeoutHandle);
 
-  assert.deepEqual(result.matchingPropertyIds, ['metadata-only-match']);
-  assert.equal(result.errors.search, false);
+  assert.equal(outcome.kind, 'loaded', 'an unresolved legacy search must not block local rows');
+  assert.equal(indexCalled, false);
+  if (outcome.kind === 'loaded') {
+    assert.deepEqual(outcome.value.rows.map(row => row.kind), ['offered', 'wanted']);
+  }
 });
 
 test('Properties list distinguishes loading, empty inventory, and filtered no-match states', async () => {
@@ -468,6 +534,10 @@ test('Properties list distinguishes loading, empty inventory, and filtered no-ma
   ]);
   assert.match(screen, /setLoadResult\(null\)/);
   assert.match(screen, /loadResult === null \? \(\s*<ActivityIndicator/);
+  assert.match(
+    screen,
+    /loadResult\.errors\.properties[\s\S]*?loadResult\.errors\.requirements[\s\S]*?loadResult\.errors\.people[\s\S]*?loadResult\.errors\.sources[\s\S]*?loadResult\.errors\.links[\s\S]*?properties\.no_matches/,
+  );
   assert.match(screen, /rows\.length === 0 \? 'properties\.empty_all' : 'properties\.no_matches'/);
   assert.match(messages, /'properties\.empty_all': 'No properties or Requirements saved yet\.'/);
   assert.match(messages, /'properties\.no_matches': 'No properties or Requirements match this search or filter\.'/);

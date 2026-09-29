@@ -9,6 +9,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { store } from '@/services/persistence';
 import { canHydrateStudioRequirement, getStudioRequirementEditHref, isWantedStudio } from '@/services/propertyDetailPresentation';
 import { getRequirementDetailIdentity, getRequirementDetailsRows, type RequirementDetailRow } from '@/services/requirementDetailsPresentation';
+import { projectRequirementIntent } from '@/services/recordIntentPresentation';
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 const sections = ['overview', 'location', 'specifications', 'preferences', 'budget', 'notes'] as const;
@@ -49,7 +50,12 @@ export default function RequirementDetailsScreen() {
       : `/requirement/${encodeURIComponent(record.id)}?seekerId=${encodeURIComponent(record.seekerId)}`;
     router.push(href as never);
   };
-  const rows = record && state === 'ready' ? getRequirementDetailsRows(record, language, t) : [];
+  const requirementIntent = record ? projectRequirementIntent(record, language) : undefined;
+  const rows = record && state === 'ready'
+    ? getRequirementDetailsRows(record, language, t).map(row => row.field === 'purpose'
+      ? { ...row, value: requirementIntent!.label }
+      : row)
+    : [];
   const direction = isRTL ? 'row-reverse' as const : 'row' as const;
   const align = isRTL ? 'right' as const : 'left' as const;
   const caption = (en: string, ar: string) => language === 'ar' ? ar : en;
@@ -99,7 +105,7 @@ export default function RequirementDetailsScreen() {
               {caption('SAVED REQUIREMENT', 'طلب محفوظ')}
             </Text>
             <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: align }]}>
-              {t(`requirements.purpose.${record.purpose}`)} · {t(`propertyType.${record.propertyType}`)}
+                {requirementIntent?.label} · {t(`propertyType.${record.propertyType}`)}
             </Text>
             <Text testID="requirement-details-id" selectable style={[styles.identifier, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: align }]}>
               {record.id}

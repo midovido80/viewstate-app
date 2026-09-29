@@ -77,6 +77,7 @@ import {
 import { getGalleryIndexFromScrollOffset, getOfferedStudioDetailValues, getPropertyDetailActionHref, getPropertyDetailBackRoute, getPropertyDetailCategoryRows, getPropertyDetailLocationDisplay, getPropertyDetailVisibleContent, isOfferedStudio } from '@/services/propertyDetailPresentation';
 import { confirmCommittedPropertyReadback, discardPropertyEditDraftAndCleanupOwnedAttachments, getPropertyDetailMapsHref, getPropertyEditMapsFieldError, propertyEditChoicesAreDirty, shouldShowPropertyGallery } from '@/services/propertyDetailEditorUx';
 import { getPropertyEditFormHref } from '@/services/propertyFormRoutes';
+import { projectPropertyIntent } from '@/services/recordIntentPresentation';
 
 export function getPropertyEditRouteHref(propertyCoreId: string, offeredStudio: boolean): string {
   return getPropertyEditFormHref(
@@ -1174,15 +1175,18 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   }
 
   const choices = draft?.choices;
+  const propertyIntent = projectPropertyIntent(property, language);
   const shownTransaction = mode === 'edit' && choices ? choices.transaction : property.activeOffer.transaction;
   const shownPrice = mode === 'edit' && choices
     ? choices.priceAmount
-    : property.activeOffer.transaction === 'sale'
+    : property.activeOffer.transaction === 'sale' && propertyIntent.id === 'offered_sale'
       ? property.activeOffer.salePrice.amount
-      : property.activeOffer.rentalPrice.amount;
+      : property.activeOffer.transaction === 'rent' && propertyIntent.id === 'offered_rent'
+        ? property.activeOffer.rentalPrice.amount
+        : undefined;
   const shownRentalPeriodId = mode === 'edit' && choices
     ? choices.rentalPeriodId
-    : property.activeOffer.transaction === 'rent'
+    : property.activeOffer.transaction === 'rent' && propertyIntent.id === 'offered_rent'
       ? property.activeOffer.rentalPeriodId
       : undefined;
   const demoCategory = getDemoCategory(property.demoCapture?.categoryId);
@@ -1506,25 +1510,27 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                       {t(`propertyType.${property.core.propertyType}`)}
                     </Text>
                   </View>
-                  <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6 }}>
-                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, fontSize: 14 }}>
-                      {t(`transaction.${property.activeOffer.transaction}`)}
-                    </Text>
-                  </View>
+                   <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: propertyIntent.valid ? colors.primary : colors.destructive, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6 }}>
+                     <Text style={{ color: propertyIntent.valid ? colors.primary : colors.destructive, fontFamily: fonts.semiBold, fontSize: 14 }}>
+                       {propertyIntent.label}
+                     </Text>
+                   </View>
                 </View>
 
-                <View style={{ marginTop: 24, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'baseline', gap: 8 }}>
-                  <Text style={{ color: colors.primary, fontFamily: fonts.bold, fontSize: 32 }}>
-                    {property.activeOffer.transaction === 'rent'
-                      ? formatRentalPrice(shownPrice!, 'KWD', shownRentalPeriodId, language, t)
-                      : formatPrice(shownPrice!, 'KWD', language)}
-                  </Text>
-                  {property.activeOffer.transaction === 'rent' && (
-                    <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 15 }}>
-                      {formatRentalCadence(shownRentalPeriodId, t)}
-                    </Text>
-                  )}
-                </View>
+               {shownPrice !== undefined ? (
+                 <View style={{ marginTop: 24, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'baseline', gap: 8 }}>
+                   <Text style={{ color: colors.primary, fontFamily: fonts.bold, fontSize: 32 }}>
+                     {propertyIntent.id === 'offered_rent'
+                       ? formatRentalPrice(shownPrice, 'KWD', shownRentalPeriodId, language, t)
+                       : formatPrice(shownPrice, 'KWD', language)}
+                   </Text>
+                   {propertyIntent.id === 'offered_rent' && (
+                     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 15 }}>
+                       {formatRentalCadence(shownRentalPeriodId, t)}
+                     </Text>
+                   )}
+                 </View>
+               ) : null}
               </View>
 
               <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
