@@ -392,6 +392,7 @@ export default function StudioCaptureRoute() {
     [editOwnerPerson, people, selectedPersonId],
   );
   const wantedIdentityReady = mode !== 'wanted'
+    || selectedPersonId === ''
     || (!!selectedPerson
       && selectedPerson.id === selectedPersonId
       && selectedPerson.classifications.includes('seeker')
@@ -648,10 +649,7 @@ export default function StudioCaptureRoute() {
     result.errors.forEach(item => {
       if (!next.has(String(item.field))) next.set(String(item.field), item);
     });
-    if (mode === 'wanted' && !selectedPersonId) {
-      setError(t('studio.person_required'));
-      setPersonError(t('studio.person_required'));
-    } else if (mode === 'wanted' && selectedPersonId
+    if (mode === 'wanted' && selectedPersonId
       && (!selectedPerson || !selectedPerson.classifications.includes('seeker'))) {
       setError(t('studio.person_missing'));
       setPersonError(t('studio.person_missing'));
@@ -674,7 +672,7 @@ export default function StudioCaptureRoute() {
       setPersonError('');
     }
     setFieldErrors(next);
-    if (mode === 'wanted' && (!selectedPerson
+    if (mode === 'wanted' && selectedPersonId && (!selectedPerson
       || !selectedPerson.classifications.includes('seeker')
       || (seekerParam && selectedPerson.id !== seekerParam))) {
       focusField('person');
@@ -798,7 +796,7 @@ export default function StudioCaptureRoute() {
           setError(outcome.retryAllowed ? t('studio.save_failed') : t('studio.save_uncertain'));
         }
       } else {
-        const ownerId = baselineRequirement?.seekerId ?? selectedPersonId;
+        const ownerId = baselineRequirement?.seekerId ?? selectedPersonId || undefined;
         const candidate = buildStudioRequirement(
           values,
           baselineRequirement?.id ?? draftRequirementId.current,
@@ -810,7 +808,7 @@ export default function StudioCaptureRoute() {
           store,
           navigate: () => router.replace({
             pathname: '/requirement/[requirementId]',
-            params: { requirementId: candidate.id, seekerId: candidate.seekerId },
+            params: { requirementId: candidate.id },
           } as never),
         });
         if (result.status === 'saved') {
@@ -893,7 +891,7 @@ export default function StudioCaptureRoute() {
     try {
       const navigate = () => router.replace({
         pathname: '/requirement/[requirementId]',
-        params: { requirementId: candidate.id, seekerId: candidate.seekerId },
+        params: { requirementId: candidate.id },
       } as never);
       const wasUncertain = !!uncertainRequirement.current;
       const outcome = wasUncertain
@@ -984,16 +982,11 @@ export default function StudioCaptureRoute() {
   };
   const changeWantedTransaction = () => {
     const personId = selectedPersonId || seekerParam;
-    if (!personId) {
-      setError(t('studio.person_required'));
-      focusField('person');
-      return;
-    }
-    // Returning through the shared chooser discards this mounted draft; a
-    // fresh Studio form is initialized from the newly chosen transaction.
+    // Transaction changes keep ownership optional. The shared chooser resumes
+    // the same catalog path without forcing Person creation.
     router.replace({
       pathname: '/capture/transaction',
-      params: { mode: 'wanted', seekerId: personId },
+      params: { mode: 'wanted', ...(personId ? { seekerId: personId } : {}) },
     } as never);
   };
 
@@ -1214,9 +1207,8 @@ export default function StudioCaptureRoute() {
 
   const renderForm = () => (
     <>
-      {mode === 'wanted' ? renderPersonSelector() : null}
-      {mode === 'wanted' && !wantedIdentityReady ? null : (
-        <>
+      {mode === 'wanted' && (seekerParam || editing) ? renderPersonSelector() : null}
+      <>
           {mode === 'wanted' ? (
             <View style={styles.field} testID="studio-transaction-summary">
               <Text style={[styles.label, labelStyle]}>{catalogLabel('transaction')}</Text>
@@ -1242,7 +1234,6 @@ export default function StudioCaptureRoute() {
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>
-      )}
     </>
   );
 
@@ -1507,12 +1498,28 @@ export default function StudioCaptureRoute() {
             {savedRequirement ? (
               <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                 <Button
-                  title={language === 'ar' ? 'عرض المتطلب' : 'View Requirement'}
+                  title={language === 'ar' ? 'ربط بشخص موجود' : 'Link existing Person'}
+                  onPress={() => router.replace({
+                    pathname: '/requirement/view/[requirementId]',
+                    params: { requirementId: savedRequirement.id, link: '1' },
+                  } as never)}
+                  testID="studio-link-existing-person"
+                />
+                <Button
+                  title={language === 'ar' ? 'إضافة شخص وربطه' : 'Add Person and link'}
+                  onPress={() => router.replace({
+                    pathname: '/person/new',
+                    params: { returnRequirementId: savedRequirement.id },
+                  } as never)}
+                  testID="studio-add-person-and-link"
+                />
+                <Button
+                  title={language === 'ar' ? 'الربط لاحقاً' : 'Link later'}
                   onPress={() => router.replace({
                     pathname: '/requirement/view/[requirementId]',
                     params: { requirementId: savedRequirement.id },
                   } as never)}
-                  testID="studio-view-saved-requirement"
+                  testID="studio-link-later"
                 />
                 <Button title={language === 'ar' ? 'الرئيسية' : 'Home'} onPress={() => router.replace('/' as never)} testID="studio-home" />
               </View>

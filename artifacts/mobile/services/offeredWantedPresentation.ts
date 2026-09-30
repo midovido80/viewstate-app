@@ -234,7 +234,7 @@ export function deriveOfferedWantedRows(
     };
   });
   const wanted: WantedRequirementRow[] = uniqueRequirements.map(requirement => {
-    const person = peopleById.get(requirement.seekerId);
+    const person = requirement.seekerId ? peopleById.get(requirement.seekerId) : undefined;
     return {
       kind: 'wanted',
       id: requirement.id,

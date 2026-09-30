@@ -273,7 +273,6 @@ export default function RequirementEditor() {
   const candidate = () => {
     if (editing && (!recordLoaded || !baseline || baseline.id !== routeRequirementId)) return { ok: false as const, message: language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.' };
     const ownerId = baseline?.seekerId ?? ownerFromRoute;
-    if (!ownerId) return { ok: false as const, message: t('requirements.invalid_owner') };
     const parse = (value: string, integer = true) => parseOptionalRequirementNumber(value, { integer });
     const min = parse(minimum, false); const max = parse(maximum, false);
     const beds = parse(bedrooms); const baths = parse(bathrooms); const masters = parse(masterBedrooms);
@@ -397,7 +396,9 @@ export default function RequirementEditor() {
         baseline,
         store,
         navigate: () => isCurrentRoute()
-          ? router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never)
+          ? result.value.seekerId
+            ? router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never)
+            : router.replace({ pathname: '/requirement/view/[requirementId]', params: { requirementId: result.value.id } } as never)
           : undefined,
       });
       if (isCurrentRoute()) {
@@ -412,7 +413,9 @@ export default function RequirementEditor() {
   };
 
   const personDetailsNavigation = (requirement: SeekerRequirement) =>
-    router.replace({ pathname: '/person/[personId]', params: { personId: requirement.seekerId } } as never);
+    requirement.seekerId
+      ? router.replace({ pathname: '/person/[personId]', params: { personId: requirement.seekerId } } as never)
+      : router.replace({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never);
   const applySaveOutcome = (
     outcome: Awaited<ReturnType<typeof savePersonRequirement>>,
     requirement: SeekerRequirement,

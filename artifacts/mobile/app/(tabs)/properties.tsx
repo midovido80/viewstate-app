@@ -159,6 +159,14 @@ export default function PropertiesScreen() {
           ) : null}
         </View>
         </TouchableOpacity>
+        {item.kind === 'wanted' && !item.person ? (
+          <View style={[styles.personTarget, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]} testID={`requirement-unassigned-${item.id}`}>
+            <Feather name="user-plus" size={14} color={colors.mutedForeground} />
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 13 }}>
+              {language === 'ar' ? 'غير مرتبط بشخص' : 'Not linked to a Person'}
+            </Text>
+          </View>
+        ) : null}
         {personTargets.map((person, index) => (
           <TouchableOpacity
             key={person.id}

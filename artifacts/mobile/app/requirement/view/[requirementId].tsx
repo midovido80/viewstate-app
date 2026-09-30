@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SeekerRequirement } from '@workspace/property-domain';
+import type { Person } from '@/services/people';
+import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -15,7 +17,7 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 const sections = ['overview', 'location', 'specifications', 'preferences', 'budget', 'notes'] as const;
 
 export default function RequirementDetailsScreen() {
-  const params = useLocalSearchParams<{ requirementId?: string | string[] }>();
+  const params = useLocalSearchParams<{ requirementId?: string | string[]; link?: string | string[] }>();
   const id = getRequirementDetailIdentity(params.requirementId);
   const router = useRouter();
   const colors = useColors();
@@ -24,6 +26,13 @@ export default function RequirementDetailsScreen() {
   const [record, setRecord] = useState<SeekerRequirement | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [attempt, setAttempt] = useState(0);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [seekers, setSeekers] = useState<Person[]>([]);
+  const [selectedSeekerId, setSelectedSeekerId] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const linkRequested = (Array.isArray(params.link) ? params.link[0] : params.link) === '1';
+  const autoLinkOpened = useRef(false);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -41,13 +50,48 @@ export default function RequirementDetailsScreen() {
     return () => { active = false; };
   }, [id, attempt]));
 
-  const back = () => record?.seekerId && router.replace(`/person/${encodeURIComponent(record.seekerId)}` as never);
+  const back = () => record?.seekerId
+    ? router.replace(`/person/${encodeURIComponent(record.seekerId)}` as never)
+    : router.replace('/properties' as never);
   const home = () => router.replace('/' as never);
+  const openLink = useCallback(async () => {
+    if (!record || record.seekerId) return;
+    setLinkError('');
+    try {
+      const people = await store.getPeople();
+      setSeekers(people.filter(person => person.classifications.includes('seeker')));
+      setSelectedSeekerId('');
+      setLinkOpen(true);
+    } catch {
+      setLinkError(language === 'ar' ? 'تعذر تحميل الأشخاص.' : 'People could not be loaded.');
+    }
+  }, [language, record]);
+  useEffect(() => {
+    if (state !== 'ready' || !record || record.seekerId || !linkRequested || autoLinkOpened.current) return;
+    autoLinkOpened.current = true;
+    void openLink();
+  }, [linkRequested, openLink, record, state]);
+  const confirmLink = async () => {
+    if (!record || !selectedSeekerId || linkBusy) return;
+    setLinkBusy(true);
+    setLinkError('');
+    const outcome = await linkRequirementToSeeker({ expected: record, seekerId: selectedSeekerId, store });
+    setLinkBusy(false);
+    if (outcome.status === 'linked' || outcome.status === 'already_linked') {
+      setRecord(outcome.requirement);
+      setLinkOpen(false);
+      router.setParams({ link: undefined });
+      return;
+    }
+    setLinkError(language === 'ar' ? 'تعذر ربط الطلب بالشخص. أعد فتح الطلب وحاول مرة أخرى.' : 'The Requirement could not be linked. Reopen it and try again.');
+  };
   const edit = () => {
     if (!record) return;
     const href = isWantedStudio(record) && canHydrateStudioRequirement(record)
       ? getStudioRequirementEditHref(record.id)
-      : `/requirement/${encodeURIComponent(record.id)}?seekerId=${encodeURIComponent(record.seekerId)}`;
+      : record.seekerId
+        ? `/requirement/${encodeURIComponent(record.id)}?seekerId=${encodeURIComponent(record.seekerId)}`
+        : `/requirement/${encodeURIComponent(record.id)}`;
     router.push(href as never);
   };
   const requirementIntent = record ? projectRequirementIntent(record, language) : undefined;
@@ -110,6 +154,11 @@ export default function RequirementDetailsScreen() {
             <Text testID="requirement-details-id" selectable style={[styles.identifier, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: align }]}>
               {record.id}
             </Text>
+            <Text testID="requirement-owner-state" style={[styles.identifier, { color: record.seekerId ? colors.primary : colors.mutedForeground, fontFamily: fonts.medium, textAlign: align }]}>
+              {record.seekerId
+                ? caption('Linked to a Person', 'مرتبط بشخص')
+                : caption('Not linked to a Person yet', 'غير مرتبط بشخص حتى الآن')}
+            </Text>
           </View>
           {sections.map(section => {
             const group = rows.filter(row => row.section === section);
@@ -131,9 +180,44 @@ export default function RequirementDetailsScreen() {
               </View>
             );
           })}
+          {!record.seekerId ? (
+            <View style={styles.linkActions}>
+              {linkError ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{linkError}</Text> : null}
+              <Button title={caption('Link existing Person', 'ربط بشخص موجود')} onPress={() => void openLink()} testID="requirement-link-existing" />
+              <Button
+                title={caption('Add Person and link', 'إضافة شخص وربطه')}
+                onPress={() => router.push({ pathname: '/person/new', params: { returnRequirementId: record.id } } as never)}
+                variant="outline"
+                testID="requirement-add-person"
+              />
+            </View>
+          ) : null}
           <Button title={t('requirements.edit')} onPress={edit} testID="requirement-details-edit" />
         </ScrollView>
       )}
+      <Modal visible={linkOpen} transparent animationType="fade" onRequestClose={() => setLinkOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.linkSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.messageTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: align }]}>
+              {caption('Choose a Seeker', 'اختر باحثاً')}
+            </Text>
+            {seekers.length === 0 ? (
+              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: align }}>
+                {caption('No Seeker Person is available.', 'لا يوجد شخص مصنف كباحث.')}
+              </Text>
+            ) : seekers.map(person => (
+              <TouchableOpacity key={person.id} onPress={() => setSelectedSeekerId(person.id)}
+                accessibilityRole="radio" accessibilityState={{ checked: selectedSeekerId === person.id }}
+                style={[styles.seekerChoice, { borderColor: selectedSeekerId === person.id ? colors.primary : colors.border }]}>
+                <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{person.name}</Text>
+              </TouchableOpacity>
+            ))}
+            {linkError ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{linkError}</Text> : null}
+            <Button title={caption('Link', 'ربط')} onPress={() => void confirmLink()} disabled={!selectedSeekerId || linkBusy} loading={linkBusy} testID="requirement-confirm-link" />
+            <Button title={t('capture.cancel')} onPress={() => setLinkOpen(false)} variant="outline" />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -158,4 +242,8 @@ const styles = StyleSheet.create({
   messageTitle: { fontSize: 21, lineHeight: 29 },
   skeletonTitle: { width: '50%', height: 26, borderRadius: 6 },
   skeletonLine: { width: '100%', height: 72, borderRadius: 12 },
+  linkActions: { gap: 10 },
+  modalBackdrop: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center', padding: 20 },
+  linkSheet: { borderWidth: 1, borderRadius: 16, padding: 18, gap: 12 },
+  seekerChoice: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, justifyContent: 'center' },
 });

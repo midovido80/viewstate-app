@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { BatchContactImportModal } from '@/components/BatchContactImportModal';
@@ -16,9 +16,14 @@ import {
   PhoneCountryCode,
 } from '@/services/phoneEntry';
 import { generateDomainId } from '@/services/identity';
+import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 
 export default function NewPersonScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnRequirementId?: string | string[] }>();
+  const returnRequirementId = Array.isArray(params.returnRequirementId)
+    ? params.returnRequirementId[0]
+    : params.returnRequirementId;
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, isRTL, fonts } = useI18n();
@@ -27,8 +32,12 @@ export default function NewPersonScreen() {
   const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>('KW');
   const [countryOpen, setCountryOpen] = useState(false);
   const [notes, setNotes] = useState('');
-  const [classifications, setClassifications] = useState<PersonClassification[]>([]);
-  const [entryMode, setEntryMode] = useState<'choose' | 'manual'>('choose');
+  const [classifications, setClassifications] = useState<PersonClassification[]>(
+    returnRequirementId ? ['seeker'] : [],
+  );
+  const [entryMode, setEntryMode] = useState<'choose' | 'manual'>(
+    returnRequirementId ? 'manual' : 'choose',
+  );
   const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -67,7 +76,24 @@ export default function NewPersonScreen() {
         classifications,
       });
       const resolved = await store.savePerson(person);
-      router.replace({ pathname: `/person/${encodeURIComponent(resolved.id)}`, params: { saved: '1' } } as never);
+      if (returnRequirementId) {
+        const requirement = await store.getRequirement(returnRequirementId);
+        if (!requirement) throw new Error('RETURN_REQUIREMENT_NOT_FOUND');
+        const outcome = await linkRequirementToSeeker({
+          expected: requirement,
+          seekerId: resolved.id,
+          store,
+        });
+        if (outcome.status !== 'linked' && outcome.status !== 'already_linked') {
+          throw new Error('RETURN_REQUIREMENT_LINK_FAILED');
+        }
+        router.replace({
+          pathname: '/requirement/view/[requirementId]',
+          params: { requirementId: returnRequirementId },
+        } as never);
+      } else {
+        router.replace({ pathname: `/person/${encodeURIComponent(resolved.id)}`, params: { saved: '1' } } as never);
+      }
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : '';
       setError(code.includes('NAME') ? t('people.name_required')
