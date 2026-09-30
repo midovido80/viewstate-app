@@ -183,7 +183,10 @@ test('deep-linked Studio edits fall back to their exact detail route without cha
   );
   assert.equal(targetFor('wanted' as never, false as never, undefined as never, undefined as never, seekerId as never), null);
   assert.equal(targetFor('offered' as never, false as never, propertyId as never, undefined as never, undefined as never), null);
-  assert.equal(targetFor('wanted' as never, true as never, undefined as never, requirementId as never, undefined as never), null);
+  assert.deepEqual(
+    targetFor('wanted' as never, true as never, undefined as never, requirementId as never, undefined as never),
+    { pathname: '/requirement/[requirementId]', params: { requirementId } },
+  );
 
   const screen = await source('../app/capture/studio.tsx');
   assert.match(screen, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\);\s*return;\s*\}/);
