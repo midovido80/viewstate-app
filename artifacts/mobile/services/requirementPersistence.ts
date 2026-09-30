@@ -200,7 +200,7 @@ export class SQLiteRequirementStore implements RequirementStore {
     const normalized = normalizeForStorage(requirement);
     const serialized = JSON.stringify(normalized);
     await this.mutations.enqueue(async () => {
-      await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      if (normalized.seekerId) await assertSeekerOwnership(this.personStore, normalized.seekerId);
       const db = this.database();
       const existing = await db.getFirstAsync<{ data: string }>(
         `SELECT data FROM ${NATIVE_REQUIREMENTS_TABLE} WHERE id = ?`,
@@ -281,7 +281,7 @@ export class SQLiteRequirementStore implements RequirementStore {
     const normalized = normalizeForStorage(replacement);
     let updated = false;
     await this.mutations.enqueue(async () => {
-      await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      if (normalized.seekerId) await assertSeekerOwnership(this.personStore, normalized.seekerId);
       const db = this.database();
       const row = await db.getFirstAsync<{ data: string }>(
         `SELECT data FROM ${NATIVE_REQUIREMENTS_TABLE} WHERE id = ?`,
@@ -444,7 +444,7 @@ export class WebRequirementStore implements RequirementStore {
     const normalized = normalizeForStorage(requirement);
     await this.withChronologyMutationLock(() =>
       this.withMutationLock(async () => {
-        await assertSeekerOwnership(this.personStore, normalized.seekerId);
+        if (normalized.seekerId) await assertSeekerOwnership(this.personStore, normalized.seekerId);
         const current = await this.getAllRaw();
         const all = current.requirements;
         const existing = all.find(item => item.id === normalized.id);
@@ -518,7 +518,7 @@ export class WebRequirementStore implements RequirementStore {
     const normalizedExpected = normalizeForStorage(expected);
     const normalized = normalizeForStorage(replacement);
     return this.withMutationLock(async () => {
-      await assertSeekerOwnership(this.personStore, normalized.seekerId);
+      if (normalized.seekerId) await assertSeekerOwnership(this.personStore, normalized.seekerId);
       const current = await this.getAllRaw();
       const all = current.requirements;
       const matching = all

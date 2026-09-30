@@ -15,6 +15,7 @@ import './studioEntry.test.ts';
 import './studioDetails.test.ts';
 import './studioFormModel.test.ts';
 import './studioSave.test.ts';
+import './requirementOwnership.test.ts';
 
 import {
   buildPropertySharePreview,

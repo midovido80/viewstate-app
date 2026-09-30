@@ -921,6 +921,24 @@ test("share preview fail-closes exact locations and maps while never exposing pr
   );
 });
 
+test("Requirement may be saved unassigned but rejects an empty owner identifier", () => {
+  const unassigned = {
+    id: "123e4567-e89b-42d3-a456-426614174000",
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: [],
+    preferredAreaMode: "all_kuwait",
+    budget: { minimum: 300, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+    rentalPeriodId: "monthly",
+  };
+  const valid = validateSeekerRequirement(unassigned);
+  assert(valid.ok, "An explicitly unassigned Requirement must be valid before Person linking");
+  if (valid.ok) assertEqual(valid.value.seekerId, undefined, "Normalization must preserve the unassigned state");
+  const invalid = validateSeekerRequirement({ ...unassigned, seekerId: "" });
+  assert(!invalid.ok, "An explicitly present but empty seekerId must remain invalid");
+});
+
 const failures: string[] = [];
 for (const current of tests) {
   try {

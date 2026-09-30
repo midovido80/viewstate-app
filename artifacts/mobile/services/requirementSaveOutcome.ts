@@ -179,18 +179,20 @@ export async function savePersonRequirement(options: {
   readonly navigate: () => void | Promise<void>;
 }): Promise<RequirementSaveOutcome> {
   const { candidate, baseline, store, navigate } = options;
-  let person: RequirementSavePerson | null;
-  try {
-    person = await store.getPerson(candidate.seekerId);
-  } catch {
-    return {
-      status: 'storage_failure',
-      retryAllowed: true,
-      diagnostic: { stage: 'ownership', code: 'storage_failure', location: ['person'] },
-    };
+  if (candidate.seekerId !== undefined) {
+    let person: RequirementSavePerson | null;
+    try {
+      person = await store.getPerson(candidate.seekerId);
+    } catch {
+      return {
+        status: 'storage_failure',
+        retryAllowed: true,
+        diagnostic: { stage: 'ownership', code: 'storage_failure', location: ['person'] },
+      };
+    }
+    if (!person) return { status: 'missing_person' };
+    if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
   }
-  if (!person) return { status: 'missing_person' };
-  if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
 
   try {
     if (baseline) {

@@ -49,7 +49,8 @@ export type CatalogPreference =
 
 export interface SeekerRequirementBase {
   readonly id: string;
-  readonly seekerId: string;
+  /** Missing until the broker links this request to a real Seeker Person. */
+  readonly seekerId?: string;
   readonly propertyType: PropertyType;
   readonly preferredAreaIds: readonly LocationAreaId[];
   readonly preferredAreaMode?: RequirementAreaMode;
@@ -285,7 +286,7 @@ export function validateSeekerRequirement(
 
   const issues: RequirementValidationIssue[] = [
     ...validateIdentifier(value.id, ["id"], true),
-    ...validateIdentifier(value.seekerId, ["seekerId"]),
+    ...(value.seekerId === undefined ? [] : validateIdentifier(value.seekerId, ["seekerId"])),
   ];
   for (const key of Object.keys(value)) {
     if (!REQUIREMENT_FIELDS.has(key)) {
@@ -718,7 +719,7 @@ export function normalizeSeekerRequirement(
     .map(preference => ({ ...preference }));
   const base = {
     id: validation.value.id,
-    seekerId: validation.value.seekerId,
+    ...(validation.value.seekerId !== undefined ? { seekerId: validation.value.seekerId } : {}),
     purpose: validation.value.purpose,
     propertyType: validation.value.propertyType,
     preferredAreaIds: [...validation.value.preferredAreaIds],

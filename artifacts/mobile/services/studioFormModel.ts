@@ -366,7 +366,7 @@ export function buildStudioProperty(
 export function buildStudioRequirement(
   values: StudioFormValues,
   id: string,
-  seekerId: string,
+  seekerId: string | undefined,
 ): SeekerRequirement {
   assertValidForm(values);
   if (values.mode !== 'wanted') throw new Error('STUDIO_REQUIREMENT_REQUIRES_WANTED_MODE');
@@ -388,7 +388,7 @@ export function buildStudioRequirement(
   ];
   const candidate = {
     id,
-    seekerId,
+    ...(seekerId !== undefined ? { seekerId } : {}),
     purpose: values.transaction === 'sale' ? 'buy' as const : 'rent' as const,
     propertyType: 'apartment' as const,
     preferredAreaIds: values.preferredAreaMode === 'all_kuwait' ? [] : [...values.preferredAreaIds],

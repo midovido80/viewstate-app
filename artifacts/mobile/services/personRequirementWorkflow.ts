@@ -96,12 +96,12 @@ export function parseOptionalRequirementNumber(
 /** Adapts UI values to the frozen M1 contract; all business validation stays in M1. */
 export function buildPersonRequirement(
   id: string,
-  seekerId: string,
+  seekerId: string | undefined,
   values: RequirementFormValues,
 ): RequirementFormResult {
   const base = {
     id,
-    seekerId,
+    ...(seekerId !== undefined ? { seekerId } : {}),
     purpose: values.purpose,
     propertyType: values.propertyType,
     preferredAreaIds: [...values.preferredAreaIds],
