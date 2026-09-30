@@ -108,14 +108,14 @@ export function getStudioEditBackTarget(
   requirementId?: string,
   seekerId?: string,
 ):
-  | { readonly pathname: '/requirement/[requirementId]'; readonly params: { readonly requirementId: string; readonly seekerId: string } }
+  | { readonly pathname: '/requirement/[requirementId]'; readonly params: { readonly requirementId: string; readonly seekerId?: string } }
   | { readonly pathname: '/property/[propertyCoreId]'; readonly params: { readonly propertyCoreId: string } }
   | null {
   if (!editing) return null;
-  if (mode === 'wanted' && requirementId && seekerId) {
+  if (mode === 'wanted' && requirementId) {
     return {
       pathname: '/requirement/[requirementId]',
-      params: { requirementId, seekerId },
+      params: seekerId ? { requirementId, seekerId } : { requirementId },
     };
   }
   if (mode === 'offered' && propertyId) {
@@ -358,14 +358,16 @@ export default function StudioCaptureRoute() {
         } else if (editRequirementId) {
           const requirement = await store.getRequirement(editRequirementId);
           if (!requirement || !isStudioRequirement(requirement)) throw new Error('STUDIO_NOT_FOUND');
-          const person = await store.getPerson(requirement.seekerId);
-          if (!person) throw new Error('STUDIO_PERSON_NOT_FOUND');
+          const person = requirement.seekerId
+            ? await store.getPerson(requirement.seekerId)
+            : null;
+          if (requirement.seekerId && !person) throw new Error('STUDIO_PERSON_NOT_FOUND');
           if (!cancelled) {
             setMode('wanted');
             setBaselineRequirement(requirement);
             setAttachments([]);
             setEditOwnerPerson(person);
-            setSelectedPersonId(requirement.seekerId);
+            setSelectedPersonId(requirement.seekerId ?? '');
             setValues(readStudioRequirement(requirement));
           }
         }
