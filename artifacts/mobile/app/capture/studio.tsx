@@ -809,8 +809,11 @@ export default function StudioCaptureRoute() {
           baseline: baselineRequirement,
           store,
           navigate: () => router.replace({
-            pathname: '/requirement/[requirementId]',
-            params: { requirementId: candidate.id },
+            pathname: '/requirement/view/[requirementId]',
+            params: {
+              requirementId: candidate.id,
+              ...(!editing && !ownerId ? { postSave: '1' } : {}),
+            },
           } as never),
         });
         if (result.status === 'saved') {
@@ -892,8 +895,11 @@ export default function StudioCaptureRoute() {
     setSaving(true);
     try {
       const navigate = () => router.replace({
-        pathname: '/requirement/[requirementId]',
-        params: { requirementId: candidate.id },
+        pathname: '/requirement/view/[requirementId]',
+        params: {
+          requirementId: candidate.id,
+          ...(!editing && !candidate.seekerId ? { postSave: '1' } : {}),
+        },
       } as never);
       const wasUncertain = !!uncertainRequirement.current;
       const outcome = wasUncertain

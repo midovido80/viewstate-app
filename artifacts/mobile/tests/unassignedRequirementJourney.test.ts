@@ -37,20 +37,31 @@ test('generic and Studio builders preserve an unassigned Wanted record', () => {
   assert.deepEqual(validMatchingRequirements([studio]), []);
 });
 
-test('capture routes save first and offer link-existing, add-and-link, or link-later actions', async () => {
-  const [studio, generic, details, person] = await Promise.all([
+test('capture routes save first and offer one authoritative post-save linking decision', async () => {
+  const [studio, generic, details, personCreate, personDetails, summary] = await Promise.all([
     readFile(resolveSourcePath('../app/capture/studio.tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/requirement/[requirementId].tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/requirement/view/[requirementId].tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/person/new.tsx', import.meta.url), 'utf8'),
+    readFile(resolveSourcePath('../app/person/[personId].tsx', import.meta.url), 'utf8'),
+    readFile(resolveSourcePath('../app/capture/summary.tsx', import.meta.url), 'utf8'),
   ]);
-  assert.match(studio, /studio-link-existing-person/);
-  assert.match(studio, /studio-add-person-and-link/);
-  assert.match(studio, /studio-link-later/);
+  assert.match(studio, /pathname: '\/requirement\/view\/\[requirementId\]'/);
+  assert.match(studio, /postSave: '1'/);
   assert.doesNotMatch(studio, /mode === 'wanted' && !selectedPersonId/);
   assert.match(generic, /pathname: '\/requirement\/view\/\[requirementId\]'/);
+  assert.match(generic, /postSave: '1'/);
   assert.match(details, /requirement-link-existing/);
   assert.match(details, /requirement-add-person/);
-  assert.match(person, /returnRequirementId/);
-  assert.match(person, /linkRequirementToSeeker/);
+  assert.match(details, /requirement-link-later/);
+  assert.match(details, /Not linked to a Person yet/);
+  assert.match(details, /Linked to: \$\{linkedPerson\.name\}/);
+  assert.match(details, /store\.getPerson\(saved\.seekerId\)/);
+  assert.match(personCreate, /returnRequirementId/);
+  assert.match(personCreate, /linkRequirementToSeeker/);
+  assert.match(personDetails, /type PersonLoadState = 'loading' \| 'ready' \| 'missing' \| 'error'/);
+  assert.match(personDetails, /loadState === 'loading'/);
+  assert.doesNotMatch(personDetails, /error \|\| t\('people\.not_found'\)/);
+  assert.match(summary, /getPropertyCardSummary\(previewProperty/);
+  assert.match(summary, /value=\{previewSubtypeLabel\}/);
 });

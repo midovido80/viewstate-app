@@ -398,7 +398,13 @@ export default function RequirementEditor() {
         navigate: () => isCurrentRoute()
           ? result.value.seekerId
             ? router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1' } } as never)
-            : router.replace({ pathname: '/requirement/view/[requirementId]', params: { requirementId: result.value.id } } as never)
+            : router.replace({
+              pathname: '/requirement/view/[requirementId]',
+              params: {
+                requirementId: result.value.id,
+                ...(!editing ? { postSave: '1' } : {}),
+              },
+            } as never)
           : undefined,
       });
       if (isCurrentRoute()) {

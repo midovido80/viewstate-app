@@ -35,6 +35,7 @@ import { ensureStudioPropertySourceLink, getStudioPersonSourceRole } from '@/ser
 import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
 import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
 import { projectRecordIntent } from '@/services/recordIntentPresentation';
+import { getPropertyCardSummary } from '@/services/cardSummaryPresentation';
 
 export default function SummaryScreen() {
   const router = useRouter();
@@ -312,17 +313,26 @@ export default function SummaryScreen() {
       <Text style={[styles.rowValue, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }]}>{value}</Text>
     </View>
   );
-  const previewDetails = (() => {
-    if (!draft.propertyType) return {} as Record<string, unknown>;
+  const previewProperty = (() => {
+    if (!draft.propertyType) return null;
     const preview = projectToProperty();
-    if (!preview.ok) return {} as Record<string, unknown>;
+    if (!preview.ok) return null;
     try {
-      return (buildPropertyWithCaptureDetails(preview.property, captureDetails, false).typeDetails
-        ?? {}) as unknown as Record<string, unknown>;
+      return buildPropertyWithCaptureDetails(preview.property, captureDetails, false);
     } catch {
-      return {} as Record<string, unknown>;
+      return null;
     }
   })();
+  const previewDetails = (previewProperty?.typeDetails ?? {}) as unknown as Record<string, unknown>;
+  const previewSubtypeLabel = previewProperty
+    ? getPropertyCardSummary(previewProperty, {
+      language,
+      translate: key => t(key as keyof Translations),
+      formatPrice: (amount, currencyCode) => formatPrice(amount, currencyCode, language),
+      formatRentalPrice: (amount, currencyCode, period) =>
+        formatRentalPrice(amount, currencyCode, period, language, key => t(key as keyof Translations)),
+    }).subtypeLabel
+    : undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -360,6 +370,12 @@ export default function SummaryScreen() {
             label={t('summary.property_type')}
             value={draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : ''} 
           />
+          {previewSubtypeLabel ? (
+            <SummaryRow
+              label={t('studio.apartment_subtype')}
+              value={previewSubtypeLabel}
+            />
+          ) : null}
           
           {draft.transaction === 'sale' && draft.salePrice && (
             <SummaryRow 

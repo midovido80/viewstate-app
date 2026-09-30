@@ -54,6 +54,8 @@ export function getPersonWantedRequirementRoute(personId: string) {
   } as const;
 }
 
+type PersonLoadState = 'loading' | 'ready' | 'missing' | 'error';
+
 export default function PersonDetailScreen() {
   const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string }>();
   const id = Array.isArray(params.personId) ? params.personId[0] : params.personId;
@@ -83,6 +85,7 @@ export default function PersonDetailScreen() {
   const [linkBusy, setLinkBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState('');
+  const [loadState, setLoadState] = useState<PersonLoadState>('loading');
   const [busy, setBusy] = useState(false);
   const [sourceUnlinkId, setSourceUnlinkId] = useState<string | null>(null);
   const [requirementReturnGuard, setRequirementReturnGuard] = useState(params.requirementSaved === '1');
@@ -128,27 +131,42 @@ export default function PersonDetailScreen() {
   };
 
   const load = useCallback(async () => {
-    if (!id) return;
+    setError('');
+    setPerson(null);
+    if (!id) {
+      setLoadState('missing');
+      return;
+    }
+    setLoadState('loading');
     try {
       const saved = await store.getPerson(id);
+      if (!saved) {
+        setLoadState('missing');
+        return;
+      }
       setPerson(saved);
-      if (!saved) return;
-      const [links, sources, ownedRequirements] = await Promise.all([
-        store.getLinksForPerson(id),
-        store.getPropertySourcesForPerson(id),
-        store.getRequirementsForSeeker(id),
-      ]);
-      setRequirements(ownedRequirements);
-      const [results, sourceProperties] = await Promise.all([
-        Promise.all(links.map(link => store.getProperty(link.propertyCoreId))),
-        Promise.all(sources.map(source => store.getProperty(source.propertyCoreId))),
-      ]);
-      setLinked(results.filter((value): value is Property => value !== null));
-      setSourced(sources.flatMap((source, index) => {
-        const property = sourceProperties[index];
-        return property ? [{ source, property }] : [];
-      }));
+      setLoadState('ready');
+      try {
+        const [links, sources, ownedRequirements] = await Promise.all([
+          store.getLinksForPerson(id),
+          store.getPropertySourcesForPerson(id),
+          store.getRequirementsForSeeker(id),
+        ]);
+        setRequirements(ownedRequirements);
+        const [results, sourceProperties] = await Promise.all([
+          Promise.all(links.map(link => store.getProperty(link.propertyCoreId))),
+          Promise.all(sources.map(source => store.getProperty(source.propertyCoreId))),
+        ]);
+        setLinked(results.filter((value): value is Property => value !== null));
+        setSourced(sources.flatMap((source, index) => {
+          const property = sourceProperties[index];
+          return property ? [{ source, property }] : [];
+        }));
+      } catch {
+        setError(t('people.load_failed'));
+      }
     } catch {
+      setLoadState('error');
       setError(t('people.load_failed'));
     }
   }, [id, t]);
@@ -328,11 +346,18 @@ export default function PersonDetailScreen() {
     }
   };
 
-  if (!person) {
+  if (loadState !== 'ready' || !person) {
+    const message = loadState === 'loading'
+      ? (language === 'ar' ? 'جارٍ تحميل الشخص…' : 'Loading Person…')
+      : loadState === 'missing'
+        ? t('people.not_found')
+        : (error || t('people.load_failed'));
     return (
       <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{error || t('people.not_found')}</Text>
-        <Button title={t('capture.back')} onPress={() => router.replace('/people' as never)} variant="outline" />
+        <Text testID={`person-detail-${loadState}`} style={{ color: colors.foreground, fontFamily: fonts.medium }}>{message}</Text>
+        {loadState !== 'loading' ? (
+          <Button title={t('capture.back')} onPress={() => router.replace('/people' as never)} variant="outline" />
+        ) : null}
       </View>
     );
   }

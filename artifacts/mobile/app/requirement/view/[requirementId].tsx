@@ -17,7 +17,11 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 const sections = ['overview', 'location', 'specifications', 'preferences', 'budget', 'notes'] as const;
 
 export default function RequirementDetailsScreen() {
-  const params = useLocalSearchParams<{ requirementId?: string | string[]; link?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    requirementId?: string | string[];
+    link?: string | string[];
+    postSave?: string | string[];
+  }>();
   const id = getRequirementDetailIdentity(params.requirementId);
   const router = useRouter();
   const colors = useColors();
@@ -31,21 +35,44 @@ export default function RequirementDetailsScreen() {
   const [selectedSeekerId, setSelectedSeekerId] = useState('');
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState('');
+  const [linkedPerson, setLinkedPerson] = useState<Person | null>(null);
+  const [ownerState, setOwnerState] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
   const linkRequested = (Array.isArray(params.link) ? params.link[0] : params.link) === '1';
+  const postSave = (Array.isArray(params.postSave) ? params.postSave[0] : params.postSave) === '1';
   const autoLinkOpened = useRef(false);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     setRecord(null);
+    setLinkedPerson(null);
+    setOwnerState('idle');
     if (!id) {
       setState('missing');
       return () => { active = false; };
     }
     setState('loading');
-    void store.getRequirement(id).then(saved => {
+    void store.getRequirement(id).then(async saved => {
       if (!active) return;
-      setRecord(saved?.id === id ? saved : null);
-      setState(saved?.id === id ? 'ready' : 'missing');
+      if (saved?.id !== id) {
+        setRecord(null);
+        setState('missing');
+        return;
+      }
+      setRecord(saved);
+      setState('ready');
+      if (!saved.seekerId) return;
+      setOwnerState('loading');
+      try {
+        const person = await store.getPerson(saved.seekerId);
+        if (!active) return;
+        setLinkedPerson(person?.id === saved.seekerId ? person : null);
+        setOwnerState(person?.id === saved.seekerId ? 'ready' : 'missing');
+      } catch {
+        if (active) {
+          setLinkedPerson(null);
+          setOwnerState('error');
+        }
+      }
     }).catch(() => { if (active) { setRecord(null); setState('error'); } });
     return () => { active = false; };
   }, [id, attempt]));
@@ -79,8 +106,11 @@ export default function RequirementDetailsScreen() {
     setLinkBusy(false);
     if (outcome.status === 'linked' || outcome.status === 'already_linked') {
       setRecord(outcome.requirement);
+      const person = seekers.find(candidate => candidate.id === outcome.requirement.seekerId) ?? null;
+      setLinkedPerson(person);
+      setOwnerState(person ? 'ready' : 'missing');
       setLinkOpen(false);
-      router.setParams({ link: undefined });
+      router.setParams({ link: undefined, postSave: undefined });
       return;
     }
     setLinkError(language === 'ar' ? 'تعذر ربط الطلب بالشخص. أعد فتح الطلب وحاول مرة أخرى.' : 'The Requirement could not be linked. Reopen it and try again.');
@@ -103,6 +133,42 @@ export default function RequirementDetailsScreen() {
   const direction = isRTL ? 'row-reverse' as const : 'row' as const;
   const align = isRTL ? 'right' as const : 'left' as const;
   const caption = (en: string, ar: string) => language === 'ar' ? ar : en;
+  const renderOwnerState = () => {
+    if (!record?.seekerId) {
+      return (
+        <Text testID="requirement-owner-state" style={[styles.identifier, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: align }]}>
+          {caption('Not linked to a Person yet', 'غير مرتبط بشخص حتى الآن')}
+        </Text>
+      );
+    }
+    if (ownerState === 'idle' || ownerState === 'loading') {
+      return (
+        <Text testID="requirement-owner-loading" style={[styles.identifier, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: align }]}>
+          {caption('Loading linked Person…', 'جارٍ تحميل الشخص المرتبط…')}
+        </Text>
+      );
+    }
+    if (ownerState === 'ready' && linkedPerson) {
+      return (
+        <TouchableOpacity
+          testID="requirement-linked-person"
+          accessibilityRole="button"
+          onPress={() => router.push(`/person/${encodeURIComponent(linkedPerson.id)}` as never)}
+        >
+          <Text style={[styles.identifier, { color: colors.primary, fontFamily: fonts.medium, textAlign: align }]}>
+            {caption(`Linked to: ${linkedPerson.name}`, `مرتبط بـ: ${linkedPerson.name}`)}
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+    return (
+      <Text testID="requirement-owner-state" style={[styles.identifier, { color: colors.destructive, fontFamily: fonts.medium, textAlign: align }]}>
+        {ownerState === 'missing'
+          ? caption('The linked Person could not be found.', 'تعذر العثور على الشخص المرتبط.')
+          : caption('The linked Person could not be loaded.', 'تعذر تحميل الشخص المرتبط.')}
+      </Text>
+    );
+  };
   const sectionLabels: Record<RequirementDetailRow['section'], string> = {
     overview: caption('THE REQUEST', 'الطلب'),
     location: caption('LOCATION', 'الموقع'),
@@ -154,11 +220,7 @@ export default function RequirementDetailsScreen() {
             <Text testID="requirement-details-id" selectable style={[styles.identifier, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: align }]}>
               {record.id}
             </Text>
-            <Text testID="requirement-owner-state" style={[styles.identifier, { color: record.seekerId ? colors.primary : colors.mutedForeground, fontFamily: fonts.medium, textAlign: align }]}>
-              {record.seekerId
-                ? caption('Linked to a Person', 'مرتبط بشخص')
-                : caption('Not linked to a Person yet', 'غير مرتبط بشخص حتى الآن')}
-            </Text>
+            {renderOwnerState()}
           </View>
           {sections.map(section => {
             const group = rows.filter(row => row.section === section);
@@ -190,9 +252,19 @@ export default function RequirementDetailsScreen() {
                 variant="outline"
                 testID="requirement-add-person"
               />
+              {postSave ? (
+                <Button
+                  title={caption('Link later', 'الربط لاحقاً')}
+                  onPress={() => router.replace('/properties' as never)}
+                  variant="outline"
+                  testID="requirement-link-later"
+                />
+              ) : null}
             </View>
           ) : null}
-          <Button title={t('requirements.edit')} onPress={edit} testID="requirement-details-edit" />
+          {!postSave || record.seekerId ? (
+            <Button title={t('requirements.edit')} onPress={edit} testID="requirement-details-edit" />
+          ) : null}
         </ScrollView>
       )}
       <Modal visible={linkOpen} transparent animationType="fade" onRequestClose={() => setLinkOpen(false)}>
