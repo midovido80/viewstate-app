@@ -155,9 +155,11 @@ test('whole-building Rent rows include saved catalog values once, preserving zer
   for (const field of [
     'purpose', 'propertyType', 'rentalPeriodId', 'occupancy', 'preferredAreaMode',
     'preferredAreaIds', 'plotAreaSquareMeters', 'builtUpAreaSquareMeters',
-    'hasWaterfront', 'swimmingPool', 'gym', 'seaView', 'budget.minimum',
-    'budget.maximum', 'notes',
+    'hasWaterfront', 'budget.minimum', 'budget.maximum', 'notes',
   ]) assert.equal(fields.filter(value => value === field).length, 1, `${field} appears once`);
+  for (const unspecified of ['swimmingPool', 'gym', 'seaView']) {
+    assert.equal(fields.includes(unspecified), false, `${unspecified} is hidden when unspecified`);
+  }
   assert.equal(row(requirement, 'plotAreaSquareMeters').value, 'At least 0');
   assert.equal(row(requirement, 'hasWaterfront').value, 'No');
   assert.equal(row(requirement, 'budget.minimum').value, '0 KWD');
