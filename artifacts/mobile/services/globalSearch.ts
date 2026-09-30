@@ -208,7 +208,7 @@ export function searchGlobalDataWithMatchReasons(data: GlobalSearchData, query: 
 
   const peopleById = new Map(data.people.map(person => [person.id, person]));
   const requirements = rankedUnique(data.requirements, requirement => requirement.id, requirement => {
-    const seeker = peopleById.get(requirement.seekerId);
+    const seeker = requirement.seekerId ? peopleById.get(requirement.seekerId) : undefined;
     const studio = isWantedStudio(requirement);
     const intent = projectRequirementIntent(requirement, 'en');
     const allKuwaitArea = requirement.preferredAreaMode === 'all_kuwait'
@@ -233,7 +233,7 @@ export function searchGlobalDataWithMatchReasons(data: GlobalSearchData, query: 
     properties: properties.values,
     requirements: requirements.values.map(requirement => ({
       requirement,
-      seeker: peopleById.get(requirement.seekerId),
+      seeker: requirement.seekerId ? peopleById.get(requirement.seekerId) : undefined,
     })),
     why: { people: people.why, properties: properties.why, requirements: requirements.why },
   };

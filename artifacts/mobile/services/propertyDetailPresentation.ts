@@ -369,8 +369,9 @@ export function getStudioRequirementEditHref(requirementId: string): string {
   return `/capture/studio?editRequirementId=${encodeURIComponent(requirementId)}`;
 }
 
-export function getStudioRequirementFallbackEditHref(requirementId: string, seekerId: string): string {
-  return `/requirement/${encodeURIComponent(requirementId)}?seekerId=${encodeURIComponent(seekerId)}&edit=1`;
+export function getStudioRequirementFallbackEditHref(requirementId: string, seekerId?: string): string {
+  const owner = seekerId ? `seekerId=${encodeURIComponent(seekerId)}&` : '';
+  return `/requirement/${encodeURIComponent(requirementId)}?${owner}edit=1`;
 }
 
 export function getPropertyDetailBackRoute(): '/properties' {

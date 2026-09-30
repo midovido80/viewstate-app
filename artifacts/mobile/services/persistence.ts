@@ -452,7 +452,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
   }
 
   private parseRequirementForConsolidation(row: { id: string; data: string }): {
-    id: string; seekerId: string; literal: Record<string, unknown>;
+    id: string; seekerId?: string; literal: Record<string, unknown>;
   } | null {
     try {
       const literal = JSON.parse(row.data) as unknown;
@@ -461,7 +461,11 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
       });
       return value.ok && value.value.id === row.id
         && typeof literal === 'object' && literal !== null && !Array.isArray(literal)
-        ? { id: value.value.id, seekerId: value.value.seekerId, literal: literal as Record<string, unknown> }
+        ? {
+          id: value.value.id,
+          ...(value.value.seekerId ? { seekerId: value.value.seekerId } : {}),
+          literal: literal as Record<string, unknown>,
+        }
         : null;
     } catch {
       return null;
@@ -565,7 +569,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         await this.db!.runAsync('UPDATE property_sources SET person_id = ? WHERE person_id = ?', [survivor.id, loser.id]);
       }
       for (const item of parsedRequirements) {
-        if (item.requirement && loserIds.has(item.requirement.seekerId)) {
+        if (item.requirement?.seekerId && loserIds.has(item.requirement.seekerId)) {
           const replacement = { ...item.requirement.literal, seekerId: survivor.id };
           await this.db!.runAsync(
             'UPDATE seeker_requirements SET data = ? WHERE id = ? AND data = ?',
@@ -1111,7 +1115,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
 
   private async getRawRequirementsForConsolidation(): Promise<{
     raw: string | null;
-    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId: string } }>;
+    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId?: string } }>;
     unreadableSeekerIds: Array<string | null>;
     rawValues: unknown[];
   }> {
@@ -1207,7 +1211,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       ? { ...source, personId: survivor.id } : source);
     const nextRequirements = requirements.rawValues.map(value => {
       const item = requirements.values.find(candidate => candidate.value === value);
-      return item && losers.has(item.requirement.seekerId)
+      return item?.requirement.seekerId && losers.has(item.requirement.seekerId)
         ? { ...item.value, seekerId: survivor.id } : value;
     });
     // Dependents first leaves the old person available if a later write fails.

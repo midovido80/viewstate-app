@@ -130,7 +130,7 @@ test('read-only details load the exact route id and provide deterministic Person
   assert.equal(getRequirementDetailIdentity(['saved-id', 'ignored']), null, 'ambiguous deep link cannot select an arbitrary record');
   assert.equal(getRequirementDetailIdentity('new'), null);
   assert.equal(getRequirementDetailIdentity('  '), null);
-  assert.match(view, /useLocalSearchParams<\{ requirementId\?: string \| string\[\] \}>/);
+  assert.match(view, /useLocalSearchParams<\{ requirementId\?: string \| string\[\]; link\?: string \| string\[\] \}>/);
   assert.match(view, /useFocusEffect/);
   assert.match(view, /store\.getRequirement\(id\)/);
   assert.match(view, /\}, \[id, attempt\]\)\)/);

@@ -58,7 +58,8 @@ test('STRUCTURAL: Wanted Studio shows its prior transaction read-only and return
   assert.match(form, /studio-transaction-summary/);
   assert.match(form, /transactionLabel\(\)/);
   assert.match(form, /testID="studio-transaction-change"/);
-  assert.match(studio, /router\.replace\(\{\s*pathname: '\/capture\/transaction',\s*params: \{ mode: 'wanted', seekerId: personId \}/);
+  assert.match(studio, /const personId = selectedPersonId \|\| seekerParam/);
+  assert.match(studio, /params: \{ mode: 'wanted', \.\.\.\(personId \? \{ seekerId: personId \} : \{\}\) \}/);
   assert.match(studio, /if \(mode === 'wanted'\) return null/);
   assert.match(studio, /\{!editing \? \([\s\S]*testID="studio-transaction-change"[\s\S]*\) : null\}/);
   const review = studio.slice(studio.indexOf('const renderReview ='));

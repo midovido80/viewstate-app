@@ -541,12 +541,14 @@ export async function saveStudioRequirement(options: {
     || options.baseline.seekerId !== options.candidate.seekerId
   )) return { status: 'edit_conflict' };
 
-  try {
-    const person = await options.store.getPerson(options.candidate.seekerId);
-    if (!person) return { status: 'missing_person' };
-    if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
-  } catch {
-    return { status: 'storage_failure', retryAllowed: true };
+  if (options.candidate.seekerId !== undefined) {
+    try {
+      const person = await options.store.getPerson(options.candidate.seekerId);
+      if (!person) return { status: 'missing_person' };
+      if (!person.classifications?.includes('seeker')) return { status: 'non_seeker' };
+    } catch {
+      return { status: 'storage_failure', retryAllowed: true };
+    }
   }
 
   // Use the canonical save path for ownership, exact-ID resolution, and CAS

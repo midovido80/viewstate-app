@@ -8,7 +8,7 @@ const source = readFile(
   'utf8',
 );
 
-test('STRUCTURAL: Wanted identity gate precedes criteria and pinned routing checks the exact eligible Person', async () => {
+test('STRUCTURAL: optional Wanted identity precedes criteria and pinned routing checks the exact eligible Person', async () => {
   const studio = await source;
   const form = studio.slice(studio.indexOf('const renderForm ='), studio.indexOf('const reviewItem ='));
 
@@ -17,8 +17,8 @@ test('STRUCTURAL: Wanted identity gate precedes criteria and pinned routing chec
   assert.match(studio, /selectedPerson\.id === seekerParam/);
   assert.match(studio, /person\.classifications\.includes\('seeker'\)/);
   assert.match(studio, /result\.filter\(person => person\.classifications\.includes\('seeker'\)\)/);
-  assert.match(form, /\{mode === 'wanted' \? renderPersonSelector\(\) : null\}/);
-  assert.match(form, /mode === 'wanted' && !wantedIdentityReady \? null :/);
+  assert.match(form, /\{mode === 'wanted' && \(seekerParam \|\| editing\) \? renderPersonSelector\(\) : null\}/);
+  assert.doesNotMatch(form, /mode === 'wanted' && !wantedIdentityReady \? null :/);
   assert.match(form, /STUDIO_FORM_FIELD_ORDER\[mode\]\.map\(fieldId => renderCatalogField\(fieldId\)\)/);
   assert.ok(
     form.indexOf('renderPersonSelector()') < form.indexOf('STUDIO_FORM_FIELD_ORDER'),
@@ -122,7 +122,7 @@ test('STRUCTURAL: only Offered Studio exposes durable media and exact Maps contr
   assert.match(studio, /openPastedLocationLink/);
   assert.match(studio, /BackHandler\.addEventListener\('hardwareBackPress'/);
   assert.match(studio, /testID="studio-view-saved-property"/);
-  assert.match(studio, /testID="studio-view-saved-requirement"/);
+  assert.match(studio, /testID="studio-link-later"/);
   assert.match(studio, /pathname: '\/requirement\/\[requirementId\]'/);
   assert.match(studio, /testID="studio-home"/);
 });
