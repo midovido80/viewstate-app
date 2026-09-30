@@ -796,7 +796,7 @@ export default function StudioCaptureRoute() {
           setError(outcome.retryAllowed ? t('studio.save_failed') : t('studio.save_uncertain'));
         }
       } else {
-        const ownerId = baselineRequirement?.seekerId ?? selectedPersonId || undefined;
+        const ownerId = baselineRequirement?.seekerId ?? (selectedPersonId || undefined);
         const candidate = buildStudioRequirement(
           values,
           baselineRequirement?.id ?? draftRequirementId.current,
