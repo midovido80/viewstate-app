@@ -413,6 +413,8 @@ export default function PersonDetailScreen() {
   const primaryActionLabel = person.classifications.length > 1
     ? (language === 'ar' ? 'اختر الإجراء' : 'Choose action')
     : primaryActionTitle(person.classifications[0]);
+  const sourcedOnly = sourced.filter(({ property }) =>
+    !linked.some(linkedProperty => linkedProperty.core.id === property.core.id));
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -546,44 +548,51 @@ export default function PersonDetailScreen() {
             </View>
             {linked.map(property => {
               const summary = getPropertyCardSummary(property, cardSummaryFormatters);
+              const source = sourced.find(item => item.property.core.id === property.core.id)?.source;
               return (
               <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)} testID={`linked-property-${property.core.id}`} accessibilityRole="button">
                   <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{projectPropertyIntent(property, language).label} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
                   {summary.studioAreaLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.studioAreaLabel}</Text> : null}
-                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.valueLabel}</Text>
-                  <Text style={[styles.ltrText, { color: colors.mutedForeground }]}>{toEnglishDigits(property.core.id)}</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.valueLabel}{source ? ` · ${t(`source.role.${source.role}`)}` : ''}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => confirmUnlink(property.core.id)} testID={`unlink-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
                   <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('people.unlink')}</Text>
                 </TouchableOpacity>
+                {source ? (
+                  <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                    <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
               );
             })}
-            <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.sourced_properties')}</Text>
-            </View>
-            {sourced.length ? sourced.map(({ source, property }) => {
-              const summary = getPropertyCardSummary(property, cardSummaryFormatters);
-              return (
-              <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                <TouchableOpacity
-                  onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)}
-                  testID={`source-property-${property.core.id}`}
-                  accessibilityRole="button"
-                >
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{projectPropertyIntent(property, language).label} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
-                  {summary.studioAreaLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.studioAreaLabel}</Text> : null}
-                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.valueLabel} · {t(`source.role.${source.role}`)}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
-                  <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
-                </TouchableOpacity>
-              </View>
-              );
-            }) : (
-              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none_for_person')}</Text>
-            )}
+            {sourcedOnly.length ? (
+              <>
+                <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.sourced_properties')}</Text>
+                </View>
+                {sourcedOnly.map(({ source, property }) => {
+                  const summary = getPropertyCardSummary(property, cardSummaryFormatters);
+                  return (
+                  <View key={property.core.id} style={[styles.property, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/property/${encodeURIComponent(property.core.id)}` as never)}
+                      testID={`source-property-${property.core.id}`}
+                      accessibilityRole="button"
+                    >
+                      <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{projectPropertyIntent(property, language).label} · {summary.typeLabel}{summary.subtypeLabel ? ` · ${summary.subtypeLabel}` : ''} · {summary.areaLabel}</Text>
+                      {summary.studioAreaLabel ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.studioAreaLabel}</Text> : null}
+                      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{summary.valueLabel} · {t(`source.role.${source.role}`)}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => confirmSourceUnlink(property.core.id)} testID={`unlink-source-property-${property.core.id}`} accessibilityRole="button" style={[styles.unlinkButton, { borderColor: colors.destructive }]}>
+                      <Text style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}>{t('source.unlink')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  );
+                })}
+              </>
+            ) : null}
             <Button title={t('people.remove')} onPress={() => { if (!requirementReturnGuard) setDeleteOpen(true); }} disabled={busy || requirementReturnGuard} variant="outline" testID="person-remove" />
           </>
         )}
@@ -614,11 +623,11 @@ export default function PersonDetailScreen() {
               />
             ))}
           </View>
-          <TextInput value={propertySearch} onChangeText={value => void searchProperties(value)} placeholder={t('home.search')} placeholderTextColor={colors.mutedForeground} style={[inputStyle, styles.modalSearch]} testID="link-property-search" />
+          <TextInput value={propertySearch} onChangeText={value => void searchProperties(value)} placeholder={t('common.search')} placeholderTextColor={colors.mutedForeground} style={[inputStyle, styles.modalSearch]} testID="link-property-search" />
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {properties.filter(property => !linked.some(item => item.core.id === property.core.id)).map(property => (
-              <TouchableOpacity key={property.core.id} onPress={() => setSelectedProperty(property)} accessibilityRole="radio" accessibilityState={{ selected: selectedProperty?.core.id === property.core.id }} style={[styles.propertyChoice, { borderBottomColor: colors.border, backgroundColor: selectedProperty?.core.id === property.core.id ? colors.accent : 'transparent' }]} testID={`link-property-choice-${property.core.id}`}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
+              <TouchableOpacity key={property.core.id} onPress={() => setSelectedProperty(property)} accessibilityRole="radio" accessibilityState={{ checked: selectedProperty?.core.id === property.core.id }} style={[styles.propertyChoice, { borderBottomColor: colors.border, backgroundColor: selectedProperty?.core.id === property.core.id ? colors.primary : 'transparent' }]} testID={`link-property-choice-${property.core.id}`}>
+                <Text style={{ color: selectedProperty?.core.id === property.core.id ? colors.background : colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{t(`propertyType.${property.core.propertyType}` as keyof Translations)} · {areaName(property)}</Text>
               </TouchableOpacity>
             ))}
             {selectedProperty ? (

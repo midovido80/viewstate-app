@@ -17,6 +17,7 @@ import './studioFormModel.test.ts';
 import './studioSave.test.ts';
 import './requirementOwnership.test.ts';
 import './unassignedRequirementJourney.test.ts';
+import './presentationCleanup.test.ts';
 
 import {
   buildPropertySharePreview,

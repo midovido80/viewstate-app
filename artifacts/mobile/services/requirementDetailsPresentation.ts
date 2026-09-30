@@ -155,8 +155,17 @@ export function getRequirementDetailsRows(
     formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language));
   add('budget', 'budget.maximum', label('Maximum budget', 'الحد الأقصى للميزانية'),
     formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language));
-  add('notes', 'notes', label('Notes', 'ملاحظات'), requirement.notes.length ? requirement.notes : unspecified(language));
-  return rows;
+  if (requirement.notes.length) {
+    add('notes', 'notes', label('Notes', 'ملاحظات'), requirement.notes);
+  }
+
+  const hiddenValues = new Set([
+    unspecified(language),
+    words(language, 'None', 'لا يوجد'),
+  ]);
+  return rows.filter(row =>
+    row.field !== 'preferredAmenityExclusions'
+    && !hiddenValues.has(row.value));
 }
 
 function formatPreference(

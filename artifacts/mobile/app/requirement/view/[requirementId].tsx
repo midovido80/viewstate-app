@@ -217,9 +217,6 @@ export default function RequirementDetailsScreen() {
             <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: align }]}>
                 {requirementIntent?.label} · {t(`propertyType.${record.propertyType}`)}
             </Text>
-            <Text testID="requirement-details-id" selectable style={[styles.identifier, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: align }]}>
-              {record.id}
-            </Text>
             {renderOwnerState()}
           </View>
           {sections.map(section => {

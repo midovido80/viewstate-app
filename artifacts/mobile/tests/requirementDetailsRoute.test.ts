@@ -190,9 +190,8 @@ test('Studio catalog preferences are shown once with localized labels; absent Re
   for (const field of [
     'apartmentSubtype', 'studioRoomCount', 'bathroomsMinimum', 'centralAC',
     'hasKitchen', 'hasHall', 'hasParking', 'builtUpAreaSquareMeters', 'furnishing',
-    'swimmingPool', 'gym', 'seaView', 'driverRoom', 'preferredAmenities',
-    'preferredAmenityExclusions', 'rentalPeriodId', 'occupancy',
-    'preferredAreaMode', 'preferredAreaIds', 'budget.minimum', 'budget.maximum', 'notes',
+    'swimmingPool', 'gym', 'seaView', 'rentalPeriodId', 'occupancy',
+    'preferredAreaMode', 'preferredAreaIds', 'budget.minimum', 'budget.maximum',
   ]) assert.equal(english.filter(item => item.field === field).length, 1, `${field} appears once`);
   assert.equal(row(rent, 'studioRoomCount').value, '1');
   assert.equal(row(rent, 'bathroomsMinimum').value, '0');
@@ -207,9 +206,11 @@ test('Studio catalog preferences are shown once with localized labels; absent Re
   assert.equal(row(rent, 'builtUpAreaSquareMeters', 'ar').value, '0');
   assert.equal(row(rent, 'preferredAreaIds').value, 'Not applicable — all Kuwait');
   assert.equal(row(rent, 'swimmingPool').value, 'No');
-  assert.equal(row(rent, 'driverRoom').value, 'Not specified');
-  assert.equal(row(rent, 'preferredAmenities').value, 'Not specified');
-  assert.equal(row(rent, 'preferredAmenityExclusions').value, 'Not specified');
+  for (const hidden of ['driverRoom', 'preferredAmenities', 'preferredAmenityExclusions', 'notes']) {
+    assert.equal(english.some(item => item.field === hidden), false, `${hidden} is hidden when it has no visible value`);
+  }
+  const withExcludedAmenity = rowsFor({ ...rent, preferredAmenityExclusions: ['garden'] });
+  assert.equal(withExcludedAmenity.some(item => item.field === 'preferredAmenityExclusions'), false, 'excluded amenities remain internal');
   assert.deepEqual(rent, rentBefore);
 
   const buy = wantedStudio('buy', 'buy-studio');
@@ -224,6 +225,6 @@ test('Studio catalog preferences are shown once with localized labels; absent Re
   for (const notApplicable of ['rentalPeriodId', 'occupancy', 'swimmingPool', 'gym', 'seaView']) {
     assert.equal(buyFields.includes(notApplicable), false, `${notApplicable} is not shown for Studio Buy`);
   }
-  assert.equal(row(buy, 'driverRoom').value, 'Not specified', 'absence is not presented as false');
+  assert.equal(buyFields.includes('driverRoom'), false, 'an unspecified preference is not rendered');
   assert.deepEqual(buy, buyBefore);
 });

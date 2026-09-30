@@ -1646,7 +1646,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 </View>
               )}
 
-              {(!offeredStudio || detailMapsHref || property.locationEnrichment?.coordinates) ? (
+              {(detailMapsHref || property.locationEnrichment?.coordinates) ? (
               <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                 {Platform.OS === 'web' ? detailMapsHref ? (
                   <a
@@ -1686,13 +1686,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     </Text>
                   </TouchableOpacity>
                 )}
-                {(mapsActionError || (Platform.OS === 'web' && !detailMapsHref)) ? (
+                {mapsActionError ? (
                   <Text
                     accessibilityRole="alert"
                     testID="property-maps-error"
                     style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium, marginTop: 10 }]}
                   >
-                    {mapsActionError || t('detail.maps_unavailable')}
+                    {mapsActionError}
                   </Text>
                 ) : null}
               </View>
