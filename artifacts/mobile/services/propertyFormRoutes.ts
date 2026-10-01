@@ -2,6 +2,7 @@ import {
   APARTMENT_SUBTYPES,
   PROPERTY_TYPES,
   type ApartmentSubtype,
+  type FloorUse,
   type PropertyType,
   type Transaction,
 } from '@workspace/property-domain';
@@ -14,6 +15,7 @@ export interface PropertyFormSelection {
   readonly transaction?: Transaction;
   readonly propertyType: PropertyType;
   readonly apartmentSubtype?: PropertyFormSubtype;
+  readonly floorUse?: FloorUse;
   readonly seekerId?: string;
   readonly linkPersonId?: string;
   readonly sourceRole?: string;
@@ -51,6 +53,7 @@ function getSelectionParams(selection: PropertyFormSelection): Record<string, st
     mode: selection.mode,
     propertyType: selection.propertyType,
   };
+  if (selection.propertyType === 'floor' && selection.floorUse) params.floorUse = selection.floorUse;
   if (selection.transaction) params.transaction = selection.transaction;
   if (selection.seekerId) params.seekerId = selection.seekerId;
   if (selection.linkPersonId) params.linkPersonId = selection.linkPersonId;

@@ -18,6 +18,7 @@ import './studioSave.test.ts';
 import './requirementOwnership.test.ts';
 import './unassignedRequirementJourney.test.ts';
 import './presentationCleanup.test.ts';
+import './propertySectorSelection.test.ts';
 
 import {
   buildPropertySharePreview,

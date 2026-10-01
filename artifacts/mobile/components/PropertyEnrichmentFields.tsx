@@ -42,6 +42,7 @@ export function PropertyEnrichmentFields({
   onInvalidQuickPickChange,
   amenityRenderExtra,
   requireExactValue = false,
+  hideFloorUse = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -50,6 +51,7 @@ export function PropertyEnrichmentFields({
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
   amenityRenderExtra?: React.ReactNode;
   requireExactValue?: boolean;
+  hideFloorUse?: boolean;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -62,7 +64,7 @@ export function PropertyEnrichmentFields({
     && definition.field !== 'builtUpAreaSquareMeters'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
-  const ordered = propertyType === 'floor'
+  const ordered = propertyType === 'floor' && !hideFloorUse
     ? [getApplicablePropertyFormFields(propertyType).find(item => item.field === 'floorUse')!, ...definitions]
     : propertyType === 'apartment'
       ? [...definitions].sort((left, right) => {

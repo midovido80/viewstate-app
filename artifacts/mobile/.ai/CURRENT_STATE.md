@@ -332,3 +332,11 @@ Scope: The frozen source revision changes only `artifacts/mobile/app/person/[per
 Review: The read-only “FW01.1 — Post-Push CTO Verification, Android/iOS Compatibility Impact & Source Freeze Readiness” report concluded “FW01.1 SOURCE FREEZE READY — FOUNDER DECISION REQUIRED.”
 Boundaries: This governance documentation does not merge FW01.1 source code into `main`, does not modify the frozen branch or commit, and authorizes no product-source change. Android/iOS native runtime acceptance, physical-device acceptance, and full FW01 acceptance remain open and are not completed. No product-code merge, release, tag, native execution, or FW02 work is authorized. Any change to the frozen revision or scope requires new explicit Founder approval.
 State: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.
+
+### Session: 2026-10-01 (Property sector selection)
+Authorization: Founder approved implementation and work-branch publication after the bounded impact review in conversation.
+Baseline: Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`; branch `work/property-sector-selection`.
+Scope: Equal-width All/Residential/Commercial filters above property types, All by default, selected sector toggles back to All. Floor use is selected before its form and passed to existing Offered/Wanted contracts. Direct residential Duplex uses the existing Apartment/duplex storage and generic form. Commercial Duplex and new form fields remain deferred.
+Compatibility: No schema, migration, hydration rewrite, dependency, matching or media-storage changes. Existing floor transition confirmation remains required before removing incompatible draft values.
+Verification: Domain tests, focused sector tests and whitespace checks run locally; complete Mobile/TypeScript gates and visual/device acceptance remain subject to their recorded results. No acceptance or deployment is implied by this entry.
+State: Work-branch implementation; Pilot promotion requires Founder acceptance.

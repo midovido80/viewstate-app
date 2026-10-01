@@ -1217,3 +1217,7 @@ Android/iOS native runtime acceptance, physical-device acceptance, and full FW01
 Any change to the frozen revision, source scope, or the three frozen files requires new explicit Founder approval under the mandatory governance lifecycle.
 
 Final state: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.
+
+## Founder decision — 2026-10-01: Property sector selection
+Three equal-width buttons (All, Residential, Commercial) precede the type list. All is default; tapping the active Residential/Commercial filter returns to All. Floor is shared and takes its use from the selected sector; All requires selecting Floor use before proceeding. Do not repeat that choice in the new Floor form. Preserve existing stored floorUse contracts and older records.
+Duplex is directly selectable under Residential/All using propertyType=apartment and apartmentSubtype=duplex. Commercial Duplex and a new dedicated Duplex form are deferred. No new tool or dependency is authorized within this feature package.

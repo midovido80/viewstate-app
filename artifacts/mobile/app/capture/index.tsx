@@ -917,6 +917,7 @@ export default function CaptureWorkflow() {
                 propertyType={draft.propertyType ?? 'other_built_property'}
                 values={captureDetails}
                 requireExactValue
+                hideFloorUse={Boolean(captureDetails.floorUse)}
                 category={demoCategory}
                 metadata={demoMetadata}
                 nearby={nearby}

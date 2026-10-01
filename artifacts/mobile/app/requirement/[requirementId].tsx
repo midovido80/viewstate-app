@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { parseFloorUse } from '@/services/propertySectorSelection';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -102,13 +103,14 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
-  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam } = useLocalSearchParams<{
+  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam, floorUse: floorUseParam } = useLocalSearchParams<{
     requirementId: string | string[];
     seekerId?: string | string[];
     edit?: string | string[];
     purpose?: string | string[];
     propertyType?: string | string[];
     apartmentSubtype?: string | string[];
+    floorUse?: string | string[];
   }>();
   const routeRequirementId = Array.isArray(requirementId) ? requirementId[0] : requirementId;
   const editing = routeRequirementId !== 'new';
@@ -120,6 +122,7 @@ export default function RequirementEditor() {
   const routePurpose = Array.isArray(purposeParam) ? purposeParam[0] : purposeParam;
   const routePropertyType = Array.isArray(propertyTypeParam) ? propertyTypeParam[0] : propertyTypeParam;
   const routeApartmentSubtype = Array.isArray(apartmentSubtypeParam) ? apartmentSubtypeParam[0] : apartmentSubtypeParam;
+  const initialFloorUse = parseFloorUse(Array.isArray(floorUseParam) ? floorUseParam[0] : floorUseParam);
   const initialPurpose: RequirementPurpose = routePurpose === 'buy' || routePurpose === 'rent' ? routePurpose : 'rent';
   const initialPropertyType: PropertyType = PROPERTY_TYPES.includes(routePropertyType as PropertyType)
     ? routePropertyType as PropertyType
@@ -140,7 +143,7 @@ export default function RequirementEditor() {
   const [purpose, setPurpose] = useState<RequirementPurpose>(initialPurpose);
   const [propertyType, setPropertyType] = useState<PropertyType>(initialPropertyType);
   const [apartmentSubtype, setApartmentSubtype] = useState<GenericRequirementApartmentSubtype | undefined>(initialApartmentSubtype);
-  const [floorUse, setFloorUse] = useState<FloorUse | undefined>();
+  const [floorUse, setFloorUse] = useState<FloorUse | undefined>(initialPropertyType === 'floor' ? initialFloorUse : undefined);
   const [areaMode, setAreaMode] = useState<AreaMode | undefined>();
   const [areas, setAreas] = useState<string[]>([]);
   const [bedrooms, setBedrooms] = useState('');
@@ -187,7 +190,7 @@ export default function RequirementEditor() {
     setBaseline(null); setRecordLoaded(!editing); setError(''); setStep(startsAtSpecifications ? 3 : 0); setShowCatalogBackControls(false); setInvalidCatalogFields(new Set());
     confirmedRequirement.current = null; uncertainRequirement.current = null; editConflictRequirement.current = null; setRecoveryAction(null);
     draftId.current = editing ? routeRequirementId : generateDomainId();
-    setPurpose(initialPurpose); setPropertyType(initialPropertyType); setApartmentSubtype(initialApartmentSubtype); setFloorUse(undefined); setAreaMode(undefined); setAreas([]);
+    setPurpose(initialPurpose); setPropertyType(initialPropertyType); setApartmentSubtype(initialApartmentSubtype); setFloorUse(initialPropertyType === 'floor' ? initialFloorUse : undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
     setDriverRoom(false); setCatalog([...getGenericRequirementApartmentSubtypePreference(initialApartmentSubtype)]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
     if (!editing) return;
@@ -227,7 +230,7 @@ export default function RequirementEditor() {
       setRecordLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [editing, routeRequirementId, ownerFromRoute, initialPurpose, initialPropertyType, initialApartmentSubtype, startsAtSpecifications]);
+  }, [editing, routeRequirementId, ownerFromRoute, initialPurpose, initialPropertyType, initialApartmentSubtype, initialFloorUse, startsAtSpecifications]);
 
   const editRequested = (Array.isArray(edit) ? edit[0] : edit) === '1';
   useEffect(() => {
@@ -310,7 +313,7 @@ export default function RequirementEditor() {
     const hasCore = bedrooms || bathrooms || masterBedrooms || livingRooms || driverRoom;
     const nextHasCentralAC = getApplicablePropertyFormFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).some(field => field.field === 'hasCentralAC');
     const removedNames = [...(!nextResidential ? [bedrooms && 'Bedrooms', bathrooms && 'Bathrooms', masterBedrooms && 'Master bedrooms', livingRooms && 'Living rooms', driverRoom && 'Driver room'].filter(Boolean) : []), ...removedCatalog.map(item => item.field), ...(!nextResidential ? [...amenities, ...excludedAmenities, ...(driverRoom ? ['driverRoom'] : []), ...services] : []), ...(centralACPreference !== undefined && !nextHasCentralAC ? ['centralAC'] : [])].map(value => localizedPreferenceName(String(value), language, next, next === 'floor' ? floorUse : undefined)).filter(Boolean);
-    const apply = () => { setPropertyType(next); if (next !== 'floor') setFloorUse(undefined); if (next !== 'apartment') setApartmentSubtype(undefined); const allowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).map(item => item.field)); if (!(next === 'floor' && floorUse === undefined)) setCatalog(current => current.filter(item => allowed.has(item.field))); if (!nextResidential) { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } if (!nextHasCentralAC) setCentralACPreference(undefined); };
+    const apply = () => { setPropertyType(next); if (next !== 'floor') setFloorUse(undefined); else if (initialFloorUse) setFloorUse(initialFloorUse); if (next !== 'apartment') setApartmentSubtype(undefined); const allowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).map(item => item.field)); if (!(next === 'floor' && floorUse === undefined)) setCatalog(current => current.filter(item => allowed.has(item.field))); if (!nextResidential) { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } if (!nextHasCentralAC) setCentralACPreference(undefined); };
     if ((hasCore && !nextResidential) || removedNames.length) {
       const message = language === 'ar' ? `سيؤدي التغيير إلى إزالة مواصفات غير متوافقة: ${removedNames.join('، ')}` : `Changing type removes incompatible preferences: ${removedNames.join(', ')}`;
       if (typeof window !== 'undefined' && window.confirm) { if (window.confirm(message)) apply(); } else Alert.alert(t('transition.requirement.title'), message, [{ text: t('capture.cancel') }, { text: t('transition.remove_confirm'), onPress: apply }]);
@@ -737,7 +740,7 @@ export default function RequirementEditor() {
        </View>}
      </View> : null}
      {step === 0 && <><Text style={styles.heading}>{t('requirements.purpose')}</Text><View style={styles.wrap}>{(['rent', 'buy'] as const).map(value => <ChoiceChip key={value} label={t(`requirements.purpose.${value}`)} selected={purpose === value} onPress={() => changePurpose(value)} testID={`requirement-purpose-${value}`} role="radio" />)}</View></>}
-   {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><View style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</View>{showCatalogBackControls && propertyType === 'apartment' && <><Text style={styles.heading}>{label('Apartment subtype', 'نوع الشقة')}</Text><View style={styles.wrap}>{(['standard_apartment', 'duplex'] as const).map(value => <ChoiceChip key={value} label={apartmentSubtypeLabel(value)} selected={apartmentSubtype === value} onPress={() => changeApartmentSubtype(value)} testID={`requirement-apartment-subtype-${value}`} role="radio" />)}</View></>}{propertyType === 'floor' && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><View style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</View></>}</>}
+   {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><View style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</View>{showCatalogBackControls && propertyType === 'apartment' && <><Text style={styles.heading}>{label('Apartment subtype', 'نوع الشقة')}</Text><View style={styles.wrap}>{(['standard_apartment', 'duplex'] as const).map(value => <ChoiceChip key={value} label={apartmentSubtypeLabel(value)} selected={apartmentSubtype === value} onPress={() => changeApartmentSubtype(value)} testID={`requirement-apartment-subtype-${value}`} role="radio" />)}</View></>}{propertyType === 'floor' && !initialFloorUse && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><View style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</View></>}</>}
     {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><View style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></View>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
      {step === 3 && <View testID="requirement-core-step">
        <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>

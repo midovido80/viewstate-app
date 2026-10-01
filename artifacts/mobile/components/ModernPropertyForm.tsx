@@ -24,9 +24,10 @@ export interface ModernPropertyFormProps {
   onNearbyChange?: (nearby: readonly string[]) => void;
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
   requireExactValue?: boolean;
+  hideFloorUse?: boolean;
 }
 
-export function ModernPropertyForm({ recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false }: ModernPropertyFormProps) {
+export function ModernPropertyForm({ recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false }: ModernPropertyFormProps) {
   return (
     <View>
       <ModernPropertyFields
@@ -36,6 +37,7 @@ export function ModernPropertyForm({ recordScopeKey, propertyType, values, onCha
         onChange={(field, value) => onChange(field, value)}
         onInvalidQuickPickChange={onInvalidQuickPickChange}
         requireExactValue={requireExactValue}
+        hideFloorUse={hideFloorUse}
         amenityRenderExtra={
           category && onDemoChange ? (
             <View style={{ gap: 10, marginTop: 8 }}>

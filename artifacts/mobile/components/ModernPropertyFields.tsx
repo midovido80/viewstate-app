@@ -17,6 +17,7 @@ export function ModernPropertyFields({
   onInvalidQuickPickChange,
   amenityRenderExtra,
   requireExactValue = false,
+  hideFloorUse = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -25,6 +26,7 @@ export function ModernPropertyFields({
   onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
   amenityRenderExtra?: React.ReactNode;
   requireExactValue?: boolean;
+  hideFloorUse?: boolean;
 }) {
   return (
     <PropertyEnrichmentFields
@@ -35,6 +37,7 @@ export function ModernPropertyFields({
       onInvalidQuickPickChange={onInvalidQuickPickChange}
       amenityRenderExtra={amenityRenderExtra}
       requireExactValue={requireExactValue}
+      hideFloorUse={hideFloorUse}
     />
   );
 }

@@ -23,7 +23,8 @@ interface RouteHarness {
     readonly captureDetails: Record<string, unknown>;
     updateDraft: (draft: Record<string, unknown>) => boolean;
     updateCaptureDetails: (details: Record<string, unknown>) => boolean;
-    replaceCaptureDetails: (details: Record<string, unknown>) => void;
+    replaceCaptureDetails: (details: Record<string, unknown>) => boolean;
+    getCurrentCaptureDetails: () => Record<string, unknown>;
   };
 }
 
@@ -52,6 +53,8 @@ const stubSources = new Map<string, string>([
   ['react-native', `
     export const View = 'View';
     export const ScrollView = 'ScrollView';
+    export const TouchableOpacity = 'TouchableOpacity';
+    export const Modal = 'Modal';
     export const Text = 'Text';
     export const StyleSheet = { create: value => value };
   `],
@@ -80,6 +83,7 @@ const stubSources = new Map<string, string>([
   ['@workspace/property-domain', `
     export const PROPERTY_TYPES = ['whole_building', 'commercial_complex', 'apartment', 'floor', 'house', 'villa', 'office', 'shop', 'warehouse', 'chalet', 'other_built_property'];
     export const APARTMENT_SUBTYPES = ['studio', 'standard_apartment', 'duplex'];
+    export { PROPERTY_DETAIL_FIELD_DEFINITIONS } from '${new URL('../../../lib/property-domain/src/taxonomy.ts', import.meta.url).href}';
   `],
 ]);
 
@@ -119,6 +123,7 @@ const routeHarness = (params: RouteHarness['params'] = {}): RouteHarness => {
   harness.capture = {
     draft: {},
     get captureDetails() { return harness.captureDetails; },
+    getCurrentCaptureDetails: () => harness.captureDetails,
     updateDraft: draft => {
       harness.draftUpdates.push(draft);
       return true;
@@ -131,6 +136,7 @@ const routeHarness = (params: RouteHarness['params'] = {}): RouteHarness => {
     replaceCaptureDetails: details => {
       harness.detailUpdates.push(details);
       harness.captureDetails = details;
+      return true;
     },
   };
   return harness;
@@ -396,7 +402,7 @@ test('production property type route clears only subtype when changing away from
 
 test('production Offered Floor selection opens the existing floor form and preserves only shared capture data', async () => {
   const route = await import('../app/capture/property-type.tsx');
-  const harness = routeHarness({ mode: 'offered', transaction: 'rent', propertyType: 'floor', apartmentSubtype: 'studio' });
+  const harness = routeHarness({ mode: 'offered', transaction: 'rent', propertyType: 'floor', apartmentSubtype: 'studio', sector: 'commercial' });
   harness.capture.draft = { propertyType: 'apartment', transaction: 'rent' };
   harness.captureDetails = {
     apartmentSubtype: 'studio',
@@ -410,12 +416,83 @@ test('production Offered Floor selection opens the existing floor form and prese
 
   assert.deepEqual(harness.draftUpdates, [{ propertyType: 'floor', apartmentSubtype: undefined, transaction: 'rent' }]);
   assert.deepEqual(harness.captureDetails, {
+    floorUse: 'commercial',
     areaSquareMeters: 120,
     mapsLink: 'https://maps.example.test/?q=1',
     attachments: [{ id: 'private-evidence' }],
   });
   assert.deepEqual(harness.pushes[0], {
     pathname: '/capture',
-    params: { mode: 'offered', transaction: 'rent', propertyType: 'floor' },
+    params: { mode: 'offered', transaction: 'rent', propertyType: 'floor', floorUse: 'commercial' },
   });
+});
+
+
+test('production sector filters toggle back to All and clear a hidden type', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  const harness = routeHarness({ mode: 'wanted', transaction: 'rent' });
+  let screen = renderRoute(route, harness);
+  assert.equal((findByTestId(screen, 'property-sector-all').props.accessibilityState as { selected: boolean }).selected, true);
+  (findByTestId(screen, 'select-type-villa').props.onSelect as () => void)();
+  screen = renderRoute(route, harness);
+  (findByTestId(screen, 'property-sector-commercial').props.onPress as () => void)();
+  screen = renderRoute(route, harness);
+  assert.throws(() => findByTestId(screen, 'select-type-villa'));
+  assert.throws(() => findByTestId(screen, 'select-type-duplex'));
+  assert.equal(findByTestId(screen, 'btn-next').props.disabled, true);
+  (findByTestId(screen, 'property-sector-commercial').props.onPress as () => void)();
+  screen = renderRoute(route, harness);
+  assert.equal((findByTestId(screen, 'property-sector-all').props.accessibilityState as { selected: boolean }).selected, true);
+  findByTestId(screen, 'select-type-duplex');
+});
+
+test('production Wanted Floor gets its use before the form for both transactions', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  for (const transaction of ['sale', 'rent']) for (const sector of ['commercial', 'residential']) {
+    const harness = routeHarness({ ...flowContext, transaction, sector });
+    (findByTestId(renderRoute(route, harness), 'select-type-floor').props.onSelect as () => void)();
+    const screen = renderRoute(route, harness);
+    assert.throws(() => findByTestId(screen, 'property-floor-use-selection'));
+    (findByTestId(screen, 'btn-next').props.onPress as () => void)();
+    assert.equal(harness.pushes[0].params?.floorUse, sector);
+    assert.equal(harness.pushes[0].params?.seekerId, flowContext.seekerId);
+    assert.equal(harness.pushes[0].params?.purpose, transaction === 'sale' ? 'buy' : 'rent');
+  }
+});
+
+test('production All requires a Floor use before continuing', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  const harness = routeHarness({ mode: 'wanted', transaction: 'rent' });
+  (findByTestId(renderRoute(route, harness), 'select-type-floor').props.onSelect as () => void)();
+  let screen = renderRoute(route, harness);
+  assert.equal(findByTestId(screen, 'btn-next').props.disabled, true);
+  (findByTestId(screen, 'select-floor-use-commercial').props.onSelect as () => void)();
+  screen = renderRoute(route, harness);
+  (findByTestId(screen, 'btn-next').props.onPress as () => void)();
+  assert.equal(harness.pushes[0].params?.floorUse, 'commercial');
+});
+
+test('production direct Duplex bypasses the Apartment subtype page', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  const harness = routeHarness(flowContext);
+  (findByTestId(renderRoute(route, harness), 'select-type-duplex').props.onSelect as () => void)();
+  (findByTestId(renderRoute(route, harness), 'btn-next').props.onPress as () => void)();
+  assert.equal(harness.pushes[0].pathname, '/requirement/new');
+  assert.equal(harness.pushes[0].params?.propertyType, 'apartment');
+  assert.equal(harness.pushes[0].params?.apartmentSubtype, 'duplex');
+});
+
+test('production sector Floor transition preserves the old draft until confirmation', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  const harness = routeHarness({ mode: 'offered', transaction: 'rent', sector: 'commercial', propertyType: 'floor' });
+  harness.capture.draft = { propertyType: 'floor', transaction: 'rent' };
+  harness.captureDetails = { floorUse: 'residential', bedroomCount: '3', mapsLink: 'https://example.test/map' };
+  (findByTestId(renderRoute(route, harness), 'btn-next').props.onPress as () => void)();
+  assert.equal(harness.pushes.length, 0);
+  assert.equal(harness.captureDetails.bedroomCount, '3');
+  (findByTestId(renderRoute(route, harness), 'sector-floor-transition-confirm').props.onPress as () => void)();
+  assert.equal(harness.captureDetails.floorUse, 'commercial');
+  assert.equal(harness.captureDetails.bedroomCount, undefined);
+  assert.equal(harness.captureDetails.mapsLink, 'https://example.test/map');
+  assert.equal(harness.pushes[0].pathname, '/capture');
 });
