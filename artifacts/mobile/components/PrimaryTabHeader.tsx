@@ -24,8 +24,8 @@ export function PrimaryTabHeader({ title }: PrimaryTabHeaderProps) {
         </Text>
       </View>
       <View style={[styles.searchContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <TouchableOpacity 
-          style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.2)', flexDirection: isRTL ? 'row-reverse' : 'row' }]} 
+        <TouchableOpacity
+          style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.2)', flexDirection: isRTL ? 'row-reverse' : 'row' }]}
           onPress={() => router.push('/search' as never)}
           activeOpacity={0.7}
           accessibilityRole="button"

@@ -20,7 +20,7 @@ export default function MoreScreen() {
         <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
           {t('more.language')}
         </Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
           onPress={toggleLanguage}
         >
