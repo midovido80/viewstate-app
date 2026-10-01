@@ -140,7 +140,7 @@ export default function PropertyTypeScreen() {
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {t('propertyType.title')}
         </Text>
-        <View style={[styles.sectors, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <View style={[styles.sectors, { direction: isRTL ? 'rtl' : 'ltr', flexDirection: 'row' }]}>
           {(['all', 'residential', 'commercial'] as const).map(value => (
             <TouchableOpacity key={value} testID={`property-sector-${value}`} accessibilityRole="button" accessibilityState={{ selected: sector === value }} onPress={() => chooseSector(value)} style={[styles.sector, { backgroundColor: sector === value ? colors.primary : colors.card, borderColor: sector === value ? colors.primary : colors.border }]}>
               <Text style={{ color: sector === value ? colors.primaryForeground : colors.foreground, fontFamily: fonts.semiBold }}>{value === 'all' ? (language === 'ar' ? 'الكل' : 'All') : value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}</Text>
