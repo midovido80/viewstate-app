@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -423,9 +424,9 @@ export default function PersonDetailScreen() {
           onPress={navigateBack}
           testID="person-detail-back"
           accessibilityRole="button"
-          style={[styles.headerSide, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}
+          style={[styles.headerSide, navigationButtonStyle]}
         >
-          <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
+          <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
             {t(mode === 'edit' ? 'capture.cancel' : 'capture.back')}
           </Text>
         </TouchableOpacity>
@@ -434,11 +435,11 @@ export default function PersonDetailScreen() {
         </Text>
         {mode === 'detail' ? (
           <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <TouchableOpacity onPress={beginEdit} testID="person-edit" accessibilityRole="button" style={styles.headerAction}>
-              <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('detail.edit')}</Text>
+            <TouchableOpacity onPress={beginEdit} testID="person-edit" accessibilityRole="button" style={[styles.headerAction, navigationButtonStyle]}>
+              <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('detail.edit')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.replace('/' as never)} testID="person-home" accessibilityRole="button" style={styles.headerAction}>
-              <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('home.title')}</Text>
+            <TouchableOpacity onPress={() => router.replace('/' as never)} testID="person-home" accessibilityRole="button" style={[styles.headerAction, navigationButtonStyle]}>
+              <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }}>{t('home.title')}</Text>
             </TouchableOpacity>
           </View>
         ) : <View style={styles.headerSide} />}
@@ -729,9 +730,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 20 },
   header: { minHeight: 60, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { flex: 2, fontSize: 20, textAlign: 'center' },
-  headerSide: { flex: 1, minWidth: 0 },
-  headerActions: { flex: 1.5, alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  headerTitle: { flex: 1, fontSize: 16, textAlign: 'center' },
+  headerSide: { minWidth: 64 },
+  headerActions: { alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
   headerAction: { minHeight: 44, justifyContent: 'center' },
   content: { padding: 20, gap: 14 },
   name: { fontSize: 28 },

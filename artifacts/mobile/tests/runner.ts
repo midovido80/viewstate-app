@@ -19,6 +19,7 @@ import './requirementOwnership.test.ts';
 import './unassignedRequirementJourney.test.ts';
 import './presentationCleanup.test.ts';
 import './propertySectorSelection.test.ts';
+import './captureBackNavigation.test.ts';
 
 import {
   buildPropertySharePreview,

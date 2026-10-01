@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +31,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
   const { isRTL, t, fonts } = useI18n();
   const { resetDraft } = useCapture();
   const [cancelVisible, setCancelVisible] = useState(false);
+  const [homeExit, setHomeExit] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const currentStep = step;
   const showProgress = currentStep !== undefined;
@@ -37,6 +39,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
   const showBack = Boolean(onBack || title || (currentStep && currentStep > 1));
 
   const handleCancel = () => {
+    setHomeExit(false);
     if (onCancel) {
       onCancel();
       return;
@@ -53,6 +56,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
   const handleKeepDraftAndExit = () => {
     setCancelVisible(false);
     router.dismissAll();
+    if (homeExit) router.replace('/' as never);
   };
 
   const handleDiscard = async () => {
@@ -63,6 +67,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
       await resetDraft();
       setCancelVisible(false);
       router.dismissAll();
+      if (homeExit) router.replace('/' as never);
     } catch (error) {
       console.error('Failed to discard draft:', error);
       Alert.alert(t('errors.draft_read_title'), t('errors.draft_reset'));
@@ -74,22 +79,23 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
   return (
     <View style={{ paddingTop: insets.top, backgroundColor: colors.background }}>
       <View style={[styles.container, { borderBottomColor: colors.border }]}>
-        <View style={[styles.controls, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <View style={[styles.controls, { direction: isRTL ? 'rtl' : 'ltr', flexDirection: 'row' }]}>
           <View style={styles.side}>
             {showBack && (
               <TouchableOpacity
                 onPress={handleBack}
-                style={[styles.iconButton, isRTL ? styles.iconButtonRTL : styles.iconButtonLTR]}
+                style={[styles.iconButton, navigationButtonStyle, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]}
                 testID="capture-back"
                 accessibilityRole="button"
                 accessibilityLabel={t('capture.back')}
               >
-                <Feather name={isRTL ? "chevron-right" : "chevron-left"} size={28} color={colors.foreground} />
+                <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.center}>
+            {showProgress ? <TouchableOpacity onPress={() => { setHomeExit(true); setCancelVisible(true); }} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('home.title')} testID="capture-home"><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text></TouchableOpacity> : null}
             {!showProgress && title ? (
               <Text
                 numberOfLines={1}

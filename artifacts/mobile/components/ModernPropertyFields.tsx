@@ -18,6 +18,7 @@ export function ModernPropertyFields({
   amenityRenderExtra,
   requireExactValue = false,
   hideFloorUse = false,
+  hideApartmentSubtype = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -27,6 +28,7 @@ export function ModernPropertyFields({
   amenityRenderExtra?: React.ReactNode;
   requireExactValue?: boolean;
   hideFloorUse?: boolean;
+  hideApartmentSubtype?: boolean;
 }) {
   return (
     <PropertyEnrichmentFields
@@ -38,6 +40,7 @@ export function ModernPropertyFields({
       amenityRenderExtra={amenityRenderExtra}
       requireExactValue={requireExactValue}
       hideFloorUse={hideFloorUse}
+      hideApartmentSubtype={hideApartmentSubtype}
     />
   );
 }

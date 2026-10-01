@@ -43,6 +43,7 @@ export function PropertyEnrichmentFields({
   amenityRenderExtra,
   requireExactValue = false,
   hideFloorUse = false,
+  hideApartmentSubtype = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -52,6 +53,7 @@ export function PropertyEnrichmentFields({
   amenityRenderExtra?: React.ReactNode;
   requireExactValue?: boolean;
   hideFloorUse?: boolean;
+  hideApartmentSubtype?: boolean;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -59,6 +61,7 @@ export function PropertyEnrichmentFields({
   const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined);
   const definitions = applicableDefinitions.filter(definition =>
     definition.field !== 'floorUse'
+    && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')
     && definition.group !== 'amenity'
     && definition.field !== 'plotAreaSquareMeters'
     && definition.field !== 'builtUpAreaSquareMeters'

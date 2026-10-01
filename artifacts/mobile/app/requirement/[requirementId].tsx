@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { parseFloorUse } from '@/services/propertySectorSelection';
@@ -364,6 +365,15 @@ export default function RequirementEditor() {
   };
   const previousStep = () => {
     setError('');
+    if (!editing && hasExplicitCatalogSelection && step === 3) {
+      if (router.canGoBack()) router.back();
+      else router.replace({ pathname: '/capture/property-type', params: {
+        mode: 'wanted', transaction: purpose === 'buy' ? 'sale' : 'rent',
+        propertyType, ...(ownerFromRoute ? { seekerId: ownerFromRoute } : {}),
+        ...(floorUse ? { sector: floorUse, floorUse } : {}),
+      } } as never);
+      return;
+    }
     if (startsAtSpecifications && step === 3) {
       setShowCatalogBackControls(true);
       setStep(1);
@@ -722,7 +732,7 @@ export default function RequirementEditor() {
     );
   }
 
-  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/people' as never)}><Text style={{ color: colors.primary }}>{t('capture.cancel')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
+  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => step > (startsAtSpecifications ? 3 : 0) ? previousStep() : router.canGoBack() ? router.back() : router.replace('/people' as never)} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('capture.back')}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
      {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
        {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
        {recoveryAction && recoveryAction !== 'edit_conflict' && <View style={styles.recoveryActions}>

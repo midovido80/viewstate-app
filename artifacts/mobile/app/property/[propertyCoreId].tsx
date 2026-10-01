@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
@@ -1327,11 +1328,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               accessibilityRole="button"
               accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'}
               testID="property-home-action"
-              style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}
+              style={[navigationButtonStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 6 }]}
             >
-              <Feather name="home" size={22} color={colors.primary} />
-              <Text style={{ fontFamily: fonts.bold, fontSize: 18, color: colors.foreground }}>ViewState</Text>
-              <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.primary }}>
+              <Feather name="home" size={22} color={navigationButtonTextStyle.color} />
+
+              <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: navigationButtonTextStyle.color }}>
                 {language === 'ar' ? 'الرئيسية' : 'Home'}
               </Text>
             </TouchableOpacity>
@@ -1357,13 +1358,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 href={getPropertyDetailBackRoute()}
                 aria-label={t('capture.back')}
                 data-testid="property-detail-back"
-                style={{ flex: 1, display: 'flex', justifyContent: isRTL ? 'flex-start' : 'flex-end', color: colors.foreground, textDecoration: 'none' }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 64, padding: '8px 12px', borderRadius: 10, backgroundColor: navigationButtonStyle.backgroundColor, color: '#FFFFFF', textDecoration: 'none', fontFamily: fonts.semiBold }}
               >
-                <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
+                <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
               </a>
             ) : (
-              <TouchableOpacity onPress={() => router.replace(getPropertyDetailBackRoute() as never)} style={{ flex: 1, alignItems: isRTL ? 'flex-start' : 'flex-end' }} testID="property-detail-back">
-                <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={26} color={colors.foreground} />
+              <TouchableOpacity onPress={() => router.replace(getPropertyDetailBackRoute() as never)} style={navigationButtonStyle} testID="property-detail-back">
+                <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1371,8 +1372,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       ) : (
         <View style={styles.header}>
           <View style={[styles.headerMain, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
-              <Text numberOfLines={1} style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
+            <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, navigationButtonStyle]}>
+              <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
             </TouchableOpacity>
             <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('edit.title')}</Text>
             <TouchableOpacity
@@ -1380,10 +1381,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               accessibilityRole="button"
               accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'}
               testID="property-home-action"
-              style={[styles.headerSide, { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }]}
+              style={[styles.headerSide, navigationButtonStyle, { flexDirection: 'row', gap: 5 }]}
             >
-              <Feather name="home" size={18} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
+              <Feather name="home" size={18} color={navigationButtonTextStyle.color} />
+              <Text style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>
                 {language === 'ar' ? 'الرئيسية' : 'Home'}
               </Text>
             </TouchableOpacity>
@@ -2261,17 +2262,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               href={getPropertyEditRouteHref(property.core.id, offeredStudio) as never}
               testID="property-edit-action"
               accessibilityRole="link"
-              style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, textDecorationLine: 'none' }}
+              style={{ flex: 1, backgroundColor: navigationButtonStyle.backgroundColor, borderRadius: 16, paddingVertical: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: navigationButtonStyle.borderColor, textDecorationLine: 'none' }}
             >
-              <Feather name="edit-2" size={20} color={colors.foreground} />
-              <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }}>
+              <Feather name="edit-2" size={20} color={navigationButtonTextStyle.color} />
+              <Text style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.bold, fontSize: 16 }}>
                 {t('detail.edit')}
               </Text>
             </Link>
           ) : (
-            <TouchableOpacity onPress={handleEdit} testID="property-edit-action" style={{ flex: 1, backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border }}>
-              <Feather name="edit-2" size={20} color={colors.foreground} />
-              <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }}>
+            <TouchableOpacity onPress={handleEdit} testID="property-edit-action" style={{ flex: 1, backgroundColor: navigationButtonStyle.backgroundColor, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: navigationButtonStyle.borderColor }}>
+              <Feather name="edit-2" size={20} color={navigationButtonTextStyle.color} />
+              <Text style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.bold, fontSize: 16 }}>
                 {t('detail.edit')}
               </Text>
             </TouchableOpacity>

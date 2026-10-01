@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -1450,10 +1451,10 @@ export default function StudioCaptureRoute() {
           accessibilityRole="button"
           testID="studio-close"
           onPress={handleHeaderBack}
-          style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+          style={[styles.backButton, navigationButtonStyle]}
         >
-          <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={20} color={colors.foreground} />
-          <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t('studio.back')}</Text>
+          <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={18} color={navigationButtonTextStyle.color} />
+          <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('studio.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {editing ? t('studio.edit_title') : t(mode === 'offered' ? 'studio.title.offered' : 'studio.title.wanted')}

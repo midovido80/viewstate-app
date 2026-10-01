@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -283,9 +284,9 @@ export default function GlobalSearchScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('capture.back')}
           testID="search-back"
-          style={styles.backButton}
+          style={[styles.backButton, navigationButtonStyle, { flexDirection: 'row', gap: 6 }]}
         >
-          <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={24} color={colors.foreground} />
+          <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={18} color={navigationButtonTextStyle.color} /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>
           {t('search.title')}

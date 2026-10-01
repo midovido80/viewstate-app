@@ -1,3 +1,5 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
+import { getCaptureBackAction } from '@/services/captureBackNavigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -765,6 +767,24 @@ export default function CaptureWorkflow() {
     setDraftSaveStatus('saved');
   };
 
+  const handleBack = () => {
+    const action = getCaptureBackAction(stage, router.canGoBack(), {
+      mode: 'offered', transaction: draft.transaction, linkPersonId, sourceRole,
+    });
+    if (action.kind === 'edit') { setStage(2); return; }
+    if (action.kind === 'back') { router.back(); return; }
+    router.replace(action.route as never);
+  };
+  const goHome = async () => {
+    if (draftSaveStatus === 'saving' || submitting) return;
+    setDraftSaveStatus('saving');
+    try {
+      if (!await persistCurrentCapture()) { setDraftSaveStatus('error'); return; }
+      setDraftSaveStatus('saved');
+      router.replace('/' as never);
+    } catch { setDraftSaveStatus('error'); }
+  };
+
   const header = stage === 1 ? t('capture.progress.transaction')
     : stage === 2 ? t('capture.progress.review') : t('summary.title');
 
@@ -775,12 +795,12 @@ export default function CaptureWorkflow() {
     >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View style={[styles.headerRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <TouchableOpacity onPress={() => stage === 1 ? router.back() : setStage(stage === 3 ? 2 : 1)} accessibilityRole="button" accessibilityLabel={t('capture.back')}>
-            <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={22} color={colors.foreground} />
+          <TouchableOpacity onPress={handleBack} style={navigationButtonStyle} testID="capture-form-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}>
+            <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('home.action.addProperty')}</Text>
-          <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('capture.cancel')}>
-            <Feather name="x" size={22} color={colors.mutedForeground} />
+          <TouchableOpacity onPress={() => void goHome()} style={navigationButtonStyle} testID="capture-form-home" disabled={draftSaveStatus === 'saving' || submitting} accessibilityRole="button" accessibilityLabel={t('home.title')}>
+            <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text>
           </TouchableOpacity>
         </View>
         <Text testID={`capture-stage-${stage}`} style={[styles.stageTitle, { color: colors.primary, fontFamily: fonts.semiBold }]}>{header}</Text>
@@ -856,9 +876,7 @@ export default function CaptureWorkflow() {
         {stage === 2 && draft.propertyType && (
           <>
             <Section title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} colors={colors} fonts={fonts}>
-              <View style={styles.chips}>
-                {(['sale', 'rent'] as const).map(value => <Choice key={value} selected={draft.transaction === value} label={t(`transaction.${value}` as keyof Translations)} onPress={() => selectTransaction(value)} colors={colors} fonts={fonts} />)}
-              </View>
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''}</Text>
                <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
                <KuwaitAreaSelector
                  selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
@@ -918,6 +936,7 @@ export default function CaptureWorkflow() {
                 values={captureDetails}
                 requireExactValue
                 hideFloorUse={Boolean(captureDetails.floorUse)}
+                hideApartmentSubtype={Boolean(draft.apartmentSubtype || captureDetails.apartmentSubtype)}
                 category={demoCategory}
                 metadata={demoMetadata}
                 nearby={nearby}
@@ -1021,8 +1040,8 @@ export default function CaptureWorkflow() {
                 </Text>
               </View>
             ) : null}
-            <TouchableOpacity onPress={() => { setSaveError(null); setStage(2); }} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, { borderColor: colors.primary }]}>
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'العودة للتحرير' : 'Back to Edit'}</Text>
+            <TouchableOpacity onPress={() => { setSaveError(null); setStage(2); }} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, navigationButtonStyle]}>
+              <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('detail.edit')}</Text>
             </TouchableOpacity>
             <Text style={[styles.previewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{demoCategory?.label[language === 'ar' ? 1 : 0] ?? (draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : '')}</Text>
             <Text style={[styles.previewMeta, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : ''}</Text>
@@ -1130,7 +1149,7 @@ export default function CaptureWorkflow() {
         </View>
       </Modal>
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {stage === 2 ? <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <Button title={t('capture.back')} onPress={() => setStage(stage === 3 ? 2 : 1)} variant="outline" testID="capture-back" />}
+        {stage === 2 ? <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <Button title={t('capture.back')} onPress={handleBack} variant="navigation" testID="capture-back" />}
       {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}
       </View>
     </KeyboardAvoidingView>

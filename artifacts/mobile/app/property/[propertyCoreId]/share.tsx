@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -196,7 +197,7 @@ export default function PropertyShareScreen() {
     ['discloseMapsLink', t('enrich.maps_link'), !!property.locationEnrichment?.mapsLink],
   ] as const;
   return <View style={[styles.container, { backgroundColor: colors.background }]}>
-    <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('capture.back')} testID="share-back"><Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text></TouchableOpacity><Text accessibilityRole="header" style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.share')}</Text><View /></View>
+    <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('capture.back')} testID="share-back" style={navigationButtonStyle}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text accessibilityRole="header" style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.share')}</Text><View /></View>
     <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content}>
       <Text style={[styles.note, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive_off')}</Text>
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.normal_fields')}</Text>

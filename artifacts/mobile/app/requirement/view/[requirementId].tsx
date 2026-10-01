@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -182,12 +183,12 @@ export default function RequirementDetailsScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top }]}>
       <View style={[styles.header, { flexDirection: direction, borderBottomColor: colors.border }]}>
         <TouchableOpacity testID="requirement-details-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}
-          onPress={back} disabled={!record} style={styles.headerAction}>
-          <Text style={{ color: record ? colors.primary : colors.mutedForeground, fontFamily: fonts.semiBold }}>{t('capture.back')}</Text>
+          onPress={back} disabled={!record} style={[styles.headerAction, navigationButtonStyle]}>
+          <Text style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold }}>{t('capture.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('requirements.view')}</Text>
-        <TouchableOpacity testID="requirement-details-home" accessibilityRole="button" onPress={home} style={styles.headerAction}>
-          <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'right' }}>{t('home.title')}</Text>
+        <TouchableOpacity testID="requirement-details-home" accessibilityRole="button" onPress={home} style={[styles.headerAction, navigationButtonStyle]}>
+          <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text>
         </TouchableOpacity>
       </View>
       {state !== 'ready' || !record ? (
