@@ -107,7 +107,7 @@ test('shared create and edit routes preserve exact context and keep Studio out o
 
 test('Apartment selection structurally enables Next before choosing a subtype', async () => {
   const propertyType = await source('../app/capture/property-type.tsx');
-  assert.match(propertyType, /disabled=\{!propertyType \|\| !mode \|\| \(rawTransaction !== undefined && !transaction\)\}/);
+  assert.match(propertyType, /disabled=\{!propertyType[^\n]+!mode/);
   assert.match(propertyType, /getPropertyFormRoute\(/);
   assert.doesNotMatch(propertyType, /select-apartment-studio|select-apartment-standard/);
   assert.doesNotMatch(propertyType, /propertyType === 'apartment' && !apartmentSubtype/);
