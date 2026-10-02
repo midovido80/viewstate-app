@@ -20,6 +20,7 @@ import './unassignedRequirementJourney.test.ts';
 import './presentationCleanup.test.ts';
 import './propertySectorSelection.test.ts';
 import './captureBackNavigation.test.ts';
+import './savedPropertyClassification.test.ts';
 
 import {
   buildPropertySharePreview,

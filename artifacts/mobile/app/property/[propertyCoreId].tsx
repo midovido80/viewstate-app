@@ -1,3 +1,4 @@
+import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged, getSavedPropertyTypeLabel } from '@/services/savedPropertyClassification';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -17,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { Property, PROPERTY_TYPES, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata, createPropertyShareSelection, buildPropertySharePreview } from '@workspace/property-domain';
+import { Property, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata, createPropertyShareSelection, buildPropertySharePreview } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
@@ -48,7 +49,7 @@ import { normalizeGoogleMapsLink, openGoogleMapsQuery, openPastedLocationLink, p
 import { openStudioWebFilePicker, openStudioWebMapsLocation } from '@/services/studioWebActions';
 import {
   PropertyEditDraftV1,
-  buildPropertyUpdateCandidate,
+  buildPropertyDetailsUpdateCandidate,
   createEditDraft,
   createPropertyUpdateOperation,
   discardPropertyEditDraft,
@@ -65,10 +66,8 @@ import {
 } from '@/services/propertyUpdateRecovery';
 import { Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { applyFloorTransition, createFloorTransitionProposal } from '@/services/amenityTypeTransitions';
 import {
   applyPropertyTransition,
-  createPropertyTypeTransitionProposal,
   createTransactionTransitionProposal,
   propertyTransitionConfirmationMessage,
   propertyTransitionErrorMessage,
@@ -374,6 +373,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         if (!legacyEnrichmentDraft) return fresh;
         return { ...fresh, choices: createEditDraft(legacyEnrichmentDraft.candidate).choices };
       })();
+      assertPropertyDetailsEditClassification(property, next.choices);
       setConflictResolutions({});
       if (!existing && !await savePropertyEditDraft(next)) {
         setError(t('edit.draft_conflict'));
@@ -385,8 +385,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       setEditDirty(standardApartment && propertyEditChoicesAreDirty(cleanChoicesRef.current, next.choices));
       setMapsFieldError('');
       setMode('edit');
-    } catch {
-      setError(t('edit.draft_unreadable'));
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message === 'SAVED_PROPERTY_CLASSIFICATION_LOCKED'
+        ? (language === 'ar' ? 'مسودة التعديل تحاول تغيير نوع العقار المحفوظ. نوع العقار ثابت عند تعديل التفاصيل.' : 'The edit draft changes the saved property classification. Classification is fixed when editing details.')
+        : t('edit.draft_unreadable'));
     }
   };
 
@@ -416,6 +418,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       const changes = typeof changesOrUpdater === 'function'
         ? changesOrUpdater(previous.choices)
         : changesOrUpdater;
+      try {
+        assertPropertyDetailsEditClassification(previous.baseline, { ...previous.choices, ...changes,
+          canonicalDetails: { ...previous.choices.canonicalDetails, ...changes.canonicalDetails },
+        });
+      } catch {
+        setError(language === 'ar' ? 'نوع العقار المحفوظ ثابت. يمكنك تعديل تفاصيله فقط.' : 'The saved property type is fixed. You can edit its details only.');
+        return false;
+      }
       const next = {
         ...previous,
         choices: {
@@ -485,35 +495,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
   const updateCanonicalDetail = (field: PropertyDetailField | 'clarification', value: string) => {
     if (!draft) return;
+    if (field === 'apartmentSubtype' || field === 'floorUse') return;
     if (field === 'clarification') {
       updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), clarification: value } });
       return;
     }
-    if (field !== 'floorUse' || !draft.choices.canonicalDetails?.floorUse || draft.choices.canonicalDetails.floorUse === value) {
-      updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), [field]: value } });
-      return;
-    }
-    const scope = `property:${draft.propertyCoreId}`;
-    const proposal = createFloorTransitionProposal(scope, draft.choices.canonicalDetails, value as 'residential' | 'commercial');
-    if (!proposal || proposal.affected.length === 0) {
-      updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), [field]: value } });
-      return;
-    }
-    Alert.alert(
-      language === 'ar' ? 'تغيير استخدام الطابق؟' : 'Change floor use?',
-      language === 'ar' ? 'سيتم حذف القيم غير المتوافقة بعد التأكيد.' : 'Incompatible values will be removed after confirmation.',
-      [
-        { text: t('capture.cancel'), style: 'cancel' },
-        {
-          text: t('transition.remove_confirm'),
-          style: 'destructive',
-          onPress: () => {
-            const next = applyFloorTransition(scope, draft.choices.canonicalDetails ?? {}, proposal);
-            if (next) updateChoices({ canonicalDetails: next }, { replaceCanonicalDetails: true });
-          },
-        },
-      ],
-    );
+    updateChoices({ canonicalDetails: { ...(draft.choices.canonicalDetails ?? {}), [field]: value } });
   };
 
   const localAttachments = (draft?.choices.attachments ?? property?.attachments ?? []).map(item => ({
@@ -803,22 +790,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     );
   };
 
-  const selectPropertyType = (propertyType: Property['core']['propertyType']) => {
-    if (!draft || propertyType === draft.choices.propertyType) return;
-    const proposal = createPropertyTypeTransitionProposal(
-      `property:${draft.propertyCoreId}`,
-      transitionStateFor(draft.choices),
-      propertyType,
-    );
-    if (!proposal) return;
-    requestPropertyTransition(
-      proposal,
-      language === 'ar'
-        ? `تغيير نوع العقار إلى ${t(`propertyType.${propertyType}` as keyof Translations)}؟`
-        : `Change property type to ${t(`propertyType.${propertyType}` as keyof Translations)}?`,
-    );
-  };
-
   const confirmPropertyTransition = () => {
     const pending = pendingPropertyTransition;
     setPendingPropertyTransition(null);
@@ -829,6 +800,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     if (!pendingOperation || saving) return;
     setSaving(true);
     try {
+      assertSavedPropertyClassificationUnchanged(pendingOperation.baseline, pendingOperation.candidate);
       const result = await executePropertyUpdateRecovery({
         operation: pendingOperation,
         allowUpdate,
@@ -1010,6 +982,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           setError(t('edit.recovery_conflict'));
           return;
         }
+        assertSavedPropertyClassificationUnchanged(pending.baseline, pending.candidate);
         const retry = await executePropertyUpdateRecovery({
           operation: pending,
           allowUpdate: true,
@@ -1037,7 +1010,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setError(t('edit.draft_conflict'));
         return;
       }
-      const candidate = buildPropertyUpdateCandidate(currentDraft.baseline, currentDraft.choices);
+      const candidate = buildPropertyDetailsUpdateCandidate(currentDraft.baseline, currentDraft.choices);
       const baselineUris = new Set((currentDraft.baseline.attachments ?? []).map(item => item.managedUri));
       const candidateUris = new Set((candidate.attachments ?? []).map(item => item.managedUri));
       const newlyCopiedUris = [...new Set([
@@ -1113,6 +1086,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       const message = caught instanceof Error ? caught.message : '';
       setError(
         caught instanceof PendingPropertyUpdateExistsError ? t('edit.recovery_pending')
+          : message.includes('SAVED_PROPERTY_CLASSIFICATION_LOCKED') ? (language === 'ar' ? 'نوع العقار المحفوظ ثابت. يمكنك تعديل تفاصيله فقط.' : 'The saved property type is fixed. You can edit its details only.')
           : message.includes('INCOMPATIBLE_TYPE_DETAILS') ? t('edit.type_incompatible')
           : message.includes('INVALID_APPROVED_AREA') ? t('edit.area_invalid')
             : message.includes('MISSING_RENTAL_PERIOD') ? t('edit.rental_period_missing')
@@ -1242,6 +1216,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     standardApartment,
   });
 
+  const savedTypeLabel = getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}` as keyof Translations));
+  const detailsTitle = language === 'ar' ? `تفاصيل ${savedTypeLabel}` : `${savedTypeLabel} Details`;
+  const editTitle = language === 'ar' ? `تعديل تفاصيل ${savedTypeLabel}` : `Edit ${savedTypeLabel} Details`;
+
   const numericSpecTiles: { fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons', label: string }[] = [];
   const addSpec = (fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons') => {
     numericSpecTiles.push({ fieldId, value, icon, family, label: propertyDetailLabels[fieldId as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? fieldId });
@@ -1351,7 +1329,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingHorizontal: 20 }}>
             <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }} />
             <Text style={{ flex: 4, fontFamily: fonts.bold, fontSize: 20, color: colors.foreground, textAlign: 'center' }}>
-              {t('detail.title')}
+              {detailsTitle}
             </Text>
             {Platform.OS === 'web' ? (
               <a
@@ -1375,7 +1353,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, navigationButtonStyle]}>
               <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
             </TouchableOpacity>
-            <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('edit.title')}</Text>
+            <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{editTitle}</Text>
             <TouchableOpacity
               onPress={() => router.replace('/' as never)}
               accessibilityRole="button"
@@ -1508,7 +1486,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 24, textAlign: isRTL ? 'right' : 'left' }}>
-                      {t(`propertyType.${property.core.propertyType}`)}
+                      {savedTypeLabel}
                     </Text>
                   </View>
                    <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: propertyIntent.valid ? colors.primary : colors.destructive, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6 }}>
@@ -1731,11 +1709,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             ) : null}
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.type')}</Text>
-            <View style={styles.options}>
-              {PROPERTY_TYPES.map(type => (
-                <Choice key={type} selected={choices.propertyType === type} onPress={() => selectPropertyType(type)} title={t(`propertyType.${type}` as keyof Translations)} testID={`edit-type-${type}`} />
-              ))}
-            </View>
+            <Text testID="property-fixed-type" style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{savedTypeLabel}</Text>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.transaction')}</Text>
             <View style={styles.horizontal}>
               {(['sale', 'rent'] as Transaction[]).map(transaction => (
@@ -1787,8 +1761,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             />
             <ModernPropertyForm
               recordScopeKey={`property:${property.core.id}`}
-              propertyType={choices.propertyType}
+              propertyType={property.core.propertyType}
               values={choices.canonicalDetails ?? {}}
+              hideApartmentSubtype
+              hideFloorUse
               onChange={updateCanonicalDetail}
               category={demoCategory}
               metadata={choices.demoMetadata}

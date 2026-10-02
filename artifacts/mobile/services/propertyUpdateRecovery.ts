@@ -1,3 +1,4 @@
+import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged } from '@/services/savedPropertyClassification';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Property,
@@ -347,6 +348,14 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
     },
     writeGeneration: (generations.get(baseline.core.id) ?? 0) + 1,
   };
+}
+
+/** Candidate path for saved Property details; classification changes are not part of this workflow. */
+export function buildPropertyDetailsUpdateCandidate(baseline: Property, choices: PropertyEditChoices): Property {
+  assertPropertyDetailsEditClassification(baseline, choices);
+  const candidate = buildPropertyUpdateCandidate(baseline, choices);
+  assertSavedPropertyClassificationUnchanged(baseline, candidate);
+  return candidate;
 }
 
 export function buildPropertyUpdateCandidate(
