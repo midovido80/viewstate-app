@@ -10,6 +10,10 @@ import {
 import { buildPropertyDetailsUpdateCandidate, createEditDraft } from '../services/propertyUpdateRecovery.ts';
 
 function property(type: PropertyType, details: Record<string, unknown> = {}): Property {
+  if (type === 'other_built_property') details = {
+    clarification: { value: 'Other approved built property', privacy: { classification: 'normal', disclosurePolicy: 'normal' } },
+    ...details,
+  };
   return {
     core: { id: 'classification-property', propertyType: type, locationArea: { id: 'salmiya' } },
     activeOffer: { id: 'classification-offer', propertyCoreId: 'classification-property', transaction: 'sale', salePrice: { amount: 70000, currencyCode: 'KWD' } },

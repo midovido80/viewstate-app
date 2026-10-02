@@ -1353,7 +1353,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, navigationButtonStyle]}>
               <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
             </TouchableOpacity>
-            <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{editTitle}</Text>
+            <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }]}>{editTitle}</Text>
             <TouchableOpacity
               onPress={() => router.replace('/' as never)}
               accessibilityRole="button"
