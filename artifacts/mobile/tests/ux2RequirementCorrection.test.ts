@@ -14,7 +14,7 @@ test('Requirement correction has one canonical owner for duplicated meanings', a
   assert.match(source, /getAreaById/);
   assert.match(source, /preferredAmenityExclusions/);
   assert.match(source, /Must not have/);
-  assert.match(source, /Not important/);
+  assert.doesNotMatch(source, /غير مهم|Not important/);
   assert.match(source, /onExcludedChange/);
   assert.match(map, /'bedroomCount'/);
   assert.match(map, /'bathroomCount'/);
@@ -199,4 +199,7 @@ test('Requirement form renders the approved labels and one grouped amenity secti
   assert.ok(source.indexOf('fields={otherSpecificationFields}') < source.indexOf('testID="requirement-central-ac"'));
   assert.match(source, /purpose === 'rent' && coreApplicable &&/);
   assert.match(component, /if \(isBoolean\)[\s\S]*?return <ChoiceChip/);
+  assert.doesNotMatch(component, /غير مهم|Not important/);
+  assert.match(source, /requirement-amenities-flow/);
+  assert.match(source, /fields=\{amenityFields\} inlineFeatures/);
 });

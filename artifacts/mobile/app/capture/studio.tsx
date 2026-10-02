@@ -1403,6 +1403,7 @@ export default function StudioCaptureRoute() {
       case 'kitchen':
       case 'hall':
       case 'parking':
+        if (values[fieldId] === 'not_important') return null;
         return reviewItem(
           catalogLabel(fieldId),
           values[fieldId] === 'unknown'
@@ -1411,7 +1412,7 @@ export default function StudioCaptureRoute() {
               ? t(`studio.${values[fieldId]}`)
               : values[fieldId] === 'yes' || values[fieldId] === 'no'
                 ? t(`studio.${values[fieldId]}`)
-                : t('studio.not_important'),
+                : '—',
         );
       case 'floorNumber':
         return reviewItem(catalogLabel(fieldId), values.floorNumber || '—');
