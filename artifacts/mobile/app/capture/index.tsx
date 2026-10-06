@@ -3,6 +3,7 @@ import { getCaptureBackAction } from '@/services/captureBackNavigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -64,7 +65,7 @@ import {
   type LocalAttachment,
   type WebAttachmentBlobStore,
 } from '@/services/attachments';
-import { requestCurrentCoordinates, normalizeGoogleMapsLink, pastedMapLocation, openPastedLocationLink } from '@/services/location';
+import { requestCurrentCoordinates, normalizeGoogleMapsLink, pastedMapLocation, openPastedLocationLink, openGoogleMapsQuery } from '@/services/location';
 import { getAreaById } from '@/constants/kuwait-areas';
 import type { Transaction, PropertyDetailField, PropertyType } from '@workspace/property-domain';
 import type { PropertyCaptureCategoryId, PropertyDemoCaptureMetadata } from '@workspace/property-domain';
@@ -72,6 +73,8 @@ import { PROPERTY_DEMO_CATALOG, getDemoCategory, getGenericCaptureTypesForTransa
 import type { PropertySourceRole } from '@/services/people';
 import { ensureStudioPropertySourceLink, getStudioPersonSourceRole } from '@/services/studioSave';
 import { transitionCaptureAreaValidation } from '@/services/captureAreaValidation';
+import { openStudioWebMapsLocation } from '@/services/studioWebActions';
+import { reorderAttachments, resolveWebAttachmentImageSources, setAttachmentCover } from '@/services/attachmentOperations';
 import { getCaptureMapsLinkValidationError } from '@/services/captureMapsLinkValidation';
 import {
   DEMO_NUMERIC_QUICK_PICK_VALUES,
@@ -247,8 +250,29 @@ export default function CaptureWorkflow() {
     uri: item.managedUri,
     order: item.order,
     ...(item.isCover ? { isCover: true as const } : {}),
-  })) as LocalAttachment[];
+  })).sort((left, right) => left.order - right.order) as LocalAttachment[];
 
+
+  const [captureImageSources, setCaptureImageSources] = useState<Readonly<Record<string, string>>>({});
+  useEffect(() => {
+    let active = true;
+    let revoke = () => {};
+    setCaptureImageSources({});
+    if (Platform.OS !== 'web') return;
+    const images = (captureDetails.attachments ?? [])
+      .filter(item => item.kind === 'image')
+      .map(item => ({ id: item.id, kind: item.kind, uri: item.managedUri }));
+    void resolveWebAttachmentImageSources(images, webBlobStore.current!)
+      .then(resolved => {
+        if (!active) { resolved.revoke(); return; }
+        revoke = resolved.revoke;
+        setCaptureImageSources(resolved.sources);
+      })
+      .catch(() => {
+        if (active) Alert.alert(t('errors.storage_title'), t('enrich.attachment_failed'));
+      });
+    return () => { active = false; revoke(); };
+  }, [draft.propertyCoreId, captureDetails.attachments, t]);
 
   const scopeKey = captureDetailsScopeKey(draft.propertyCoreId);
   const mapsLinkError = getCaptureMapsLinkValidationError(captureDetails.mapsLink)
@@ -448,15 +472,20 @@ export default function CaptureWorkflow() {
   const commitCaptureAttachments = async (next: readonly LocalAttachment[]) => {
     if (!next.length) return;
     const hasCover = captureAttachments.some(item => item.isCover);
+    let newCoverAssigned = false;
     const accepted = updateCaptureDetails({
       attachments: [
         ...(captureDetails.attachments ?? []),
-        ...next.map((item, index) => ({
-          id: item.id, kind: item.kind, originalName: item.originalName, mimeType: item.mimeType,
-          order: captureAttachments.length + index, managedUri: item.uri,
-          ...(!hasCover && index === 0 && item.kind === 'image' ? { isCover: true as const } : {}),
-          privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
-        })),
+        ...next.map((item, index) => {
+          const makeCover = !hasCover && !newCoverAssigned && item.kind === 'image';
+          if (makeCover) newCoverAssigned = true;
+          return {
+            id: item.id, kind: item.kind, originalName: item.originalName, mimeType: item.mimeType,
+            order: captureAttachments.length + index, managedUri: item.uri,
+            ...(makeCover ? { isCover: true as const } : {}),
+            privacy: { classification: 'normal' as const, disclosurePolicy: 'normal' as const },
+          };
+        }),
       ],
     });
     try {
@@ -510,15 +539,49 @@ export default function CaptureWorkflow() {
     }
   };
 
-  const removeCaptureAttachment = async (attachment: LocalAttachment) => {
-    const next = (captureDetails.attachments ?? []).filter(item => item.id !== attachment.id)
-      .map((item, order) => ({ ...item, order, ...(item.id === captureDetails.attachments?.find(candidate => candidate.kind === 'image')?.id ? { isCover: true } : {}) }));
+  const changeCaptureAttachments = async (transform: (items: readonly LocalAttachment[]) => readonly LocalAttachment[]): Promise<boolean> => {
+    if (attachmentBusy) return false;
+    setAttachmentBusy(true);
     const previous = captureDetails;
-    const accepted = updateCaptureDetails({ attachments: next.length ? next : undefined });
-    if (!accepted || !await persistCaptureDetails()) {
+    try {
+      const next = transform(captureAttachments).map(item => {
+        const existing = previous.attachments?.find(value => value.id === item.id)!;
+        const { isCover: _cover, ...metadata } = existing;
+        return { ...metadata, order: item.order, ...(item.isCover ? { isCover: true as const } : {}) };
+      });
+      if (!updateCaptureDetails({ attachments: next.length ? next : undefined }) || !await persistCaptureDetails()) {
+        replaceCaptureDetails(previous);
+        return false;
+      }
+      return true;
+    } catch {
       replaceCaptureDetails(previous);
-      return;
+      Alert.alert(t('errors.storage_title'), t('enrich.attachment_failed'));
+      return false;
+    } finally {
+      setAttachmentBusy(false);
     }
+  };
+
+  const moveCaptureAttachment = (attachment: LocalAttachment, delta: number) => changeCaptureAttachments(items => {
+    const ids = items.map(item => item.id);
+    const index = ids.indexOf(attachment.id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= ids.length) return items;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    return reorderAttachments(items, ids);
+  });
+
+  const removeCaptureAttachment = async (attachment: LocalAttachment) => {
+    const persisted = await changeCaptureAttachments(items => {
+      let next = items.filter(item => item.id !== attachment.id).map((item, order) => ({ ...item, order }));
+      if (!next.some(item => item.isCover)) {
+        const firstImage = next.find(item => item.kind === 'image');
+        if (firstImage) next = setAttachmentCover(next, firstImage.id);
+      }
+      return next;
+    });
+    if (!persisted) return;
     try {
       await attachmentStore.delete(attachment.uri);
     } catch {
@@ -546,10 +609,17 @@ export default function CaptureWorkflow() {
   };
 
   const openCaptureMapsLink = async () => {
-    const link = captureDetails.mapsLink?.trim();
-    if (!link) return;
+    const link = captureDetails.mapsLink?.trim() ?? '';
+    const query = selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : 'Kuwait';
+    if (mapsLinkError) return;
     try {
-      await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+      if (Platform.OS === 'web') {
+        openStudioWebMapsLocation({ link, query });
+      } else if (link) {
+        await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
+      } else {
+        await openGoogleMapsQuery(query);
+      }
     } catch {
       Alert.alert(t('errors.validation_title'), t('enrich.maps_link_invalid'));
     }
@@ -1010,12 +1080,18 @@ export default function CaptureWorkflow() {
                   </TouchableOpacity>
                 </>}
               </View>
-              {captureAttachments.map(attachment => (
+              {captureAttachments.map((attachment, index) => (
                 <View key={attachment.id} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card, marginTop: 8, justifyContent: 'space-between' }]}>
                   <TouchableOpacity onPress={() => void openAttachment(attachment, Sharing).catch(() => Alert.alert(t('errors.storage_title'), t('enrich.attachment_failed')))} testID={`capture-open-${attachment.id}`}>
+                    {attachment.kind === 'image' && (Platform.OS !== 'web' || captureImageSources[attachment.id]) ? <Image source={{ uri: Platform.OS === 'web' ? captureImageSources[attachment.id] : attachment.uri }} style={{ width: 96, height: 72, borderRadius: 8, resizeMode: 'cover' }} /> : null}
                     <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{attachment.isCover ? '★ ' : ''}{attachment.originalName}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => void removeCaptureAttachment(attachment)} testID={`capture-remove-${attachment.id}`}>
+                  <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <Button title={t('enrich.move_up')} disabled={attachmentBusy || index === 0} onPress={() => void moveCaptureAttachment(attachment, -1)} testID={`capture-up-${attachment.id}`} />
+                    <Button title="↓" disabled={attachmentBusy || index === captureAttachments.length - 1} onPress={() => void moveCaptureAttachment(attachment, 1)} testID={`capture-down-${attachment.id}`} />
+                    {attachment.kind === 'image' ? <Button title={t('enrich.cover')} disabled={attachmentBusy} onPress={() => void changeCaptureAttachments(items => setAttachmentCover(items, attachment.id))} testID={`capture-cover-${attachment.id}`} /> : null}
+                  </View>
+                  <TouchableOpacity disabled={attachmentBusy} onPress={() => void removeCaptureAttachment(attachment)} testID={`capture-remove-${attachment.id}`}>
                     <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('enrich.remove')}</Text>
                   </TouchableOpacity>
                 </View>

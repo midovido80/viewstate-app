@@ -259,7 +259,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   useEffect(() => {
     let active = true;
     let revokeSources = () => {};
-    const sourceAttachments = standardApartment && mode === 'edit'
+    const sourceAttachments = mode === 'edit'
       ? (draft?.choices.attachments ?? property?.attachments ?? [])
       : (property?.attachments ?? []);
     const images = sourceAttachments
@@ -554,9 +554,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         attachments: [
           ...existing,
           ...next.map((item, index) => {
-            const makeCover = standardApartment
-              ? !hasCover && !firstNewImageCovered && item.kind === 'image'
-              : !hasCover && index === 0 && item.kind === 'image';
+            const makeCover = !hasCover && !firstNewImageCovered && item.kind === 'image';
             if (makeCover) firstNewImageCovered = true;
             return {
               id: item.id,
@@ -582,7 +580,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
   const addMedia = async () => {
     if (!property || !draft) return;
-    if (standardApartment && Platform.OS === 'web') {
+    if (Platform.OS === 'web') {
       try {
         openStudioWebFilePicker({
           accept: 'image/*,video/*',
@@ -616,7 +614,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
   const addPdfs = async () => {
     if (!property || !draft) return;
-    if (standardApartment && Platform.OS === 'web') {
+    if (Platform.OS === 'web') {
       try {
         openStudioWebFilePicker({
           accept: 'application/pdf',
@@ -650,15 +648,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
   const openMapsLink = async () => {
     const link = draft?.choices.mapsLink?.trim() ?? '';
-    if (!standardApartment) {
-      if (!link) return;
-      try {
-        await openPastedLocationLink(pastedMapLocation(normalizeGoogleMapsLink(link)));
-      } catch {
-        setError(t('enrich.maps_link_invalid'));
-      }
-      return;
-    }
     const area = getAreaById(draft?.choices.locationAreaId ?? property?.core.locationArea.id ?? '');
     const query = area ? (language === 'ar' ? area.ar : area.en) : '';
     const validation = getPropertyEditMapsFieldError(link, language);
@@ -961,11 +950,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setError(t('edit.draft_conflict'));
         return;
       }
-      if (standardApartment) {
-        const mapsValidation = getPropertyEditMapsFieldError(currentDraft.choices.mapsLink ?? '', language);
-        setMapsFieldError(mapsValidation);
-        if (mapsValidation) return;
-      }
+      const mapsValidation = getPropertyEditMapsFieldError(currentDraft.choices.mapsLink ?? '', language);
+      setMapsFieldError(mapsValidation);
+      if (mapsValidation) return;
       if (invalidQuickPickFields.size > 0) {
         setError(t('errors.capture_incomplete'));
         return;
@@ -1196,7 +1183,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const openDetailMapsLink = async () => {
     const location = property?.locationEnrichment;
     try {
-      if (standardApartment && !location?.mapsLink?.value && !location?.coordinates) {
+      if (!location?.mapsLink?.value && !location?.coordinates) {
         await openGoogleMapsQuery(areaName(property.core.locationArea.id));
       } else {
         await openSavedPropertyMapsLocation(
@@ -1213,7 +1200,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     link: property.locationEnrichment?.mapsLink?.value,
     coordinates: property.locationEnrichment?.coordinates,
     areaQuery: areaName(property.core.locationArea.id),
-    standardApartment,
+    allowAreaSearch: true,
   });
 
   const savedTypeLabel = getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}` as keyof Translations));
@@ -1821,12 +1808,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               value={choices.mapsLink ?? ''}
               onChangeText={value => {
                 updateChoices({ mapsLink: value });
-                if (standardApartment) setMapsFieldError(getPropertyEditMapsFieldError(value, language));
+                setMapsFieldError(getPropertyEditMapsFieldError(value, language));
               }}
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-maps-link"
             />
-            {standardApartment && mapsFieldError ? (
+            {mapsFieldError ? (
               <Text
                 accessibilityRole="alert"
                 testID="property-edit-maps-link-error"
@@ -1857,7 +1844,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             {localAttachments.map((attachment, index) => (
               <View key={attachment.id} style={[styles.sourceSection, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => void openPropertyAttachment({ ...attachment, managedUri: attachment.uri, privacy: { classification: 'normal', disclosurePolicy: 'normal' } })} testID={`property-edit-open-${attachment.id}`}>
-                  {standardApartment && attachment.kind === 'image' && (Platform.OS !== 'web' || galleryImageSources[attachment.id]) ? (
+                  {attachment.kind === 'image' && (Platform.OS !== 'web' || galleryImageSources[attachment.id]) ? (
                     <Image
                       source={{ uri: Platform.OS === 'web' ? galleryImageSources[attachment.id] : attachment.uri }}
                       style={{ width: 96, height: 72, borderRadius: 8, marginBottom: 8, resizeMode: 'cover' }}
@@ -1875,12 +1862,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   })} testID={`property-edit-up-${attachment.id}`}>
                     <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t('enrich.move_up')}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity disabled={standardApartment && attachment.kind !== 'image'} onPress={() => updateAttachmentChoices(items => setAttachmentCover(items, attachment.id))} testID={`property-edit-cover-${attachment.id}`}>
+                  <TouchableOpacity disabled={attachment.kind !== 'image'} onPress={() => updateAttachmentChoices(items => setAttachmentCover(items, attachment.id))} testID={`property-edit-cover-${attachment.id}`}>
                     <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t('enrich.cover')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => updateAttachmentChoices(items => {
                     let remaining = items.filter(item => item.id !== attachment.id).map((item, order) => ({ ...item, order }));
-                    if (standardApartment && !remaining.some(item => item.isCover)) {
+                    if (!remaining.some(item => item.isCover)) {
                       const firstImage = remaining.find(item => item.kind === 'image');
                       if (firstImage) remaining = setAttachmentCover(remaining, firstImage.id);
                     }

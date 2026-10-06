@@ -108,3 +108,38 @@ test('Saved details screen hides every classification chooser and uses the guard
   assert.match(source, /assertSavedPropertyClassificationUnchanged\(pendingOperation.baseline, pendingOperation.candidate\)/);
   assert.match(source, /property-fixed-type/);
 });
+
+test('Every property classification preserves precise location and mixed attachments through details save and reload', () => {
+  const cases = [
+    ...PROPERTY_TYPES.map(type => property(type)),
+    property('apartment', { apartmentSubtype: 'duplex' }),
+    property('apartment', { apartmentSubtype: 'standard_apartment' }),
+    property('apartment', { apartmentSubtype: 'studio' }),
+    property('floor', { floorUse: 'residential' }),
+    property('floor', { floorUse: 'commercial' }),
+  ];
+  for (const baseline of cases) {
+    const draft = createEditDraft(baseline);
+    const privacy = { classification: 'normal', disclosurePolicy: 'normal' } as const;
+    const attachments = [
+      { id: 'pdf', kind: 'pdf', originalName: 'plan.pdf', mimeType: 'application/pdf', order: 0, managedUri: 'viewstate-web-attachment:classification-property:pdf', privacy },
+      { id: 'image', kind: 'image', originalName: 'front.jpg', mimeType: 'image/jpeg', order: 1, managedUri: 'viewstate-web-attachment:classification-property:image', isCover: true, privacy },
+      { id: 'video', kind: 'video', originalName: 'tour.mp4', mimeType: 'video/mp4', order: 2, managedUri: 'viewstate-web-attachment:classification-property:video', privacy },
+    ] as NonNullable<Property['attachments']>;
+    const coordinates = { latitude: 29.34, longitude: 48.07, privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' } } as const;
+    const mapsLink = 'https://www.google.com/maps/place/Salmiya';
+    const candidate = buildPropertyDetailsUpdateCandidate(baseline, {
+      ...draft.choices, mapsLink, manualLocationText: 'Entrance facing the main road', coordinates, attachments,
+    });
+    assertSavedPropertyClassificationUnchanged(baseline, candidate);
+    const reloaded = createEditDraft(JSON.parse(JSON.stringify(candidate)) as Property);
+    assert.equal(reloaded.choices.mapsLink, mapsLink);
+    assert.equal(reloaded.choices.manualLocationText, 'Entrance facing the main road');
+    assert.deepEqual(reloaded.choices.coordinates, coordinates);
+    assert.deepEqual(reloaded.choices.attachments, attachments);
+    const unrelatedEdit = buildPropertyDetailsUpdateCandidate(candidate, { ...reloaded.choices, description: 'Updated description' });
+    assert.deepEqual(unrelatedEdit.locationEnrichment, candidate.locationEnrichment);
+    assert.deepEqual(unrelatedEdit.attachments, candidate.attachments);
+    assert.equal(unrelatedEdit.core.id, baseline.core.id);
+  }
+});

@@ -562,12 +562,12 @@ test('Apartment clean exit keeps staged-file ownership on CAS conflict and clean
 
 test('Apartment Property Details opens an area search only when exact map data is absent', () => {
   assert.equal(
-    getPropertyDetailMapsHref({ standardApartment: true, areaQuery: 'Salmiya' }),
+    getPropertyDetailMapsHref({ allowAreaSearch: true, areaQuery: 'Salmiya' }),
     'https://www.google.com/maps/search/?api=1&query=Salmiya',
   );
   assert.equal(
     getPropertyDetailMapsHref({
-      standardApartment: true,
+      allowAreaSearch: true,
       areaQuery: 'Salmiya',
       link: 'https://evil.example/maps/place',
     }),
@@ -575,7 +575,7 @@ test('Apartment Property Details opens an area search only when exact map data i
     'invalid saved links fail closed instead of falling back to an area search',
   );
   assert.equal(
-    getPropertyDetailMapsHref({ standardApartment: false, areaQuery: 'Salmiya' }),
+    getPropertyDetailMapsHref({ allowAreaSearch: false, areaQuery: 'Salmiya' }),
     null,
   );
 });
@@ -641,7 +641,7 @@ test('Property detail gallery is image-only for every type and omits empty/PDF-o
   assert.match(source, /const otherFiles = \(property\?\.attachments \?\? \[\]\)\.filter\(a => a\.kind !== 'image'\)/);
 });
 
-test('Apartment route wires verified Maps opening, platform-specific attachment pickers, previews, and clean Back', async () => {
+test('All property editors wire verified Maps opening, platform-specific attachment pickers, previews, and apartment clean Back', async () => {
   const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
   assert.match(source, /getPropertyDetailMapsHref/);
   assert.match(source, /discardPropertyEditDraftAndCleanupOwnedAttachments/);
@@ -654,6 +654,15 @@ test('Apartment route wires verified Maps opening, platform-specific attachment 
   assert.match(source, /if \(!standardApartment \|\| editDirty\) \{\s*setLeaveVisible\(true\)/);
   assert.match(source, /testID=\"property-edit-maps-link-error\"/);
   assert.match(source, /persistAttachmentsThenDeleteRemoved/);
+  assert.doesNotMatch(source, /if \(standardApartment && Platform\.OS === 'web'\)/);
+  assert.doesNotMatch(source, /standardApartment && mapsFieldError/);
+  assert.doesNotMatch(source, /standardApartment && attachment\.kind === 'image'/);
+  assert.match(source, /allowAreaSearch: true/);
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(capture, /openStudioWebMapsLocation\(\{ link, query \}\)/);
+  assert.match(capture, /openGoogleMapsQuery\(query\)/);
+  assert.match(capture, /resolveWebAttachmentImageSources/);
+  assert.match(capture, /persistCaptureDetails/);
 });
 
 test('Property Details displays the persisted source role, not the role-picker default', async () => {

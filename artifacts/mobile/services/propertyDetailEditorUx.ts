@@ -73,12 +73,12 @@ export function getPropertyDetailMapsHref(options: {
   readonly link?: string;
   readonly coordinates?: MapCoordinates;
   readonly areaQuery: string;
-  readonly standardApartment: boolean;
+  readonly allowAreaSearch: boolean;
 }): string | null {
   const link = options.link?.trim();
   if (options.link && !link) return null;
   const href = getPropertyMapsWebHref(link || undefined, options.coordinates);
-  if (href || link || options.coordinates || !options.standardApartment) return href;
+  if (href || link || options.coordinates || !options.allowAreaSearch) return href;
   return getStudioWebMapsUrl('', options.areaQuery);
 }
 
