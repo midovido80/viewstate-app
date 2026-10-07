@@ -1221,3 +1221,7 @@ Final state: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — W
 ## Founder decision — 2026-10-01: Property sector selection
 Three equal-width buttons (All, Residential, Commercial) precede the type list. All is default; tapping the active Residential/Commercial filter returns to All. Floor is shared and takes its use from the selected sector; All requires selecting Floor use before proceeding. Do not repeat that choice in the new Floor form. Preserve existing stored floorUse contracts and older records.
 Duplex is directly selectable under Residential/All using propertyType=apartment and apartmentSubtype=duplex. Commercial Duplex and a new dedicated Duplex form are deferred. No new tool or dependency is authorized within this feature package.
+
+## Founder decision — 2026-10-07: Residential Occupancy and Master bedrooms
+Add optional Family/Bachelor/Any Occupancy to all residential Offered Property forms, including Studio. Add optional actual Master bedrooms directly below Bedrooms on all residential types except Studio. Master bedrooms are part of total bedrooms and cannot exceed a known total. These facts are excluded from commercial forms and introduce no duplicate Wanted Requirement fields.
+Residential Other uses optional propertyUse to distinguish it from commercial Other without changing the existing canonical property type; old unclassified records remain supported. Persisted Other use is locked during details editing. Additive local persistence only; no new dependency or bulk migration is authorized.

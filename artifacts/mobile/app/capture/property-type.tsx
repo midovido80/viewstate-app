@@ -192,7 +192,7 @@ export default function PropertyTypeScreen() {
         <Button
           title={t('capture.next')}
           onPress={handleNext}
-          disabled={otherUseRequired || !propertyType || !visibleTypes.includes(propertyType) || (propertyType === 'floor' && !floorUse) || !mode || (rawTransaction !== undefined && !transaction)}
+          disabled={!propertyType || !visibleTypes.includes(propertyType) || (propertyType === 'floor' && !floorUse) || !mode || (rawTransaction !== undefined && !transaction) || otherUseRequired}
           size="large"
           testID="btn-next"
         />

@@ -340,3 +340,10 @@ Scope: Equal-width All/Residential/Commercial filters above property types, All 
 Compatibility: No schema, migration, hydration rewrite, dependency, matching or media-storage changes. Existing floor transition confirmation remains required before removing incompatible draft values.
 Verification: Domain tests, focused sector tests and whitespace checks run locally; complete Mobile/TypeScript gates and visual/device acceptance remain subject to their recorded results. No acceptance or deployment is implied by this entry.
 State: Work-branch implementation; Pilot promotion requires Founder acceptance.
+
+### Session: 2026-10-07 (Residential actual facts)
+Authorization: Founder explicitly requested screenshot Occupancy (Family/Bachelor/Any) on every residential Offered Property form and Master bedrooms immediately below Bedrooms on every residential type except Studio.
+Baseline: Work branch `work/property-sector-selection` at `93e66b82314d5f7c43b18d0f73178a0ab3301183`; live Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`.
+Implementation: Optional canonical occupancy and masterBedroomCount facts across residential forms, including whole buildings and residential Other; Studio occupancy uses its dedicated form. Counts are nonnegative integers and cannot exceed known total bedrooms. Other retains an optional propertyUse discriminator because its canonical type is shared by both sectors; new capture chooses use before the form, known saved use stays locked, and legacy unclassified records remain readable. Legacy Villa demo master counts hydrate for explicit editing without a storage migration or duplicate control.
+Verification: Domain tests passed locally; nine added behavioral Mobile tests and both TypeScript gates passed in the first CI run. Existing field-matrix/source assertions are being aligned with the approved amendment; final full CI results are reported separately.
+Boundaries: No new dependencies, migrations, hydration writes, matching changes, APK, deployment, or Pilot promotion. Preview and physical-device Founder acceptance remain pending.

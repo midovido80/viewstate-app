@@ -106,7 +106,8 @@ export function PropertyEnrichmentFields({
     }
 
     if (definition.control === 'choice') {
-      const options = (field === 'floorUse' || field === 'propertyUse') ? ['residential', 'commercial']
+      const options = field === 'floorUse' ? ['residential', 'commercial']
+        : field === 'propertyUse' ? ['residential', 'commercial']
         : field === 'occupancy' ? ['family', 'bachelor', 'any']
         : field === 'apartmentSubtype' ? APARTMENT_SUBTYPES
         : FURNISHING_VALUES;

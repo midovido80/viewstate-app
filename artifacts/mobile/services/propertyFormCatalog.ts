@@ -245,7 +245,7 @@ const LABELS: Record<string, readonly [string, string]> = {
   elevatorCount: ['Elevators', 'عدد المصاعد'],
   apartmentSubtype: ['Apartment subtype', 'نوع الشقة'],
   bedroomCount: ['Bedrooms', 'غرف النوم'],
-  masterBedroomCount: ['Master bedrooms', 'غرف نوم ماستر'],
+  masterBedroomCount: ['Master bedrooms', 'غرف ماستر'],
   occupancy: ['Occupancy', 'نوع السكن'],
   propertyUse: ['Property use', 'استخدام العقار'],
   livingRoomCount: ['Number of halls', 'عدد الصالات'],
@@ -378,7 +378,8 @@ export function getApplicablePropertyFormFieldsForMode(
   const applicable = getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype);
   if (mode === 'offered') return applicable;
   return applicable.filter(
-    (definition): definition is PropertyFormWantedFieldDefinition => definition.wanted !== undefined,
+    (definition): definition is PropertyFormWantedFieldDefinition => definition.wanted !== undefined
+      && !(definition.field === 'bedroomCount' && (propertyType === 'whole_building' || propertyType === 'other_built_property')),
   );
 }
 

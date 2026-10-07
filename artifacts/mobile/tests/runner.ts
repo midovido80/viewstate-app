@@ -2346,31 +2346,36 @@ test('Task 6 static/source assertions: native atomic CAS/shared queue and web ex
   assert.doesNotMatch(persistence, /INSERT OR REPLACE INTO properties/);
 });
 
-test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, and sale/rent compatibility', () => {
+test('Approved Dynamic Details matrix including residential facts validates all types, floor variants, and sale/rent compatibility', () => {
   assert.equal(PROPERTY_TYPES.length, 11);
   const residentialAmenities = ['hasMaidRoom', 'hasHeating', 'hasBalcony', 'hasLaundryRoom', 'hasSolarHeater', 'hasElevator', 'hasGarden', 'hasSecurityGuard', 'hasBBQArea'] as const;
   const exactFields = {
-    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasCentralAC'],
-    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
-    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
-    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront', 'hasCentralAC'],
-    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', ...residentialAmenities, 'hasCentralAC'],
+    apartment: ['builtUpAreaSquareMeters', 'apartmentSubtype', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'bathroomCount', 'livingRoomCount', 'floorNumber', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasCentralAC'],
+    house: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
+    villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
+    chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront', 'hasCentralAC'],
+    floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', ...residentialAmenities, 'hasCentralAC'],
     floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
     office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'hasCentralAC'],
     shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
-     whole_building: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'hasCentralAC'],
+     whole_building: ['bedroomCount', 'masterBedroomCount', 'occupancy', 'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'hasCentralAC'],
      commercial_complex: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'frontageWidthMeters', 'hasCentralAC'],
     warehouse: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage', 'hasCentralAC'],
-    other_built_property: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification', 'hasCentralAC'],
+    other_built_property: ['propertyUse', 'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification', 'hasCentralAC'],
   } as const;
   const fieldsFor = (
     propertyType: Property['core']['propertyType'],
     floorUse?: 'residential' | 'commercial',
     apartmentSubtype?: ApartmentSubtype,
+    propertyUse?: 'residential' | 'commercial',
   ) =>
     PROPERTY_DETAIL_FIELD_DEFINITIONS
       .filter(definition => definition.appliesTo.includes(propertyType)
-        && (!definition.apartmentSubtypes
+        && (!definition.propertyUses || propertyType !== 'other_built_property'
+          || propertyUse !== undefined && definition.propertyUses.includes(propertyUse))
+        && (definition.field === 'masterBedroomCount' && propertyType === 'apartment' && apartmentSubtype === undefined
+          || !definition.apartmentSubtypes
+          || propertyType !== 'apartment'
           || propertyType === 'apartment'
             && apartmentSubtype !== undefined
             && definition.apartmentSubtypes.includes(apartmentSubtype))
@@ -2382,11 +2387,15 @@ test('DEC-044 exact Dynamic Details matrix validates all types, floor variants, 
   }
   assert.deepEqual(
     fieldsFor('apartment', undefined, 'studio'),
-    [...exactFields.apartment, 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking'].sort(),
+    [...exactFields.apartment.filter(field => field !== 'masterBedroomCount'), 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking'].sort(),
     'Studio apartment adds only its scoped fields',
   );
   assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential].sort());
   assert.deepEqual(fieldsFor('floor', 'commercial'), [...exactFields.floor_commercial].sort());
+  assert.deepEqual(fieldsFor('other_built_property', undefined, undefined, 'residential'),
+    [...exactFields.other_built_property, 'bedroomCount', 'masterBedroomCount', 'occupancy'].sort());
+  assert.deepEqual(fieldsFor('other_built_property', undefined, undefined, 'commercial'),
+    [...exactFields.other_built_property].sort());
   assert.deepEqual(FURNISHING_VALUES, ['unfurnished', 'semi_furnished', 'furnished']);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('constructionYear' as never)), false);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('roomCount' as never)), false);
