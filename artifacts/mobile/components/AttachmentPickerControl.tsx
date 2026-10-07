@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
-import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, View } from 'react-native';
+import { Button } from '@/components/Button';
 
 type Props = {
   label: string;
@@ -14,14 +15,12 @@ export function AttachmentPickerControl({ label, accept, testID, disabled, onFil
   if (Platform.OS !== 'web') return null;
   return (
     <View>
-      <TouchableOpacity
-        accessibilityRole="button"
+      <Button
+        title={label}
         disabled={disabled}
         onPress={() => input.current?.click()}
         testID={testID}
-      >
-        <Text>{label}</Text>
-      </TouchableOpacity>
+      />
       <input
         ref={input}
         type="file"
