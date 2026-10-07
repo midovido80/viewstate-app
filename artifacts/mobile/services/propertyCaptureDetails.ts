@@ -112,7 +112,13 @@ export function buildPropertyWithCaptureDetails(
     baseline.core.propertyType,
     fields.floorUse as 'residential' | 'commercial' | undefined,
     apartmentSubtype,
+    fields.propertyUse as 'residential' | 'commercial' | undefined,
   );
+  if (strict && ['occupancy', 'masterBedroomCount'].some(field =>
+    fields[field as PropertyDetailField]?.trim()
+    && !applicable.some(definition => definition.field === field))) {
+    throw new Error('RESIDENTIAL_CAPTURE_DETAIL_INCOMPATIBLE');
+  }
   if (strict && baseline.core.propertyType === 'floor') {
     const applicableFields = new Set(applicable.map(definition => definition.field));
     const populatedFloorFields = PROPERTY_FORM_CATALOG
@@ -129,7 +135,7 @@ export function buildPropertyWithCaptureDetails(
     if (!raw?.trim()) continue;
     if (field === 'clarification') continue;
     if (field === 'intendedUse' || field === 'commercialActivity') rawDetails[field] = { value: raw, privacy: normalPrivacy };
-    else if (field === 'floorUse' || field === 'apartmentSubtype' || field === 'furnishing') rawDetails[field] = raw;
+    else if (field === 'floorUse' || field === 'apartmentSubtype' || field === 'furnishing' || field === 'occupancy' || field === 'propertyUse') rawDetails[field] = raw;
     else if (field.startsWith('has')) rawDetails[field] = raw === 'true';
     else rawDetails[field] = Number(raw);
   }

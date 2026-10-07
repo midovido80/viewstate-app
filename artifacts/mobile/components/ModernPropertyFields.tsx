@@ -18,7 +18,7 @@ export function ModernPropertyFields({
   amenityRenderExtra,
   requireExactValue = false,
   hideFloorUse = false,
-  hideApartmentSubtype = false,
+  hidePropertyUse = false, hideApartmentSubtype = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -29,6 +29,7 @@ export function ModernPropertyFields({
   requireExactValue?: boolean;
   hideFloorUse?: boolean;
   hideApartmentSubtype?: boolean;
+  hidePropertyUse?: boolean;
 }) {
   return (
     <PropertyEnrichmentFields
@@ -41,6 +42,7 @@ export function ModernPropertyFields({
       requireExactValue={requireExactValue}
       hideFloorUse={hideFloorUse}
       hideApartmentSubtype={hideApartmentSubtype}
+        hidePropertyUse={hidePropertyUse}
     />
   );
 }

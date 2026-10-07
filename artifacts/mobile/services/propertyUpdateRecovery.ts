@@ -419,7 +419,7 @@ export function buildPropertyUpdateCandidate(
     if (!raw?.trim() || definition.field === 'clarification') continue;
     if (definition.field === 'intendedUse' || definition.field === 'commercialActivity') {
       details[definition.field] = { value: raw, privacy: { classification: 'normal', disclosurePolicy: 'normal' } };
-    } else if (definition.field === 'floorUse' || definition.field === 'apartmentSubtype' || definition.field === 'furnishing') {
+    } else if (definition.field === 'floorUse' || definition.field === 'apartmentSubtype' || definition.field === 'furnishing' || definition.field === 'occupancy' || definition.field === 'propertyUse') {
       details[definition.field] = raw;
     } else if (definition.field.startsWith('has')) {
       details[definition.field] = raw === 'true';

@@ -1,4 +1,4 @@
-import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
+import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -44,6 +44,7 @@ export function PropertyEnrichmentFields({
   requireExactValue = false,
   hideFloorUse = false,
   hideApartmentSubtype = false,
+  hidePropertyUse = false,
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -54,41 +55,39 @@ export function PropertyEnrichmentFields({
   requireExactValue?: boolean;
   hideFloorUse?: boolean;
   hideApartmentSubtype?: boolean;
+  hidePropertyUse?: boolean;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
   const floorUse = values.floorUse;
-  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined);
+  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined);
   const definitions = applicableDefinitions.filter(definition =>
     definition.field !== 'floorUse'
+    && (!hidePropertyUse || definition.field !== 'propertyUse')
     && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')
     && definition.group !== 'amenity'
     && definition.field !== 'plotAreaSquareMeters'
     && definition.field !== 'builtUpAreaSquareMeters'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
+  const specificationOrder: PropertyDetailField[] = [
+    'propertyUse', 'apartmentSubtype', 'bedroomCount', 'masterBedroomCount', 'bathroomCount',
+    'floorNumber', 'parkingSpaceCount', 'livingRoomCount', 'furnishing', 'occupancy',
+  ];
+  const rank = (field: PropertyDetailField) => {
+    const index = specificationOrder.indexOf(field);
+    return index < 0 ? specificationOrder.length : index;
+  };
+  const sorted = [...definitions].sort((left, right) => rank(left.field) - rank(right.field));
   const ordered = propertyType === 'floor' && !hideFloorUse
-    ? [getApplicablePropertyFormFields(propertyType).find(item => item.field === 'floorUse')!, ...definitions]
-    : propertyType === 'apartment'
-      ? [...definitions].sort((left, right) => {
-        const order: PropertyDetailField[] = [
-          'apartmentSubtype',
-          'bedroomCount',
-          'bathroomCount',
-          'floorNumber',
-          'parkingSpaceCount',
-          'livingRoomCount',
-          'furnishing',
-        ];
-        return order.indexOf(left.field) - order.indexOf(right.field);
-      })
-      : definitions;
+    ? [getApplicablePropertyFormFields(propertyType).find(item => item.field === 'floorUse')!, ...sorted]
+    : sorted;
 
   function renderFieldContent(definition: PropertyFormFieldDefinition) {
     const field = definition.field;
     const testIdField = field === 'floorUse' ? 'floor-use' : field === 'apartmentSubtype' ? 'apartment-subtype' : field;
     const usesResidentialQuickPick = definition.control === 'numeric_quick_pick'
-      && isPropertyNumericQuickPickSurface(propertyType, floorUse);
+      && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
 
     if (usesResidentialQuickPick) {
       return (
@@ -107,7 +106,8 @@ export function PropertyEnrichmentFields({
     }
 
     if (definition.control === 'choice') {
-      const options = field === 'floorUse' ? ['residential', 'commercial']
+      const options = (field === 'floorUse' || field === 'propertyUse') ? ['residential', 'commercial']
+        : field === 'occupancy' ? ['family', 'bachelor', 'any']
         : field === 'apartmentSubtype' ? APARTMENT_SUBTYPES
         : FURNISHING_VALUES;
 
@@ -116,7 +116,8 @@ export function PropertyEnrichmentFields({
           {options.map(value => {
             const isSelected = values[field] === value;
             let label = value;
-            if (field === 'floorUse') label = t(`enrich.${value}` as any);
+            if (field === 'occupancy') label = ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] } as Record<string, string[]>)[value][language === 'ar' ? 1 : 0];
+            else if (field === 'floorUse' || field === 'propertyUse') label = t(`enrich.${value}` as any);
             else if (field === 'furnishing') label = t(`enrich.furnishing.${value}` as any);
             else if (field === 'apartmentSubtype') {
               label = t(`enrich.apartment_subtype.${value}` as any);
@@ -125,7 +126,7 @@ export function PropertyEnrichmentFields({
             return (
               <TouchableOpacity
                 key={value}
-                onPress={() => onChange(field, value)}
+                onPress={() => onChange(field, field === 'occupancy' && isSelected ? '' : value)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
                 testID={`enrich-${testIdField}-${value}`}
@@ -133,14 +134,14 @@ export function PropertyEnrichmentFields({
                   styles.chip,
                   {
                     borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? colors.primary + '11' : colors.card
+                    backgroundColor: isSelected ? (field === 'occupancy' ? colors.primary : colors.primary + '11') : colors.card
                   }
                 ]}
               >
                 <Text style={[
                   styles.chipText,
                   {
-                    color: isSelected ? colors.primary : colors.foreground,
+                    color: isSelected ? (field === 'occupancy' ? colors.primaryForeground : colors.primary) : colors.foreground,
                     fontFamily: isSelected ? fonts.semiBold : fonts.medium
                   }
                 ]}>
@@ -170,14 +171,14 @@ export function PropertyEnrichmentFields({
                   styles.chip,
                   {
                     borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? colors.primary + '11' : colors.card
+                    backgroundColor: isSelected ? (field === 'occupancy' ? colors.primary : colors.primary + '11') : colors.card
                   }
                 ]}
               >
                 <Text style={[
                   styles.chipText,
                   {
-                    color: isSelected ? colors.primary : colors.foreground,
+                    color: isSelected ? (field === 'occupancy' ? colors.primaryForeground : colors.primary) : colors.foreground,
                     fontFamily: isSelected ? fonts.semiBold : fonts.medium
                   }
                 ]}>
@@ -212,7 +213,7 @@ export function PropertyEnrichmentFields({
   return (
     <View style={styles.wrap}>
       {ordered.map(definition => {
-        const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && isPropertyNumericQuickPickSurface(propertyType, floorUse);
+        const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
         return (
           <View key={definition.field}>
             {!usesResidentialQuickPick && (

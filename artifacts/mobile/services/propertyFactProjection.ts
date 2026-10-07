@@ -22,6 +22,7 @@ export interface PropertyFactProjection {
 
 export const EQUIVALENT_TEMPLATE_FIELDS: Readonly<Record<string, PropertyDetailField>> = {
   bedroomCount: 'bedroomCount',
+  masterBedroomCount: 'masterBedroomCount',
   bathroomCount: 'bathroomCount',
   floorNumber: 'floorNumber',
   floorCount: 'floorCount',
@@ -110,7 +111,7 @@ export function projectPropertyFacts(property: Property): PropertyFactProjection
     const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[field.id];
     const legacy = property.demoCapture?.numericValues?.[field.id];
     if (canonicalField && legacy !== undefined) {
-      if (hasCanonicalSnapshot) continue;
+      if (hasCanonicalSnapshot && canonicalField !== 'masterBedroomCount') continue;
       const canonical = unwrap(details[canonicalField]);
       if (canonical === undefined) templateFacts[canonicalField] = legacy;
       else if (canonical !== legacy) conflicts.push({ key: canonicalField, canonicalValue: canonical as number, legacyValue: legacy });

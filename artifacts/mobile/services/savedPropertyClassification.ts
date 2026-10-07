@@ -54,6 +54,9 @@ export function assertPropertyDetailsEditClassification(
     // Missing or blank legacy draft fields are untouched, as in the existing candidate builder.
     if (requested?.trim() && requested !== saved) fail();
   }
+  if (baseline.core.propertyType === 'other_built_property' && detail(baseline, 'propertyUse') !== undefined
+    && choices.canonicalDetails?.propertyUse?.trim()
+    && choices.canonicalDetails.propertyUse !== detail(baseline, 'propertyUse')) fail();
   if (choices.demoMetadata && choices.demoMetadata.categoryId !== baseline.demoCapture?.categoryId) fail();
 }
 
@@ -61,6 +64,8 @@ export function assertSavedPropertyClassificationUnchanged(baseline: Property, c
   if (candidate.core.propertyType !== baseline.core.propertyType
     || (baseline.core.propertyType === 'apartment' && savedSubtype(candidate) !== savedSubtype(baseline))
     || (baseline.core.propertyType === 'floor' && detail(candidate, 'floorUse') !== detail(baseline, 'floorUse'))
+    || (baseline.core.propertyType === 'other_built_property' && detail(baseline, 'propertyUse') !== undefined
+      && detail(candidate, 'propertyUse') !== detail(baseline, 'propertyUse'))
     || candidate.demoCapture?.categoryId !== baseline.demoCapture?.categoryId) {
     throw new Error('SAVED_PROPERTY_CLASSIFICATION_LOCKED');
   }

@@ -1752,6 +1752,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               values={choices.canonicalDetails ?? {}}
               hideApartmentSubtype
               hideFloorUse
+              hidePropertyUse={Boolean((property.typeDetails as unknown as Record<string, unknown> | undefined)?.propertyUse)}
               onChange={updateCanonicalDetail}
               category={demoCategory}
               metadata={choices.demoMetadata}

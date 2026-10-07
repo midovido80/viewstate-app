@@ -32,6 +32,7 @@ export default function PropertyTypeScreen() {
     propertyType?: string | string[];
     sector?: string | string[];
     floorUse?: string | string[];
+    propertyUse?: string | string[];
   }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -62,6 +63,9 @@ export default function PropertyTypeScreen() {
   const sourceRole = firstParam(params.sourceRole);
   const [sector, setSector] = useState<PropertySectorFilter>(parsePropertySector(firstParam(params.sector)));
   const [selectedFloorUse, setSelectedFloorUse] = useState(parseFloorUse(firstParam(params.floorUse)));
+  const [selectedPropertyUse, setSelectedPropertyUse] = useState(parseFloorUse(firstParam(params.propertyUse)));
+  const propertyUse = sector === 'all' ? selectedPropertyUse : sector;
+  const otherUseRequired = mode === 'offered' && propertyType === 'other_built_property' && !propertyUse;
   const [floorConfirmation, setFloorConfirmation] = useState<FloorTransitionProposal | null>(null);
   const visibleTypes = getPropertyTypeChoices(sector);
   const floorUse = sector === 'all' ? selectedFloorUse : sector;
@@ -69,9 +73,10 @@ export default function PropertyTypeScreen() {
     const next = togglePropertySector(sector, pressed);
     setSector(next);
     setSelectedFloorUse(undefined);
+    setSelectedPropertyUse(undefined);
     const keepType = propertyType && getPropertyTypeChoices(next).includes(propertyType);
     if (!keepType) setPropertyType(undefined);
-    router.setParams({ sector: next, floorUse: undefined, ...(!keepType ? { propertyType: undefined, apartmentSubtype: undefined } : {}) });
+    router.setParams({ sector: next, floorUse: undefined, propertyUse: undefined, ...(!keepType ? { propertyType: undefined, apartmentSubtype: undefined } : {}) });
   };
   const choosePropertyType = (nextType: PropertyTypeChoice) => {
     setPropertyType(nextType);
@@ -80,7 +85,7 @@ export default function PropertyTypeScreen() {
   };
 
   const finishSelection = () => {
-    if (!propertyType || !visibleTypes.includes(propertyType) || !mode || (propertyType === 'floor' && !floorUse) || (rawTransaction !== undefined && !transaction)) return;
+    if (otherUseRequired || !propertyType || !visibleTypes.includes(propertyType) || !mode || (propertyType === 'floor' && !floorUse) || (rawTransaction !== undefined && !transaction)) return;
     const canonical = canonicalPropertyTypeChoice(propertyType);
     const selectedSubtype = propertyType === 'duplex' ? 'duplex' : apartmentSubtype;
     const target = getPropertyFormRoute({
@@ -117,6 +122,7 @@ export default function PropertyTypeScreen() {
         ...(captureDetails.attachments ? { attachments: captureDetails.attachments } : {}),
       });
     }
+    if (mode === 'offered' && propertyType === 'other_built_property' && propertyUse && !updateCaptureDetails({ propertyUse })) return;
     if (propertyType === 'duplex' && !updateCaptureDetails({ apartmentSubtype: 'duplex' })) return;
     if (target.kind === 'floor' && floorUse && !updateCaptureDetails({ floorUse })) return;
     router.push({
@@ -156,6 +162,14 @@ export default function PropertyTypeScreen() {
             testID={`select-type-${type}`}
           />
         ))}
+        {mode === 'offered' && propertyType === 'other_built_property' && sector === 'all' ? (
+          <View testID="property-other-use-selection" style={styles.floorChoices}>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'استخدام العقار' : 'Property use'}</Text>
+            {(['residential', 'commercial'] as const).map(value => (
+              <SelectCard key={value} title={value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')} selected={selectedPropertyUse === value} testID={`select-other-use-${value}`} onSelect={() => { setSelectedPropertyUse(value); router.setParams({ propertyUse: value }); }} />
+            ))}
+          </View>
+        ) : null}
         {propertyType === 'floor' && sector === 'all' && <View testID="property-floor-use-selection" style={styles.floorChoices}>
           <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'استخدام الدور' : 'Floor use'}</Text>
           {(['residential', 'commercial'] as const).map(value => <SelectCard key={value} title={value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')} selected={selectedFloorUse === value} testID={`select-floor-use-${value}`} onSelect={() => { setSelectedFloorUse(value); router.setParams({ floorUse: value }); }} />)}
@@ -178,7 +192,7 @@ export default function PropertyTypeScreen() {
         <Button
           title={t('capture.next')}
           onPress={handleNext}
-          disabled={!propertyType || !visibleTypes.includes(propertyType) || (propertyType === 'floor' && !floorUse) || !mode || (rawTransaction !== undefined && !transaction)}
+          disabled={otherUseRequired || !propertyType || !visibleTypes.includes(propertyType) || (propertyType === 'floor' && !floorUse) || !mode || (rawTransaction !== undefined && !transaction)}
           size="large"
           testID="btn-next"
         />

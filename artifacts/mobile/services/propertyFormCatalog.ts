@@ -245,6 +245,9 @@ const LABELS: Record<string, readonly [string, string]> = {
   elevatorCount: ['Elevators', 'عدد المصاعد'],
   apartmentSubtype: ['Apartment subtype', 'نوع الشقة'],
   bedroomCount: ['Bedrooms', 'غرف النوم'],
+  masterBedroomCount: ['Master bedrooms', 'غرف نوم ماستر'],
+  occupancy: ['Occupancy', 'نوع السكن'],
+  propertyUse: ['Property use', 'استخدام العقار'],
   livingRoomCount: ['Number of halls', 'عدد الصالات'],
   floorNumber: ['Floor number', 'رقم الدور'],
   floorUse: ['Floor use', 'استخدام الدور'],
@@ -274,7 +277,7 @@ const LABELS: Record<string, readonly [string, string]> = {
 };
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
-  'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'masterBedroomCount', 'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',
@@ -287,10 +290,10 @@ const BOOLEAN_FIELDS = new Set<string>([
   'hasKitchen', 'hasHall', 'hasParking',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
-  'apartmentSubtype', 'floorUse', 'furnishing',
+  'apartmentSubtype', 'floorUse', 'furnishing', 'occupancy', 'propertyUse',
 ]);
 const NUMERIC_QUICK_PICK_FIELDS = new Set<PropertyDetailField>([
-  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'masterBedroomCount', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',
@@ -336,10 +339,15 @@ export function getApplicablePropertyFormFields(
   propertyType: PropertyType,
   floorUse?: FloorUse,
   apartmentSubtype?: ApartmentSubtype,
+  propertyUse?: FloorUse,
 ): readonly PropertyFormFieldDefinition[] {
   return PROPERTY_FORM_CATALOG.filter(definition =>
     definition.appliesTo.includes(propertyType)
-    && (!definition.apartmentSubtypes
+    && (!definition.propertyUses || propertyType !== 'other_built_property'
+      || propertyUse !== undefined && definition.propertyUses.includes(propertyUse))
+    && (definition.field === 'masterBedroomCount' && propertyType === 'apartment' && apartmentSubtype === undefined
+      || !definition.apartmentSubtypes
+      || propertyType !== 'apartment'
       || propertyType === 'apartment'
         && apartmentSubtype !== undefined
         && definition.apartmentSubtypes.includes(apartmentSubtype))

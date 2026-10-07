@@ -1240,6 +1240,24 @@ export default function StudioCaptureRoute() {
           {mode === 'offered'
             ? textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })
             : null}
+          {mode === 'offered' ? (
+            <View style={styles.field} testID="studio-occupancy-field">
+              <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'نوع السكن' : 'Occupancy'}</Text>
+              <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                {(['family', 'bachelor', 'any'] as const).map(value => (
+                  <ChoiceChip
+                    key={value}
+                    label={({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] })[value][language === 'ar' ? 1 : 0]}
+                    selected={values.occupancy === value}
+                    onPress={() => update('occupancy', values.occupancy === value ? undefined : value)}
+                    role="radio"
+                    testID={`studio-occupancy-${value}`}
+                    style={styles.flexChip}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>
@@ -1426,6 +1444,10 @@ export default function StudioCaptureRoute() {
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
       {mode === 'wanted' ? reviewItem(catalogLabel('transaction'), studioReviewIntent().label) : null}
       {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderReviewCatalogField(fieldId))}
+      {mode === 'offered' && values.occupancy ? reviewItem(
+        language === 'ar' ? 'نوع السكن' : 'Occupancy',
+        ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0],
+      ) : null}
       {mode === 'offered' && values.privateNotes
         ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes)
         : null}

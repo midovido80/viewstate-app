@@ -40,6 +40,7 @@ export type ApartmentSubtype =
   | "duplex";
 
 export type FloorUse = "residential" | "commercial";
+export type PropertyOccupancy = "family" | "bachelor" | "any";
 export type Furnishing = "unfurnished" | "semi_furnished" | "furnished";
 
 export type Transaction = "sale" | "rent";
@@ -97,6 +98,9 @@ export interface ClassifiedLiteralText {
  */
 export interface WholeBuildingTypeDetails {
   readonly propertyType: "whole_building";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
+  readonly bedroomCount?: number;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly floorCount?: number;
@@ -129,6 +133,8 @@ export interface CommercialComplexTypeDetails {
 
 export interface ApartmentTypeDetails {
   readonly propertyType: "apartment";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly apartmentSubtype?: ApartmentSubtype;
   /** Canonical open-plan room count for a Studio; distinct from bedrooms. */
@@ -162,6 +168,8 @@ export interface EmptyFloorTypeDetails {
 
 export interface ResidentialFloorTypeDetails {
   readonly propertyType: "floor";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
   readonly floorUse: "residential";
   readonly builtUpAreaSquareMeters?: number;
   readonly bedroomCount?: number;
@@ -203,6 +211,8 @@ export type FloorTypeDetails =
 
 export interface HouseTypeDetails {
   readonly propertyType: "house";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly bedroomCount?: number;
@@ -266,6 +276,10 @@ export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"
 
 export interface OtherBuiltPropertyTypeDetails {
   readonly propertyType: "other_built_property";
+  readonly propertyUse?: FloorUse;
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
+  readonly bedroomCount?: number;
   readonly clarification: ClassifiedLiteralText;
   readonly hasCentralAC?: boolean;
   readonly plotAreaSquareMeters?: number;

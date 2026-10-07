@@ -66,6 +66,9 @@ export type PropertyDetailField =
   | "elevatorCount"
   | "apartmentSubtype"
   | "studioRoomCount"
+  | "propertyUse"
+  | "occupancy"
+  | "masterBedroomCount"
   | "bedroomCount"
   | "livingRoomCount"
   | "floorNumber"
@@ -98,6 +101,7 @@ export interface PropertyDetailFieldDefinition {
   readonly field: PropertyDetailField;
   readonly appliesTo: readonly PropertyType[];
   readonly floorUses?: readonly FloorUse[];
+  readonly propertyUses?: readonly FloorUse[];
   readonly apartmentSubtypes?: readonly ApartmentSubtype[];
 }
 
@@ -117,7 +121,10 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "elevatorCount", appliesTo: ["whole_building", "commercial_complex"] },
   { field: "apartmentSubtype", appliesTo: ["apartment"] },
   { field: "studioRoomCount", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
-  { field: "bedroomCount", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "propertyUse", appliesTo: ["other_built_property"] },
+  { field: "occupancy", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "other_built_property"], floorUses: ["residential"], propertyUses: ["residential"] },
+  { field: "bedroomCount", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "other_built_property"], floorUses: ["residential"], propertyUses: ["residential"] },
+  { field: "masterBedroomCount", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "other_built_property"], floorUses: ["residential"], propertyUses: ["residential"], apartmentSubtypes: ["standard_apartment", "duplex"] },
   { field: "livingRoomCount", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "floorNumber", appliesTo: ["apartment", "floor", "office", "shop"] },
   { field: "floorUse", appliesTo: ["floor"] },

@@ -13,7 +13,7 @@ import { getPropertyFormField } from '@/services/propertyFormCatalog';
 import { readStudioRequirement } from '@/services/studioFormModel';
 
 const coreFieldOrder: readonly PropertyDetailField[] = [
-  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
+  'bedroomCount', 'masterBedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
 ];
 
 export const propertyDetailDisplayDefinitions = [
@@ -42,7 +42,11 @@ export function formatPropertyDetailValue(
       : { unfurnished: 'Unfurnished', semi_furnished: 'Semi-furnished', furnished: 'Furnished' };
     return localized[value as keyof typeof localized] ?? String(value);
   }
-  if (field === 'floorUse') {
+  if (field === 'occupancy') {
+    const labels = { family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] };
+    return labels[value as keyof typeof labels]?.[language === 'ar' ? 1 : 0] ?? String(value);
+  }
+  if (field === 'floorUse' || field === 'propertyUse') {
     return value === 'residential'
       ? (language === 'ar' ? 'سكني' : 'Residential')
       : value === 'commercial' ? (language === 'ar' ? 'تجاري' : 'Commercial') : String(value);
@@ -69,6 +73,7 @@ function unwrapDetailValue(value: unknown): unknown {
 
 const STUDIO_NON_APPLICABLE_TOTALS = new Set([
   'bedroomCount',
+  'masterBedroomCount',
   'floorCount',
   'apartmentCount',
   'shopCount',
@@ -283,7 +288,7 @@ export function getPropertyDetailCategoryRows(
     const value = metadata.numericValues?.[numericField.id];
     if (typeof value !== 'number' || !Number.isFinite(value)) continue;
     const canonicalField = EQUIVALENT_TEMPLATE_FIELDS[numericField.id];
-    if (canonicalField && hasCanonicalSnapshot) continue;
+    if (canonicalField && hasCanonicalSnapshot && canonicalField !== 'masterBedroomCount') continue;
     if (canonicalField && unwrapDetailValue(canonicalDetails[canonicalField]) !== undefined
       && unwrapDetailValue(canonicalDetails[canonicalField]) !== null) continue;
     const displayField = canonicalField ?? numericField.id;

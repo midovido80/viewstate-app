@@ -6,6 +6,7 @@ import {
   type CatalogPreference,
   type ApartmentTypeDetails,
   type Property,
+  type PropertyOccupancy,
   type RequirementAreaMode,
   type RequirementRentalPeriodId,
   type ResidentialAmenity,
@@ -32,6 +33,7 @@ export interface StudioFormValues {
   readonly preferredAreaIds: readonly string[];
   readonly mapsLink: string;
   readonly privateNotes: string;
+  readonly occupancy?: PropertyOccupancy;
   readonly price: string;
   readonly budgetMinimum: string;
   readonly budgetMaximum: string;
@@ -172,6 +174,9 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
   }
 
   if (values.mode === 'offered') {
+    if (values.occupancy !== undefined && !['family', 'bachelor', 'any'].includes(values.occupancy)) {
+      errors.push(formError('occupancy', 'invalid_choice', 'Select Family, Bachelor, or Any.'));
+    }
     if (!values.locationAreaId || getAreaById(values.locationAreaId) === undefined) {
       errors.push(formError('locationAreaId', 'invalid_area', 'Select a canonical Kuwait area.'));
     }
@@ -317,6 +322,7 @@ export function buildStudioProperty(
     propertyType: 'apartment' as const,
     apartmentSubtype: 'studio' as const,
     studioRoomCount: STUDIO_OPEN_ROOM_COUNT,
+    ...(values.occupancy !== undefined ? { occupancy: values.occupancy } : {}),
     ...(numberValue(values.areaSquareMeters) !== undefined
       ? { builtUpAreaSquareMeters: numberValue(values.areaSquareMeters) }
       : {}),
@@ -451,6 +457,7 @@ export function readStudioProperty(property: Property): StudioFormValues {
     locationAreaId: property.core.locationArea.id,
     mapsLink: property.locationEnrichment?.mapsLink?.value ?? '',
     privateNotes: property.core.privateNotes?.value ?? '',
+    ...(details.occupancy !== undefined ? { occupancy: details.occupancy } : {}),
     price: String(transaction === 'sale'
       ? property.activeOffer.salePrice.amount
       : property.activeOffer.rentalPrice.amount),

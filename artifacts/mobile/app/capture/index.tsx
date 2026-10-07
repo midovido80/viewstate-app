@@ -1,3 +1,4 @@
+import type { ApartmentSubtype } from '@workspace/property-domain';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { getCaptureBackAction } from '@/services/captureBackNavigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -280,9 +281,9 @@ export default function CaptureWorkflow() {
     : null;
   const applicable = useMemo(
     () => draft.propertyType
-      ? getApplicablePropertyFormFields(draft.propertyType, captureDetails.floorUse as 'residential' | 'commercial' | undefined)
+      ? getApplicablePropertyFormFields(draft.propertyType, captureDetails.floorUse as 'residential' | 'commercial' | undefined, captureDetails.apartmentSubtype as ApartmentSubtype | undefined, captureDetails.propertyUse as 'residential' | 'commercial' | undefined)
       : [],
-    [captureDetails.floorUse, draft.propertyType],
+    [captureDetails.floorUse, captureDetails.apartmentSubtype, captureDetails.propertyUse, draft.propertyType],
   );
   const previewFeatureLabels = Array.from(new Set([
     ...applicable
@@ -1007,6 +1008,7 @@ export default function CaptureWorkflow() {
                 requireExactValue
                 hideFloorUse={Boolean(captureDetails.floorUse)}
                 hideApartmentSubtype={Boolean(draft.apartmentSubtype || captureDetails.apartmentSubtype)}
+                hidePropertyUse={Boolean(captureDetails.propertyUse)}
                 category={demoCategory}
                 metadata={demoMetadata}
                 nearby={nearby}

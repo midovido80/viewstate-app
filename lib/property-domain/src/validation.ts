@@ -167,6 +167,19 @@ export function validateTypeDetails(
       }
     }
   }
+  if (candidate.occupancy !== undefined && !["family", "bachelor", "any"].includes(candidate.occupancy as string)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "occupancy"], "Occupancy must be family, bachelor, or any."));
+  }
+  if (candidate.propertyUse !== undefined && !isFloorUse(candidate.propertyUse)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "propertyUse"], "Property use must be residential or commercial."));
+  }
+  if (details.propertyType === "apartment" && details.apartmentSubtype === "studio" && candidate.masterBedroomCount !== undefined) {
+    issues.push(issue("incompatible_detail_field", ["typeDetails", "masterBedroomCount"], "Master bedrooms are not applicable to a Studio."));
+  }
+  if (typeof candidate.masterBedroomCount === "number" && typeof candidate.bedroomCount === "number"
+    && candidate.masterBedroomCount > candidate.bedroomCount) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "masterBedroomCount"], "Master bedrooms cannot exceed total bedrooms."));
+  }
   if (candidate.furnishing !== undefined && !isFurnishing(candidate.furnishing)) {
     issues.push(issue("invalid_furnishing", ["typeDetails", "furnishing"], "Furnishing must be unfurnished, semi_furnished, or furnished."));
   }
@@ -203,6 +216,10 @@ export function validateTypeDetails(
       continue;
     }
 
+    if (details.propertyType === "other_built_property" && definition.propertyUses
+      && !definition.propertyUses.includes(candidate.propertyUse as "residential" | "commercial")) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", definition.field], "This field requires residential Property use."));
+    }
     if (
       details.propertyType === "floor" &&
       definition.floorUses !== undefined &&
@@ -242,6 +259,7 @@ export function validateTypeDetails(
     "officeCount",
     "elevatorCount",
     "bedroomCount",
+    "masterBedroomCount",
     "studioRoomCount",
     "livingRoomCount",
     "floorNumber",
