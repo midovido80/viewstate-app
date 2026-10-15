@@ -29,6 +29,6 @@ test('wanted subtype display preserves legacy standard values and omits non-apar
 
 test('Person Requirement cards append subtype while retaining Apartment as the property type', async () => {
   const source = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(source, /t\(`propertyType\.\$\{requirement\.propertyType\}`\)\}\{getWantedApartmentSubtypeLabel\(requirement, language\)/);
+  assert.match(source, /t\(`propertyType\.\$\{requirement\.propertyType\}`\)\)\}\{getWantedApartmentSubtypeLabel\(requirement, language\)/);
   assert.match(source, /getWantedApartmentSubtypeLabel,\s*\} from '@\/services\/propertyDetailPresentation'/);
 });

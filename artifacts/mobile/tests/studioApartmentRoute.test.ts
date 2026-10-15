@@ -370,7 +370,7 @@ test('production subtype route keeps Standard on existing offered and wanted des
   });
 });
 
-test('production property type route clears only subtype when changing away from Apartment', async () => {
+test('production property type route clears stale subtype and Floor use when changing away from Apartment', async () => {
   const route = await import('../app/capture/property-type.tsx');
   const harness = routeHarness({
     ...flowContext,
@@ -382,6 +382,7 @@ test('production property type route clears only subtype when changing away from
 
   assert.deepEqual(harness.setParamsCalls[0], {
     propertyType: 'villa',
+    floorUse: undefined,
     apartmentSubtype: undefined,
   });
   assert.equal(harness.params.mode, 'wanted');
@@ -450,7 +451,7 @@ test('production Wanted Floor gets its use before the form for both transactions
   const route = await import('../app/capture/property-type.tsx');
   for (const transaction of ['sale', 'rent']) for (const sector of ['commercial', 'residential']) {
     const harness = routeHarness({ ...flowContext, transaction, sector });
-    (findByTestId(renderRoute(route, harness), 'select-type-floor').props.onSelect as () => void)();
+    (findByTestId(renderRoute(route, harness), `select-type-${sector}_floor`).props.onSelect as () => void)();
     const screen = renderRoute(route, harness);
     assert.throws(() => findByTestId(screen, 'property-floor-use-selection'));
     (findByTestId(screen, 'btn-next').props.onPress as () => void)();
@@ -460,16 +461,47 @@ test('production Wanted Floor gets its use before the form for both transactions
   }
 });
 
-test('production All requires a Floor use before continuing', async () => {
+test('production All exposes both named Floor choices and opens the correct form without another use selection', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  for (const mode of ['offered', 'wanted']) for (const transaction of ['sale', 'rent']) for (const use of ['residential', 'commercial']) {
+    const harness = routeHarness({ mode, transaction });
+    let screen = renderRoute(route, harness);
+    findByTestId(screen, 'select-type-residential_floor');
+    findByTestId(screen, 'select-type-commercial_floor');
+    assert.throws(() => findByTestId(screen, 'select-type-floor'));
+    (findByTestId(screen, `select-type-${use}_floor`).props.onSelect as () => void)();
+    screen = renderRoute(route, harness);
+    assert.equal(findByTestId(screen, 'btn-next').props.disabled, false);
+    assert.throws(() => findByTestId(screen, 'property-floor-use-selection'));
+    (findByTestId(screen, 'btn-next').props.onPress as () => void)();
+    assert.equal(harness.pushes[0].pathname, mode === 'wanted' ? '/requirement/new' : '/capture');
+    assert.equal(harness.pushes[0].params?.propertyType, 'floor');
+    assert.equal(harness.pushes[0].params?.floorUse, use);
+    if (mode === 'offered') assert.equal(harness.captureDetails.floorUse, use);
+  }
+});
+
+test('production selector restores the exact named Floor from canonical Back parameters', async () => {
+  const route = await import('../app/capture/property-type.tsx');
+  for (const use of ['residential', 'commercial']) {
+    const harness = routeHarness({ mode: 'wanted', transaction: 'rent', propertyType: 'floor', floorUse: use, sector: 'all' });
+    const screen = renderRoute(route, harness);
+    assert.equal(findByTestId(screen, `select-type-${use}_floor`).props.selected, true);
+    assert.equal(findByTestId(screen, 'btn-next').props.disabled, false);
+    (findByTestId(screen, 'btn-next').props.onPress as () => void)();
+    assert.equal(harness.pushes[0].params?.floorUse, use);
+  }
+});
+
+test('production sector changes hide and clear the opposite named Floor', async () => {
   const route = await import('../app/capture/property-type.tsx');
   const harness = routeHarness({ mode: 'wanted', transaction: 'rent' });
-  (findByTestId(renderRoute(route, harness), 'select-type-floor').props.onSelect as () => void)();
-  let screen = renderRoute(route, harness);
+  (findByTestId(renderRoute(route, harness), 'select-type-residential_floor').props.onSelect as () => void)();
+  (findByTestId(renderRoute(route, harness), 'property-sector-commercial').props.onPress as () => void)();
+  const screen = renderRoute(route, harness);
+  assert.throws(() => findByTestId(screen, 'select-type-residential_floor'));
+  findByTestId(screen, 'select-type-commercial_floor');
   assert.equal(findByTestId(screen, 'btn-next').props.disabled, true);
-  (findByTestId(screen, 'select-floor-use-commercial').props.onSelect as () => void)();
-  screen = renderRoute(route, harness);
-  (findByTestId(screen, 'btn-next').props.onPress as () => void)();
-  assert.equal(harness.pushes[0].params?.floorUse, 'commercial');
 });
 
 test('production direct Duplex bypasses the Apartment subtype page', async () => {
