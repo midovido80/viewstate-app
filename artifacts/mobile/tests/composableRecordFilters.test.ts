@@ -65,7 +65,7 @@ test('Properties and People screens expose the same combinable, accessible filte
     assert.match(source, /accessibilityRole=\{option\.key === 'all' \? 'button' : 'checkbox'\}/);
     assert.match(source, /aria-checked=\{option\.key === 'all' \? undefined : selected\}/);
   }
-  assert.match(properties, /filterOfferedWantedRows\(rows, filter, search\)/);
+  assert.match(properties, /filterOfferedWantedRows\(rows, filter, search, sector\)/);
   assert.match(people, /anyRecordIntentMatchesComposableFilter/);
   assert.match(people, /line\.intentId/);
 });

@@ -27,6 +27,8 @@ import {
   type ComposableRecordFilter,
 } from '@/services/composableRecordFilters';
 
+import { togglePropertySector, type PropertySectorFilter } from '@/services/propertySectorSelection';
+
 const PROPERTY_FILTER_OPTIONS = [
   { key: 'all' },
   { key: 'offered', dimension: 'directions', value: 'offered' },
@@ -48,6 +50,7 @@ export default function PropertiesScreen() {
   const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ComposableRecordFilter>(EMPTY_COMPOSABLE_RECORD_FILTER);
+  const [sector, setSector] = useState<PropertySectorFilter>('all');
   const rows = loadResult?.rows ?? [];
 
   useEffect(() => {
@@ -69,7 +72,7 @@ export default function PropertiesScreen() {
     }, [highlightedId])
   );
 
-  const visibleRows = filterOfferedWantedRows(rows, filter, search);
+  const visibleRows = filterOfferedWantedRows(rows, filter, search, sector);
   const prioritizedRows = highlightedId
     ? [
       ...visibleRows.filter(row => row.kind === 'offered' && row.id === highlightedId),
@@ -243,16 +246,21 @@ export default function PropertiesScreen() {
       <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         {PROPERTY_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
-            ? !hasActiveRecordFilters(filter)
+            ? !hasActiveRecordFilters(filter) && sector === 'all'
             : option.dimension === 'directions'
               ? filter.directions.includes(option.value)
               : filter.transactions.includes(option.value);
           return (
             <TouchableOpacity
               key={option.key}
-              onPress={() => setFilter(current => option.key === 'all'
-                ? EMPTY_COMPOSABLE_RECORD_FILTER
-                : toggleRecordFilter(current, option.dimension, option.value))}
+              onPress={() => {
+                if (option.key === 'all') {
+                  setFilter(EMPTY_COMPOSABLE_RECORD_FILTER);
+                  setSector('all');
+                } else {
+                  setFilter(current => toggleRecordFilter(current, option.dimension, option.value));
+                }
+              }}
               style={[
                 styles.filterChip,
                 { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
@@ -263,6 +271,27 @@ export default function PropertiesScreen() {
             >
               <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {t(`properties.filter.${option.key}` as keyof Translations)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={[styles.sectorFilters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="properties-sector-filters">
+        {(['residential', 'commercial'] as const).map(value => {
+          const selected = sector === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              onPress={() => setSector(current => togglePropertySector(current, value))}
+              style={[styles.filterChip, styles.sectorChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
+              testID={`properties-filter-${value}`}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected }}
+              aria-checked={selected}
+            >
+              <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+                {value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}
               </Text>
             </TouchableOpacity>
           );
@@ -338,6 +367,17 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 8,
     flexWrap: 'wrap',
+  },
+  sectorFilters: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  sectorChip: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterChip: {
     borderWidth: 1,

@@ -15,6 +15,8 @@ import {
   type ComposableRecordFilter,
 } from '@/services/composableRecordFilters';
 
+import { getBuiltPropertySector, type PropertySectorFilter } from '@/services/propertySectorSelection';
+
 export type OfferedWantedFilter = 'all' | 'offered' | 'wanted' | 'sale' | 'rent';
 
 interface PresentationBase {
@@ -345,10 +347,21 @@ export function filterOfferedWantedRows(
   rows: readonly OfferedWantedRow[],
   filter: OfferedWantedFilter | ComposableRecordFilter = EMPTY_COMPOSABLE_RECORD_FILTER,
   query = '',
+  sector: PropertySectorFilter = 'all',
 ): OfferedWantedRow[] {
   const selection = typeof filter === 'string' ? legacyFilterSelection(filter) : filter;
   const meaningfulQuery = flexibleSearchTerms(query).length > 0;
   return rows.filter(row => {
+    if (sector !== 'all') {
+      const propertyType = row.kind === 'offered' ? row.property.core.propertyType : row.requirement.propertyType;
+      const details = row.kind === 'offered'
+        ? row.property.typeDetails as Readonly<Record<string, unknown>> | undefined
+        : undefined;
+      const use = row.kind === 'offered'
+        ? propertyType === 'floor' ? details?.floorUse : details?.propertyUse
+        : propertyType === 'floor' ? row.requirement.floorUse : undefined;
+      if (getBuiltPropertySector(propertyType, use) !== sector) return false;
+    }
     const intent = row.kind === 'offered'
       ? projectPropertyIntent(row.property, 'en')
       : projectRequirementIntent(row.requirement, 'en');

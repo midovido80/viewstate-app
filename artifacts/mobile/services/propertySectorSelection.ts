@@ -28,3 +28,11 @@ export function canonicalPropertyTypeChoice(choice: PropertyTypeChoice) {
     ? { propertyType: 'apartment' as const, apartmentSubtype: 'duplex' as const }
     : { propertyType: choice };
 }
+
+/** Shared types need an explicit stored use; never infer it from labels or notes. */
+export function getBuiltPropertySector(propertyType: PropertyType, use?: unknown): FloorUse | undefined {
+  if (propertyType === 'floor' || propertyType === 'other_built_property') return parseFloorUse(use);
+  if (RESIDENTIAL.includes(propertyType) && !COMMERCIAL.includes(propertyType)) return 'residential';
+  if (COMMERCIAL.includes(propertyType) && !RESIDENTIAL.includes(propertyType)) return 'commercial';
+  return undefined;
+}
