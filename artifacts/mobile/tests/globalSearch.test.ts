@@ -475,8 +475,8 @@ test('Person activity read model deduplicates linked/source offers, preserves ex
 test('People cards render only two activity lines, navigate exact children without parent presses, refresh on focus/search, and omit private notes', async () => {
   const screen = await readFile('app/(tabs)/people.tsx', 'utf8');
   assert.match(screen, /getPersonDirectIntentActivityLines\(person\.id, properties, requirements, links, sources, formatters\)/);
-  assert.match(screen, /\(activityByPerson\.get\(item\.id\) \?\? \[\]\)\.slice\(0,\s*2\)/);
-  assert.match(screen, /activityByPerson\.get\(item\.id\)!\.length - 2/);
+  assert.match(screen, /\(visibleActivityByPerson\.get\(item\.id\) \?\? \[\]\)\.slice\(0,\s*2\)/);
+  assert.match(screen, /visibleActivityByPerson\.get\(item\.id\)!\.length - 2/);
   assert.match(screen, /onPress=\{event => \{\s*event\.stopPropagation\(\);\s*router\.push\(line\.href as never\);/);
   assert.match(screen, /onPress=\{\(\) => router\.push\(`\/person\/\$\{encodeURIComponent\(item\.id\)\}` as never\)\}/);
   assert.match(screen, /useFocusEffect\(useCallback\(/);

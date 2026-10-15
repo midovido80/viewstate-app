@@ -301,8 +301,8 @@ test('People search remains name/phone-only and distinguishes an empty database 
   assert.match(people, /const allPeople = store\.getPeople\(\)/);
   assert.match(people, /store\.searchPeople\(search\)/);
   assert.match(people, /setTotalPeople\(all\.length\)/);
-  assert.match(people, /search\.trim\(\) && !hasActiveRecordFilters\(filter\)\s*\?\s*t\('people\.no_search_results'\)/);
-  assert.match(people, /hasActiveRecordFilters\(filter\)\s*\?\s*t\('people\.no_filtered_results'\)/);
+  assert.match(people, /search\.trim\(\) && !hasActivePeopleFilters\s*\?\s*t\('people\.no_search_results'\)/);
+  assert.match(people, /hasActivePeopleFilters\s*\?\s*t\('people\.no_filtered_results'\)/);
   assert.match(people, /testID=\{totalPeople === 0 \? 'people-empty' : 'people-no-search-results'\}/);
   assert.match(strings, /'people\.search': 'Search People by name or phone/);
   assert.match(strings, /'people\.no_search_results': 'No People match this name or phone search/);
