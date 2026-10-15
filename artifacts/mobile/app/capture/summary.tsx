@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { useRef, useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -368,7 +369,7 @@ export default function SummaryScreen() {
             )) : null}
           <SummaryRow 
             label={t('summary.property_type')}
-            value={draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : ''} 
+            value={draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : ''}
           />
           {previewSubtypeLabel ? (
             <SummaryRow

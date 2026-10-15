@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -216,7 +217,7 @@ export default function RequirementDetailsScreen() {
               {caption('SAVED REQUIREMENT', 'طلب محفوظ')}
             </Text>
             <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: align }]}>
-                {requirementIntent?.label} · {t(`propertyType.${record.propertyType}`)}
+                {requirementIntent?.label} · {(record.propertyType === 'floor' ? getFloorTypeLabel(record.floorUse, language, t('propertyType.floor')) : t(`propertyType.${record.propertyType}`))}
             </Text>
             {renderOwnerState()}
           </View>

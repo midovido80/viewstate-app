@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { CatalogPreference, PropertyDetailField, SeekerRequirement } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, toEnglishDigits } from '@/constants/market';
@@ -64,7 +65,7 @@ export function getRequirementDetailsRows(
   const subtype = getWantedApartmentSubtypeLabel(requirement, language);
 
   add('overview', 'purpose', label('Purpose', 'الغرض'), translate(`requirements.purpose.${requirement.purpose}`));
-  add('overview', 'propertyType', label('Property type', 'نوع العقار'), translate(`propertyType.${requirement.propertyType}`));
+  add('overview', 'propertyType', label('Property type', 'نوع العقار'), requirement.propertyType === 'floor' ? getFloorTypeLabel(requirement.floorUse, language, translate('propertyType.floor')) : translate(`propertyType.${requirement.propertyType}`));
   if (requirement.propertyType === 'apartment') {
     add('overview', 'apartmentSubtype', label('Apartment subtype', 'نوع الشقة'), subtype ?? unspecified(language));
   }

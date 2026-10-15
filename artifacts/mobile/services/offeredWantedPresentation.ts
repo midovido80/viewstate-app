@@ -15,7 +15,7 @@ import {
   type ComposableRecordFilter,
 } from '@/services/composableRecordFilters';
 
-import { getBuiltPropertySector, type PropertySectorFilter } from '@/services/propertySectorSelection';
+import { getBuiltPropertySector, getFloorTypeLabel, type PropertySectorFilter } from '@/services/propertySectorSelection';
 
 export type OfferedWantedFilter = 'all' | 'offered' | 'wanted' | 'sale' | 'rent';
 
@@ -296,6 +296,8 @@ function propertySearchFields(row: OfferedPropertyRow): FlexibleSearchField[] {
   return [
     { field: 'type', value: property.core.propertyType },
     ...values.map(value => ({ field: 'type', value })),
+    ...(property.core.propertyType === 'floor' && getBuiltPropertySector('floor', details?.floorUse)
+      ? (['en', 'ar'] as const).map(language => ({ field: 'type', value: getFloorTypeLabel(details?.floorUse, language, '') })) : []),
     ...(subtype ? [{ field: 'subtype', value: subtype }] : []),
     ...(subtype === 'standard_apartment' ? [{ field: 'subtype', value: 'standard apartment' }] : []),
     ...(subtype === 'studio' ? [{ field: 'subtype', value: 'studio apartment' }] : []),
@@ -317,6 +319,8 @@ function requirementSearchFields(row: WantedRequirementRow): FlexibleSearchField
   const seeker = row.person ? [row.person] : [];
   return [
     { field: 'type', value: requirement.propertyType },
+    ...(requirement.propertyType === 'floor' && requirement.floorUse
+      ? (['en', 'ar'] as const).map(language => ({ field: 'type', value: getFloorTypeLabel(requirement.floorUse, language, '') })) : []),
     ...(PROPERTY_TYPE_SEARCH_VALUES[requirement.propertyType] ?? [])
       .map(value => ({ field: 'type', value })),
     ...(subtype?.kind === 'choice' ? [{ field: 'subtype', value: subtype.value }] : []),

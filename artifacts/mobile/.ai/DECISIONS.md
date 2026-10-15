@@ -1228,3 +1228,6 @@ Residential Other uses optional propertyUse to distinguish it from commercial Ot
 
 ## Founder decision — 2026-10-15: Property inventory sector filters
 Add Residential and Commercial controls below the current Properties tab filter row. Use mutually exclusive sector selection; tapping the active sector restores both sectors, and All clears both sector and intent facets. Sector restrictions intersect search and existing filters for Offered/Wanted rows. Shared Floor/Other types require a known stored use to appear in a specific sector; unknown legacy use remains available in the unfiltered list without inference or migration.
+
+## Founder decision — 2026-10-15: Explicit Floor names and canonical use
+Replace the main selector's generic Floor choice with Residential floor and Commercial floor. All shows both; Residential and Commercial each show their matching choice. Selection saves the existing propertyType=floor and floorUse=residential/commercial contracts for Offered and Wanted, without another Floor-use question in the new selected-use form. Apply localized specific names to inventory cards, details, review and search. Preserve draft transition protections and leave unknown legacy Floor use unclassified until explicitly completed. This supersedes the earlier main-selector generic Floor/use-choice presentation, without changing the stored taxonomy.

@@ -9,7 +9,7 @@ import { CaptureHeader } from '@/components/CaptureHeader';
 import { SelectCard } from '@/components/SelectCard';
 import { Button } from '@/components/Button';
 import { APARTMENT_SUBTYPES, PROPERTY_TYPES, type ApartmentSubtype, type Transaction } from '@workspace/property-domain';
-import { getPropertyTypeChoices, canonicalPropertyTypeChoice, parseFloorUse, parsePropertySector, togglePropertySector, type PropertySectorFilter, type PropertyTypeChoice } from '@/services/propertySectorSelection';
+import { getPropertyTypeChoices, canonicalPropertyTypeChoice, restorePropertyTypeChoice, getPropertyTypeChoiceLabel, parseFloorUse, parsePropertySector, togglePropertySector, type PropertySectorFilter, type PropertyTypeChoice } from '@/services/propertySectorSelection';
 import { applyFloorTransition, createFloorTransitionProposal, type FloorTransitionProposal } from '@/services/amenityTypeTransitions';
 import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
 
@@ -41,8 +41,8 @@ export default function PropertyTypeScreen() {
   const initialType = firstParam(params.propertyType);
   const [propertyType, setPropertyType] = useState<PropertyTypeChoice | undefined>(
     PROPERTY_TYPES.includes(initialType as typeof PROPERTY_TYPES[number])
-      ? initialType === 'apartment' && firstParam(params.apartmentSubtype) === 'duplex' ? 'duplex' : initialType as typeof PROPERTY_TYPES[number]
-      : firstParam(params.mode) ? undefined : draft.propertyType,
+      ? restorePropertyTypeChoice(initialType as typeof PROPERTY_TYPES[number], firstParam(params.apartmentSubtype), firstParam(params.floorUse) ?? firstParam(params.sector))
+      : firstParam(params.mode) ? undefined : restorePropertyTypeChoice(draft.propertyType, draft.apartmentSubtype, captureDetails.floorUse),
   );
   const rawSubtype = firstParam(params.apartmentSubtype);
   const apartmentSubtype: ApartmentSubtypeChoice | undefined = rawSubtype === 'standard'
@@ -62,30 +62,30 @@ export default function PropertyTypeScreen() {
   const linkPersonId = firstParam(params.linkPersonId);
   const sourceRole = firstParam(params.sourceRole);
   const [sector, setSector] = useState<PropertySectorFilter>(parsePropertySector(firstParam(params.sector)));
-  const [selectedFloorUse, setSelectedFloorUse] = useState(parseFloorUse(firstParam(params.floorUse)));
   const [selectedPropertyUse, setSelectedPropertyUse] = useState(parseFloorUse(firstParam(params.propertyUse)));
   const propertyUse = sector === 'all' ? selectedPropertyUse : sector;
   const otherUseRequired = mode === 'offered' && propertyType === 'other_built_property' && !propertyUse;
   const [floorConfirmation, setFloorConfirmation] = useState<FloorTransitionProposal | null>(null);
   const visibleTypes = getPropertyTypeChoices(sector);
-  const floorUse = sector === 'all' ? selectedFloorUse : sector;
+  const selectedCanonical = propertyType ? canonicalPropertyTypeChoice(propertyType) : undefined;
+  const isFloor = selectedCanonical?.propertyType === 'floor';
+  const floorUse = selectedCanonical?.floorUse;
   const chooseSector = (pressed: PropertySectorFilter) => {
     const next = togglePropertySector(sector, pressed);
     setSector(next);
-    setSelectedFloorUse(undefined);
     setSelectedPropertyUse(undefined);
     const keepType = propertyType && getPropertyTypeChoices(next).includes(propertyType);
     if (!keepType) setPropertyType(undefined);
-    router.setParams({ sector: next, floorUse: undefined, propertyUse: undefined, ...(!keepType ? { propertyType: undefined, apartmentSubtype: undefined } : {}) });
+    router.setParams({ sector: next, floorUse: keepType ? selectedCanonical?.floorUse : undefined, propertyUse: undefined, ...(!keepType ? { propertyType: undefined, apartmentSubtype: undefined } : {}) });
   };
   const choosePropertyType = (nextType: PropertyTypeChoice) => {
     setPropertyType(nextType);
     const canonical = canonicalPropertyTypeChoice(nextType);
-    router.setParams({ ...canonical, apartmentSubtype: nextType === 'duplex' ? 'duplex' : undefined });
+    router.setParams({ ...canonical, floorUse: canonical.floorUse, apartmentSubtype: nextType === 'duplex' ? 'duplex' : undefined });
   };
 
   const finishSelection = () => {
-    if (otherUseRequired || !propertyType || !visibleTypes.includes(propertyType) || !mode || (propertyType === 'floor' && !floorUse) || (rawTransaction !== undefined && !transaction)) return;
+    if (otherUseRequired || !propertyType || !visibleTypes.includes(propertyType) || !mode || (isFloor && !floorUse) || (rawTransaction !== undefined && !transaction)) return;
     const canonical = canonicalPropertyTypeChoice(propertyType);
     const selectedSubtype = propertyType === 'duplex' ? 'duplex' : apartmentSubtype;
     const target = getPropertyFormRoute({
@@ -93,7 +93,7 @@ export default function PropertyTypeScreen() {
       ...(transaction ? { transaction } : {}),
       propertyType: canonical.propertyType,
       ...(selectedSubtype ? { apartmentSubtype: selectedSubtype } : {}),
-      ...(propertyType === 'floor' && floorUse ? { floorUse } : {}),
+      ...(isFloor && floorUse ? { floorUse } : {}),
       ...(seekerId ? { seekerId } : {}),
       ...(linkPersonId ? { linkPersonId } : {}),
       ...(sourceRole ? { sourceRole } : {}),
@@ -110,7 +110,7 @@ export default function PropertyTypeScreen() {
         : undefined,
       ...(transaction ? { transaction } : {}),
     })) return;
-    if (target.kind === 'floor' && draft.propertyType !== propertyType) {
+    if (target.kind === 'floor' && draft.propertyType !== canonical.propertyType) {
       replaceCaptureDetails({
         ...(floorUse ? { floorUse } : {}),
         ...(captureDetails.areaSquareMeters !== undefined ? { areaSquareMeters: captureDetails.areaSquareMeters } : {}),
@@ -132,7 +132,7 @@ export default function PropertyTypeScreen() {
   };
 
   const handleNext = () => {
-    if (mode === 'offered' && propertyType === 'floor' && floorUse && draft.propertyType === 'floor') {
+    if (mode === 'offered' && isFloor && floorUse && draft.propertyType === 'floor') {
       const proposal = createFloorTransitionProposal(`property-sector:${draft.propertyCoreId ?? 'new'}`, captureDetails, floorUse);
       if (proposal?.affected.length) { setFloorConfirmation(proposal); return; }
     }
@@ -156,7 +156,7 @@ export default function PropertyTypeScreen() {
         {visibleTypes.map(type => (
           <SelectCard
             key={type}
-            title={type === 'duplex' ? (language === 'ar' ? 'دوبلكس' : 'Duplex') : t(`propertyType.${type}` as keyof Translations)}
+            title={getPropertyTypeChoiceLabel(type, language, t(`propertyType.${canonicalPropertyTypeChoice(type).propertyType}` as keyof Translations))}
             selected={propertyType === type}
             onSelect={() => choosePropertyType(type)}
             testID={`select-type-${type}`}
@@ -170,10 +170,7 @@ export default function PropertyTypeScreen() {
             ))}
           </View>
         ) : null}
-        {propertyType === 'floor' && sector === 'all' && <View testID="property-floor-use-selection" style={styles.floorChoices}>
-          <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'استخدام الدور' : 'Floor use'}</Text>
-          {(['residential', 'commercial'] as const).map(value => <SelectCard key={value} title={value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')} selected={selectedFloorUse === value} testID={`select-floor-use-${value}`} onSelect={() => { setSelectedFloorUse(value); router.setParams({ floorUse: value }); }} />)}
-        </View>}
+
       </ScrollView>
       <Modal visible={floorConfirmation !== null} transparent onRequestClose={() => setFloorConfirmation(null)}>
         <View style={styles.backdrop}><View style={[styles.confirmation, { backgroundColor: colors.card }]}>
@@ -192,7 +189,7 @@ export default function PropertyTypeScreen() {
         <Button
           title={t('capture.next')}
           onPress={handleNext}
-          disabled={!propertyType || !visibleTypes.includes(propertyType) || (propertyType === 'floor' && !floorUse) || !mode || (rawTransaction !== undefined && !transaction) || otherUseRequired}
+          disabled={!propertyType || !visibleTypes.includes(propertyType) || (isFloor && !floorUse) || !mode || (rawTransaction !== undefined && !transaction) || otherUseRequired}
           size="large"
           testID="btn-next"
         />

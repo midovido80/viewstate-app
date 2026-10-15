@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { Property } from '@workspace/property-domain';
 import type { PropertyEditChoices } from './propertyUpdateRecovery';
 
@@ -33,8 +34,7 @@ export function getSavedPropertyTypeLabel(property: Property, language: 'en' | '
   }
   if (property.core.propertyType === 'floor') {
     const use = detail(property, 'floorUse');
-    if (use === 'residential') return language === 'ar' ? 'دور سكني' : 'Residential floor';
-    if (use === 'commercial') return language === 'ar' ? 'دور تجاري' : 'Commercial floor';
+    return getFloorTypeLabel(use, language, baseTypeLabel);
   }
   return baseTypeLabel;
 }

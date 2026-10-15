@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -525,7 +526,7 @@ export default function PersonDetailScreen() {
               const intent = projectRequirementIntent(requirement, language);
               return (
               <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
-              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{intent.label} · {t(`propertyType.${requirement.propertyType}`)}{getWantedApartmentSubtypeLabel(requirement, language) ? ` · ${getWantedApartmentSubtypeLabel(requirement, language)}` : ''}</Text>
+              <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{intent.label} · {(requirement.propertyType === 'floor' ? getFloorTypeLabel(requirement.floorUse, language, t('propertyType.floor')) : t(`propertyType.${requirement.propertyType}`))}{getWantedApartmentSubtypeLabel(requirement, language) ? ` · ${getWantedApartmentSubtypeLabel(requirement, language)}` : ''}</Text>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
                 {requirement.preferredAreaMode === 'all_kuwait'
                   ? (language === 'ar' ? 'كل مناطق الكويت' : 'All Kuwait')

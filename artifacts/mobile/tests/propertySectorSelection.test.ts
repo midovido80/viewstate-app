@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getPropertyTypeChoices, canonicalPropertyTypeChoice, parseFloorUse, parsePropertySector, togglePropertySector, getBuiltPropertySector } from '../services/propertySectorSelection.ts';
+import { getPropertyTypeChoices, canonicalPropertyTypeChoice, parseFloorUse, parsePropertySector, togglePropertySector, getBuiltPropertySector, restorePropertyTypeChoice, getFloorTypeLabel, getPropertyTypeChoiceLabel } from '../services/propertySectorSelection.ts';
 import { deriveOfferedWantedRows, filterOfferedWantedRows } from '../services/offeredWantedPresentation.ts';
+import { getPropertyCardSummary, getRequirementCardSummary } from '../services/cardSummaryPresentation.ts';
+import { buildPropertyWithCaptureDetails } from '../services/propertyCaptureDetails.ts';
+import { validateProperty } from '@workspace/property-domain';
 import type { Property, PropertyType, SeekerRequirement } from '@workspace/property-domain';
 import { getPropertyFormRoute } from '../services/propertyFormRoutes.ts';
 
@@ -15,12 +18,12 @@ test('All is the default and selected sector toggles back to All', () => {
   assert.equal(togglePropertySector('all', 'all'), 'all');
 });
 
-test('sector lists contain Floor and Other but keep Duplex residential', () => {
-  assert.deepEqual(getPropertyTypeChoices('commercial'), ['commercial_complex', 'floor', 'office', 'shop', 'warehouse', 'other_built_property']);
-  assert.deepEqual(getPropertyTypeChoices('residential'), ['whole_building', 'apartment', 'duplex', 'floor', 'house', 'villa', 'chalet', 'other_built_property']);
+test('sector lists expose named Floor choices and keep Duplex residential', () => {
+  assert.deepEqual(getPropertyTypeChoices('commercial'), ['commercial_complex', 'commercial_floor', 'office', 'shop', 'warehouse', 'other_built_property']);
+  assert.deepEqual(getPropertyTypeChoices('residential'), ['whole_building', 'apartment', 'duplex', 'residential_floor', 'house', 'villa', 'chalet', 'other_built_property']);
   const all = getPropertyTypeChoices('all');
   assert.equal(new Set(all).size, all.length);
-  assert.equal(all.length, 12);
+  assert.equal(all.length, 13);
 });
 
 test('direct Duplex retains the existing canonical apartment subtype', () => {
@@ -145,4 +148,67 @@ test('clearing a sector returns all sectors while preserving the other facets', 
   const selected = togglePropertySector('all', 'residential');
   assert.equal(filterOfferedWantedRows(rows, selection, '', selected).length, 1);
   assert.equal(filterOfferedWantedRows(rows, selection, '', togglePropertySector(selected, 'residential')).length, 2);
+});
+
+test('named Floor choices route Offered and Wanted sale/rent with their own stored use', () => {
+  for (const [choice, floorUse] of [['residential_floor', 'residential'], ['commercial_floor', 'commercial']] as const) {
+    const canonical = canonicalPropertyTypeChoice(choice);
+    assert.deepEqual(canonical, { propertyType: 'floor', floorUse });
+    assert.equal(restorePropertyTypeChoice(canonical.propertyType, undefined, floorUse), choice);
+    for (const mode of ['offered', 'wanted'] as const) for (const transaction of ['sale', 'rent'] as const) {
+      const target = getPropertyFormRoute({ mode, transaction, ...canonical, seekerId: 'person-test' });
+      assert.equal(target.params.propertyType, 'floor');
+      assert.equal(target.params.floorUse, floorUse);
+      assert.equal(target.kind, mode === 'offered' ? 'floor' : 'wanted');
+      assert.equal(target.params.seekerId, 'person-test');
+      if (mode === 'wanted') assert.equal(target.params.purpose, transaction === 'sale' ? 'buy' : 'rent');
+    }
+  }
+  assert.equal(getPropertyTypeChoices('all').includes('floor'), false);
+  assert.equal(getPropertyTypeChoices('residential').includes('commercial_floor'), false);
+  assert.equal(getPropertyTypeChoices('commercial').includes('residential_floor'), false);
+});
+
+test('Floor choices restore from saved use without guessing legacy Floor use', () => {
+  assert.equal(restorePropertyTypeChoice('floor'), undefined);
+  assert.equal(restorePropertyTypeChoice('floor', undefined, 'invalid'), undefined);
+  assert.equal(restorePropertyTypeChoice('floor', undefined, 'residential'), 'residential_floor');
+  assert.equal(restorePropertyTypeChoice('floor', undefined, 'commercial'), 'commercial_floor');
+  assert.equal(restorePropertyTypeChoice('apartment', 'duplex'), 'duplex');
+});
+
+test('Floor labels agree in English/Arabic cards and unknown legacy rows keep the generic label', () => {
+  for (const language of ['en', 'ar'] as const) {
+    const formatters = { language, translate: (key: string) => key === 'propertyType.floor' ? (language === 'ar' ? 'دور' : 'Floor') : key,
+      formatPrice: (amount: number) => String(amount), formatRentalPrice: (amount: number) => String(amount) };
+    for (const use of ['residential', 'commercial'] as const) {
+      const choice = use === 'residential' ? 'residential_floor' : 'commercial_floor';
+      const expected = language === 'ar' ? (use === 'residential' ? 'دور سكني' : 'دور تجاري') : (use === 'residential' ? 'Residential floor' : 'Commercial floor');
+      assert.equal(getPropertyTypeChoiceLabel(choice, language, 'Floor'), expected);
+      assert.equal(getPropertyCardSummary(sectorProperty(use, 'floor', 'rent', use), formatters).typeLabel, expected);
+      assert.equal(getRequirementCardSummary(sectorRequirement(use, 'floor', 'rent', use), formatters).typeLabel, expected);
+    }
+    assert.equal(getFloorTypeLabel(undefined, language, 'Legacy floor'), 'Legacy floor');
+    assert.equal(getPropertyCardSummary(sectorProperty('legacy', 'floor', 'rent'), formatters).typeLabel, language === 'ar' ? 'دور' : 'Floor');
+  }
+});
+
+test('named Floor selection survives save/read-back and stays in its own inventory sector', () => {
+  for (const choice of ['residential_floor', 'commercial_floor'] as const) {
+    const canonical = canonicalPropertyTypeChoice(choice);
+    const baseline = sectorProperty(choice, canonical.propertyType, 'rent');
+    const candidate = buildPropertyWithCaptureDetails(baseline, { floorUse: canonical.floorUse });
+    assert.equal(validateProperty(candidate).ok, true);
+    const restored: Property = JSON.parse(JSON.stringify(candidate));
+    const rows = deriveOfferedWantedRows([restored], []);
+    assert.equal(filterOfferedWantedRows(rows, 'all', '', canonical.floorUse).length, 1);
+    assert.equal(filterOfferedWantedRows(rows, 'all', '', canonical.floorUse === 'residential' ? 'commercial' : 'residential').length, 0);
+  }
+});
+
+test('inventory search recognizes residential/commercial Floor names in both languages', () => {
+  const rows = deriveOfferedWantedRows([sectorProperty('res', 'floor', 'rent', 'residential'), sectorProperty('com', 'floor', 'rent', 'commercial')],
+    [sectorRequirement('wanted-res', 'floor', 'rent', 'residential'), sectorRequirement('wanted-com', 'floor', 'rent', 'commercial')]);
+  for (const query of ['دور سكني', 'residential floor']) assert.deepEqual(filterOfferedWantedRows(rows, 'all', query).map(row => row.id), ['res', 'wanted-res']);
+  for (const query of ['دور تجاري', 'commercial floor']) assert.deepEqual(filterOfferedWantedRows(rows, 'all', query).map(row => row.id), ['com', 'wanted-com']);
 });

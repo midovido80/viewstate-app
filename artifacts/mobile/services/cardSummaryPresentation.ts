@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import type { PersonPropertyLink, PropertySource } from '@/services/people';
 import { getAreaById } from '@/constants/kuwait-areas';
@@ -51,7 +52,9 @@ export function getPropertyCardSummary(
   formatters: CardSummaryFormatters,
 ): PropertyCardSummary {
   const { language, translate } = formatters;
-  const typeLabel = translate(`propertyType.${property.core.propertyType}`);
+  const baseTypeLabel = translate(`propertyType.${property.core.propertyType}`);
+  const typeLabel = property.core.propertyType === 'floor'
+    ? getFloorTypeLabel((property.typeDetails as Readonly<Record<string, unknown>> | undefined)?.floorUse, language, baseTypeLabel) : baseTypeLabel;
   const subtypeLabel = getPropertySubtype(property, formatters);
   const studioArea = isOfferedStudio(property)
     ? getOfferedStudioAreaSquareMeters(property)
@@ -81,7 +84,8 @@ export function getRequirementCardSummary(
   formatters: CardSummaryFormatters,
 ): RequirementCardSummary {
   const { language, translate } = formatters;
-  const typeLabel = translate(`propertyType.${requirement.propertyType}`);
+  const baseTypeLabel = translate(`propertyType.${requirement.propertyType}`);
+  const typeLabel = requirement.propertyType === 'floor' ? getFloorTypeLabel(requirement.floorUse, language, baseTypeLabel) : baseTypeLabel;
   const subtypeLabel = getRequirementCardSubtypeLabel(requirement, language);
   const studioArea = isWantedStudio(requirement)
     ? requirement.catalogPreferences?.find(preference =>

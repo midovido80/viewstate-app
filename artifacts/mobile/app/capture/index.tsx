@@ -1,3 +1,4 @@
+import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { ApartmentSubtype } from '@workspace/property-domain';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { getCaptureBackAction } from '@/services/captureBackNavigation';
@@ -1121,10 +1122,10 @@ export default function CaptureWorkflow() {
             <TouchableOpacity onPress={() => { setSaveError(null); setStage(2); }} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, navigationButtonStyle]}>
               <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('detail.edit')}</Text>
             </TouchableOpacity>
-            <Text style={[styles.previewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{demoCategory?.label[language === 'ar' ? 1 : 0] ?? (draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : '')}</Text>
+            <Text style={[styles.previewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{demoCategory?.label[language === 'ar' ? 1 : 0] ?? (draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : '')}</Text>
             <Text style={[styles.previewMeta, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : ''}</Text>
             <PreviewRow label={t('summary.transaction')} value={projectRecordIntent('offered', draft.transaction, language).label} colors={colors} fonts={fonts} />
-            <PreviewRow label={t('summary.property_type')} value={draft.propertyType ? t(`propertyType.${draft.propertyType}` as keyof Translations) : ''} colors={colors} fonts={fonts} />
+            <PreviewRow label={t('summary.property_type')} value={draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : ''} colors={colors} fonts={fonts} />
             <PreviewRow label={language === 'ar' ? 'القطعة' : 'Block'} value={draft.block ?? ''} colors={colors} fonts={fonts} />
             <PreviewRow label={draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')} value={String((draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount) ?? '')} colors={colors} fonts={fonts} />
             {draft.transaction === 'rent' && <PreviewRow label={language === 'ar' ? 'الدورية' : 'Cadence'} value={draft.rentalPeriodId === 'yearly' ? (language === 'ar' ? 'سنوياً' : 'Yearly') : (language === 'ar' ? 'شهرياً' : 'Monthly')} colors={colors} fonts={fonts} />}
