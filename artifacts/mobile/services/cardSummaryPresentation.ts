@@ -1,5 +1,5 @@
-import { getFloorTypeLabel } from '@/services/propertySectorSelection';
-import type { Property, SeekerRequirement } from '@workspace/property-domain';
+import { getBuiltPropertySector, getFloorTypeLabel, type PropertySectorFilter } from '@/services/propertySectorSelection';
+import type { FloorUse, Property, SeekerRequirement } from '@workspace/property-domain';
 import type { PersonPropertyLink, PropertySource } from '@/services/people';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatWantedBudget, getWantedAreaDisplayValues } from '@/services/offeredWantedPresentation';
@@ -12,6 +12,8 @@ import {
   projectRequirementIntent,
   type PresentedIntentId,
 } from '@/services/recordIntentPresentation';
+
+import { EMPTY_COMPOSABLE_RECORD_FILTER, recordIntentMatchesComposableFilter, type ComposableRecordFilter } from '@/services/composableRecordFilters';
 
 export type CardSummaryLanguage = 'en' | 'ar';
 
@@ -43,6 +45,7 @@ export interface PersonActivityLine {
   readonly id: string;
   readonly kind: 'request' | 'offer';
   readonly intentId: PresentedIntentId;
+  readonly sector?: FloorUse;
   readonly href: string;
   readonly label: string;
 }
@@ -128,6 +131,7 @@ export function getPersonDirectIntentActivityLines(
   const requestLines: PersonActivityLine[] = requirementsForPerson.map(requirement => {
     const summary = getRequirementCardSummary(requirement, formatters);
     const intent = projectRequirementIntent(requirement, language);
+    const sector = getBuiltPropertySector(requirement.propertyType, requirement.floorUse);
     const parts = [
       intent.label,
       summary.typeLabel,
@@ -141,6 +145,7 @@ export function getPersonDirectIntentActivityLines(
       id: requirement.id,
       kind: 'request',
       intentId: intent.id,
+      ...(sector ? { sector } : {}),
       href: `/requirement/view/${encodeURIComponent(requirement.id)}`,
       label: localizedActivityLabel(parts),
     };
@@ -154,6 +159,9 @@ export function getPersonDirectIntentActivityLines(
     if (!property) continue;
     const summary = getPropertyCardSummary(property, formatters);
     const intent = projectPropertyIntent(property, language);
+    const details = property.typeDetails as Readonly<Record<string, unknown>> | undefined;
+    const sector = getBuiltPropertySector(property.core.propertyType,
+      property.core.propertyType === 'floor' ? details?.floorUse : details?.propertyUse);
     const parts = [
       intent.label,
       summary.typeLabel,
@@ -167,6 +175,7 @@ export function getPersonDirectIntentActivityLines(
       id: propertyId,
       kind: 'offer',
       intentId: intent.id,
+      ...(sector ? { sector } : {}),
       href: `/property/${encodeURIComponent(propertyId)}`,
       label: localizedActivityLabel(parts),
     });
@@ -236,4 +245,13 @@ function getOfferedStudioAreaSquareMeters(property: Property): number | undefine
 
 function localizedActivityLabel(parts: readonly (string | undefined)[]): string {
   return parts.filter((part): part is string => Boolean(part)).join(' · ');
+}
+/** Every selected facet must match the same activity, never different records belonging to one Person. */
+export function filterPersonActivityLines(
+  lines: readonly PersonActivityLine[],
+  filter: ComposableRecordFilter = EMPTY_COMPOSABLE_RECORD_FILTER,
+  sector: PropertySectorFilter = 'all',
+): PersonActivityLine[] {
+  return lines.filter(line => (sector === 'all' || line.sector === sector)
+    && recordIntentMatchesComposableFilter(line.intentId, filter));
 }

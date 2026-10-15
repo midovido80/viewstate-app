@@ -10,6 +10,7 @@ import { Person } from '@/services/people';
 import { store } from '@/services/persistence';
 import { formatPrice, formatRentalPrice, toEnglishDigits } from '@/constants/market';
 import {
+  filterPersonActivityLines,
   getPersonActivityMoreLabel,
   getPersonDirectIntentActivityLines,
   type PersonActivityLine,
@@ -18,11 +19,12 @@ import {
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
   EMPTY_COMPOSABLE_RECORD_FILTER,
-  anyRecordIntentMatchesComposableFilter,
   hasActiveRecordFilters,
   toggleRecordFilter,
   type ComposableRecordFilter,
 } from '@/services/composableRecordFilters';
+
+import { togglePropertySector, type PropertySectorFilter } from '@/services/propertySectorSelection';
 
 const PEOPLE_FILTER_OPTIONS = [
   { key: 'all' },
@@ -43,6 +45,8 @@ export default function PeopleScreen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ComposableRecordFilter>(EMPTY_COMPOSABLE_RECORD_FILTER);
+  const [sector, setSector] = useState<PropertySectorFilter>('all');
+  const hasActivePeopleFilters = hasActiveRecordFilters(filter) || sector !== 'all';
   const [error, setError] = useState('');
 
   useFocusEffect(useCallback(() => {
@@ -82,10 +86,11 @@ export default function PeopleScreen() {
     return () => { active = false; };
   }, [search, t, language]));
 
-  const visiblePeople = people.filter(person => anyRecordIntentMatchesComposableFilter(
-    (activityByPerson.get(person.id) ?? []).map(line => line.intentId),
-    filter,
-  ));
+  const visibleActivityByPerson = new Map(people.map(person => [
+    person.id, filterPersonActivityLines(activityByPerson.get(person.id) ?? [], filter, sector),
+  ] as const));
+  const visiblePeople = people.filter(person =>
+    !hasActivePeopleFilters || (visibleActivityByPerson.get(person.id)?.length ?? 0) > 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -111,16 +116,21 @@ export default function PeopleScreen() {
       <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]} testID="people-composable-filters">
         {PEOPLE_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
-            ? !hasActiveRecordFilters(filter)
+            ? !hasActivePeopleFilters
             : option.dimension === 'directions'
               ? filter.directions.includes(option.value)
               : filter.transactions.includes(option.value);
           return (
             <TouchableOpacity
               key={option.key}
-              onPress={() => setFilter(current => option.key === 'all'
-                ? EMPTY_COMPOSABLE_RECORD_FILTER
-                : toggleRecordFilter(current, option.dimension, option.value))}
+              onPress={() => {
+                if (option.key === 'all') {
+                  setFilter(EMPTY_COMPOSABLE_RECORD_FILTER);
+                  setSector('all');
+                } else {
+                  setFilter(current => toggleRecordFilter(current, option.dimension, option.value));
+                }
+              }}
               style={[
                 styles.filterChip,
                 { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
@@ -131,6 +141,26 @@ export default function PeopleScreen() {
             >
               <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {t(`properties.filter.${option.key}` as keyof Translations)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={[styles.sectorFilters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-sector-filters">
+        {(['residential', 'commercial'] as const).map(value => {
+          const selected = sector === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              onPress={() => setSector(current => togglePropertySector(current, value))}
+              style={[styles.filterChip, styles.sectorChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
+              testID={`people-filter-${value}`}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected }}
+              aria-checked={selected}
+            >
+              <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+                {value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}
               </Text>
             </TouchableOpacity>
           );
@@ -153,9 +183,9 @@ export default function PeopleScreen() {
           >
             {totalPeople === 0
               ? t('people.empty')
-              : search.trim() && !hasActiveRecordFilters(filter)
+              : search.trim() && !hasActivePeopleFilters
                 ? t('people.no_search_results')
-                : hasActiveRecordFilters(filter)
+                : hasActivePeopleFilters
                   ? t('people.no_filtered_results')
                   : t('people.empty')}
           </Text>}
@@ -172,7 +202,7 @@ export default function PeopleScreen() {
             <Text style={[styles.classes, { color: colors.primary, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
               {item.classifications.map(value => t(`people.classification.${value}` as keyof Translations)).join(' · ')}
             </Text>
-            {(activityByPerson.get(item.id) ?? []).slice(0, 2).map(line => (
+            {(visibleActivityByPerson.get(item.id) ?? []).slice(0, 2).map(line => (
               <TouchableOpacity
                 key={line.key}
                 onPress={event => {
@@ -187,9 +217,9 @@ export default function PeopleScreen() {
                 </Text>
               </TouchableOpacity>
             ))}
-            {(activityByPerson.get(item.id)?.length ?? 0) > 2 ? (
+            {(visibleActivityByPerson.get(item.id)?.length ?? 0) > 2 ? (
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
-                {getPersonActivityMoreLabel(activityByPerson.get(item.id)!.length - 2, language)}
+                {getPersonActivityMoreLabel(visibleActivityByPerson.get(item.id)!.length - 2, language)}
               </Text>
             ) : null}
           </TouchableOpacity>
@@ -214,6 +244,8 @@ const styles = StyleSheet.create({
   classes: { marginTop: 4, fontSize: 13 },
   empty: { textAlign: 'center', paddingTop: 60 },
   filters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'wrap' },
+  sectorFilters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
+  sectorChip: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   filterChip: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   error: { paddingHorizontal: 20 },
   add: { position: 'absolute', left: 20, right: 20 },
