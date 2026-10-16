@@ -287,6 +287,12 @@ export default function CaptureWorkflow() {
       : [],
     [captureDetails.floorUse, captureDetails.apartmentSubtype, captureDetails.propertyUse, draft.propertyType],
   );
+  const isWholeBuildingSale = draft.propertyType === 'whole_building' && draft.transaction === 'sale';
+  const wholeBuildingSaleOnlyFields = new Set([
+    'apartmentsPerFloor', 'commercialFloorCount', 'hasCommercialFloors',
+    'hasCommercialShops', 'hasGuardRoom', 'streetPosition', 'parkingTypes',
+    'privateParkingCount', 'rentalOccupancy', 'monthlyIncome',
+  ]);
   const previewFeatureLabels = Array.from(new Set([
     ...applicable
       .filter(definition => definition.group === 'amenity' && captureDetails[definition.field] === 'true')
@@ -1136,7 +1142,7 @@ export default function CaptureWorkflow() {
               <>
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
              {(draft.propertyType === 'commercial_complex' || draft.propertyType === 'whole_building') && draft.transaction === 'sale' && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
-             {applicable.filter(definition => definition.group !== 'amenity' && !(draft.propertyType === 'whole_building' && ['bedroomCount', 'masterBedroomCount'].includes(definition.field)) && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private'))).map(definition => <PreviewRow key={definition.field} label={definition.field === 'occupancy' && draft.propertyType === 'whole_building' ? (language === 'ar' ? 'الإشغال السكني' : 'Residential occupancy') : definition.field === 'roomsPerUnit' && draft.propertyType === 'whole_building' ? (language === 'ar' ? 'غرف النوم في شقة واحدة' : 'Bedrooms in ONE apartment') : definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
+             {applicable.filter(definition => definition.group !== 'amenity' && !(isWholeBuildingSale && ['bedroomCount', 'masterBedroomCount'].includes(definition.field)) && !(draft.propertyType === 'whole_building' && !isWholeBuildingSale && wholeBuildingSaleOnlyFields.has(definition.field)) && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private'))).map(definition => <PreviewRow key={definition.field} label={definition.field === 'occupancy' && isWholeBuildingSale ? (language === 'ar' ? 'الإشغال السكني' : 'Residential occupancy') : definition.field === 'roomsPerUnit' && isWholeBuildingSale ? (language === 'ar' ? 'غرف النوم في شقة واحدة' : 'Bedrooms in ONE apartment') : definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
              {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (

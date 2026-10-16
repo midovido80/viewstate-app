@@ -1225,6 +1225,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
     : visibleContent.typeDetails) as Record<string, unknown>;
+  const isWholeBuildingSale = property.core.propertyType === 'whole_building' && property.activeOffer.transaction === 'sale';
+  const wholeBuildingSaleOnlyFields = new Set([
+    'apartmentsPerFloor', 'commercialFloorCount', 'hasCommercialFloors',
+    'hasCommercialShops', 'hasGuardRoom', 'streetPosition', 'parkingTypes',
+    'privateParkingCount', 'rentalOccupancy', 'monthlyIncome',
+  ]);
   if ((property.core.propertyType === 'commercial_complex' || property.core.propertyType === 'whole_building') && property.activeOffer.transaction === 'sale') {
     const yieldPercent = grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined);
     if (yieldPercent !== undefined) {
@@ -1253,16 +1259,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const supplementalDetails = propertyDetailDisplayDefinitions
     .filter(definition =>
       definition.group !== 'amenity'
-      && !(property.core.propertyType === 'whole_building' && ['bedroomCount', 'masterBedroomCount'].includes(definition.field))
+      && !(isWholeBuildingSale && ['bedroomCount', 'masterBedroomCount'].includes(definition.field))
+      && !(property.core.propertyType === 'whole_building' && !isWholeBuildingSale && wholeBuildingSaleOnlyFields.has(definition.field))
       && !numericSpecTiles.some(tile => tile.fieldId === definition.field)
       && detailValues[definition.field] !== undefined
       && definition.field !== 'plotAreaSquareMeters'
       && definition.field !== 'builtUpAreaSquareMeters')
     .map(definition => ({
       field: definition.field,
-      label: property.core.propertyType === 'whole_building' && definition.field === 'occupancy'
+      label: isWholeBuildingSale && definition.field === 'occupancy'
         ? (language === 'ar' ? 'الإشغال السكني' : 'Residential occupancy')
-        : property.core.propertyType === 'whole_building' && definition.field === 'roomsPerUnit'
+        : isWholeBuildingSale && definition.field === 'roomsPerUnit'
           ? (language === 'ar' ? 'غرف النوم في شقة واحدة' : 'Bedrooms in ONE apartment')
           : definition.label[language === 'ar' ? 1 : 0],
       value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language, t),
@@ -1270,7 +1277,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const existingSupplementalFields = new Set<string>(supplementalDetails.map(item => item.field));
   const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
     .filter(item =>
-      !(property.core.propertyType === 'whole_building' && ['bedroomCount', 'masterBedroomCount'].includes(item.field))
+       !(isWholeBuildingSale && ['bedroomCount', 'masterBedroomCount'].includes(item.field))
+       && !(property.core.propertyType === 'whole_building' && !isWholeBuildingSale && wholeBuildingSaleOnlyFields.has(item.field))
       &&
       !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
       && !(offeredStudio && item.field === 'builtUpAreaSquareMeters')
