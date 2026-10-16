@@ -386,3 +386,9 @@ Authorization: Founder reported that simplifying the Add Property transaction ch
 Baseline: Work branch `work/property-sector-selection` at `d8f26d0e4ba8e70e3c608cf914d3e5c33d7fe788`.
 Correction: The entry screen now shows To buy/للشراء and Purchase or Rent/شراء أم إيجار under Wanted, and For sale/للبيع and Sale or Rent under Offered. Rent remains For rent/للإيجار; direction is not repeated inside either option. Canonical transaction values, existing filter behavior and Wanted sale-to-buy routing remain unchanged.
 Verification: Existing production route regression extended to English and Arabic, including toggling Offered/Wanted without losing the selected transaction and exact Seeker ownership; full CI results are reported separately. No dependencies, persistence migration, Preview or Pilot changes.
+
+### Session: 2026-10-16 (Founder-approved Offered whole-building Sale form)
+Authorization: Founder approved a bounded replacement form for Offered residential whole-building Sale, with later form additions/removals reserved for later review.
+Implementation: Separate one-apartment bedrooms/bathrooms from building facts; add independent residential/commercial floor, unit, shop, service, parking, position and occupancy facts, monthly income and gross annual yield. Keep other forms, including commercial complex Sale, unchanged.
+Compatibility: Local canonical validation and save/edit/read presentation only. No server migration, legacy hydration rewrite, discarded drafts or attachments, dependencies, release, APK or Pilot change.
+Verification: Full mobile/domain tests, TypeScript checks, whitespace checks and GitHub Actions are reported with the work-branch revision. Expo Preview is available for Founder review; physical-device acceptance is not claimed.

@@ -274,6 +274,8 @@ export function validateTypeDetails(
     "parkingSpaceCount",
     "floorCount",
     "unitCount",
+    "apartmentsPerFloor",
+    "commercialFloorCount",
     "roomsPerUnit",
     "bathroomsPerUnit",
     "apartmentCount",
@@ -316,6 +318,9 @@ export function validateTypeDetails(
     "hasWaterfront",
     "hasColdStorage",
     "hasCentralAC",
+    "hasCommercialFloors",
+    "hasCommercialShops",
+    "hasGuardRoom",
     "hasKitchen",
     "hasHall",
     "hasParking",
@@ -338,7 +343,7 @@ export function validateTypeDetails(
   }
 
   const aggregateUnitFields = ["unitCount", "apartmentCount", "shopCount", "officeCount"] as const;
-  const aggregateUnitCountsApplicable = aggregateUnitFields.every(field =>
+  const aggregateUnitCountsApplicable = details.propertyType === "commercial_complex" && aggregateUnitFields.every(field =>
     PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)
       ?.appliesTo.includes(details.propertyType) === true,
   );
@@ -355,6 +360,46 @@ export function validateTypeDetails(
       ["typeDetails", "unitCount"],
       "Known apartment, shop, and office counts cannot exceed unitCount.",
     ));
+  }
+
+  if (details.propertyType === "whole_building") {
+    for (const field of ["floorCount", "unitCount", "apartmentsPerFloor"] as const) {
+      if (typeof candidate[field] === "number" && candidate[field] < 1) {
+        issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be positive for a whole building.`));
+      }
+    }
+    if (candidate.hasCommercialShops === false && candidate.shopCount !== undefined) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", "shopCount"], "Shop count requires commercial shops."));
+    }
+    if (candidate.hasCommercialShops === true && (!Number.isSafeInteger(candidate.shopCount) || (candidate.shopCount as number) < 1 || (candidate.shopCount as number) > 3)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", "shopCount"], "Commercial shops must be 1, 2, or 3."));
+    }
+    if (candidate.hasCommercialFloors === false && candidate.commercialFloorCount !== undefined) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", "commercialFloorCount"], "Commercial floor count requires commercial floors."));
+    }
+    if (candidate.hasCommercialFloors === true && (!Number.isSafeInteger(candidate.commercialFloorCount) || (candidate.commercialFloorCount as number) < 1)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", "commercialFloorCount"], "Commercial floors must have a positive count."));
+    }
+    if (candidate.hasCommercialFloors === true && typeof candidate.floorCount !== "number") {
+      issues.push(issue("required", ["typeDetails", "floorCount"], "Total floors are required when commercial floors are specified."));
+    }
+    if (typeof candidate.commercialFloorCount === "number" && typeof candidate.floorCount === "number" && candidate.commercialFloorCount > candidate.floorCount) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", "commercialFloorCount"], "Commercial floors cannot exceed total floors."));
+    }
+    if (candidate.streetPosition !== undefined && !["one_street", "two_streets", "corner", "front_back"].includes(String(candidate.streetPosition))) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", "streetPosition"], "Invalid street position."));
+    }
+    if (candidate.parkingTypes !== undefined && (!Array.isArray(candidate.parkingTypes)
+      || candidate.parkingTypes.some(value => !["private", "public", "paid"].includes(value))
+      || new Set(candidate.parkingTypes).size !== candidate.parkingTypes.length)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", "parkingTypes"], "Invalid parking types."));
+    }
+    if (candidate.privateParkingCount !== undefined && (!Array.isArray(candidate.parkingTypes) || !candidate.parkingTypes.includes("private"))) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", "privateParkingCount"], "Private parking count requires private parking."));
+    }
+    if (candidate.monthlyIncome !== undefined && (typeof candidate.monthlyIncome !== "number" || !Number.isFinite(candidate.monthlyIncome) || candidate.monthlyIncome < 0)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", "monthlyIncome"], "Monthly income must be a non-negative finite amount."));
+    }
   }
 
   return issues.length === 0 ? valid(details) : invalid(issues);

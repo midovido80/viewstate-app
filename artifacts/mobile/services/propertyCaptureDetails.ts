@@ -135,9 +135,9 @@ export function buildPropertyWithCaptureDetails(
     if (!raw?.trim()) continue;
     if (field === 'clarification') continue;
     if (field === 'intendedUse' || field === 'commercialActivity') rawDetails[field] = { value: raw, privacy: normalPrivacy };
-    else if (field === 'parkingTypes') rawDetails[field] = raw.split(',').filter(Boolean);
     else if (field === 'privateParkingCount' && !fields.parkingTypes?.split(',').includes('private')) continue;
     else if (field === 'floorUse' || field === 'apartmentSubtype' || field === 'furnishing' || field === 'occupancy' || field === 'propertyUse' || field === 'buildingAgeBand' || field === 'streetPosition' || field === 'rentalOccupancy') rawDetails[field] = raw;
+    else if (field === 'parkingTypes') rawDetails[field] = raw.split(',').filter(Boolean);
     else if (field.startsWith('has')) rawDetails[field] = raw === 'true';
     else rawDetails[field] = Number(raw);
   }

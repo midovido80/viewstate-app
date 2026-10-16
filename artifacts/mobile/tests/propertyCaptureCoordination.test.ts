@@ -37,7 +37,7 @@ import {
   getSupportedPropertyFormSelections,
 } from '@/services/propertyFormRoutes';
 import { APARTMENT_SUBTYPES, PROPERTY_TYPES } from '@workspace/property-domain';
-import { createEditDraft } from '@/services/propertyUpdateRecovery';
+import { buildPropertyUpdateCandidate, createEditDraft } from '@/services/propertyUpdateRecovery';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -122,6 +122,72 @@ test('BEHAVIOR: commercial complex canonical counts round-trip through capture b
   assert.equal(details.unitCount, 3);
   assert.equal(details.frontageWidthMeters, 50);
   assert.equal(details.roomsPerUnit, 2);
+});
+
+test('BEHAVIOR: whole-building Sale facts save and reopen with independent totals and per-apartment labels', () => {
+  const saleBaseline: Property = {
+    core: { id: 'whole-building-sale-test', propertyType: 'whole_building', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'whole-building-sale-offer',
+      propertyCoreId: 'whole-building-sale-test',
+      transaction: 'sale',
+      salePrice: { amount: 1_000_000, currencyCode: 'KWD' },
+    },
+  };
+  const saved = buildPropertyWithCaptureDetails(saleBaseline, {
+    occupancy: 'family',
+    floorCount: '4',
+    apartmentsPerFloor: '2',
+    unitCount: '9',
+    roomsPerUnit: '3',
+    bathroomsPerUnit: '2',
+    hasCommercialShops: 'true',
+    shopCount: '2',
+    hasCommercialFloors: 'true',
+    commercialFloorCount: '1',
+    elevatorCount: '4',
+    hasCentralAC: 'true',
+    hasGuardRoom: 'false',
+    streetPosition: 'corner',
+    parkingTypes: 'private,public',
+    privateParkingCount: '3',
+    rentalOccupancy: 'partially_rented',
+    monthlyIncome: '6000',
+    nearbyServices: JSON.stringify(['school', 'pharmacy']),
+  });
+  const reopened = createEditDraft(saved);
+  const edited = buildPropertyUpdateCandidate(saved, reopened.choices);
+  const details = edited.typeDetails as unknown as Record<string, unknown>;
+  assert.equal(details.unitCount, 9, 'total units remain manually authoritative, not 4 × 2');
+  assert.equal(details.apartmentsPerFloor, 2);
+  assert.equal(details.roomsPerUnit, 3, 'bedrooms are attached to one apartment only');
+  assert.equal(details.bathroomsPerUnit, 2);
+  assert.equal(details.shopCount, 2);
+  assert.equal(details.commercialFloorCount, 1, 'commercial floors are not added to total floors');
+  assert.deepEqual(details.parkingTypes, ['private', 'public']);
+  assert.equal(details.privateParkingCount, 3);
+  assert.equal(details.monthlyIncome, 6000);
+  assert.deepEqual(edited.nearbyServices, ['school', 'pharmacy']);
+});
+
+test('BEHAVIOR: legacy whole-building bedroom facts survive edit without becoming per-apartment values', () => {
+  const legacy: Property = {
+    core: { id: 'legacy-whole-building', propertyType: 'whole_building', locationArea: { id: 'salmiya' } },
+    activeOffer: {
+      id: 'legacy-whole-building-offer',
+      propertyCoreId: 'legacy-whole-building',
+      transaction: 'sale',
+      salePrice: { amount: 500_000, currencyCode: 'KWD' },
+    },
+    typeDetails: { propertyType: 'whole_building', bedroomCount: 12, masterBedroomCount: 4 },
+  };
+  const draft = createEditDraft(legacy);
+  assert.equal(draft.choices.canonicalDetails?.bedroomCount, '12');
+  assert.equal(draft.choices.canonicalDetails?.masterBedroomCount, '4');
+  const reopened = buildPropertyUpdateCandidate(legacy, draft.choices);
+  const details = reopened.typeDetails as unknown as Record<string, unknown>;
+  assert.equal(details.bedroomCount, 12);
+  assert.equal(details.masterBedroomCount, 4);
 });
 
 test('BEHAVIOR: fresh Rent draft applies monthly cadence without inventing values', () => {

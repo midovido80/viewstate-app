@@ -52,6 +52,14 @@ export function formatPropertyDetailValue(
     const labels = { family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] };
     return labels[value as keyof typeof labels]?.[language === 'ar' ? 1 : 0] ?? String(value);
   }
+  if (field === 'rentalOccupancy') {
+    const labels = {
+      vacant: ['Vacant', 'شاغر'],
+      fully_rented: ['Fully rented', 'مؤجر بالكامل'],
+      partially_rented: ['Partly rented', 'مؤجر جزئياً'],
+    } as const;
+    return labels[value as keyof typeof labels]?.[language === 'ar' ? 1 : 0] ?? String(value);
+  }
   if (field === 'floorUse' || field === 'propertyUse') {
     return value === 'residential'
       ? (language === 'ar' ? 'سكني' : 'Residential')

@@ -309,6 +309,28 @@ test("residential amenity facts preserve unknown, false, and true without derivi
   assertEqual(validateTypeDetails({ propertyType: "office", hasHeating: true } as unknown as TypeDetails, core("office")).ok, false, "Commercial types must reject residential amenities");
 });
 
+test("whole-building commercial floors stay within total floors and shop counts stay 1–3", () => {
+  const valid: TypeDetails = {
+    propertyType: "whole_building",
+    floorCount: 4,
+    unitCount: 2,
+    apartmentsPerFloor: 3,
+    hasCommercialFloors: true,
+    commercialFloorCount: 4,
+    hasCommercialShops: true,
+    shopCount: 3,
+  };
+  assert(validateTypeDetails(valid, core("whole_building")).ok, "Commercial floors may equal, but not be added to, total floors");
+  for (const invalid of [
+    { ...valid, commercialFloorCount: 5 },
+    { ...valid, hasCommercialFloors: false },
+    { ...valid, shopCount: 4 },
+    { ...valid, hasCommercialShops: false },
+  ]) {
+    assertEqual(validateTypeDetails(invalid, core("whole_building")).ok, false, "Invalid conditional building facts must fail validation");
+  }
+});
+
 test("Studio has a fixed canonical open-room fact and subtype-only feature facts", () => {
   const studio: TypeDetails = {
     propertyType: "apartment",
@@ -335,14 +357,14 @@ test("Studio has a fixed canonical open-room fact and subtype-only feature facts
   } as TypeDetails, core("apartment")).ok, false, "Open-room count requires the Studio subtype");
 });
 
-test("building aggregate counts validate only for whole buildings and commercial complexes", () => {
+test("commercial complex aggregate counts validate, while whole-building totals stay independently entered", () => {
   const invalidBuildingCounts = {
     unitCount: 2,
     apartmentCount: 1,
     shopCount: 1,
     officeCount: 1,
   };
-  for (const propertyType of ["whole_building", "commercial_complex"] as const) {
+  for (const propertyType of ["commercial_complex"] as const) {
     const result = validateTypeDetails(
       { propertyType, ...invalidBuildingCounts } as TypeDetails,
       core(propertyType),
@@ -353,10 +375,18 @@ test("building aggregate counts validate only for whole buildings and commercial
       `${propertyType} must retain its aggregate validation`,
     );
   }
+  assert(validateTypeDetails({
+    propertyType: "whole_building",
+    unitCount: 2,
+    apartmentCount: 9,
+    shopCount: 3,
+    floorCount: 4,
+    apartmentsPerFloor: 2,
+  }, core("whole_building")).ok, "Manual total units are not inferred from floor or apartment counts");
 
   const aggregateFields = ["unitCount", "apartmentCount", "shopCount", "officeCount"] as const;
   for (const propertyType of PROPERTY_TYPES) {
-    const applicable = aggregateFields.every(field =>
+    const applicable = propertyType === "commercial_complex" && aggregateFields.every(field =>
       PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)
         ?.appliesTo.includes(propertyType) === true,
     );

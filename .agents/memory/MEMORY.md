@@ -7,3 +7,4 @@
 - [Wanted Requirement boundary](studio-requirement-media-scope.md) — Requirements hold seeker preferences, not Property location or media; decode legacy rows without rewriting them.
 - [Wanted catalog selection](wanted-catalog-selection.md) — choose transaction, type, and apartment subtype once before specifications; preserve those choices on Back.
 - [Property entry verification](property-entry-verification.md) — verify Home and Person-led entries separately; test Wanted with a Seeker, not an Owner-only Person.
+- [Whole-building sale scope](whole-building-sale-scope.md) — keep building facts separate from one-apartment facts; later form additions/removals require Founder review.

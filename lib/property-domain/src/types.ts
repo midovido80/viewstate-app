@@ -105,6 +105,11 @@ export interface WholeBuildingTypeDetails {
   readonly builtUpAreaSquareMeters?: number;
   readonly floorCount?: number;
   readonly unitCount?: number;
+  readonly apartmentsPerFloor?: number;
+  readonly commercialFloorCount?: number;
+  readonly hasCommercialFloors?: boolean;
+  readonly hasCommercialShops?: boolean;
+  readonly hasGuardRoom?: boolean;
   readonly apartmentCount?: number;
   readonly shopCount?: number;
   readonly officeCount?: number;
@@ -112,6 +117,11 @@ export interface WholeBuildingTypeDetails {
   readonly parkingSpaceCount?: number;
   readonly roomsPerUnit?: number;
   readonly bathroomsPerUnit?: number;
+  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly rentalOccupancy?: "vacant" | "fully_rented" | "partially_rented";
+  readonly monthlyIncome?: number;
   readonly hasCentralAC?: boolean;
 }
 
@@ -119,12 +129,12 @@ export interface CommercialComplexTypeDetails {
   readonly propertyType: "commercial_complex";
   readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
   readonly hasBasement?: boolean;
-  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
-  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
-  readonly privateParkingCount?: number;
   readonly hasMortgage?: boolean;
   readonly rentalOccupancy?: "vacant" | "fully_rented" | "partially_rented";
   readonly monthlyIncome?: number;
+  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly floorCount?: number;

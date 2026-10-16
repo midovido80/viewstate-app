@@ -45,6 +45,7 @@ export function PropertyEnrichmentFields({
   hideFloorUse = false,
   hideApartmentSubtype = false,
   hidePropertyUse = false,
+  excludedFields = [],
 }: {
   recordScopeKey: string;
   propertyType: PropertyType;
@@ -56,6 +57,7 @@ export function PropertyEnrichmentFields({
   hideFloorUse?: boolean;
   hideApartmentSubtype?: boolean;
   hidePropertyUse?: boolean;
+  excludedFields?: readonly PropertyDetailField[];
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
@@ -70,6 +72,7 @@ export function PropertyEnrichmentFields({
     && definition.group !== 'amenity'
     && definition.field !== 'plotAreaSquareMeters'
     && definition.field !== 'builtUpAreaSquareMeters'
+    && !excludedFields.includes(definition.field)
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
   const specificationOrder: PropertyDetailField[] = [

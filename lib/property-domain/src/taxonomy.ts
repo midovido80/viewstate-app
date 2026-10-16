@@ -66,6 +66,11 @@ export type PropertyDetailField =
   | "parkingSpaceCount"
   | "floorCount"
   | "unitCount"
+  | "apartmentsPerFloor"
+  | "commercialFloorCount"
+  | "hasCommercialFloors"
+  | "hasCommercialShops"
+  | "hasGuardRoom"
   | "roomsPerUnit"
   | "bathroomsPerUnit"
   | "apartmentCount"
@@ -115,7 +120,13 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
-  ...(["buildingAgeBand", "hasBasement", "streetPosition", "parkingTypes", "privateParkingCount", "hasMortgage", "rentalOccupancy", "monthlyIncome"] as const).map(field => ({ field, appliesTo: ["commercial_complex"] as const })),
+  ...(["buildingAgeBand", "hasBasement", "hasMortgage"] as const).map(field => ({ field, appliesTo: ["commercial_complex"] as const })),
+  { field: "streetPosition", appliesTo: ["whole_building", "commercial_complex"] },
+  { field: "parkingTypes", appliesTo: ["whole_building", "commercial_complex"] },
+  { field: "privateParkingCount", appliesTo: ["whole_building", "commercial_complex"] },
+  { field: "rentalOccupancy", appliesTo: ["whole_building", "commercial_complex"] },
+  { field: "monthlyIncome", appliesTo: ["whole_building", "commercial_complex"] },
+  ...(["hasCommercialFloors", "hasCommercialShops", "hasGuardRoom", "commercialFloorCount", "apartmentsPerFloor"] as const).map(field => ({ field, appliesTo: ["whole_building"] as const })),
   { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "other_built_property"] },
   { field: "builtUpAreaSquareMeters", appliesTo: PROPERTY_TYPES },
   { field: "bathroomCount", appliesTo: ["apartment", "floor", "house", "villa", "office", "shop", "warehouse", "chalet"] },

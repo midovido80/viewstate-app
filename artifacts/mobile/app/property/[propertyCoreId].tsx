@@ -1215,7 +1215,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   if (offeredStudio) {
     addSpec('studioRoomCount', 1, 'bed-outline', 'MaterialCommunityIcons');
     numericSpecTiles[numericSpecTiles.length - 1].label = language === 'ar' ? 'غرفة مفتوحة' : 'Open room';
-  } else if (propertyFacts.templateFacts.bedroomCount !== undefined) addSpec('bedroomCount', propertyFacts.templateFacts.bedroomCount, 'bed-outline', 'MaterialCommunityIcons');
+  } else if (property.core.propertyType !== 'whole_building' && propertyFacts.templateFacts.bedroomCount !== undefined) addSpec('bedroomCount', propertyFacts.templateFacts.bedroomCount, 'bed-outline', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.bathroomCount !== undefined) addSpec('bathroomCount', propertyFacts.templateFacts.bathroomCount, 'shower', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.livingRoomCount !== undefined) addSpec('livingRoomCount', propertyFacts.templateFacts.livingRoomCount, 'sofa-outline', 'MaterialCommunityIcons');
   if (propertyFacts.templateFacts.parkingSpaceCount !== undefined) addSpec('parkingSpaceCount', propertyFacts.templateFacts.parkingSpaceCount, 'car', 'MaterialCommunityIcons');
@@ -1225,7 +1225,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
     : visibleContent.typeDetails) as Record<string, unknown>;
-  if (property.core.propertyType === 'commercial_complex' && property.activeOffer.transaction === 'sale') {
+  if ((property.core.propertyType === 'commercial_complex' || property.core.propertyType === 'whole_building') && property.activeOffer.transaction === 'sale') {
     const yieldPercent = grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined);
     if (yieldPercent !== undefined) {
       addSpec('grossAnnualRentalYield', `${yieldPercent.toFixed(2)}%`, 'percent', 'Feather');
@@ -1253,18 +1253,25 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const supplementalDetails = propertyDetailDisplayDefinitions
     .filter(definition =>
       definition.group !== 'amenity'
+      && !(property.core.propertyType === 'whole_building' && ['bedroomCount', 'masterBedroomCount'].includes(definition.field))
       && !numericSpecTiles.some(tile => tile.fieldId === definition.field)
       && detailValues[definition.field] !== undefined
       && definition.field !== 'plotAreaSquareMeters'
       && definition.field !== 'builtUpAreaSquareMeters')
     .map(definition => ({
       field: definition.field,
-      label: definition.label[language === 'ar' ? 1 : 0],
+      label: property.core.propertyType === 'whole_building' && definition.field === 'occupancy'
+        ? (language === 'ar' ? 'الإشغال السكني' : 'Residential occupancy')
+        : property.core.propertyType === 'whole_building' && definition.field === 'roomsPerUnit'
+          ? (language === 'ar' ? 'غرف النوم في شقة واحدة' : 'Bedrooms in ONE apartment')
+          : definition.label[language === 'ar' ? 1 : 0],
       value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language, t),
     }));
   const existingSupplementalFields = new Set<string>(supplementalDetails.map(item => item.field));
   const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
     .filter(item =>
+      !(property.core.propertyType === 'whole_building' && ['bedroomCount', 'masterBedroomCount'].includes(item.field))
+      &&
       !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
       && !(offeredStudio && item.field === 'builtUpAreaSquareMeters')
       && !numericSpecTiles.some(tile => tile.fieldId === item.field)
@@ -1548,6 +1555,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   ))}
                 </View>
               )}
+              {(property.core.propertyType === 'whole_building' || property.core.propertyType === 'commercial_complex') && numericSpecTiles.some(spec => spec.fieldId === 'grossAnnualRentalYield')
+                ? <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'العائد الإجمالي قبل المصروفات والصيانة والتمويل.' : 'Gross yield before expenses, maintenance and financing.'}</Text>
+                : null}
 
               {propertySupplementalDetails.length > 0 && (
                 <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
@@ -2259,8 +2269,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   function DetailRow({ label, value }: { label: string; value: string }) {
     return (
       <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
-        <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{label}</Text>
-        <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{value}</Text>
+        <Text style={{ color: property?.core.propertyType === 'whole_building' ? colors.destructive : colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{label}</Text>
+        <Text style={[styles.detailValue, { color: property?.core.propertyType === 'whole_building' ? colors.destructive : colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{value}</Text>
       </View>
     );
   }
@@ -2298,8 +2308,8 @@ const styles = StyleSheet.create({
   detailRow: { paddingVertical: 18, borderBottomWidth: 1 },
   detailValue: { fontSize: 18, marginTop: 6 },
   sourceSection: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
-  sourceHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  sourceTitle: { flex: 1, gap: 3 },
+  sourceHeader: { alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
+  sourceTitle: { flex: 1, flexShrink: 1, minWidth: 0, gap: 3 },
   relationshipUnlink: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   sourcePickerHeader: { minHeight: 60, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   label: { fontSize: 16, marginTop: 8 },

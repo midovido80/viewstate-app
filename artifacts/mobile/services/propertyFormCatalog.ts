@@ -245,6 +245,11 @@ const LABELS: Record<string, readonly [string, string]> = {
   parkingSpaceCount: ['Parking spaces', 'مواقف السيارات'],
   floorCount: ['Floors', 'عدد الأدوار'],
   unitCount: ['Units', 'عدد الوحدات'],
+  apartmentsPerFloor: ['Apartments on a typical residential floor', 'عدد الشقق في الدور السكني المعتاد'],
+  commercialFloorCount: ['Commercial floors (included in total floors)', 'الأدوار التجارية (ضمن إجمالي الأدوار)'],
+  hasCommercialFloors: ['Commercial floors', 'أدوار تجارية'],
+  hasCommercialShops: ['Commercial shops', 'محلات تجارية'],
+  hasGuardRoom: ['Guard room', 'غرفة حارس'],
   roomsPerUnit: ['Rooms per unit', 'الغرف في كل وحدة'],
   bathroomsPerUnit: ['Bathrooms per unit', 'الحمامات في كل وحدة'],
   apartmentCount: ['Apartments', 'عدد الشقق'],
@@ -286,6 +291,7 @@ const LABELS: Record<string, readonly [string, string]> = {
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
   'privateParkingCount',
+  'apartmentsPerFloor', 'commercialFloorCount',
   'masterBedroomCount', 'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
@@ -297,6 +303,7 @@ const DECIMAL_FIELDS = new Set<PropertyDetailField>([
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
   'hasBasement', 'hasMortgage',
+  'hasCommercialFloors', 'hasCommercialShops', 'hasGuardRoom',
   'hasPool', 'hasWaterfront', 'hasColdStorage', 'hasCentralAC',
   'hasKitchen', 'hasHall', 'hasParking',
 ]);
@@ -307,6 +314,7 @@ const CHOICE_FIELDS = new Set<PropertyDetailField>([
 const NUMERIC_QUICK_PICK_FIELDS = new Set<PropertyDetailField>([
   'masterBedroomCount', 'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount',
+  'apartmentsPerFloor', 'commercialFloorCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',
 ]);
