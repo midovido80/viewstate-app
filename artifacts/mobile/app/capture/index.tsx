@@ -1004,12 +1004,12 @@ export default function CaptureWorkflow() {
               <>
             <Section title={language === 'ar' ? 'المواصفات' : 'Property specifications'} colors={colors} fonts={fonts}>
               <ModernPropertyForm
+                requireExactValue
                 transaction={draft.transaction}
                 salePrice={draft.salePrice?.amount}
                 recordScopeKey={scopeKey}
                 propertyType={draft.propertyType ?? 'other_built_property'}
                 values={captureDetails}
-                requireExactValue
                 hideFloorUse={Boolean(captureDetails.floorUse)}
                 hideApartmentSubtype={Boolean(draft.apartmentSubtype || captureDetails.apartmentSubtype)}
                 hidePropertyUse={Boolean(captureDetails.propertyUse)}
