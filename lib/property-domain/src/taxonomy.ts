@@ -52,6 +52,14 @@ export const FURNISHING_VALUES = [
 ] as const satisfies readonly Furnishing[];
 
 export type PropertyDetailField =
+  | "buildingAgeBand"
+  | "hasBasement"
+  | "streetPosition"
+  | "parkingTypes"
+  | "privateParkingCount"
+  | "hasMortgage"
+  | "rentalOccupancy"
+  | "monthlyIncome"
   | "plotAreaSquareMeters"
   | "builtUpAreaSquareMeters"
   | "bathroomCount"
@@ -107,6 +115,7 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
+  ...(["buildingAgeBand", "hasBasement", "streetPosition", "parkingTypes", "privateParkingCount", "hasMortgage", "rentalOccupancy", "monthlyIncome"] as const).map(field => ({ field, appliesTo: ["commercial_complex"] as const })),
   { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "other_built_property"] },
   { field: "builtUpAreaSquareMeters", appliesTo: PROPERTY_TYPES },
   { field: "bathroomCount", appliesTo: ["apartment", "floor", "house", "villa", "office", "shop", "warehouse", "chalet"] },

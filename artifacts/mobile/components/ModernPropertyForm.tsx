@@ -8,8 +8,11 @@ import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/prope
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { FLOOR_NUMBER_QUICK_PICK_VALUES } from '@/services/numericQuickPick';
+import { CommercialComplexSaleFields } from '@/components/CommercialComplexSaleFields';
 
 export interface ModernPropertyFormProps {
+  transaction?: 'sale' | 'rent';
+  salePrice?: number;
   recordScopeKey: string;
   propertyType: PropertyType;
   values: EnrichmentFieldValues;
@@ -29,7 +32,8 @@ export interface ModernPropertyFormProps {
   hidePropertyUse?: boolean;
 }
 
-export function ModernPropertyForm({ recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
+export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
+  if (propertyType === 'commercial_complex' && transaction === 'sale') return <CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
   return (
     <View>
       <ModernPropertyFields

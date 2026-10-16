@@ -240,6 +240,27 @@ export function validateTypeDetails(
     "frontageWidthMeters",
     "ceilingHeightMeters",
   ] as const;
+  const commercialChoices = {
+    buildingAgeBand: ["1_5", "6_12", "over_12"],
+    streetPosition: ["one_street", "two_streets", "corner", "front_back"],
+    rentalOccupancy: ["vacant", "fully_rented", "partially_rented"],
+  };
+  for (const [field, options] of Object.entries(commercialChoices)) {
+    if (candidate[field] !== undefined && !options.includes(candidate[field] as string)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", field], "Invalid commercial choice."));
+    }
+  }
+  if (candidate.parkingTypes !== undefined && (!Array.isArray(candidate.parkingTypes)
+    || candidate.parkingTypes.some(value => !["private", "public", "paid"].includes(value))
+    || new Set(candidate.parkingTypes).size !== candidate.parkingTypes.length)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "parkingTypes"], "Invalid parking types."));
+  }
+  if (candidate.privateParkingCount !== undefined && (!Array.isArray(candidate.parkingTypes) || !candidate.parkingTypes.includes("private"))) {
+    issues.push(issue("incompatible_detail_field", ["typeDetails", "privateParkingCount"], "Private parking count requires private parking."));
+  }
+  if (candidate.monthlyIncome !== undefined && (typeof candidate.monthlyIncome !== "number" || !Number.isFinite(candidate.monthlyIncome) || candidate.monthlyIncome < 0)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "monthlyIncome"], "Monthly income must be a non-negative finite amount."));
+  }
   for (const field of positiveFields) {
     const value = candidate[field];
     if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
@@ -248,6 +269,7 @@ export function validateTypeDetails(
   }
 
   const countFields = [
+    "privateParkingCount",
     "bathroomCount",
     "parkingSpaceCount",
     "floorCount",
@@ -265,6 +287,9 @@ export function validateTypeDetails(
     "floorNumber",
     "loadingBayCount",
   ] as const;
+  if (details.propertyType === "commercial_complex" && candidate.floorCount !== undefined && (typeof candidate.floorCount !== "number" || candidate.floorCount < 1)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "floorCount"], "A commercial complex must have at least one floor."));
+  }
   for (const field of countFields) {
     const value = candidate[field];
     if (
@@ -276,6 +301,8 @@ export function validateTypeDetails(
   }
 
   for (const field of [
+    "hasBasement",
+    "hasMortgage",
     "hasMaidRoom",
     "hasHeating",
     "hasBalcony",

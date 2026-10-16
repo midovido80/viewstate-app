@@ -117,6 +117,14 @@ export interface WholeBuildingTypeDetails {
 
 export interface CommercialComplexTypeDetails {
   readonly propertyType: "commercial_complex";
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly hasBasement?: boolean;
+  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly hasMortgage?: boolean;
+  readonly rentalOccupancy?: "vacant" | "fully_rented" | "partially_rented";
+  readonly monthlyIncome?: number;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly floorCount?: number;

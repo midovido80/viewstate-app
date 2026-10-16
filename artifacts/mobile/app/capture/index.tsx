@@ -32,6 +32,7 @@ import {
 } from '@/services/propertyFormCatalog';
 import { propertyDetailLabels, formatPropertyDetailValue } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
+import { grossAnnualRentalYield } from '@/services/commercialComplexSale';
 import { AttachmentPickerControl } from '@/components/AttachmentPickerControl';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
 import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
@@ -1003,6 +1004,8 @@ export default function CaptureWorkflow() {
               <>
             <Section title={language === 'ar' ? 'المواصفات' : 'Property specifications'} colors={colors} fonts={fonts}>
               <ModernPropertyForm
+                transaction={draft.transaction}
+                salePrice={draft.salePrice?.amount}
                 recordScopeKey={scopeKey}
                 propertyType={draft.propertyType ?? 'other_built_property'}
                 values={captureDetails}
@@ -1132,7 +1135,8 @@ export default function CaptureWorkflow() {
             {!isBasicApartmentFollowUp && (
               <>
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
-             {applicable.filter(definition => definition.group !== 'amenity' && captureDetails[definition.field] !== undefined).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
+             {draft.propertyType === 'commercial_complex' && draft.transaction === 'sale' && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
+             {applicable.filter(definition => definition.group !== 'amenity' && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private'))).map(definition => <PreviewRow key={definition.field} label={definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
             {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
              {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (

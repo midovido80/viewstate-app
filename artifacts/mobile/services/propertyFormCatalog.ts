@@ -230,6 +230,14 @@ const WANTED_BY_FIELD: Partial<Record<PropertyDetailField, PropertyWantedDescrip
 };
 
 const LABELS: Record<string, readonly [string, string]> = {
+  buildingAgeBand: ['Building age', 'عمر البناء'],
+  hasBasement: ['Basement', 'سرداب'],
+  streetPosition: ['Street position', 'الموقع'],
+  parkingTypes: ['Parking', 'المواقف'],
+  privateParkingCount: ['Private parking spaces', 'عدد المواقف الخاصة'],
+  hasMortgage: ['Mortgaged', 'العقار مرهون'],
+  rentalOccupancy: ['Occupancy status', 'الإشغال'],
+  monthlyIncome: ['Monthly income (KWD)', 'المدخول الشهري (د.ك)'],
   plotAreaSquareMeters: ['Plot area (m²)', 'مساحة الأرض (م²)'],
   builtUpAreaSquareMeters: ['Built-up area (m²)', 'مساحة البناء (م²)'],
   bathroomCount: ['Bathrooms', 'الحمامات'],
@@ -277,19 +285,23 @@ const LABELS: Record<string, readonly [string, string]> = {
 };
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
+  'privateParkingCount',
   'masterBedroomCount', 'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',
 ]);
 const DECIMAL_FIELDS = new Set<PropertyDetailField>([
+  'monthlyIncome',
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
+  'hasBasement', 'hasMortgage',
   'hasPool', 'hasWaterfront', 'hasColdStorage', 'hasCentralAC',
   'hasKitchen', 'hasHall', 'hasParking',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
+  'buildingAgeBand', 'streetPosition', 'parkingTypes', 'rentalOccupancy',
   'apartmentSubtype', 'floorUse', 'furnishing', 'occupancy', 'propertyUse',
 ]);
 const NUMERIC_QUICK_PICK_FIELDS = new Set<PropertyDetailField>([
@@ -316,7 +328,7 @@ export const PROPERTY_FORM_CATALOG: readonly PropertyFormFieldDefinition[] = [
       ...definition,
       control: controlFor(definition.field),
       label: LABELS[definition.field] ?? ['Unknown', 'غير معروف'],
-      group: definition.field.startsWith('has') ? 'amenity' as const : 'detail' as const,
+      group: definition.field.startsWith('has') && !['hasBasement', 'hasMortgage'].includes(definition.field) ? 'amenity' as const : 'detail' as const,
       offered: { kind: 'actual_fact' as const, field: definition.field },
       ...(wanted ? { wanted } : {}),
     };

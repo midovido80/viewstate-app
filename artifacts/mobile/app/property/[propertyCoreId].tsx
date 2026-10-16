@@ -22,6 +22,7 @@ import { Property, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata
 import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
+import { grossAnnualRentalYield } from '@/services/commercialComplexSale';
 import { getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -1224,6 +1225,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
     : visibleContent.typeDetails) as Record<string, unknown>;
+  if (property.core.propertyType === 'commercial_complex' && property.activeOffer.transaction === 'sale') {
+    const yieldPercent = grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined);
+    if (yieldPercent !== undefined) {
+      addSpec('grossAnnualRentalYield', `${yieldPercent.toFixed(2)}%`, 'percent', 'Feather');
+      numericSpecTiles[numericSpecTiles.length - 1].label = language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield';
+    }
+  }
   const actualStudioAreaSquareMeters = studioAreaSquareMeters
     ?? (offeredStudio ? readNumericDetail(detailValues.builtUpAreaSquareMeters) : undefined);
   const locationArea = getAreaById(property.core.locationArea.id);
@@ -1747,6 +1755,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
             />
             <ModernPropertyForm
+              transaction={shownTransaction}
+              salePrice={shownTransaction === 'sale' ? shownPrice : undefined}
               recordScopeKey={`property:${property.core.id}`}
               propertyType={property.core.propertyType}
               values={choices.canonicalDetails ?? {}}

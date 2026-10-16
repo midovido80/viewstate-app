@@ -60,8 +60,10 @@ export function PropertyEnrichmentFields({
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
   const floorUse = values.floorUse;
-  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined);
+  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined).filter(definition => !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field));
   const definitions = applicableDefinitions.filter(definition =>
+    !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field)
+    &&
     definition.field !== 'floorUse'
     && (!hidePropertyUse || definition.field !== 'propertyUse')
     && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')

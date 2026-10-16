@@ -11,6 +11,7 @@ import { EQUIVALENT_TEMPLATE_FIELDS, hasCanonicalTypeDetailsSnapshot } from '@/s
 import { getDemoCategory } from '@/services/propertyDemoCatalog';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';
 import { readStudioRequirement } from '@/services/studioFormModel';
+import { COMMERCIAL_COMPLEX_CHOICES } from '@/services/commercialComplexSale';
 
 const coreFieldOrder: readonly PropertyDetailField[] = [
   'bedroomCount', 'masterBedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
@@ -30,6 +31,11 @@ export function formatPropertyDetailValue(
   language: 'en' | 'ar',
   translate?: (key: string) => string,
 ): string {
+  const choices = COMMERCIAL_COMPLEX_CHOICES[field];
+  if (choices) return (Array.isArray(value) ? value : String(value).split(',')).map(item => {
+    const choice = choices.find(option => option[0] === item);
+    return choice?.[language === 'ar' ? 2 : 1] ?? String(item);
+  }).join(language === 'ar' ? '، ' : ', ');
   if (typeof value === 'object' && value && 'value' in value) {
     return toEnglishDigits(String((value as { value: unknown }).value));
   }
