@@ -3,6 +3,7 @@ import test from 'node:test';
 import { registerHooks } from 'node:module';
 
 interface RouteHarness {
+  language?: 'en' | 'ar';
   params: Record<string, string | undefined>;
   state: unknown[];
   cursor: number;
@@ -68,8 +69,8 @@ const stubSources = new Map<string, string>([
     export const useI18n = () => ({
       t: key => key,
       fonts: { bold: 'bold', semiBold: 'semiBold' },
-      isRTL: false,
-      language: 'en',
+      isRTL: globalThis.__apartmentRouteHarness.language === 'ar',
+      language: globalThis.__apartmentRouteHarness.language ?? 'en',
     });
   `],
   ['@/hooks/useColors', `
@@ -228,15 +229,26 @@ test('production Wanted chooser requires an explicit Rent or Buy choice and keep
   const propertyTypeRoute = await import('../app/capture/property-type.tsx');
   const subtypeRoute = await import('../app/capture/apartment-subtype.tsx');
 
-  for (const transaction of ['rent', 'sale'] as const) {
+  for (const language of ['en', 'ar'] as const) for (const transaction of ['rent', 'sale'] as const) {
     const seekerId = `exact-seeker-${transaction}`;
     const transactionHarness = routeHarness({ mode: 'wanted', seekerId });
+    transactionHarness.language = language;
     const initialTransaction = renderRoute(transactionRoute, transactionHarness);
     assert.equal(findByTestId(initialTransaction, 'btn-next').props.disabled, true);
     (findByTestId(initialTransaction, 'select-wanted').props.onSelect as () => void)();
     const selectedTransaction = renderRoute(transactionRoute, transactionHarness);
+    assert.equal(findByTestId(selectedTransaction, 'select-sale').props.title, language === 'ar' ? 'للشراء' : 'To buy');
+    assert.equal(findByTestId(selectedTransaction, 'select-rent').props.title, language === 'ar' ? 'للإيجار' : 'For rent');
     (findByTestId(selectedTransaction, transaction === 'rent' ? 'select-rent' : 'select-sale').props.onSelect as () => void)();
-    (findByTestId(renderRoute(transactionRoute, transactionHarness), 'btn-next').props.onPress as () => void)();
+    (findByTestId(renderRoute(transactionRoute, transactionHarness), 'select-offered').props.onSelect as () => void)();
+    const offeredTransaction = renderRoute(transactionRoute, transactionHarness);
+    assert.equal(findByTestId(offeredTransaction, 'select-sale').props.title, language === 'ar' ? 'للبيع' : 'For sale');
+    assert.equal(findByTestId(offeredTransaction, transaction === 'rent' ? 'select-rent' : 'select-sale').props.selected, true);
+    (findByTestId(offeredTransaction, 'select-wanted').props.onSelect as () => void)();
+    const wantedAgain = renderRoute(transactionRoute, transactionHarness);
+    assert.equal(findByTestId(wantedAgain, 'select-sale').props.title, language === 'ar' ? 'للشراء' : 'To buy');
+    assert.equal(findByTestId(wantedAgain, transaction === 'rent' ? 'select-rent' : 'select-sale').props.selected, true);
+    (findByTestId(wantedAgain, 'btn-next').props.onPress as () => void)();
 
     assert.deepEqual(transactionHarness.pushes[0], {
       pathname: '/capture/property-type',

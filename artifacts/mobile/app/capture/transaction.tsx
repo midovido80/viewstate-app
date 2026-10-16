@@ -86,10 +86,10 @@ export default function TransactionScreen() {
         />
 
         <Text style={[styles.groupTitle, styles.transactionHeading, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-          {label('Sale or Rent', 'بيع أم إيجار')}
+          {offerMode === 'wanted' ? label('Purchase or Rent', 'شراء أم إيجار') : label('Sale or Rent', 'بيع أم إيجار')}
         </Text>
         <SelectCard
-          title={label('For sale', 'للبيع')}
+          title={offerMode === 'wanted' ? label('To buy', 'للشراء') : label('For sale', 'للبيع')}
           icon="tag"
           selected={transaction === 'sale'}
           onSelect={() => {

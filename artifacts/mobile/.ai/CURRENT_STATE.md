@@ -380,3 +380,9 @@ Authorization: Founder requested that People change the Sale filter wording to P
 Baseline: Work branch `work/property-sector-selection` at `9e47c86d45ccf4cb8c790dd486cb1ded14781408`.
 Change: Shared bilingual transaction-filter label in People and Properties: Wanted only uses To buy/للشراء, Offered or no direction uses For sale/للبيع, both directions use For sale / To buy; Rent remains For rent/للإيجار. Existing canonical sale-to-wanted-buy mapping, selected filters, sector intersections and saved records remain unchanged.
 Verification: Existing filter suite extended with direction transitions, canonical result matching and both-tab label consumers; full CI results are reported separately. No dependency, migration, Preview or Pilot change.
+
+### Session: 2026-10-16 (Wanted transaction-entry purchase wording correction)
+Authorization: Founder reported that simplifying the Add Property transaction choices left Sale visible after choosing Wanted, and explicitly requested Purchase for Wanted while retaining Sale for Offered.
+Baseline: Work branch `work/property-sector-selection` at `d8f26d0e4ba8e70e3c608cf914d3e5c33d7fe788`.
+Correction: The entry screen now shows To buy/للشراء and Purchase or Rent/شراء أم إيجار under Wanted, and For sale/للبيع and Sale or Rent under Offered. Rent remains For rent/للإيجار; direction is not repeated inside either option. Canonical transaction values, existing filter behavior and Wanted sale-to-buy routing remain unchanged.
+Verification: Existing production route regression extended to English and Arabic, including toggling Offered/Wanted without losing the selected transaction and exact Seeker ownership; full CI results are reported separately. No dependencies, persistence migration, Preview or Pilot changes.
