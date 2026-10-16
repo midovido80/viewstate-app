@@ -89,9 +89,7 @@ export default function TransactionScreen() {
           {label('Sale or Rent', 'بيع أم إيجار')}
         </Text>
         <SelectCard
-          title={offerMode === 'wanted'
-            ? label('Wanted Purchase', 'مطلوب للشراء')
-            : label('Offered Sale', 'معروض للبيع')}
+          title={label('For sale', 'للبيع')}
           icon="tag"
           selected={transaction === 'sale'}
           onSelect={() => {
@@ -101,9 +99,7 @@ export default function TransactionScreen() {
           testID="select-sale"
         />
         <SelectCard
-          title={offerMode === 'wanted'
-            ? label('Wanted Rent', 'مطلوب للإيجار')
-            : label('Offered Rent', 'معروض للإيجار')}
+          title={label('For rent', 'للإيجار')}
           icon="key"
           selected={transaction === 'rent'}
           onSelect={() => {

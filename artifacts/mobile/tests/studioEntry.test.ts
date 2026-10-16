@@ -17,10 +17,9 @@ test('Add entry requires both Offered/Wanted and transaction choices without aut
   const transaction = await source('../app/capture/transaction.tsx');
   assert.match(transaction, /select-offered/);
   assert.match(transaction, /select-wanted/);
-  assert.match(transaction, /Offered Sale/);
-  assert.match(transaction, /Offered Rent/);
-  assert.match(transaction, /Wanted Purchase/);
-  assert.match(transaction, /Wanted Rent/);
+  assert.match(transaction, /title=\{label\('For sale', 'للبيع'\)\}/);
+  assert.match(transaction, /title=\{label\('For rent', 'للإيجار'\)\}/);
+  assert.doesNotMatch(transaction, /Wanted Purchase|Wanted Rent|Offered Sale|Offered Rent/);
   assert.match(transaction, /disabled=\{!offerMode \|\| !transaction\}/);
   assert.match(transaction, /router\.push\(getPropertyTypeSelectionRoute\(/);
   assert.doesNotMatch(transaction, /onSelect=\{\(\) => \{[^}]*router\.push/s);

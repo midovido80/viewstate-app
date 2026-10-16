@@ -368,3 +368,9 @@ Baseline: Work branch `work/property-sector-selection` at `61e0758e1ac224662f796
 Implementation: Two equal-width bilingual sector controls below the People intent filters; mutually exclusive, reversible, with All clearing both groups. Derive each activity's sector from its canonical linked Property or owned Requirement. All selected facets must match one activity; separate activities cannot combine into a false match. Person cards show only matching activities and the matching overflow count. Unfiltered People still includes persons without activity; unknown Floor/Other use is excluded only from a specific sector. Existing Person search remains combined with these filters.
 Verification: Focused composable, sector and presentation regression tests passed locally, 43/43, covering all direction/transaction/sector combinations, ownership, cross-record false positives, shared-type use and read-only deduplication. Full CI and Preview/device acceptance are recorded separately.
 Boundaries: No database writes/migrations, dependencies, APK, deployment or Pilot promotion.
+
+### Session: 2026-10-16 (Transaction selector wording)
+Authorization: Founder requested independent wording for the two selection groups: Offered/Wanted above and For rent/For sale below, without repeating direction in the transaction choices.
+Baseline: `work/property-sector-selection` at `c249c724aa5e00b6e0a4778936582dcb8f69f995`.
+Change: Short bilingual transaction-choice labels only; direction, transaction identifiers, routing and the combined intent labels used in cards/review remain unchanged.
+Verification: Existing selector wording assertions updated for the requested copy; full CI results are reported separately. No dependency, persistence, Preview or Pilot changes.
