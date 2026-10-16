@@ -72,3 +72,17 @@ export function anyRecordIntentMatchesComposableFilter(
   if (!hasActiveRecordFilters(filter)) return true;
   return intentIds.some(intentId => recordIntentMatchesComposableFilter(intentId, filter));
 }
+
+/** Labels describe the selected direction; canonical sale/buy mapping stays unchanged. */
+export function getRecordTransactionFilterLabel(
+  transaction: RecordTransactionFilter,
+  filter: ComposableRecordFilter,
+  language: 'en' | 'ar',
+): string {
+  if (transaction === 'rent') return language === 'ar' ? 'للإيجار' : 'For rent';
+  const wanted = filter.directions.includes('wanted');
+  const offered = filter.directions.includes('offered');
+  if (wanted && offered) return language === 'ar' ? 'للبيع / للشراء' : 'For sale / To buy';
+  if (wanted) return language === 'ar' ? 'للشراء' : 'To buy';
+  return language === 'ar' ? 'للبيع' : 'For sale';
+}

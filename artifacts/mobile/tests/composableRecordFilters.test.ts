@@ -5,6 +5,7 @@ import {
   EMPTY_COMPOSABLE_RECORD_FILTER,
   anyRecordIntentMatchesComposableFilter,
   hasActiveRecordFilters,
+  getRecordTransactionFilterLabel,
   recordIntentMatchesComposableFilter,
   toggleRecordFilter,
 } from '../services/composableRecordFilters.ts';
@@ -166,4 +167,45 @@ test('People sector controls sit below intent controls and All clears both while
   assert.match(source, /people-filter-\$\{value\}/);
   assert.match(source, /visibleActivityByPerson\.get\(item\.id\)/);
   assert.match(source, /const hasActivePeopleFilters = hasActiveRecordFilters\(filter\) \|\| sector !== 'all'/);
+});
+
+test('transaction filter labels follow Wanted/Offered selection in Arabic and English', () => {
+  const wanted = toggleRecordFilter(EMPTY_COMPOSABLE_RECORD_FILTER, 'directions', 'wanted');
+  const offered = toggleRecordFilter(EMPTY_COMPOSABLE_RECORD_FILTER, 'directions', 'offered');
+  const both = toggleRecordFilter(wanted, 'directions', 'offered');
+  assert.equal(getRecordTransactionFilterLabel('sale', wanted, 'ar'), 'للشراء');
+  assert.equal(getRecordTransactionFilterLabel('sale', wanted, 'en'), 'To buy');
+  assert.equal(getRecordTransactionFilterLabel('sale', offered, 'ar'), 'للبيع');
+  assert.equal(getRecordTransactionFilterLabel('sale', offered, 'en'), 'For sale');
+  assert.equal(getRecordTransactionFilterLabel('sale', EMPTY_COMPOSABLE_RECORD_FILTER, 'ar'), 'للبيع');
+  assert.equal(getRecordTransactionFilterLabel('sale', both, 'ar'), 'للبيع / للشراء');
+  assert.equal(getRecordTransactionFilterLabel('sale', both, 'en'), 'For sale / To buy');
+  for (const filter of [wanted, offered, both, EMPTY_COMPOSABLE_RECORD_FILTER]) {
+    assert.equal(getRecordTransactionFilterLabel('rent', filter, 'ar'), 'للإيجار');
+    assert.equal(getRecordTransactionFilterLabel('rent', filter, 'en'), 'For rent');
+  }
+});
+
+test('toggling Wanted changes only its label while sale filter still maps to purchase requests', () => {
+  const sale = toggleRecordFilter(EMPTY_COMPOSABLE_RECORD_FILTER, 'transactions', 'sale');
+  const wantedSale = toggleRecordFilter(sale, 'directions', 'wanted');
+  const original = JSON.stringify(wantedSale);
+  assert.equal(getRecordTransactionFilterLabel('sale', wantedSale, 'ar'), 'للشراء');
+  assert.equal(recordIntentMatchesComposableFilter('wanted_buy', wantedSale), true);
+  assert.equal(recordIntentMatchesComposableFilter('wanted_rent', wantedSale), false);
+  assert.equal(recordIntentMatchesComposableFilter('offered_sale', wantedSale), false);
+  assert.equal(JSON.stringify(wantedSale), original);
+  const cleared = toggleRecordFilter(wantedSale, 'directions', 'wanted');
+  assert.deepEqual(cleared.transactions, ['sale']);
+  assert.equal(getRecordTransactionFilterLabel('sale', cleared, 'ar'), 'للبيع');
+  assert.equal(recordIntentMatchesComposableFilter('offered_sale', cleared), true);
+  assert.equal(recordIntentMatchesComposableFilter('wanted_buy', cleared), true);
+});
+
+test('People and Properties use the same contextual transaction-filter label', async () => {
+  const [people, properties] = await Promise.all([
+    readFile(resolveSourcePath('../app/(tabs)/people.tsx', import.meta.url), 'utf8'),
+    readFile(resolveSourcePath('../app/(tabs)/properties.tsx', import.meta.url), 'utf8'),
+  ]);
+  for (const source of [people, properties]) assert.match(source, /getRecordTransactionFilterLabel\(option\.key, filter, language\)/);
 });

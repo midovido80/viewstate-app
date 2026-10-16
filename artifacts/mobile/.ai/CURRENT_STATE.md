@@ -374,3 +374,9 @@ Authorization: Founder requested independent wording for the two selection group
 Baseline: `work/property-sector-selection` at `c249c724aa5e00b6e0a4778936582dcb8f69f995`.
 Change: Short bilingual transaction-choice labels only; direction, transaction identifiers, routing and the combined intent labels used in cards/review remain unchanged.
 Verification: Existing selector wording assertions updated for the requested copy; full CI results are reported separately. No dependency, persistence, Preview or Pilot changes.
+
+### Session: 2026-10-16 (Contextual transaction filter labels)
+Authorization: Founder requested that People change the Sale filter wording to Purchase when Wanted is selected, matching the requested Properties behavior.
+Baseline: Work branch `work/property-sector-selection` at `9e47c86d45ccf4cb8c790dd486cb1ded14781408`.
+Change: Shared bilingual transaction-filter label in People and Properties: Wanted only uses To buy/للشراء, Offered or no direction uses For sale/للبيع, both directions use For sale / To buy; Rent remains For rent/للإيجار. Existing canonical sale-to-wanted-buy mapping, selected filters, sector intersections and saved records remain unchanged.
+Verification: Existing filter suite extended with direction transitions, canonical result matching and both-tab label consumers; full CI results are reported separately. No dependency, migration, Preview or Pilot change.

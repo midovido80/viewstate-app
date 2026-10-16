@@ -20,6 +20,7 @@ import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
   EMPTY_COMPOSABLE_RECORD_FILTER,
   hasActiveRecordFilters,
+  getRecordTransactionFilterLabel,
   toggleRecordFilter,
   type ComposableRecordFilter,
 } from '@/services/composableRecordFilters';
@@ -140,7 +141,9 @@ export default function PeopleScreen() {
               aria-checked={option.key === 'all' ? undefined : selected}
             >
               <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
-                {t(`properties.filter.${option.key}` as keyof Translations)}
+                {option.key === 'sale' || option.key === 'rent'
+                  ? getRecordTransactionFilterLabel(option.key, filter, language)
+                  : t(`properties.filter.${option.key}` as keyof Translations)}
               </Text>
             </TouchableOpacity>
           );
