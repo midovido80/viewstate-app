@@ -3205,7 +3205,8 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
 
   // Manual location is intentionally not editable, but restored and projected
   // values survive save/recovery so previously captured state is not erased.
-  assert.match(detail, /property-edit-manual-location/);
+  assert.doesNotMatch(detail, /property-edit-manual-location|enrich\.manual_location|manualLocationText/);
+  assert.doesNotMatch(share, /enrich\.manual_location|manualLocationText/);
   assert.match(detail, /property-edit-maps-link/);
 
   // Attachment cards provide both preview/open affordances; mutations remain
