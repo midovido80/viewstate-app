@@ -22,6 +22,7 @@ import { Property, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata
 import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
+import { LocationAttachmentCard, LocationAttachmentRow, LocationAttachmentButton, AttachmentPrivacyNote, locationLinkInputStyle } from '@/components/LocationAttachmentUI';
 import { grossAnnualRentalYield } from '@/services/commercialComplexSale';
 import { isCommercialFloorSale, isCommercialFloorSaleFieldVisible, commercialFloorSaleFieldRank, commercialFloorSaleLabel } from '@/services/commercialFloorSale';
 import { getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput } from '@/services/propertyDemoCatalog';
@@ -580,12 +581,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     setNewAttachmentUris(current => [...current, ...copied]);
   };
 
-  const addMedia = async () => {
+  const addMedia = async (mediaTypes: ('images' | 'videos')[]) => {
     if (!property || !draft) return;
     if (Platform.OS === 'web') {
       try {
         openStudioWebFilePicker({
-          accept: 'image/*,video/*',
+          accept: mediaTypes[0] === 'images' ? 'image/*' : 'video/*',
           onFiles: files => {
             void (async () => {
               try {
@@ -608,7 +609,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       return;
     }
     try {
-      await storePickedAttachments(await pickAndStoreMedia(property.core.id, localAttachments, { fileStore: attachmentStore }));
+      await storePickedAttachments(await pickAndStoreMedia(property.core.id, localAttachments, { fileStore: attachmentStore }, undefined, mediaTypes));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('enrich.attachment_failed'));
     }
@@ -1660,16 +1661,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     </Text>
                   </View>
                 ) : (
-                  <TouchableOpacity
-                    onPress={openDetailMapsLink}
-                    testID="property-maps-action"
-                    style={{ backgroundColor: colors.foreground, borderRadius: 16, paddingVertical: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }}
-                  >
-                    <Feather name="map" size={20} color={colors.background} />
-                    <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
-                      {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
-                    </Text>
-                  </TouchableOpacity>
+                  <LocationAttachmentRow>
+                    <LocationAttachmentButton icon="map" label={language === 'ar' ? 'عرض على الخريطة' : 'View on map'} onPress={openDetailMapsLink} testID="property-maps-action" />
+                  </LocationAttachmentRow>
                 )}
                 {mapsActionError ? (
                   <Text
@@ -1818,6 +1812,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-paci"
             />
+            <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="property-edit-location-card">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
             <TextInput
               value={choices.mapsLink ?? ''}
@@ -1825,7 +1820,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 updateChoices({ mapsLink: value });
                 setMapsFieldError(getPropertyEditMapsFieldError(value, language));
               }}
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              placeholder={language === 'ar' ? 'الصق الرابط هنا' : 'Paste link here'}
+              style={[styles.input, locationLinkInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-maps-link"
             />
             {mapsFieldError ? (
@@ -1837,25 +1833,23 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 {mapsFieldError}
               </Text>
             ) : null}
-            <TouchableOpacity onPress={() => void openMapsLink()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-open-maps">
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.open_maps')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => void captureEditCoordinates()} disabled={locationBusy} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-current-location">
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('enrich.current_location')}</Text>
-            </TouchableOpacity>
+            <LocationAttachmentRow>
+              <LocationAttachmentButton label={t('enrich.current_location')} icon="crosshair" onPress={() => void captureEditCoordinates()} busy={locationBusy} testID="property-edit-current-location" />
+              <LocationAttachmentButton label={t('enrich.open_maps')} icon="map" onPress={() => void openMapsLink()} testID="property-edit-open-maps" />
+            </LocationAttachmentRow>
             {choices.coordinates ? (
               <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
                 {`${choices.coordinates.latitude}, ${choices.coordinates.longitude}`}
               </Text>
             ) : null}
-            <View style={[styles.headerActions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <TouchableOpacity onPress={() => void addMedia()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-add-media">
-                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_media')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => void addPdfs()} style={[styles.headerAction, { borderColor: colors.border, backgroundColor: colors.card }]} testID="property-edit-add-pdf">
-                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_pdf')}</Text>
-              </TouchableOpacity>
-            </View>
+            </LocationAttachmentCard>
+            <LocationAttachmentCard title={language === 'ar' ? 'الصور والملفات' : 'Photos and files'} testID="property-edit-attachments-card">
+              <LocationAttachmentRow>
+                <LocationAttachmentButton tile icon="image" label={t('enrich.add_images')} onPress={() => void addMedia(['images'])} testID="property-edit-add-images" />
+                <LocationAttachmentButton tile icon="video" label={t('enrich.add_videos')} onPress={() => void addMedia(['videos'])} testID="property-edit-add-videos" />
+                <LocationAttachmentButton tile icon="file-text" label={t('enrich.add_files')} onPress={() => void addPdfs()} testID="property-edit-add-pdf" />
+              </LocationAttachmentRow>
+              <AttachmentPrivacyNote />
             {localAttachments.map((attachment, index) => (
               <View key={attachment.id} style={[styles.sourceSection, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => void openPropertyAttachment({ ...attachment, managedUri: attachment.uri, privacy: { classification: 'normal', disclosurePolicy: 'normal' } })} testID={`property-edit-open-${attachment.id}`}>
@@ -1893,6 +1887,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 </View>
               </View>
             ))}
+            </LocationAttachmentCard>
             <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" />
           </>
         ) : null}

@@ -35,6 +35,7 @@ import { ModernPropertyForm } from '@/components/ModernPropertyForm';
 import { grossAnnualRentalYield } from '@/services/commercialComplexSale';
 import { isCommercialFloorSale, isCommercialFloorSaleFieldVisible, commercialFloorSaleFieldRank, commercialFloorSaleLabel } from '@/services/commercialFloorSale';
 import { AttachmentPickerControl } from '@/components/AttachmentPickerControl';
+import { LocationAttachmentCard, LocationAttachmentRow, LocationAttachmentButton, AttachmentPrivacyNote, locationLinkInputStyle } from '@/components/LocationAttachmentUI';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
 import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
 import {
@@ -1041,12 +1042,13 @@ export default function CaptureWorkflow() {
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               </View>}
             </Section>
-            <Section title={language === 'ar' ? 'الموقع الدقيق والمرفقات' : 'Precise location and attachments'} colors={colors} fonts={fonts}>
+            <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="capture-location-card">
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
               <TextInput
                 value={captureDetails.mapsLink ?? ''}
                 onChangeText={value => updateCaptureDetails({ mapsLink: value || undefined })}
-                style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                placeholder={language === 'ar' ? 'الصق الرابط هنا' : 'Paste link here'}
+                style={[styles.input, locationLinkInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
                 accessibilityLabel={t('enrich.maps_link')}
                 accessibilityHint={mapsLinkError ?? undefined}
                 testID="capture-maps-link"
@@ -1061,32 +1063,28 @@ export default function CaptureWorkflow() {
                   {mapsLinkError}
                 </Text>
               ) : null}
-              <View style={styles.chips}>
-                <Choice selected={Boolean(captureDetails.coordinates)} label={t('enrich.current_location')} onPress={() => void captureCurrentCoordinates()} colors={colors} fonts={fonts} />
-                <Choice selected={false} label={t('enrich.open_maps')} onPress={() => void openCaptureMapsLink()} colors={colors} fonts={fonts} />
-              </View>
+              <LocationAttachmentRow>
+                <LocationAttachmentButton label={t('enrich.current_location')} icon="crosshair" onPress={() => void captureCurrentCoordinates()} busy={locationBusy} testID="capture-current-location" />
+                <LocationAttachmentButton label={t('enrich.open_maps')} icon="map" onPress={() => void openCaptureMapsLink()} testID="capture-open-maps" />
+              </LocationAttachmentRow>
               {captureDetails.coordinates ? (
                 <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>
                   {`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`}
                 </Text>
               ) : null}
-              <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            </LocationAttachmentCard>
+            <LocationAttachmentCard title={language === 'ar' ? 'الصور والملفات' : 'Photos and files'} testID="capture-attachments-card">
+              <LocationAttachmentRow>
                 {Platform.OS === 'web' ? <>
                   <AttachmentPickerControl label={t('enrich.add_images')} accept="image/*" testID="capture-add-images" disabled={attachmentBusy} onFiles={files => void addCaptureWebFiles(files)} />
                   <AttachmentPickerControl label={t('enrich.add_videos')} accept="video/*" testID="capture-add-videos" disabled={attachmentBusy} onFiles={files => void addCaptureWebFiles(files)} />
                   <AttachmentPickerControl label={t('enrich.add_files')} accept=".pdf,application/pdf" testID="capture-add-files" disabled={attachmentBusy} onFiles={files => void addCaptureWebFiles(files)} />
                 </> : <>
-                  <TouchableOpacity onPress={() => void addCaptureMedia(['images'])} disabled={attachmentBusy} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card }]} testID="capture-add-images">
-                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_images')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => void addCaptureMedia(['videos'])} disabled={attachmentBusy} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card }]} testID="capture-add-videos">
-                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_videos')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => void addCapturePdfs()} disabled={attachmentBusy} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card }]} testID="capture-add-files">
-                    <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('enrich.add_files')}</Text>
-                  </TouchableOpacity>
+                  <LocationAttachmentButton tile icon="image" label={t('enrich.add_images')} onPress={() => void addCaptureMedia(['images'])} disabled={attachmentBusy} testID="capture-add-images" />
+                  <LocationAttachmentButton tile icon="video" label={t('enrich.add_videos')} onPress={() => void addCaptureMedia(['videos'])} disabled={attachmentBusy} testID="capture-add-videos" />
+                  <LocationAttachmentButton tile icon="file-text" label={t('enrich.add_files')} onPress={() => void addCapturePdfs()} disabled={attachmentBusy} testID="capture-add-files" />
                 </>}
-              </View>
+              </LocationAttachmentRow>
               {captureAttachments.map((attachment, index) => (
                 <View key={attachment.id} style={[styles.choice, { borderColor: colors.border, backgroundColor: colors.card, marginTop: 8, justifyContent: 'space-between' }]}>
                   <TouchableOpacity onPress={() => void openAttachment(attachment, Sharing).catch(() => Alert.alert(t('errors.storage_title'), t('enrich.attachment_failed')))} testID={`capture-open-${attachment.id}`}>
@@ -1103,8 +1101,8 @@ export default function CaptureWorkflow() {
                   </TouchableOpacity>
                 </View>
               ))}
-              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{t('enrich.attachment_privacy')}</Text>
-            </Section>
+              <AttachmentPrivacyNote />
+            </LocationAttachmentCard>
               </>
             )}
           </>

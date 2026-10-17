@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Platform, View } from 'react-native';
-import { Button } from '@/components/Button';
+import { LocationAttachmentButton } from '@/components/LocationAttachmentUI';
 
 type Props = {
   label: string;
@@ -14,9 +14,11 @@ export function AttachmentPickerControl({ label, accept, testID, disabled, onFil
   const input = useRef<HTMLInputElement>(null);
   if (Platform.OS !== 'web') return null;
   return (
-    <View>
-      <Button
-        title={label}
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <LocationAttachmentButton
+        label={label}
+        icon={accept.startsWith('image') ? 'image' : accept.startsWith('video') ? 'video' : 'file-text'}
+        tile
         disabled={disabled}
         onPress={() => input.current?.click()}
         testID={testID}
@@ -24,6 +26,8 @@ export function AttachmentPickerControl({ label, accept, testID, disabled, onFil
       <input
         ref={input}
         type="file"
+        tabIndex={-1}
+        disabled={disabled}
         accept={accept}
         multiple
         aria-label={label}

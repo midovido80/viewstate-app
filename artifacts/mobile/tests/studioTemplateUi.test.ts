@@ -97,7 +97,9 @@ test('STRUCTURAL: Offered Studio keeps its exact-location and media controls; Wa
   assert.match(form, /mode === 'offered' \? renderExactLocationSection\(\) : null/);
   assert.match(form, /mode === 'offered' \? renderStudioAttachments\(\) : null/);
   assert.match(studio, /testID="studio-open-google-maps"/);
-  assert.match(studio, /testID="studio-add-media"/);
+  assert.match(studio, /testID="studio-add-images"/);
+  assert.match(studio, /testID="studio-add-videos"/);
+  assert.match(studio, /testID="studio-current-location"/);
   assert.match(studio, /testID="studio-add-file"/);
   assert.match(studio, /setAttachmentCover/);
   assert.match(studio, /reorderAttachments/);

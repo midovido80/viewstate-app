@@ -83,7 +83,8 @@ import {
   type AttachmentFileStore,
   type LocalAttachment,
 } from '@/services/attachmentOperations';
-import { openPastedLocationLink, openGoogleMapsQuery } from '@/services/location';
+import { openPastedLocationLink, openGoogleMapsQuery, requestCurrentCoordinates } from '@/services/location';
+import { LocationAttachmentCard, LocationAttachmentRow, LocationAttachmentButton, AttachmentPrivacyNote, locationLinkInputStyle } from '@/components/LocationAttachmentUI';
 import * as Linking from 'expo-linking';
 import { createPrivacyMetadata } from '@workspace/property-domain';
 import {
@@ -202,6 +203,8 @@ export default function StudioCaptureRoute() {
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState('');
   const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [webImageSources, setWebImageSources] = useState<Readonly<Record<string, string>>>({});
   const [peopleError, setPeopleError] = useState(false);
   const flight = useRef(false);
@@ -510,12 +513,12 @@ export default function StudioCaptureRoute() {
     ? 'تعذر إضافة الملف. تحقق من نوع الملف أو أذونات مكتبة الصور وحاول مرة أخرى.'
     : 'The file could not be added. Check its type or media-library permission and try again.';
 
-  const addStudioMedia = async () => {
+  const addStudioMedia = async (mediaTypes: ('images' | 'videos')[]) => {
     if (mode !== 'offered' || attachmentBusy) return;
     setAttachmentBusy(true);
     try {
       const id = baselineProperty?.core.id ?? draftPropertyId.current;
-      const picked = await pickAndStoreMedia(id, attachments, { fileStore: attachmentFileStore });
+      const picked = await pickAndStoreMedia(id, attachments, { fileStore: attachmentFileStore }, undefined, mediaTypes);
       appendStagedAttachments(picked);
     } catch {
       setAttachmentError(attachmentFailureMessage());
@@ -538,11 +541,11 @@ export default function StudioCaptureRoute() {
     }
   };
 
-  const addStudioWebFiles = (kind: 'media' | 'pdf') => {
+  const addStudioWebFiles = (kind: 'images' | 'videos' | 'pdf') => {
     if (mode !== 'offered' || Platform.OS !== 'web' || attachmentBusy) return;
     try {
       openStudioWebFilePicker({
-        accept: kind === 'media' ? 'image/*,video/*' : 'application/pdf',
+        accept: kind === 'images' ? 'image/*' : kind === 'videos' ? 'video/*' : '.pdf,application/pdf',
         onFiles: files => {
           if (!files.length) return;
           setAttachmentBusy(true);
@@ -959,13 +962,14 @@ export default function StudioCaptureRoute() {
         accessibilityLabel={label}
         style={[
           styles.input,
+          key === 'mapsLink' ? locationLinkInputStyle : undefined,
           {
             color: colors.foreground,
             borderColor: getError(key) ? colors.destructive : colors.border,
             backgroundColor: colors.card,
             textAlign: isRTL ? 'right' : 'left',
             fontFamily: fonts.regular,
-            minHeight: options.multiline ? 100 : 48,
+            minHeight: options.multiline ? 100 : key === 'mapsLink' ? 52 : 48,
           },
         ]}
       />
@@ -1265,14 +1269,22 @@ export default function StudioCaptureRoute() {
   );
 
   const renderExactLocationSection = () => (
-    <View style={styles.field} testID="studio-exact-location">
-      <Text style={[styles.label, labelStyle]}>
-        {language === 'ar' ? 'الموقع الدقيق (اختياري)' : 'Exact location (optional)'}
-      </Text>
+    <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="studio-exact-location">
       {textInput('mapsLink', language === 'ar' ? 'رابط خرائط Google' : 'Google Maps URL')}
-      <Button
-        title={language === 'ar' ? 'فتح خرائط Google' : 'Open Google Maps'}
+      <LocationAttachmentRow>
+        <LocationAttachmentButton label={t('enrich.current_location')} icon="crosshair" testID="studio-current-location" busy={locationBusy} disabled={saving} onPress={() => {
+          if (mode !== 'offered' || locationBusy || saving) return;
+          setLocationBusy(true);
+          setLocationError('');
+          void requestCurrentCoordinates().then(coordinates => {
+            update('mapsLink', `https://www.google.com/maps/search/?api=1&query=${coordinates.latitude},${coordinates.longitude}`);
+          }).catch(() => setLocationError(t('enrich.location_failed'))).finally(() => setLocationBusy(false));
+        }} />
+        <LocationAttachmentButton
+        label={language === 'ar' ? 'فتح خرائط Google' : 'Open Google Maps'}
+        icon="map"
         onPress={() => {
+          setLocationError('');
           const link = values.mapsLink.trim();
           const query = mode === 'offered'
             ? areaTitle(values.locationAreaId)
@@ -1283,7 +1295,7 @@ export default function StudioCaptureRoute() {
             try {
               openStudioWebMapsLocation({ link, query });
             } catch {
-              setAttachmentError(language === 'ar'
+              setLocationError(language === 'ar'
                 ? 'تعذر فتح رابط خرائط Google صالح.'
                 : 'Could not open a valid Google Maps link.');
             }
@@ -1292,34 +1304,31 @@ export default function StudioCaptureRoute() {
           void (link
             ? openPastedLocationLink({ source: 'pasted_link', link }, Linking)
             : openGoogleMapsQuery(query, Linking))
-            .catch(() => setAttachmentError(language === 'ar'
+            .catch(() => setLocationError(language === 'ar'
               ? 'تعذر فتح رابط خرائط Google صالح.'
               : 'Could not open a valid Google Maps link.'));
         }}
         testID="studio-open-google-maps"
       />
-    </View>
+      </LocationAttachmentRow>
+      {locationError ? <FieldError message={locationError} /> : null}
+    </LocationAttachmentCard>
   );
 
   const renderStudioAttachments = () => (
-    <View style={[styles.field, styles.attachmentPanel]} testID="studio-attachments">
-      <Text style={[styles.label, labelStyle]}>
-        {language === 'ar' ? 'الصور والمستندات' : 'Images and documents'}
-      </Text>
-      <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Button
-          title={language === 'ar' ? 'إضافة صور أو مقاطع فيديو' : 'Add images or videos'}
-          onPress={() => Platform.OS === 'web' ? addStudioWebFiles('media') : void addStudioMedia()}
-          disabled={attachmentBusy || saving}
-          testID="studio-add-media"
-        />
-        <Button
-          title={language === 'ar' ? 'إضافة PDF / ملف' : 'Add PDF / File'}
+    <LocationAttachmentCard title={language === 'ar' ? 'الصور والملفات' : 'Photos and files'} testID="studio-attachments">
+      <LocationAttachmentRow>
+        <LocationAttachmentButton tile icon="image" label={t('enrich.add_images')}
+          onPress={() => Platform.OS === 'web' ? addStudioWebFiles('images') : void addStudioMedia(['images'])}
+          disabled={attachmentBusy || saving} testID="studio-add-images" />
+        <LocationAttachmentButton tile icon="video" label={t('enrich.add_videos')}
+          onPress={() => Platform.OS === 'web' ? addStudioWebFiles('videos') : void addStudioMedia(['videos'])}
+          disabled={attachmentBusy || saving} testID="studio-add-videos" />
+        <LocationAttachmentButton tile icon="file-text" label={t('enrich.add_files')}
           onPress={() => Platform.OS === 'web' ? addStudioWebFiles('pdf') : void addStudioPdf()}
-          disabled={attachmentBusy || saving}
-          testID="studio-add-file"
-        />
-      </View>
+          disabled={attachmentBusy || saving} testID="studio-add-file" />
+      </LocationAttachmentRow>
+      <AttachmentPrivacyNote />
       {attachmentBusy ? <ActivityIndicator color={colors.primary} /> : null}
       {attachmentError ? <FieldError message={attachmentError} /> : null}
       {attachments.slice().sort((left, right) => left.order - right.order).map((item, index) => (
@@ -1365,7 +1374,7 @@ export default function StudioCaptureRoute() {
           {language === 'ar' ? 'لا توجد مرفقات بعد.' : 'No attachments yet.'}
         </Text>
       ) : null}
-    </View>
+    </LocationAttachmentCard>
   );
 
   const reviewItem = (label: string, value: string) => (
