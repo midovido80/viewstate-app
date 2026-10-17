@@ -144,8 +144,9 @@ test('REGRESSION: Studio web Maps preserves the route and file actions invoke se
 
   assert.match(exactLocation, /Platform\.OS === 'web'[\s\S]*openStudioWebMapsLocation\(\{ link, query \}\)/);
   assert.match(exactLocation, /openPastedLocationLink\(\{ source: 'pasted_link', link \}, Linking\)/);
-  assert.match(studio, /openStudioWebFilePicker\(\{[\s\S]*accept: kind === 'media' \? 'image\/\*\,video\/\*' : 'application\/pdf'/);
-  assert.match(attachments, /addStudioWebFiles\('media'\)/);
+  assert.match(studio, /openStudioWebFilePicker\(\{[\s\S]*accept: kind === 'images' \? 'image\/\*' : kind === 'videos' \? 'video\/\*' : '\.pdf,application\/pdf'/);
+  assert.match(attachments, /addStudioWebFiles\('images'\)/);
+  assert.match(attachments, /addStudioWebFiles\('videos'\)/);
   assert.match(attachments, /addStudioWebFiles\('pdf'\)/);
   assert.match(errorSummary, /accessibilityRole="alert"/);
   assert.match(studio, /catch \{\s*\/\/ Keep the field-specific error visible even if a host cannot measure\./);

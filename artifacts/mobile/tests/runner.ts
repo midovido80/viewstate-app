@@ -3167,7 +3167,8 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   // does not define/remount a new Input component on every render.
   assert.match(detail, /ModernPropertyForm/);
   assert.match(detail, /property-edit-description/);
-  assert.match(detail, /property-edit-add-media/);
+  assert.match(detail, /property-edit-add-images/);
+  assert.match(detail, /property-edit-add-videos/);
   assert.match(keyboardScroll, /forwardRef<ScrollView, Props>/);
   assert.match(keyboardScroll, /KeyboardAwareScrollView/);
   assert.match(keyboardScroll, /keyboardShouldPersistTaps/);

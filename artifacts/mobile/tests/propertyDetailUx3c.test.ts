@@ -647,7 +647,7 @@ test('All property editors wire verified Maps opening, platform-specific attachm
   assert.match(source, /discardPropertyEditDraftAndCleanupOwnedAttachments/);
   assert.match(source, /openStudioWebMapsLocation\(\{ link, query \}\)/);
   assert.match(source, /openGoogleMapsQuery\(query\)/);
-  assert.match(source, /openStudioWebFilePicker\([\s\S]*accept: 'image\/\*,video\/\*'/);
+  assert.match(source, /openStudioWebFilePicker\([\s\S]*accept: mediaTypes\[0\] === 'images' \? 'image\/\*' : 'video\/\*'/);
   assert.match(source, /openStudioWebFilePicker\([\s\S]*accept: 'application\/pdf'/);
   assert.match(source, /Platform\.OS !== 'web' \|\| galleryImageSources\[attachment\.id\]/);
   assert.match(source, /propertyEditChoicesAreDirty\(cleanChoicesRef\.current, next\.choices\)/);
