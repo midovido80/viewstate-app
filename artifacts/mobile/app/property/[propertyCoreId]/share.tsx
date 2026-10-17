@@ -104,9 +104,9 @@ export default function PropertyShareScreen() {
       const builtPreview = buildPropertySharePreview({
         property, selection,
         availableAttachments: (property.attachments ?? []).map(item => ({ id: item.id, propertyCoreId: property.core.id })),
-        privateLocation: { paci: property.locationEnrichment?.paciNumber?.value, manualLocation: property.locationEnrichment?.manualLocationText?.value, mapsLink: property.locationEnrichment?.mapsLink?.value },
+        privateLocation: { paci: property.locationEnrichment?.paciNumber?.value, mapsLink: property.locationEnrichment?.mapsLink?.value },
         contacts: contacts.filter(person => !!person.displayPhone).map(person => ({ id: person.id, name: person.name, phone: toEnglishDigits(person.displayPhone) })),
-        labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), manualLocation: t('enrich.manual_location'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact') },
+        labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact') },
         detailLabels: Object.fromEntries(Object.entries(propertyDetailLabels).map(([field, labels]) => [field, labels[language === 'ar' ? 1 : 0]])),
         detailValueLabels: {
           true: t('enrich.yes'),
@@ -179,7 +179,7 @@ export default function PropertyShareScreen() {
   };
   const toggleAttachment = (attachmentId: string) => setSelection(current => current && ({ ...current, attachmentIds: current.attachmentIds.includes(attachmentId) ? current.attachmentIds.filter(id => id !== attachmentId) : [...current.attachmentIds, attachmentId] }));
   const toggleNormal = (field: PropertyShareSelection['normalFields'][number]) => setSelection(current => current && ({ ...current, normalFields: current.normalFields.includes(field) ? current.normalFields.filter(item => item !== field) : [...current.normalFields, field] }));
-  const toggleSensitive = (name: 'discloseOwnerSource' | 'discloseExactLocation' | 'disclosePaci' | 'discloseManualLocation' | 'discloseMapsLink') => setSelection(current => current && ({ ...current, [name]: !current[name] }));
+  const toggleSensitive = (name: 'discloseOwnerSource' | 'discloseExactLocation' | 'disclosePaci' | 'discloseMapsLink') => setSelection(current => current && ({ ...current, [name]: !current[name] }));
   const toggleContact = (contactId: string) => setSelection(current => current && ({ ...current, personContactIds: current.personContactIds.includes(contactId) ? current.personContactIds.filter(id => id !== contactId) : [...current.personContactIds, contactId] }));
   const normalLabel = (field: PropertyShareSelection['normalFields'][number]) => ({
     property_type: t('detail.type'),
@@ -193,7 +193,6 @@ export default function PropertyShareScreen() {
     ['discloseOwnerSource', shareT('share.owner_source'), !!property.core.ownerSource],
     ['discloseExactLocation', shareT('share.exact_location'), !!property.core.exactLocation],
     ['disclosePaci', t('enrich.paci'), !!property.locationEnrichment?.paciNumber],
-    ['discloseManualLocation', t('enrich.manual_location'), !!property.locationEnrichment?.manualLocationText],
     ['discloseMapsLink', t('enrich.maps_link'), !!property.locationEnrichment?.mapsLink],
   ] as const;
   return <View style={[styles.container, { backgroundColor: colors.background }]}>

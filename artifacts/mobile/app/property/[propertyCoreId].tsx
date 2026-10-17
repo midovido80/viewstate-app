@@ -1239,7 +1239,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     governorate: locationArea ? (language === 'ar' ? locationArea.governorateAr : locationArea.governorateEn) : undefined,
     area: areaName(property.core.locationArea.id),
     block: property.core.block,
-    address: property.locationEnrichment?.manualLocationText?.value,
     description: visibleContent.description,
   });
   const availableFeatures = Array.from(new Set([
@@ -1806,13 +1805,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               onChangeText={value => updateChoices({ paciNumber: value })}
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-paci"
-            />
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.manual_location')}</Text>
-            <TextInput
-              value={choices.manualLocationText ?? ''}
-              onChangeText={value => updateChoices({ manualLocationText: value })}
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
-              testID="property-edit-manual-location"
             />
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
             <TextInput
