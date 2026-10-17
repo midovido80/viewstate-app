@@ -83,6 +83,7 @@ test('Property and People filter rows stay horizontal, do not wrap, and retain f
     const source = await readFile(`app/(tabs)/${tab}.tsx`, 'utf8');
     assert.match(source, /<ScrollView horizontal showsHorizontalScrollIndicator=\{false\}/);
     assert.match(source, /flexWrap: 'nowrap'/);
+    assert.match(source, /flexGrow: 0, flexShrink: 0, minHeight: 52/);
     assert.match(source, /<Text numberOfLines=\{1\}/);
     assert.match(source, /getRecordTransactionFilterLabel\(option.key, filter, language\)/);
     assert.match(source, /direction: isRTL \? 'rtl' : 'ltr'/);
