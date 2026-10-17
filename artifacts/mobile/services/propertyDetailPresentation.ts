@@ -31,6 +31,7 @@ export function formatPropertyDetailValue(
   language: 'en' | 'ar',
   translate?: (key: string) => string,
 ): string {
+  if (field === 'rentalOccupancy' && value === 'rented') return language === 'ar' ? 'مؤجر' : 'Rented';
   const choices = COMMERCIAL_COMPLEX_CHOICES[field];
   if (choices) return (Array.isArray(value) ? value : String(value).split(',')).map(item => {
     const choice = choices.find(option => option[0] === item);

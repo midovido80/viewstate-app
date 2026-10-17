@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -114,7 +114,7 @@ export default function PeopleScreen() {
           accessibilityLabel={t('people.search')}
         />
       </View>
-      <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]} testID="people-composable-filters">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-composable-filters">
         {PEOPLE_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
             ? !hasActivePeopleFilters
@@ -140,7 +140,7 @@ export default function PeopleScreen() {
               accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
               aria-checked={option.key === 'all' ? undefined : selected}
             >
-              <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+              <Text numberOfLines={1} style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {option.key === 'sale' || option.key === 'rent'
                   ? getRecordTransactionFilterLabel(option.key, filter, language)
                   : t(`properties.filter.${option.key}` as keyof Translations)}
@@ -148,7 +148,7 @@ export default function PeopleScreen() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
       <View style={[styles.sectorFilters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-sector-filters">
         {(['residential', 'commercial'] as const).map(value => {
           const selected = sector === value;
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 18 },
   classes: { marginTop: 4, fontSize: 13 },
   empty: { textAlign: 'center', paddingTop: 60 },
-  filters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'wrap' },
+  filters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'nowrap' },
   sectorFilters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
   sectorChip: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   filterChip: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },

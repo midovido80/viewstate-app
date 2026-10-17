@@ -201,6 +201,17 @@ export interface ResidentialFloorTypeDetails {
 export interface CommercialFloorTypeDetails {
   readonly propertyType: "floor";
   readonly floorUse: "commercial";
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly rentalOccupancy?: "vacant" | "rented";
+  readonly monthlyIncome?: number;
+  readonly hasElevator?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasPrivateEntrance?: boolean;
+  readonly hasKitchen?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasAccessibleEntrance?: boolean;
   readonly builtUpAreaSquareMeters?: number;
   readonly bathroomCount?: number;
   readonly floorNumber?: number;

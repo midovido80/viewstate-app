@@ -305,7 +305,8 @@ test("residential amenity facts preserve unknown, false, and true without derivi
   assertEqual(explicit.hasBalcony, false, "Explicit false must survive");
   assertEqual(explicit.hasHeating, true, "Explicit true must survive");
   assertEqual("elevatorCount" in explicit, false, "Elevator availability must not derive a count");
-  assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasElevator: true } as TypeDetails, core("floor")).ok, false, "Commercial Floor must reject residential amenities");
+  assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasElevator: true, hasBalcony: true, hasKitchen: true, hasSecurityGuard: true, hasPrivateEntrance: true, hasAccessibleEntrance: true } as TypeDetails, core("floor")).ok, true, "Commercial Floor accepts its approved shared amenities");
+  assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasMaidRoom: true } as unknown as TypeDetails, core("floor")).ok, false, "Commercial Floor still rejects residential-only amenities");
   assertEqual(validateTypeDetails({ propertyType: "office", hasHeating: true } as unknown as TypeDetails, core("office")).ok, false, "Commercial types must reject residential amenities");
 });
 

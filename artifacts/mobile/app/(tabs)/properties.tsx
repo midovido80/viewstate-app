@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, FlatList, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -244,7 +244,7 @@ export default function PropertiesScreen() {
         />
       </View>
 
-      <View style={[styles.filters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="properties-composable-filters">
         {PROPERTY_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
             ? !hasActiveRecordFilters(filter) && sector === 'all'
@@ -270,7 +270,7 @@ export default function PropertiesScreen() {
               accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
               aria-checked={option.key === 'all' ? undefined : selected}
             >
-              <Text style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+              <Text numberOfLines={1} style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {option.key === 'sale' || option.key === 'rent'
                   ? getRecordTransactionFilterLabel(option.key, filter, language)
                   : t(`properties.filter.${option.key}` as keyof Translations)}
@@ -278,7 +278,7 @@ export default function PropertiesScreen() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <View style={[styles.sectorFilters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="properties-sector-filters">
         {(['residential', 'commercial'] as const).map(value => {
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 8,
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
   },
   sectorFilters: {
     paddingHorizontal: 20,

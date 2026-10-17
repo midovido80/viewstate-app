@@ -1,3 +1,4 @@
+import './commercialFloorSale.test';
 import './commercialComplexSale.test';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -2356,7 +2357,7 @@ test('Approved Dynamic Details matrix including residential facts validates all 
     villa: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasCentralAC'],
     chalet: ['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'bathroomCount', 'livingRoomCount', 'floorCount', 'furnishing', ...residentialAmenities, 'parkingSpaceCount', 'hasPool', 'hasWaterfront', 'hasCentralAC'],
     floor_residential: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'bedroomCount', 'masterBedroomCount', 'occupancy', 'livingRoomCount', 'floorNumber', 'floorUse', 'furnishing', ...residentialAmenities, 'hasCentralAC'],
-    floor_commercial: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
+    floor_commercial: ['buildingAgeBand', 'parkingTypes', 'privateParkingCount', 'rentalOccupancy', 'monthlyIncome', 'hasPrivateEntrance', 'hasAccessibleEntrance', 'hasBalcony', 'hasElevator', 'hasSecurityGuard', 'hasKitchen', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'floorUse', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
     office: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'hasCentralAC'],
     shop: ['builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'floorNumber', 'intendedUse', 'commercialActivity', 'frontageWidthMeters', 'ceilingHeightMeters', 'hasCentralAC'],
      whole_building: ['bedroomCount', 'masterBedroomCount', 'occupancy', 'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'floorCount', 'unitCount', 'apartmentCount', 'shopCount', 'officeCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit', 'hasCentralAC'],

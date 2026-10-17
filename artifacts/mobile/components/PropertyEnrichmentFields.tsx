@@ -60,7 +60,7 @@ export function PropertyEnrichmentFields({
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
   const floorUse = values.floorUse;
-  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined).filter(definition => !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field));
+  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined).filter(definition => !(propertyType === 'floor' && floorUse === 'commercial' && ['hasBalcony', 'hasElevator', 'hasSecurityGuard', 'hasKitchen', 'hasPrivateEntrance', 'hasAccessibleEntrance'].includes(definition.field)) && !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field));
   const definitions = applicableDefinitions.filter(definition =>
     !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field)
     &&

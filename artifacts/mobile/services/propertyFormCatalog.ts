@@ -231,6 +231,8 @@ const WANTED_BY_FIELD: Partial<Record<PropertyDetailField, PropertyWantedDescrip
 
 const LABELS: Record<string, readonly [string, string]> = {
   buildingAgeBand: ['Building age', 'عمر البناء'],
+  hasPrivateEntrance: ['Private entrance', 'مدخل مستقل للدور'],
+  hasAccessibleEntrance: ['Wheelchair access', 'إمكانية وصول للكراسي المتحركة'],
   hasBasement: ['Basement', 'سرداب'],
   streetPosition: ['Street position', 'الموقع'],
   parkingTypes: ['Parking', 'المواقف'],
@@ -296,6 +298,7 @@ const DECIMAL_FIELDS = new Set<PropertyDetailField>([
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
+  'hasPrivateEntrance', 'hasAccessibleEntrance',
   'hasBasement', 'hasMortgage',
   'hasPool', 'hasWaterfront', 'hasColdStorage', 'hasCentralAC',
   'hasKitchen', 'hasHall', 'hasParking',
@@ -391,6 +394,7 @@ export function getApplicablePropertyFormFieldsForMode(
   if (mode === 'offered') return applicable;
   return applicable.filter(
     (definition): definition is PropertyFormWantedFieldDefinition => definition.wanted !== undefined
+      && !(propertyType === 'floor' && floorUse === 'commercial' && ['hasBalcony', 'hasElevator', 'hasSecurityGuard', 'hasKitchen'].includes(definition.field))
       && !(definition.field === 'bedroomCount' && (propertyType === 'whole_building' || propertyType === 'other_built_property')),
   );
 }

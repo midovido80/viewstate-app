@@ -243,7 +243,7 @@ export function validateTypeDetails(
   const commercialChoices = {
     buildingAgeBand: ["1_5", "6_12", "over_12"],
     streetPosition: ["one_street", "two_streets", "corner", "front_back"],
-    rentalOccupancy: ["vacant", "fully_rented", "partially_rented"],
+    rentalOccupancy: details.propertyType === "floor" ? ["vacant", "rented"] : ["vacant", "fully_rented", "partially_rented"],
   };
   for (const [field, options] of Object.entries(commercialChoices)) {
     if (candidate[field] !== undefined && !options.includes(candidate[field] as string)) {
@@ -302,6 +302,8 @@ export function validateTypeDetails(
 
   for (const field of [
     "hasBasement",
+    "hasPrivateEntrance",
+    "hasAccessibleEntrance",
     "hasMortgage",
     "hasMaidRoom",
     "hasHeating",

@@ -60,6 +60,8 @@ export type PropertyDetailField =
   | "hasMortgage"
   | "rentalOccupancy"
   | "monthlyIncome"
+  | "hasPrivateEntrance"
+  | "hasAccessibleEntrance"
   | "plotAreaSquareMeters"
   | "builtUpAreaSquareMeters"
   | "bathroomCount"
@@ -115,7 +117,9 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
-  ...(["buildingAgeBand", "hasBasement", "streetPosition", "parkingTypes", "privateParkingCount", "hasMortgage", "rentalOccupancy", "monthlyIncome"] as const).map(field => ({ field, appliesTo: ["commercial_complex"] as const })),
+  ...(["buildingAgeBand", "parkingTypes", "privateParkingCount", "rentalOccupancy", "monthlyIncome"] as const).map(field => ({ field, appliesTo: ["commercial_complex", "floor"] as const, floorUses: ["commercial"] as const })),
+  ...(["hasBasement", "streetPosition", "hasMortgage"] as const).map(field => ({ field, appliesTo: ["commercial_complex"] as const })),
+  ...(["hasPrivateEntrance", "hasAccessibleEntrance"] as const).map(field => ({ field, appliesTo: ["floor"] as const, floorUses: ["commercial"] as const })),
   { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "other_built_property"] },
   { field: "builtUpAreaSquareMeters", appliesTo: PROPERTY_TYPES },
   { field: "bathroomCount", appliesTo: ["apartment", "floor", "house", "villa", "office", "shop", "warehouse", "chalet"] },
@@ -140,17 +144,17 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "furnishing", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasMaidRoom", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasHeating", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
-  { field: "hasBalcony", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasBalcony", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential", "commercial"] },
   { field: "hasLaundryRoom", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasSolarHeater", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
-  { field: "hasElevator", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasElevator", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential", "commercial"] },
   { field: "hasGarden", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
-  { field: "hasSecurityGuard", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
+  { field: "hasSecurityGuard", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential", "commercial"] },
   { field: "hasBBQArea", appliesTo: ["apartment", "floor", "house", "villa", "chalet"], floorUses: ["residential"] },
   { field: "hasPool", appliesTo: ["house", "villa", "chalet"] },
   { field: "hasWaterfront", appliesTo: ["chalet"] },
   { field: "hasCentralAC", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "commercial_complex", "office", "shop", "warehouse", "other_built_property"] },
-  { field: "hasKitchen", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
+  { field: "hasKitchen", appliesTo: ["apartment", "floor"], apartmentSubtypes: ["studio"], floorUses: ["commercial"] },
   { field: "hasHall", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "hasParking", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },

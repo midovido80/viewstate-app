@@ -23,6 +23,7 @@ import { Button } from '@/components/Button';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
 import { grossAnnualRentalYield } from '@/services/commercialComplexSale';
+import { isCommercialFloorSale, isCommercialFloorSaleFieldVisible, commercialFloorSaleFieldRank, commercialFloorSaleLabel } from '@/services/commercialFloorSale';
 import { getDemoCategory, DEMO_NEARBY_SERVICES, parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -1225,6 +1226,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
     : visibleContent.typeDetails) as Record<string, unknown>;
+  const commercialFloorSale = isCommercialFloorSale(property.core.propertyType, detailValues?.floorUse, property.activeOffer.transaction);
+  const floorYield = commercialFloorSale && property.activeOffer.transaction === 'sale' ? grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined) : undefined;
+  if (commercialFloorSale) {
+    for (let index = numericSpecTiles.length - 1; index >= 0; index--) {
+      if (numericSpecTiles[index].fieldId !== 'areaSquareMeters') numericSpecTiles.splice(index, 1);
+    }
+  }
   if (property.core.propertyType === 'commercial_complex' && property.activeOffer.transaction === 'sale') {
     const yieldPercent = grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined);
     if (yieldPercent !== undefined) {
@@ -1243,24 +1251,27 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   });
   const availableFeatures = Array.from(new Set([
     ...propertyDetailDisplayDefinitions
-      .filter(definition => definition.group === 'amenity' && detailValues[definition.field] === true)
-      .map(definition => definition.label[language === 'ar' ? 1 : 0]),
+      .filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && definition.group === 'amenity' && detailValues[definition.field] === true)
+      .map(definition => commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]),
     ...(property.demoCapture?.selectedFeatures ?? [])
       .filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, detailValues, detailValues.floorUse as string | undefined))
       .map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id),
   ]));
   const supplementalDetails = propertyDetailDisplayDefinitions
     .filter(definition =>
-      definition.group !== 'amenity'
+      (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field))
+      && (!commercialFloorSale || definition.field !== 'privateParkingCount' || Array.isArray(detailValues.parkingTypes) && detailValues.parkingTypes.includes('private'))
+      && definition.group !== 'amenity'
       && !numericSpecTiles.some(tile => tile.fieldId === definition.field)
       && detailValues[definition.field] !== undefined
       && definition.field !== 'plotAreaSquareMeters'
       && definition.field !== 'builtUpAreaSquareMeters')
     .map(definition => ({
       field: definition.field,
-      label: definition.label[language === 'ar' ? 1 : 0],
+      label: commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0],
       value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language, t),
     }));
+  if (commercialFloorSale) supplementalDetails.sort((a, b) => commercialFloorSaleFieldRank(a.field) - commercialFloorSaleFieldRank(b.field));
   const existingSupplementalFields = new Set<string>(supplementalDetails.map(item => item.field));
   const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
     .filter(item =>
@@ -1554,6 +1565,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     {language === 'ar' ? 'تفاصيل العقار' : 'Property details'}
                   </Text>
                   {propertySupplementalDetails.map(item => <DetailRow key={item.field} label={item.label} value={item.value} />)}
+                  {floorYield !== undefined && <DetailRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي (%)' : 'Gross annual rental yield (%)'} value={`${floorYield.toFixed(2)}%`} />}
                 </View>
               )}
 

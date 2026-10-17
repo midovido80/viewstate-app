@@ -1,7 +1,7 @@
 import type { ApartmentSubtype, CatalogPreference, PropertyDetailField, PropertyType, FloorUse } from '@workspace/property-domain';
 import {
   PROPERTY_FORM_CATALOG,
-  getApplicablePropertyFormFields,
+  getApplicablePropertyFormFieldsForMode,
 } from '@/services/propertyFormCatalog';
 
 /** Core/typed Requirement mappings, derived from the shared Foundation catalog. */
@@ -69,7 +69,7 @@ export function getRequirementCatalogFields(
   floorUse?: FloorUse,
   apartmentSubtype?: ApartmentSubtype,
 ) {
-  return getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype)
+  return getApplicablePropertyFormFieldsForMode('wanted', propertyType, floorUse, apartmentSubtype)
     .filter(definition =>
       definition.field !== 'floorUse'
       && definition.wanted?.storage === 'catalogPreference'
