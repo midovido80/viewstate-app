@@ -71,7 +71,9 @@ test('STRUCTURAL: Studio fields render in shared order with catalog-controlled b
   assert.doesNotMatch(studio, /NumericQuickPick|studio-bathrooms"/);
   assert.match(studio, /getStudioBathroomConfirmationCase\(values\)/);
   assert.match(studio, /testID="studio-confirm-bathroom-replacement"/);
-  assert.doesNotMatch(studio, /STUDIO_AMENITIES|studio-amenity-|reviewItem\(t\('studio\.amenities'/);
+  assert.match(studio, /STUDIO_FEATURES\.map/);
+  assert.match(studio, /studio-amenity-/);
+  assert.match(form, /case 'nearbyServices'/);
 });
 
 test('STRUCTURAL: field validation localizes and focuses the actual failing control before Review', async () => {

@@ -59,7 +59,7 @@ test('Clearing Studio features leaves them unspecified, while historical false s
 
 test('New amenities remain Studio-only and exclude unapproved facilities', () => {
   const property = buildStudioProperty({ ...offered(), amenitySelections: { hasSharedPool: 'yes' } }, 'studio', 'offer');
-  assert.equal(validateProperty({ ...property, typeDetails: { ...property.typeDetails, apartmentSubtype: 'standard_apartment' } }).ok, false);
+  assert.equal(validateProperty({ ...property, typeDetails: { ...property.typeDetails, propertyType: 'apartment', apartmentSubtype: 'standard_apartment' } }).ok, false);
   const requirement = buildStudioRequirement({ ...wanted('sale'), amenitySelections: { hasSharedGym: 'required' } }, id, 'seeker');
   assert.equal(validateSeekerRequirement({ ...requirement, catalogPreferences: requirement.catalogPreferences?.filter(item => item.field !== 'apartmentSubtype') }).ok, false);
   assert.equal(STUDIO_FEATURES.some(item => /Maid|Driver|Laundry|Entrance/i.test(item.field)), false);

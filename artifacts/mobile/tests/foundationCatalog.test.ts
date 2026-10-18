@@ -88,6 +88,10 @@ test('Only existing bounded catalogPreference meanings receive wanted mappings',
     hasKitchen: ['feature'],
     hasHall: ['feature'],
     hasParking: ['feature'],
+    hasSplitAC: ['feature'],
+    hasSharedPool: ['feature'],
+    hasSharedGym: ['feature'],
+    hasSeaView: ['feature'],
   };
   const mapped = PROPERTY_FORM_CATALOG.filter(item => item.wanted?.storage === 'catalogPreference');
   assert.deepEqual(
@@ -136,6 +140,10 @@ test('Requirement presentation and field allow-lists derive from Foundation meta
     'hasKitchen',
     'hasParking',
     'hasPool',
+    'hasSeaView',
+    'hasSharedGym',
+    'hasSharedPool',
+    'hasSplitAC',
     'hasWaterfront',
     'intendedUse',
   ]);
@@ -155,7 +163,7 @@ test('Requirement presentation and field allow-lists derive from Foundation meta
   assert.deepEqual(getRequirementPresentationFields('floor', 'commercial').specifications, ['intendedUse', 'commercialActivity']);
   assert.deepEqual(getRequirementPresentationFields('floor', 'residential').specifications, []);
   assert.equal(getRequirementCatalogFields('floor', 'residential').some(item => item.field === 'commercialActivity'), false);
-  for (const field of ['hasKitchen', 'hasHall', 'hasParking'] as const) {
+  for (const field of ['hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'] as const) {
     assert.equal(getRequirementCatalogFields('apartment').some(item => item.field === field), false);
     assert.equal(isRequirementCatalogFieldAllowed(field), false);
   }
@@ -243,7 +251,7 @@ test('Shared core descriptors map only existing Property and Requirement paths',
 });
 
 function expectedGlobalApproval(field: string): boolean {
-  return !['hasKitchen', 'hasHall', 'hasParking'].includes(field) && [
+  return !['hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'].includes(field) && [
     'apartmentSubtype', 'furnishing', 'intendedUse', 'commercialActivity',
     'hasPool', 'hasWaterfront', 'hasColdStorage',
   ].includes(field);

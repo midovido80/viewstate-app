@@ -94,7 +94,7 @@ export interface RequirementRecoveryReport {
 const knownRequirementKeys = new Set([
   'id', 'seekerId', 'purpose', 'propertyType', 'preferredAreaIds', 'preferredAreaMode',
   'budget', 'notes', 'bedroomsMinimum', 'bathroomsMinimum', 'centralAC',
-  'preferredAmenities', 'preferredAmenityExclusions', 'catalogPreferences',
+  'preferredAmenities', 'preferredAmenityExclusions', 'catalogPreferences', 'preferredNearbyServices',
   'floorUse', 'masterBedroomsMinimum', 'driverRoom', 'rentalPeriodId',
   'occupancy', 'swimmingPool', 'gym', 'seaView',
 ]);

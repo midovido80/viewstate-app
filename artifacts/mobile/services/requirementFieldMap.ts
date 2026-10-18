@@ -27,6 +27,10 @@ export const STUDIO_ONLY_REQUIREMENT_CATALOG_FIELDS = new Set<PropertyDetailFiel
   'hasKitchen',
   'hasHall',
   'hasParking',
+  'hasSplitAC',
+  'hasSharedPool',
+  'hasSharedGym',
+  'hasSeaView',
 ]);
 
 export type GenericRequirementApartmentSubtype = Exclude<ApartmentSubtype, 'studio'>;

@@ -57,8 +57,8 @@ test('BEHAVIOR: numeric parser preserves zero and normalizes Western Arabic Pers
 });
 
 test('BEHAVIOR: nearby identifiers are stable and bilingual', () => {
-  assert.equal(DEMO_NEARBY_SERVICES.length, 10);
-  assert.equal(new Set(DEMO_NEARBY_SERVICES.map(item => item.id)).size, 10);
+  assert.equal(DEMO_NEARBY_SERVICES.length, 16);
+  assert.equal(new Set(DEMO_NEARBY_SERVICES.map(item => item.id)).size, 16);
   for (const item of DEMO_NEARBY_SERVICES) assert.ok(item.label[0] && item.label[1]);
 });
 
