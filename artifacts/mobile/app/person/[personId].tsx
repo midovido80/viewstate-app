@@ -517,16 +517,15 @@ export default function PersonDetailScreen() {
                 <Text style={{ color: colors.success, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
               </View>
             ) : null}
-            {eligibleSourceRoles.length === 0 ? <ApprovedAction title={primaryActionLabel} onPress={activatePrimaryAction} testID="person-primary-action" style={{ flex: 0 }} /> : null}
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 }}>
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.accent, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
             </View>
-            {eligibleSourceRoles.length ? <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
-              <ApprovedAction title={language === 'ar' ? 'إضافة عقار' : 'Add property'} onPress={beginAddProperty} icon="plus" testID="person-primary-action" />
-              <ApprovedAction title={t('people.link')} onPress={() => void openLink()} variant="outline" icon="link" testID="person-link-property" />
-            </View> : null}
+            <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
+              <ApprovedAction title={eligibleSourceRoles.length ? (language === 'ar' ? 'إضافة عقار' : 'Add property') : primaryActionLabel} onPress={eligibleSourceRoles.length ? beginAddProperty : activatePrimaryAction} icon="plus" testID="person-primary-action" />
+              {eligibleSourceRoles.length ? <ApprovedAction title={t('people.link')} onPress={() => void openLink()} variant="outline" icon="link" testID="person-link-property" /> : null}
+            </View>
             {linked.map(property => {
               const summary = getPropertyCardSummary(property, cardSummaryFormatters);
               const source = sourced.find(item => item.property.core.id === property.core.id)?.source;
@@ -553,7 +552,7 @@ export default function PersonDetailScreen() {
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.accent, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
             </View>
-            {person.classifications.includes('seeker') && eligibleSourceRoles.length > 0 ? <ApprovedAction title={language === 'ar' ? 'إضافة طلب' : 'Add Requirement'} onPress={() => actionForClassification('seeker')} variant="outline" testID="person-add-requirement" style={{ flex: 0 }} /> : null}
+            {person.classifications.includes('seeker') && eligibleSourceRoles.length > 0 ? <ApprovedAction title={language === 'ar' ? 'إضافة طلب' : 'Add Requirement'} onPress={() => actionForClassification('seeker')} variant="outline" testID="person-requirement-create" style={{ flex: 0 }} /> : null}
             {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => {
               const intent = projectRequirementIntent(requirement, language);
               return (

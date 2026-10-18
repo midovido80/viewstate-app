@@ -58,7 +58,8 @@ test('Details and Person presentation hide technical identities and consolidate 
   assert.match(personView, /sourcedOnly\.map/);
   assert.match(personView, /placeholder=\{t\('common\.search'\)\}/);
   assert.match(personView, /accessibilityState=\{\{ checked:/);
-  assert.match(personView, /backgroundColor: selectedProperty\?\.core\.id === property\.core\.id \? colors\.primary/);
+  assert.match(personView, /const selected = selectedProperty\?\.core\.id === property\.core\.id/);
+  assert.match(personView, /backgroundColor: selected \? '#EFF6FF' : colors\.card/);
 });
 
 test('Map and edit-route presentation avoid false errors and technical route headers', async () => {

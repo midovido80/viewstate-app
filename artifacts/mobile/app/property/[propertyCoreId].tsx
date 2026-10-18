@@ -1656,7 +1656,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             )}
 
-              {canPermanentlyDelete ? <ApprovedAction title={t('detail.delete')} icon="trash-2" variant="danger" onPress={() => setDeleteVisible(true)} testID="property-delete-action" style={{ flex: 0 }} /> : null}
+              {canPermanentlyDelete ? (
+                <ApprovedAction testID="property-delete-action" title={t('detail.delete')} icon="trash-2" variant="danger" onPress={() => setDeleteVisible(true)} style={{ flex: 0 }} />
+              ) : null}
             </View>
           </>
         ) : choices ? (
