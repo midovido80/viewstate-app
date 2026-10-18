@@ -1338,7 +1338,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       ) : (
         <View style={styles.header}>
           <View style={[styles.headerMain, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, navigationButtonStyle]}>
+            <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, approvedNavigationStyle]}>
               <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
             </TouchableOpacity>
             <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }]}>{editTitle}</Text>
@@ -1347,7 +1347,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               accessibilityRole="button"
               accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'}
               testID="property-home-action"
-              style={[styles.headerSide, navigationButtonStyle, { flexDirection: 'row', gap: 5 }]}
+              style={[styles.headerSide, approvedNavigationStyle, { flexDirection: 'row', gap: 5 }]}
             >
               <Feather name="home" size={18} color={navigationButtonTextStyle.color} />
               <Text style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>

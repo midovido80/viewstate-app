@@ -881,17 +881,8 @@ export default function CaptureWorkflow() {
             <Feather name="home" size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold, fontSize: 13 }]}>{t('home.title')}</Text>
           </TouchableOpacity>
         </View>
-        <Text testID={`capture-stage-${stage}`} style={[styles.stageTitle, { color: colors.primary, fontFamily: fonts.semiBold }]}>{header}</Text>
-        <View style={[styles.steps, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          {[1, 2, 3].map(number => (
-            <View key={number} style={styles.step}>
-              <View style={[styles.stepDot, { backgroundColor: number <= stage ? colors.primary : colors.border }]}>
-                <Text style={{ color: number <= stage ? colors.background : colors.mutedForeground, fontFamily: fonts.bold }}>{number}</Text>
-              </View>
-              {number < 3 && <View style={[styles.connector, { backgroundColor: number < stage ? colors.primary : colors.border }]} />}
-            </View>
-          ))}
-        </View>
+        <Text testID={`capture-stage-${stage}`} style={[styles.stageTitle, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{stage === 2 && draft.propertyType ? `${draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)} · ${draft.transaction === 'rent' ? (language === 'ar' ? 'معروض للإيجار' : 'Offered for rent') : draft.transaction === 'sale' ? (language === 'ar' ? 'معروض للبيع' : 'Offered for sale') : ''}` : header}</Text>
+
       </View>
 
       <ScrollView
@@ -1233,7 +1224,7 @@ export default function CaptureWorkflow() {
         </View>
       </Modal>
       <View style={[styles.footer, { flexDirection: isRTL ? 'row' : 'row-reverse', backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {stage === 2 ? <ApprovedAction title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <ApprovedAction title={t('capture.back')} onPress={handleBack} variant="outline" testID="capture-back" />}
+        {stage === 2 ? <ApprovedAction title={language === 'ar' ? 'حفظ مسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <ApprovedAction title={t('capture.back')} onPress={handleBack} variant="outline" testID="capture-back" />}
       {stage === 1 ? <ApprovedAction title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <ApprovedAction title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <ApprovedAction title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}
       </View>
     </KeyboardAvoidingView>
