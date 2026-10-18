@@ -20,6 +20,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { Property, PropertyDetailField, Transaction, PropertyDemoCaptureMetadata, createPropertyShareSelection, buildPropertySharePreview } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
+import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { formatPropertyDetailValue, propertyDetailDisplayDefinitions, propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
 import { LocationAttachmentCard, LocationAttachmentRow, LocationAttachmentButton, AttachmentPrivacyNote, locationLinkInputStyle } from '@/components/LocationAttachmentUI';
@@ -1252,17 +1253,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   });
   const availableFeatures = Array.from(new Set([
     ...propertyDetailDisplayDefinitions
-      .filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && definition.group === 'amenity' && detailValues[definition.field] === true)
+      .filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (property.core.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, detailValues)) && property.core.propertyType !== 'warehouse' && definition.group === 'amenity' && detailValues[definition.field] === true)
       .map(definition => commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]),
-    ...(property.demoCapture?.selectedFeatures ?? [])
+    ...(property.core.propertyType === 'warehouse' ? [] : property.demoCapture?.selectedFeatures ?? [])
       .filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, detailValues, detailValues.floorUse as string | undefined))
       .map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id),
   ]));
   const supplementalDetails = propertyDetailDisplayDefinitions
     .filter(definition =>
-      (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field))
+      (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (property.core.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, detailValues))
       && (!commercialFloorSale || definition.field !== 'privateParkingCount' || Array.isArray(detailValues.parkingTypes) && detailValues.parkingTypes.includes('private'))
-      && definition.group !== 'amenity'
+      && (property.core.propertyType === 'warehouse' || definition.group !== 'amenity')
       && !numericSpecTiles.some(tile => tile.fieldId === definition.field)
       && detailValues[definition.field] !== undefined
       && definition.field !== 'plotAreaSquareMeters'
@@ -1614,7 +1615,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 )}
               </View>
 
-              {nearbyServicesTextList.length > 0 && (
+              {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && (
                 <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                   <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <Feather name="map" size={20} color={colors.primary} />

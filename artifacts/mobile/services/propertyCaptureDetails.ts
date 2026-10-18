@@ -1,3 +1,4 @@
+import { sanitizeWarehouseDetails } from '@/services/warehouseForm';
 import {
   validateProperty,
   APARTMENT_SUBTYPES,
@@ -135,9 +136,9 @@ export function buildPropertyWithCaptureDetails(
     if (!raw?.trim()) continue;
     if (field === 'clarification') continue;
     if (field === 'intendedUse' || field === 'commercialActivity') rawDetails[field] = { value: raw, privacy: normalPrivacy };
-    else if (field === 'parkingTypes') rawDetails[field] = raw.split(',').filter(Boolean);
+    else if ((field === 'parkingTypes' || field === 'warehouseLevels')) rawDetails[field] = raw.split(',').filter(Boolean);
     else if (field === 'privateParkingCount' && !fields.parkingTypes?.split(',').includes('private')) continue;
-    else if (field === 'floorUse' || field === 'apartmentSubtype' || field === 'furnishing' || field === 'occupancy' || field === 'propertyUse' || field === 'buildingAgeBand' || field === 'streetPosition' || field === 'rentalOccupancy') rawDetails[field] = raw;
+    else if (field === 'floorUse' || field === 'apartmentSubtype' || field === 'furnishing' || field === 'occupancy' || field === 'propertyUse' || field === 'buildingAgeBand' || field === 'streetPosition' || field === 'rentalOccupancy' || ['warehouseFinish', 'warehouseKind', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit'].includes(field)) rawDetails[field] = raw;
     else if (field.startsWith('has')) rawDetails[field] = raw === 'true';
     else rawDetails[field] = Number(raw);
   }
@@ -145,6 +146,7 @@ export function buildPropertyWithCaptureDetails(
   if (baseline.core.propertyType === 'other_built_property' && fields.clarification?.trim()) {
     rawDetails.clarification = { value: fields.clarification, privacy: normalPrivacy };
   }
+  if (baseline.core.propertyType === 'warehouse') { const cleaned = sanitizeWarehouseDetails(rawDetails); for (const key of Object.keys(rawDetails)) delete rawDetails[key]; Object.assign(rawDetails, cleaned); }
   const populatedDetailKeys = Object.keys(rawDetails).filter(key => key !== 'propertyType');
   if (
     strict

@@ -1,3 +1,4 @@
+import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { ApartmentSubtype } from '@workspace/property-domain';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
@@ -998,7 +999,7 @@ export default function CaptureWorkflow() {
                 const number = Number(normalized);
                  if (normalized === '' || Number.isFinite(number)) updateCaptureDetails({ areaSquareMeters: normalized === '' ? undefined : number, areaUnit: 'square_meter' });
               }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
-              {!commercialFloorSale && <>
+              {!commercialFloorSale && draft.propertyType !== 'warehouse' && <>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               </>}
@@ -1037,7 +1038,7 @@ export default function CaptureWorkflow() {
                   return next;
                 })}
               />
-              {commercialFloorSale && <View style={{ gap: 8, marginTop: 12 }}>
+              {(commercialFloorSale || draft.propertyType === 'warehouse') && <View style={{ gap: 8, marginTop: 12 }}>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               </View>}
@@ -1135,9 +1136,9 @@ export default function CaptureWorkflow() {
               <>
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
              {draft.propertyType === 'commercial_complex' && draft.transaction === 'sale' && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
-             {applicable.filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && definition.group !== 'amenity' && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private')) ).sort((a, b) => commercialFloorSale ? commercialFloorSaleFieldRank(a.field) - commercialFloorSaleFieldRank(b.field) : 0).map(definition => <PreviewRow key={definition.field} label={commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
+             {applicable.filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (draft.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, captureDetails)) && (draft.propertyType === 'warehouse' || definition.group !== 'amenity') && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private')) ).sort((a, b) => commercialFloorSale ? commercialFloorSaleFieldRank(a.field) - commercialFloorSaleFieldRank(b.field) : 0).map(definition => <PreviewRow key={definition.field} label={commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
              {commercialFloorSale && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
-            {nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
+            {draft.propertyType !== 'warehouse' && nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
              {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (
                <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={metadataValue(demoMetadata?.numericValues?.[item.id])} colors={colors} fonts={fonts} />
@@ -1145,7 +1146,7 @@ export default function CaptureWorkflow() {
              {demoCategory?.choices.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.choices?.[item.id] !== undefined).map(item => (
               <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={item.options.find(option => option.id === demoMetadata?.choices?.[item.id])?.label[language === 'ar' ? 1 : 0] ?? ''} colors={colors} fonts={fonts} />
             ))}
-              {previewFeatureLabels.length ? <PreviewRow label={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available Property Features'} value={previewFeatureLabels.join(', ')} colors={colors} fonts={fonts} /> : null}
+              {draft.propertyType !== 'warehouse' && previewFeatureLabels.length ? <PreviewRow label={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available Property Features'} value={previewFeatureLabels.join(', ')} colors={colors} fonts={fonts} /> : null}
              {captureDetails.mapsLink ? <PreviewRow label={t('enrich.maps_link')} value={captureDetails.mapsLink} colors={colors} fonts={fonts} /> : null}
              {captureDetails.coordinates ? <PreviewRow label={language === 'ar' ? 'الإحداثيات الدقيقة' : 'Exact coordinates'} value={`${captureDetails.coordinates.latitude}, ${captureDetails.coordinates.longitude}`} colors={colors} fonts={fonts} /> : null}
              {captureAttachments.length ? <PreviewRow label={language === 'ar' ? 'المرفقات' : 'Attachments'} value={captureAttachments.map(item => item.originalName).join(', ')} colors={colors} fonts={fonts} /> : null}

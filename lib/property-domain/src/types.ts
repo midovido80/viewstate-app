@@ -281,6 +281,21 @@ export interface ShopTypeDetails extends Omit<OfficeTypeDetails, "propertyType">
 
 export interface WarehouseTypeDetails {
   readonly propertyType: "warehouse";
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly warehouseFinish?: "normal" | "good" | "super_deluxe";
+  readonly warehouseKind?: "industrial" | "food";
+  readonly warehouseLevels?: readonly ("basement" | "ground")[];
+  readonly entranceCount?: number;
+  readonly hasVehicleRamp?: boolean;
+  readonly rampVehicleSize?: "large" | "medium" | "small";
+  readonly hasServiceElevator?: boolean;
+  readonly serviceElevatorCapacityTons?: number;
+  readonly hasEscalator?: boolean;
+  readonly hasFireSystem?: boolean;
+  readonly electricityPhase?: "two_phase" | "three_phase";
+  readonly electricityCapacity?: number;
+  readonly electricityCapacityUnit?: "A" | "kW" | "kVA";
+
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly bathroomCount?: number;

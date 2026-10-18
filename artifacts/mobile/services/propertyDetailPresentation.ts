@@ -11,6 +11,7 @@ import { EQUIVALENT_TEMPLATE_FIELDS, hasCanonicalTypeDetailsSnapshot } from '@/s
 import { getDemoCategory } from '@/services/propertyDemoCatalog';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';
 import { readStudioRequirement } from '@/services/studioFormModel';
+import { WAREHOUSE_CHOICES } from '@/services/warehouseForm';
 import { COMMERCIAL_COMPLEX_CHOICES } from '@/services/commercialComplexSale';
 
 const coreFieldOrder: readonly PropertyDetailField[] = [
@@ -32,7 +33,7 @@ export function formatPropertyDetailValue(
   translate?: (key: string) => string,
 ): string {
   if (field === 'rentalOccupancy' && value === 'rented') return language === 'ar' ? 'مؤجر' : 'Rented';
-  const choices = COMMERCIAL_COMPLEX_CHOICES[field];
+  const choices = WAREHOUSE_CHOICES[field] ?? COMMERCIAL_COMPLEX_CHOICES[field];
   if (choices) return (Array.isArray(value) ? value : String(value).split(',')).map(item => {
     const choice = choices.find(option => option[0] === item);
     return choice?.[language === 'ar' ? 2 : 1] ?? String(item);

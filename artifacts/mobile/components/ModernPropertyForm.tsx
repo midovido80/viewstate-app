@@ -8,6 +8,7 @@ import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/prope
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { FLOOR_NUMBER_QUICK_PICK_VALUES } from '@/services/numericQuickPick';
+import { WarehouseFields } from '@/components/WarehouseFields';
 import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
 import { CommercialComplexSaleFields } from '@/components/CommercialComplexSaleFields';
 import { isCommercialFloorSale } from '@/services/commercialFloorSale';
@@ -35,6 +36,7 @@ export interface ModernPropertyFormProps {
 }
 
 export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
+  if (propertyType === 'warehouse') return <WarehouseFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
   const nearbySection = onNearbyChange ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
   if (propertyType === 'commercial_complex' && transaction === 'sale') return <View><CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
   if (isCommercialFloorSale(propertyType, values.floorUse, transaction)) return <View><CommercialComplexSaleFields profile="floor" recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;

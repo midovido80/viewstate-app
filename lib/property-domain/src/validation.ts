@@ -239,9 +239,16 @@ export function validateTypeDetails(
     "builtUpAreaSquareMeters",
     "frontageWidthMeters",
     "ceilingHeightMeters",
+    "serviceElevatorCapacityTons",
+    "electricityCapacity",
   ] as const;
   const commercialChoices = {
     buildingAgeBand: ["1_5", "6_12", "over_12"],
+    warehouseFinish: ["normal", "good", "super_deluxe"],
+    warehouseKind: ["industrial", "food"],
+    rampVehicleSize: ["large", "medium", "small"],
+    electricityPhase: ["two_phase", "three_phase"],
+    electricityCapacityUnit: ["A", "kW", "kVA"],
     streetPosition: ["one_street", "two_streets", "corner", "front_back"],
     rentalOccupancy: details.propertyType === "floor" ? ["vacant", "rented"] : ["vacant", "fully_rented", "partially_rented"],
   };
@@ -260,6 +267,23 @@ export function validateTypeDetails(
   }
   if (candidate.monthlyIncome !== undefined && (typeof candidate.monthlyIncome !== "number" || !Number.isFinite(candidate.monthlyIncome) || candidate.monthlyIncome < 0)) {
     issues.push(issue("invalid_physical_value", ["typeDetails", "monthlyIncome"], "Monthly income must be a non-negative finite amount."));
+  }
+  if (candidate.warehouseLevels !== undefined && (!Array.isArray(candidate.warehouseLevels)
+    || candidate.warehouseLevels.some(value => !["basement", "ground"].includes(value))
+    || new Set(candidate.warehouseLevels).size !== candidate.warehouseLevels.length)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "warehouseLevels"], "Select unique basement/ground levels."));
+  }
+  for (const [child, active] of [
+    ["rampVehicleSize", candidate.hasVehicleRamp === true],
+    ["serviceElevatorCapacityTons", candidate.hasServiceElevator === true],
+    ["hasColdStorage", candidate.warehouseKind !== "industrial"],
+  ] as const) {
+    if (details.propertyType === "warehouse" && candidate[child] !== undefined && !active) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", child], "Warehouse detail requires its applicable parent selection."));
+    }
+  }
+  if (candidate.electricityCapacity !== undefined && candidate.electricityCapacityUnit === undefined) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "electricityCapacityUnit"], "Choose a unit for electrical capacity."));
   }
   for (const field of positiveFields) {
     const value = candidate[field];
@@ -286,6 +310,7 @@ export function validateTypeDetails(
     "livingRoomCount",
     "floorNumber",
     "loadingBayCount",
+    "entranceCount",
   ] as const;
   if (details.propertyType === "commercial_complex" && candidate.floorCount !== undefined && (typeof candidate.floorCount !== "number" || candidate.floorCount < 1)) {
     issues.push(issue("invalid_physical_value", ["typeDetails", "floorCount"], "A commercial complex must have at least one floor."));
@@ -317,6 +342,10 @@ export function validateTypeDetails(
     "hasPool",
     "hasWaterfront",
     "hasColdStorage",
+    "hasVehicleRamp",
+    "hasServiceElevator",
+    "hasEscalator",
+    "hasFireSystem",
     "hasCentralAC",
     "hasSplitAC",
     "hasSharedPool",

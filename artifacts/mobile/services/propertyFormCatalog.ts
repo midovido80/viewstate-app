@@ -234,6 +234,20 @@ const WANTED_BY_FIELD: Partial<Record<PropertyDetailField, PropertyWantedDescrip
 };
 
 const LABELS: Record<string, readonly [string, string]> = {
+  warehouseFinish: ['Warehouse finishing', 'التشطيب'],
+  warehouseKind: ['Warehouse type', 'نوع المخزن'],
+  warehouseLevels: ['Levels', 'الطابق'],
+  entranceCount: ['Number of entrances', 'عدد المداخل'],
+  hasVehicleRamp: ['Vehicle ramp', 'رامب مجهز للسيارات'],
+  rampVehicleSize: ['Ramp vehicle size', 'حجم السيارة المناسب للرامب'],
+  hasServiceElevator: ['Service elevator', 'مصعد خدمات'],
+  serviceElevatorCapacityTons: ['Elevator capacity (tonnes)', 'حمولة المصعد (طن)'],
+  hasEscalator: ['Escalator', 'سلم كهربائي'],
+  hasFireSystem: ['Fire suppression system', 'نظام إطفاء'],
+  electricityPhase: ['Electricity phase', 'الكهرباء'],
+  electricityCapacity: ['Electrical capacity', 'قوة الكهرباء'],
+  electricityCapacityUnit: ['Electrical capacity unit', 'وحدة قوة الكهرباء'],
+
   buildingAgeBand: ['Building age', 'عمر البناء'],
   hasPrivateEntrance: ['Private entrance', 'مدخل مستقل للدور'],
   hasAccessibleEntrance: ['Wheelchair access', 'إمكانية وصول للكراسي المتحركة'],
@@ -296,22 +310,26 @@ const LABELS: Record<string, readonly [string, string]> = {
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
   'privateParkingCount',
+  'entranceCount',
   'masterBedroomCount', 'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
   'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount',
   'elevatorCount', 'floorNumber', 'loadingBayCount',
   'roomsPerUnit', 'bathroomsPerUnit',
 ]);
 const DECIMAL_FIELDS = new Set<PropertyDetailField>([
+  'serviceElevatorCapacityTons', 'electricityCapacity',
   'monthlyIncome',
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
+  'hasVehicleRamp', 'hasServiceElevator', 'hasEscalator', 'hasFireSystem',
   'hasPrivateEntrance', 'hasAccessibleEntrance',
   'hasBasement', 'hasMortgage',
   'hasPool', 'hasWaterfront', 'hasColdStorage', 'hasCentralAC',
   'hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
+  'warehouseFinish', 'warehouseKind', 'warehouseLevels', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit',
   'buildingAgeBand', 'streetPosition', 'parkingTypes', 'rentalOccupancy',
   'apartmentSubtype', 'floorUse', 'furnishing', 'occupancy', 'propertyUse',
 ]);

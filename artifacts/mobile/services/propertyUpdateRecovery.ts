@@ -1,3 +1,4 @@
+import { sanitizeWarehouseDetails } from '@/services/warehouseForm';
 import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged } from '@/services/savedPropertyClassification';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -419,11 +420,11 @@ export function buildPropertyUpdateCandidate(
     if (!raw?.trim() || definition.field === 'clarification') continue;
     if (definition.field === 'intendedUse' || definition.field === 'commercialActivity') {
       details[definition.field] = { value: raw, privacy: { classification: 'normal', disclosurePolicy: 'normal' } };
-    } else if (definition.field === 'parkingTypes') {
+    } else if ((definition.field === 'parkingTypes' || definition.field === 'warehouseLevels')) {
       details[definition.field] = raw.split(',').filter(Boolean);
     } else if (definition.field === 'privateParkingCount' && !canonicalDetails.parkingTypes?.split(',').includes('private')) {
       continue;
-    } else if (definition.field === 'floorUse' || definition.field === 'apartmentSubtype' || definition.field === 'furnishing' || definition.field === 'occupancy' || definition.field === 'propertyUse' || definition.field === 'buildingAgeBand' || definition.field === 'streetPosition' || definition.field === 'rentalOccupancy') {
+    } else if (definition.field === 'floorUse' || definition.field === 'apartmentSubtype' || definition.field === 'furnishing' || definition.field === 'occupancy' || definition.field === 'propertyUse' || definition.field === 'buildingAgeBand' || definition.field === 'streetPosition' || definition.field === 'rentalOccupancy' || ['warehouseFinish', 'warehouseKind', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit'].includes(definition.field)) {
       details[definition.field] = raw;
     } else if (definition.field.startsWith('has')) {
       details[definition.field] = raw === 'true';
@@ -431,6 +432,7 @@ export function buildPropertyUpdateCandidate(
       details[definition.field] = Number(raw);
     }
   }
+  if (choices.propertyType === 'warehouse') { const cleaned = sanitizeWarehouseDetails(details); for (const key of Object.keys(details)) delete details[key]; Object.assign(details, cleaned); }
   if (Object.keys(details).length) candidate.typeDetails = details;
   else delete candidate.typeDetails;
   const hasDescription = Object.prototype.hasOwnProperty.call(choices, 'description');

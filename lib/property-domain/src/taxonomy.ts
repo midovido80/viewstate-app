@@ -52,6 +52,19 @@ export const FURNISHING_VALUES = [
 ] as const satisfies readonly Furnishing[];
 
 export type PropertyDetailField =
+  | "warehouseFinish"
+  | "warehouseKind"
+  | "warehouseLevels"
+  | "entranceCount"
+  | "hasVehicleRamp"
+  | "rampVehicleSize"
+  | "hasServiceElevator"
+  | "serviceElevatorCapacityTons"
+  | "hasEscalator"
+  | "hasFireSystem"
+  | "electricityPhase"
+  | "electricityCapacity"
+  | "electricityCapacityUnit"
   | "buildingAgeBand"
   | "hasBasement"
   | "streetPosition"
@@ -121,7 +134,8 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
-  ...(["buildingAgeBand", "parkingTypes", "privateParkingCount", "rentalOccupancy", "monthlyIncome"] as const).map(field => ({ field, appliesTo: ["commercial_complex", "floor"] as const, floorUses: ["commercial"] as const })),
+  { field: "buildingAgeBand", appliesTo: ["commercial_complex", "floor", "warehouse"], floorUses: ["commercial"] },
+  ...(["parkingTypes", "privateParkingCount", "rentalOccupancy", "monthlyIncome"] as const).map(field => ({ field, appliesTo: ["commercial_complex", "floor"] as const, floorUses: ["commercial"] as const })),
   ...(["hasBasement", "streetPosition", "hasMortgage"] as const).map(field => ({ field, appliesTo: ["commercial_complex"] as const })),
   ...(["hasPrivateEntrance", "hasAccessibleEntrance"] as const).map(field => ({ field, appliesTo: ["floor"] as const, floorUses: ["commercial"] as const })),
   { field: "plotAreaSquareMeters", appliesTo: ["whole_building", "commercial_complex", "house", "villa", "warehouse", "chalet", "other_built_property"] },
@@ -169,6 +183,19 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "commercialActivity", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },
   { field: "frontageWidthMeters", appliesTo: ["floor", "shop", "commercial_complex"], floorUses: ["commercial"] },
   { field: "ceilingHeightMeters", appliesTo: ["floor", "shop", "warehouse"], floorUses: ["commercial"] },
+  { field: "warehouseFinish", appliesTo: ["warehouse"] },
+  { field: "warehouseKind", appliesTo: ["warehouse"] },
+  { field: "warehouseLevels", appliesTo: ["warehouse"] },
+  { field: "entranceCount", appliesTo: ["warehouse"] },
+  { field: "hasVehicleRamp", appliesTo: ["warehouse"] },
+  { field: "rampVehicleSize", appliesTo: ["warehouse"] },
+  { field: "hasServiceElevator", appliesTo: ["warehouse"] },
+  { field: "serviceElevatorCapacityTons", appliesTo: ["warehouse"] },
+  { field: "hasEscalator", appliesTo: ["warehouse"] },
+  { field: "hasFireSystem", appliesTo: ["warehouse"] },
+  { field: "electricityPhase", appliesTo: ["warehouse"] },
+  { field: "electricityCapacity", appliesTo: ["warehouse"] },
+  { field: "electricityCapacityUnit", appliesTo: ["warehouse"] },
   { field: "loadingBayCount", appliesTo: ["warehouse"] },
   { field: "hasColdStorage", appliesTo: ["warehouse"] },
   { field: "clarification", appliesTo: ["other_built_property"] },
