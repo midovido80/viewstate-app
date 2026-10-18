@@ -43,6 +43,12 @@ export const DEMO_NEARBY_SERVICES = [
   option('pharmacy', 'Pharmacy', 'صيدلية'),
   option('club_gym', 'Club / Gym', 'نادي / جيم'),
   option('beach', 'Beach', 'شاطئ'),
+  option('cafe', 'Café', 'مقهى'),
+  option('laundry', 'Laundry shop', 'مغسلة ملابس'),
+  option('clinic', 'Clinic / Medical center', 'عيادة / مركز طبي'),
+  option('nursery', 'Nursery', 'حضانة'),
+  option('park', 'Park / Walking path', 'حديقة / ممشى'),
+  option('shopping_center', 'Shopping center', 'مركز تسوق'),
 ] as const;
 
 const features = (items: readonly [string, string, string][]) =>

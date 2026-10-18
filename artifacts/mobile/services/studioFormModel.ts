@@ -19,8 +19,10 @@ import {
   getStudioCatalogField,
 } from '@/services/studioCatalog';
 
+import { STUDIO_FEATURES, type StudioFeatureField } from '@/services/studioAmenities';
+
 export type StudioFormMode = 'offered' | 'wanted';
-export type StudioAmenity = Extract<ResidentialAmenity, 'balcony' | 'elevator'>;
+export type StudioAmenity = Extract<ResidentialAmenity, 'balcony' | 'elevator' | 'security_guard'>;
 export type StudioOfferedSelection = 'yes' | 'no' | 'unknown';
 export type StudioWantedSelection = 'required' | 'not_important' | 'must_not_have';
 export type StudioSelection = StudioOfferedSelection | StudioWantedSelection;
@@ -48,6 +50,8 @@ export interface StudioFormValues {
   readonly kitchen: StudioSelection;
   readonly hall: StudioSelection;
   readonly parking: StudioSelection;
+  readonly amenitySelections?: Readonly<Partial<Record<StudioFeatureField, StudioSelection>>>;
+  readonly nearbyServices?: readonly string[];
   readonly description: string;
 }
 
@@ -71,7 +75,7 @@ export interface StudioFormValidation {
 }
 
 /** @deprecated Legacy allowlist used only to recognize stored requirements. */
-export const STUDIO_AMENITIES = ['balcony', 'elevator'] as const satisfies readonly StudioAmenity[];
+export const STUDIO_AMENITIES = ['balcony', 'elevator', 'security_guard'] as const satisfies readonly StudioAmenity[];
 const RENTAL_PERIODS = ['daily', 'monthly', 'yearly'] as const;
 const PRIVACY_NORMAL = createPrivacyMetadata('normal', 'normal');
 const PRIVACY_EXACT_LOCATION = createPrivacyMetadata('exact_location', 'explicit_per_share');
@@ -101,6 +105,8 @@ export function createStudioFormValues(
     kitchen: mode === 'offered' ? 'unknown' : 'not_important',
     hall: mode === 'offered' ? 'unknown' : 'not_important',
     parking: mode === 'offered' ? 'unknown' : 'not_important',
+    amenitySelections: Object.fromEntries(STUDIO_FEATURES.map(item => [item.field, mode === 'offered' ? 'unknown' : 'not_important'])),
+    nearbyServices: [],
     description: '',
   };
 }
@@ -256,6 +262,13 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
       errors.push(formError(field, 'invalid_choice', `Selection for ${field} is not valid for ${values.mode} Studio forms.`));
     }
   }
+  const allowedSelections = values.mode === 'offered' ? ['yes', 'no', 'unknown'] : ['required', 'must_not_have', 'not_important'];
+  if (Object.entries(values.amenitySelections ?? {}).some(([field, selection]) => !STUDIO_FEATURES.some(item => item.field === field) || !allowedSelections.includes(selection))) {
+    errors.push(formError('amenitySelections', 'invalid_choice', 'Select an approved Studio amenity.'));
+  }
+  if (values.nearbyServices !== undefined && (!Array.isArray(values.nearbyServices) || values.nearbyServices.some(id => typeof id !== 'string' || !id.trim()) || new Set(values.nearbyServices).size !== values.nearbyServices.length)) {
+    errors.push(formError('nearbyServices', 'invalid_choice', 'Nearby services must be unique identifiers.'));
+  }
   if (values.mode === 'offered' && values.mapsLink !== '' && getCaptureMapsLinkValidationError(values.mapsLink)) {
     errors.push(formError('mapsLink', 'invalid_location_link', 'Enter a supported Google Maps link.'));
   }
@@ -322,6 +335,7 @@ export function buildStudioProperty(
     propertyType: 'apartment' as const,
     apartmentSubtype: 'studio' as const,
     studioRoomCount: STUDIO_OPEN_ROOM_COUNT,
+    ...Object.fromEntries(STUDIO_FEATURES.flatMap(item => { const value = booleanFromOffered(values.amenitySelections?.[item.field] ?? 'unknown'); return value === undefined ? [] : [[item.field, value]]; })),
     ...(values.occupancy !== undefined ? { occupancy: values.occupancy } : {}),
     ...(numberValue(values.areaSquareMeters) !== undefined
       ? { builtUpAreaSquareMeters: numberValue(values.areaSquareMeters) }
@@ -354,6 +368,7 @@ export function buildStudioProperty(
         rentalPeriodId: values.rentalPeriodId,
       },
     typeDetails: details,
+    nearbyServices: [...(values.nearbyServices ?? [])],
     ...(values.mapsLink !== ''
       ? {
         locationEnrichment: {
@@ -392,6 +407,11 @@ export function buildStudioRequirement(
       preferenceFromWanted('hasParking', values.parking),
     ].filter((preference): preference is CatalogPreference => preference !== undefined)),
   ];
+  for (const item of STUDIO_FEATURES) {
+    if ('amenity' in item || item.field === 'hasCentralAC') continue;
+    const selection = values.amenitySelections?.[item.field];
+    if (selection === 'required' || selection === 'must_not_have') preferences.push({ field: item.field, kind: 'feature', value: selection === 'required' });
+  }
   const candidate = {
     id,
     ...(seekerId !== undefined ? { seekerId } : {}),
@@ -401,6 +421,10 @@ export function buildStudioRequirement(
     preferredAreaMode: values.preferredAreaMode,
     budget: { minimum, maximum, currencyCode: 'KWD' },
     notes: values.description,
+    preferredNearbyServices: [...(values.nearbyServices ?? [])],
+    ...(values.amenitySelections?.hasCentralAC === 'required' ? { centralAC: true } : values.amenitySelections?.hasCentralAC === 'must_not_have' ? { centralAC: false } : {}),
+    ...(STUDIO_FEATURES.some(item => 'amenity' in item && values.amenitySelections?.[item.field] === 'required') ? { preferredAmenities: STUDIO_FEATURES.flatMap(item => 'amenity' in item && values.amenitySelections?.[item.field] === 'required' ? [item.amenity] : []) } : {}),
+    ...(STUDIO_FEATURES.some(item => 'amenity' in item && values.amenitySelections?.[item.field] === 'must_not_have') ? { preferredAmenityExclusions: STUDIO_FEATURES.flatMap(item => 'amenity' in item && values.amenitySelections?.[item.field] === 'must_not_have' ? [item.amenity] : []) } : {}),
     ...(numberValue(values.bathrooms) !== undefined
       ? { bathroomsMinimum: numberValue(values.bathrooms) }
       : {}),
@@ -473,6 +497,8 @@ export function readStudioProperty(property: Property): StudioFormValues {
     kitchen: details.hasKitchen === true ? 'yes' : details.hasKitchen === false ? 'no' : 'unknown',
     hall: details.hasHall === true ? 'yes' : details.hasHall === false ? 'no' : 'unknown',
     parking: details.hasParking === true ? 'yes' : details.hasParking === false ? 'no' : 'unknown',
+    amenitySelections: Object.fromEntries(STUDIO_FEATURES.map(item => [item.field, details[item.field] === true ? 'yes' : details[item.field] === false ? 'no' : 'unknown'])),
+    nearbyServices: [...(property.nearbyServices ?? [])],
     description: property.core.description?.value ?? '',
   };
 }
@@ -491,10 +517,9 @@ export function isStudioRequirement(requirement: SeekerRequirement): boolean {
   ].some(field => field in rawRequirement)) return false;
   if ((requirement.preferredAmenities ?? []).some(amenity =>
     !(STUDIO_AMENITIES as readonly string[]).includes(amenity))) return false;
-  if ((requirement.preferredAmenityExclusions ?? []).length > 0) return false;
+  if ((requirement.preferredAmenityExclusions ?? []).some(amenity => !(STUDIO_AMENITIES as readonly string[]).includes(amenity))) return false;
   if (requirement.bedroomsMinimum !== undefined
     || requirement.masterBedroomsMinimum !== undefined
-    || requirement.centralAC !== undefined
     || requirement.floorUse !== undefined
     || requirement.driverRoom !== undefined) return false;
   if (requirement.purpose === 'rent'
@@ -510,6 +535,7 @@ export function isStudioRequirement(requirement: SeekerRequirement): boolean {
     'hasKitchen',
     'hasHall',
     'hasParking',
+    ...STUDIO_FEATURES.filter(item => !('amenity' in item) && item.field !== 'hasCentralAC').map(item => item.field),
   ]);
   if (preferences.some(preference => !supportedFields.has(preference.field))) return false;
   if (new Set(preferences.map(preference => preference.field)).size !== preferences.length) return false;
@@ -570,6 +596,13 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
     kitchen: wantedSelection(requirement, 'hasKitchen'),
     hall: wantedSelection(requirement, 'hasHall'),
     parking: wantedSelection(requirement, 'hasParking'),
+    amenitySelections: Object.fromEntries(STUDIO_FEATURES.map(item => {
+      const value = item.field === 'hasCentralAC' ? requirement.centralAC
+        : 'amenity' in item ? requirement.preferredAmenities?.includes(item.amenity) ? true : requirement.preferredAmenityExclusions?.includes(item.amenity) ? false : undefined
+        : (() => { const preference = studioPreference(requirement, item.field); return preference?.kind === 'feature' ? preference.value : undefined; })();
+      return [item.field, value === true ? 'required' : value === false ? 'must_not_have' : 'not_important'];
+    })),
+    nearbyServices: [...(requirement.preferredNearbyServices ?? [])],
     description: requirement.notes,
     mapsLink: '',
   };

@@ -157,7 +157,7 @@ export function validateTypeDetails(
         "Studio room count is fixed at one and is valid only for a Studio apartment.",
       ));
     }
-    for (const field of ["hasKitchen", "hasHall", "hasParking"] as const) {
+    for (const field of ["hasKitchen", "hasHall", "hasParking", "hasSplitAC", "hasSharedPool", "hasSharedGym", "hasSeaView"] as const) {
       if (candidate[field] !== undefined && details.apartmentSubtype !== "studio") {
         issues.push(issue(
           "incompatible_detail_field",
@@ -318,6 +318,10 @@ export function validateTypeDetails(
     "hasWaterfront",
     "hasColdStorage",
     "hasCentralAC",
+    "hasSplitAC",
+    "hasSharedPool",
+    "hasSharedGym",
+    "hasSeaView",
     "hasKitchen",
     "hasHall",
     "hasParking",

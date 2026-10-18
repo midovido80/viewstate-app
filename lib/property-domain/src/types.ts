@@ -166,6 +166,11 @@ export interface ApartmentTypeDetails {
   readonly hasKitchen?: boolean;
   readonly hasHall?: boolean;
   readonly hasParking?: boolean;
+  readonly hasSplitAC?: boolean;
+  readonly hasSharedPool?: boolean;
+  readonly hasSharedGym?: boolean;
+  readonly hasSeaView?: boolean;
+
 }
 
 export interface EmptyFloorTypeDetails {

@@ -96,6 +96,10 @@ export type PropertyDetailField =
   | "hasPool"
   | "hasWaterfront"
   | "hasCentralAC"
+  | "hasSplitAC"
+  | "hasSharedPool"
+  | "hasSharedGym"
+  | "hasSeaView"
   | "hasKitchen"
   | "hasHall"
   | "hasParking"
@@ -155,6 +159,10 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasWaterfront", appliesTo: ["chalet"] },
   { field: "hasCentralAC", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "commercial_complex", "office", "shop", "warehouse", "other_built_property"] },
   { field: "hasKitchen", appliesTo: ["apartment", "floor"], apartmentSubtypes: ["studio"], floorUses: ["commercial"] },
+  { field: "hasSplitAC", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
+  { field: "hasSharedPool", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
+  { field: "hasSharedGym", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
+  { field: "hasSeaView", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "hasHall", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "hasParking", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "intendedUse", appliesTo: ["floor", "office", "shop", "warehouse"], floorUses: ["commercial"] },

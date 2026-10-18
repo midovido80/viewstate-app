@@ -1,3 +1,5 @@
+import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
+import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -166,6 +168,7 @@ export default function RequirementEditor() {
   const [maximum, setMaximum] = useState('');
   const [cadence, setCadence] = useState<RequirementRentalPeriodId>('monthly');
   const [notes, setNotes] = useState('');
+  const [nearbyServices, setNearbyServices] = useState<readonly string[]>([]);
   const draftId = useRef(editing ? routeRequirementId : generateDomainId());
   const studioForwardedId = useRef<string | null>(null);
   const newStudioForwardedKey = useRef<string | null>(null);
@@ -224,7 +227,7 @@ export default function RequirementEditor() {
       setAmenities([...(record.preferredAmenities ?? []), ...(legacyMaid ? ['maid_room' as const] : [])]); setServices(RENT_SERVICES.filter(value => form[value] === true)); setCentralACPreference(form.centralAC);
       setExcludedAmenities([...(record as SeekerRequirement & Extension).preferredAmenityExclusions ?? []]);
       setOccupancy(form.occupancy); setCadence(form.rentalPeriodId ?? 'monthly');
-      setMinimum(form.minimumBudget === undefined ? '' : String(form.minimumBudget)); setMaximum(form.maximumBudget === undefined ? '' : String(form.maximumBudget)); setNotes(form.notes);
+      setMinimum(form.minimumBudget === undefined ? '' : String(form.minimumBudget)); setMaximum(form.maximumBudget === undefined ? '' : String(form.maximumBudget)); setNotes(form.notes); setNearbyServices(form.preferredNearbyServices ?? []);
     }).catch(() => {
       if (cancelled) return;
       setError(language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.');
@@ -287,7 +290,7 @@ export default function RequirementEditor() {
     if (!min.ok || !max.ok || !beds.ok || !baths.ok || !masters.ok || !builtArea.ok || invalidCatalogFields.size > 0) return { ok: false as const, message: language === 'ar' ? 'أدخل أرقاماً صالحة.' : 'Enter valid numbers.' };
     const values = {
       purpose, propertyType, preferredAreaIds: areaMode === 'all_kuwait' ? [] : areas, preferredAreaMode: areaMode,
-      minimumBudget: min.value, maximumBudget: max.value, currencyCode: MARKET_CONFIG.currencyCode, notes,
+      minimumBudget: min.value, maximumBudget: max.value, currencyCode: MARKET_CONFIG.currencyCode, notes, preferredNearbyServices: nearbyServices,
       ...(beds.value !== undefined ? { bedroomsMinimum: beds.value } : {}),
       ...(baths.value !== undefined ? { bathroomsMinimum: baths.value } : {}),
       ...(masters.value !== undefined ? { masterBedroomsMinimum: masters.value } : {}),
@@ -588,6 +591,7 @@ export default function RequirementEditor() {
     ...(showPreferredAmenities ? [`${label('Preferred amenities', 'المزايا المفضلة')}: ${[...new Set([...amenities, ...(driverRoom ? ['driverRoom'] : []), ...excludedAmenities.map(value => `${value}:excluded`), ...services, ...(centralACPreference !== undefined && applicableCoreFields.has('hasCentralAC') ? [`centralAC${centralACPreference ? '' : ':excluded'}`] : []), ...catalog.filter(item => item.kind === 'feature' && amenityCatalogFields.includes(item.field)).map(item => `${item.field}${item.value ? '' : ':excluded'}`)].map(value => value.endsWith(':excluded') ? `${AMENITY_LABELS[value.slice(0, -9)]?.[language === 'ar' ? 'ar' : 'en'] ?? value.slice(0, -9)} (${label('Must not have', 'يجب ألا تتوفر')})` : AMENITY_LABELS[value]?.[language === 'ar' ? 'ar' : 'en'] ?? (value === 'driverRoom' ? label('Driver room', 'غرفة سائق') : label('Selected amenity', 'ميزة محددة'))))].join(', ') || '—'}`] : []),
     `${label('Budget', 'الميزانية')}: ${minimum || '—'}–${maximum || '—'} ${MARKET_CONFIG.currencyCode}`,
     ...(purpose === 'rent' ? [`${label('Cadence', 'الدورية')}: ${cadence === 'daily' ? label('Daily', 'يومياً') : cadence === 'yearly' ? label('Yearly', 'سنوياً') : label('Monthly', 'شهرياً')}`] : []),
+    ...(nearbyServices.length ? [`${label('Nearby services', 'الخدمات القريبة')}: ${nearbyServices.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · ')}`] : []),
     ...(notes.trim() ? [`${label('Notes', 'الملاحظات')}: ${notes}`] : []),
   ];
   catalogInvalidBridge = (field, invalid) => setInvalidCatalogFields(current => {
@@ -773,6 +777,7 @@ export default function RequirementEditor() {
           {coreApplicable && purpose === 'rent' && poolCatalogApplies && <ChoiceChip label={`${poolSelected || poolExcluded ? '✓ ' : ''}${AMENITY_LABELS.swimmingPool[language === 'ar' ? 'ar' : 'en']}${poolExcluded ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={poolSelected || poolExcluded} onPress={togglePool} testID="requirement-service-swimmingPool" role="checkbox" />}
           {applicableCoreFields.has('hasCentralAC') && <ChoiceChip label={`${centralACPreference !== undefined ? '✓ ' : ''}${AMENITY_LABELS.centralAC[language === 'ar' ? 'ar' : 'en']}${centralACPreference === false ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={centralACPreference !== undefined} onPress={() => setCentralACPreference(current => current === undefined ? true : undefined)} testID="requirement-central-ac" role="checkbox" />}
         <RequirementCatalogPreferencesProxy propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} amenities={amenities} onAmenitiesChange={setAmenities} excluded={excludedAmenities} onExcludedChange={setExcludedAmenities} showAmenities={coreApplicable} amenityFields={purpose === 'rent' ? amenityCatalogFields.filter(field => field !== 'hasPool') : amenityCatalogFields} /></View></>}
+       <NearbyServicesSelector values={nearbyServices} onChange={setNearbyServices} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />
      </View>}
     {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <View style={styles.wrap}>{(['daily', 'monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'daily' ? label('Daily', 'يومياً') : value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</View>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{projectRequirementIntent({ purpose }, language).label} · {(propertyType === 'floor' ? getFloorTypeLabel(floorUse, language, t('propertyType.floor')) : t(`propertyType.${propertyType}`))}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}

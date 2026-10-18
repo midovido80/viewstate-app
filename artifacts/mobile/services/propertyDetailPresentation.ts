@@ -92,8 +92,12 @@ const STUDIO_NON_APPLICABLE_TOTALS = new Set([
 ]);
 
 const STUDIO_HIDDEN_LEGACY_AMENITIES = new Set([
-  'hasBalcony',
-  'hasElevator',
+  'hasMaidRoom',
+  'hasLaundryRoom',
+  'hasGarden',
+  'hasHeating',
+  'hasSolarHeater',
+  'hasBBQArea',
 ]);
 
 export function isOfferedStudio(property: Pick<Property, 'core' | 'typeDetails'>): boolean {

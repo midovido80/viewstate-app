@@ -210,7 +210,7 @@ export function prepareStudioPropertyEditCandidate(
   for (const key of [
     'propertyType', 'apartmentSubtype', 'studioRoomCount', 'builtUpAreaSquareMeters',
     'occupancy', 'bathroomCount', 'floorNumber', 'hasKitchen', 'hasHall', 'hasParking',
-    'hasBalcony', 'hasElevator',
+    'hasBalcony', 'hasElevator', 'hasSecurityGuard', 'hasCentralAC', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView',
   ]) delete details[key];
   for (const [key, value] of Object.entries(candidate.typeDetails ?? {})) {
     if (

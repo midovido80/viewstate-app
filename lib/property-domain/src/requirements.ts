@@ -56,6 +56,7 @@ export interface SeekerRequirementBase {
   readonly preferredAreaMode?: RequirementAreaMode;
   readonly budget: SeekerRequirementBudget;
   readonly notes: string;
+  readonly preferredNearbyServices?: readonly string[];
   readonly preferredAmenities?: readonly ResidentialAmenity[];
   readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
   readonly catalogPreferences?: readonly CatalogPreference[];
@@ -144,6 +145,7 @@ const REQUIREMENT_FIELDS = new Set([
   "preferredAreaMode",
   "budget",
   "notes",
+  "preferredNearbyServices",
   "preferredAmenities",
   "preferredAmenityExclusions",
   "catalogPreferences",
@@ -168,10 +170,10 @@ const CATALOG_FEATURE_FIELDS = new Set<PropertyDetailField>([
   "hasMaidRoom", "hasHeating", "hasBalcony", "hasLaundryRoom",
   "hasSolarHeater", "hasElevator", "hasGarden", "hasSecurityGuard",
   "hasBBQArea", "hasPool", "hasWaterfront", "hasColdStorage",
-  "hasKitchen", "hasHall", "hasParking",
+  "hasKitchen", "hasHall", "hasParking", "hasSplitAC", "hasSharedPool", "hasSharedGym", "hasSeaView",
 ]);
 const STUDIO_FEATURE_FIELDS = new Set<PropertyDetailField>([
-  "hasKitchen", "hasHall", "hasParking",
+  "hasKitchen", "hasHall", "hasParking", "hasSplitAC", "hasSharedPool", "hasSharedGym", "hasSeaView",
 ]);
 const CATALOG_NUMBER_RELATIONS: Partial<Record<PropertyDetailField, "minimum" | "exact">> = {
   plotAreaSquareMeters: "minimum",
@@ -544,6 +546,11 @@ export function validateSeekerRequirement(
     });
   }
 
+  if (value.preferredNearbyServices !== undefined && (!Array.isArray(value.preferredNearbyServices)
+    || value.preferredNearbyServices.some(id => typeof id !== "string" || !id.trim())
+    || new Set(value.preferredNearbyServices).size !== value.preferredNearbyServices.length)) {
+    issues.push(issue("invalid_requirement", ["preferredNearbyServices"], "Nearby services must be unique non-empty identifiers."));
+  }
   const budget = value.budget;
   if (!isRecord(budget)) {
     issues.push(issue("invalid_budget", ["budget"], "Budget is required."));
@@ -732,6 +739,7 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(validation.value.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...validation.value.preferredNearbyServices] } : {}),
     ...(source.bedroomsMinimum !== undefined
       ? { bedroomsMinimum: validation.value.bedroomsMinimum }
       : {}),

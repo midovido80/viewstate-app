@@ -15,6 +15,8 @@ export type StudioCatalogFieldId =
   | 'hall'
   | 'parking'
   | 'floorNumber'
+  | 'amenities'
+  | 'nearbyServices'
   | 'description';
 
 export interface StudioCatalogChoice {
@@ -54,6 +56,8 @@ export const STUDIO_FORM_FIELD_ORDER: Readonly<Record<StudioCatalogMode, readonl
     'hall',
     'parking',
     'floorNumber',
+    'amenities',
+    'nearbyServices',
     'description',
   ],
   wanted: [
@@ -68,6 +72,8 @@ export const STUDIO_FORM_FIELD_ORDER: Readonly<Record<StudioCatalogMode, readonl
     'hall',
     'parking',
     'floorNumber',
+    'amenities',
+    'nearbyServices',
     'description',
   ],
 };
@@ -184,6 +190,8 @@ export const STUDIO_FORM_CATALOG: readonly StudioCatalogField[] = [
     label: ['Floor number', 'رقم الطابق'],
     modes: ['offered', 'wanted'],
   },
+  { id: 'amenities', label: ['Amenities', 'مزايا العقار'], modeLabels: { wanted: ['Preferred amenities', 'المزايا المفضلة'] }, modes: ['offered', 'wanted'] },
+  { id: 'nearbyServices', label: ['Nearby services', 'الخدمات القريبة'], modes: ['offered', 'wanted'] },
   {
     id: 'description',
     label: ['Description / notes', 'الوصف / ملاحظات'],

@@ -2389,7 +2389,7 @@ test('Approved Dynamic Details matrix including residential facts validates all 
   }
   assert.deepEqual(
     fieldsFor('apartment', undefined, 'studio'),
-    [...exactFields.apartment.filter(field => field !== 'masterBedroomCount'), 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking'].sort(),
+    [...exactFields.apartment.filter(field => field !== 'masterBedroomCount'), 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'].sort(),
     'Studio apartment adds only its scoped fields',
   );
   assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential].sort());

@@ -1,13 +1,14 @@
 import { Text, TextInput, View, StyleSheet } from 'react-native';
 import type { PropertyType, PropertyCaptureCategoryId, PropertyDemoCaptureMetadata, PropertyDetailField } from '@workspace/property-domain';
 import type { DemoCategoryDefinition } from '@/services/propertyDemoCatalog';
-import { DEMO_NEARBY_SERVICES, parseDemoNumericInput } from '@/services/propertyDemoCatalog';
+import { parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { ModernPropertyFields } from '@/components/ModernPropertyFields';
 import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentFields';
 import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { FLOOR_NUMBER_QUICK_PICK_VALUES } from '@/services/numericQuickPick';
+import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
 import { CommercialComplexSaleFields } from '@/components/CommercialComplexSaleFields';
 import { isCommercialFloorSale } from '@/services/commercialFloorSale';
 
@@ -34,8 +35,9 @@ export interface ModernPropertyFormProps {
 }
 
 export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
-  if (propertyType === 'commercial_complex' && transaction === 'sale') return <CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
-  if (isCommercialFloorSale(propertyType, values.floorUse, transaction)) return <CommercialComplexSaleFields profile="floor" recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
+  const nearbySection = onNearbyChange ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
+  if (propertyType === 'commercial_complex' && transaction === 'sale') return <View><CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
+  if (isCommercialFloorSale(propertyType, values.floorUse, transaction)) return <View><CommercialComplexSaleFields profile="floor" recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
   return (
     <View>
       <ModernPropertyFields
@@ -56,16 +58,12 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
                   {category.features.filter(feature => !isDemoFeatureSuppressed(feature.id, propertyType, values as Record<string, unknown>, (values as Record<string, string>).floorUse)).map(feature => <ChoiceChip key={feature.id} label={feature.label[language === 'ar' ? 1 : 0]} selected={metadata?.selectedFeatures?.includes(feature.id) ?? false} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} />)}
                 </View>
               )}
-              {DEMO_NEARBY_SERVICES.length > 0 && (
-                <>
-                  <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, marginTop: 8 }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
-                  <View style={styles.chips}>{DEMO_NEARBY_SERVICES.map(item => <ChoiceChip key={item.id} label={item.label[language === 'ar' ? 1 : 0]} selected={nearby.includes(item.id)} onPress={() => onNearbyChange?.(nearby.includes(item.id) ? nearby.filter(id => id !== item.id) : [...nearby, item.id])} />)}</View>
-                </>
-              )}
+
             </View>
           ) : null
         }
       />
+      {nearbySection}
       {propertyType === 'other_built_property' ? (
         <View>
           <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'توضيح نوع العقار' : 'Property clarification'}</Text>

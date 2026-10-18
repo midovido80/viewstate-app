@@ -441,7 +441,7 @@ test('BEHAVIOR: wanted budgets and blank optional criteria distinguish valid zer
   assert.equal(validateStudioForm({ ...base, areaSquareMeters: '0' }).ok, false);
 });
 
-test('BEHAVIOR: legacy Balcony and Elevator criteria are read invisibly and omitted from new saves', () => {
+test('BEHAVIOR: legacy Balcony and Elevator criteria reopen and survive new saves', () => {
   const legacyRequirement = {
     id: '55555555-5555-4555-8555-555555555555',
     seekerId: 'seeker-legacy',
@@ -462,7 +462,9 @@ test('BEHAVIOR: legacy Balcony and Elevator criteria are read invisibly and omit
     ...values,
     description: 'Updated without unrelated amenities',
   }, legacyRequirement.id, legacyRequirement.seekerId);
-  assert.equal('preferredAmenities' in saved, false);
+  assert.deepEqual(saved.preferredAmenities, ['elevator', 'balcony']);
+  assert.equal(values.amenitySelections?.hasBalcony, 'required');
+  assert.equal(values.amenitySelections?.hasElevator, 'required');
 });
 
 test('BEHAVIOR: invalid canonical areas and Maps links produce field-specific validation codes', () => {

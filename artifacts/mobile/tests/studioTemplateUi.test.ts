@@ -23,12 +23,12 @@ test('BEHAVIOR: shared Studio catalog supplies both mode-specific sequences and 
   assert.deepEqual(STUDIO_FORM_FIELD_ORDER.offered, [
     'transaction', 'locationAreaId', 'price', 'rentalPeriodId',
     'areaSquareMeters', 'studioRoomCount', 'bathrooms', 'kitchen', 'hall',
-    'parking', 'floorNumber', 'description',
+    'parking', 'floorNumber', 'amenities', 'nearbyServices', 'description',
   ]);
   assert.deepEqual(STUDIO_FORM_FIELD_ORDER.wanted, [
     'locationAreaId', 'budgetMinimum', 'budgetMaximum',
     'rentalPeriodId', 'areaSquareMeters', 'studioRoomCount', 'bathrooms',
-    'kitchen', 'hall', 'parking', 'floorNumber', 'description',
+    'kitchen', 'hall', 'parking', 'floorNumber', 'amenities', 'nearbyServices', 'description',
   ]);
   assert.equal(getStudioCatalogFieldLabel('locationAreaId', 'wanted')[0], 'Preferred area');
   assert.equal(getStudioCatalogFieldLabel('locationAreaId', 'wanted')[1], 'المنطقة المفضلة');

@@ -1,3 +1,6 @@
+import { STUDIO_FEATURES } from '@/services/studioAmenities';
+import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
+import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -1213,6 +1216,18 @@ export default function StudioCaptureRoute() {
         return binaryPreference(fieldId);
       case 'floorNumber':
         return <View key={fieldId}>{textInput('floorNumber', catalogLabel(fieldId), { keyboardType: 'numeric' })}</View>;
+      case 'amenities':
+        return <View key={fieldId} style={styles.field} testID="studio-amenities">
+          <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+          <View style={[styles.chips, { direction: isRTL ? 'rtl' : 'ltr' }]}>{STUDIO_FEATURES.map(item => {
+            const selection = values.amenitySelections?.[item.field];
+            const selected = selection === 'yes' || selection === 'required' || selection === 'no' || selection === 'must_not_have';
+            return <ChoiceChip key={item.field} label={`${item.label[language === 'ar' ? 1 : 0]}${selection === 'no' || selection === 'must_not_have' ? (isRTL ? ' · بدون' : ' · Without') : ''}`} selected={selected}
+              onPress={() => update('amenitySelections', { ...values.amenitySelections, [item.field]: selected ? (mode === 'offered' ? 'unknown' : 'not_important') : (mode === 'offered' ? 'yes' : 'required') })} testID={`studio-amenity-${item.field}`} role="checkbox" />;
+          })}</View>
+        </View>;
+      case 'nearbyServices':
+        return <NearbyServicesSelector key={fieldId} values={values.nearbyServices ?? []} onChange={value => update('nearbyServices', value)} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />;
       case 'description':
         return <View key={fieldId}>{textInput('description', catalogLabel(fieldId), { multiline: true })}</View>;
     }
@@ -1443,6 +1458,13 @@ export default function StudioCaptureRoute() {
         );
       case 'floorNumber':
         return reviewItem(catalogLabel(fieldId), values.floorNumber || '—');
+      case 'amenities':
+        return reviewItem(catalogLabel(fieldId), STUDIO_FEATURES.flatMap(item => {
+          const selected = values.amenitySelections?.[item.field];
+          return selected === 'yes' || selected === 'required' ? [item.label[language === 'ar' ? 1 : 0]] : selected === 'no' || selected === 'must_not_have' ? [`${item.label[language === 'ar' ? 1 : 0]} · ${language === 'ar' ? 'بدون' : 'Without'}`] : [];
+        }).join(' · ') || '—');
+      case 'nearbyServices':
+        return reviewItem(catalogLabel(fieldId), (values.nearbyServices ?? []).map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · ') || '—');
       case 'description':
         return reviewItem(catalogLabel(fieldId), values.description || '—');
     }

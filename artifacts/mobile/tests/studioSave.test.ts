@@ -800,3 +800,17 @@ test('Wanted Studio rejects retired exact-location and attachment fields before 
   assert.equal(memory.requirements.size, 0);
   assert.equal(navigationCount, 0);
 });
+
+
+test('Studio edit clears approved amenities and nearby services while preserving media and map data', () => {
+  const initial = { ...createStudioFormValues('offered', 'rent'), locationAreaId: 'salmiya', price: '450', mapsLink: 'https://maps.google.com/?q=Salmiya', amenitySelections: { hasSharedPool: 'yes' as const, hasBalcony: 'yes' as const }, nearbyServices: ['mosque'] };
+  const baseline = buildStudioProperty(initial, 'studio-extra-edit', 'studio-extra-offer');
+  const read = readStudioProperty(baseline);
+  const built = buildStudioProperty({ ...read, amenitySelections: { ...read.amenitySelections, hasSharedPool: 'unknown', hasBalcony: 'unknown' }, nearbyServices: [] }, baseline.core.id, baseline.activeOffer.id);
+  const candidate = prepareStudioPropertyEditCandidate(baseline, built);
+  assert.equal((candidate.typeDetails as unknown as Record<string, unknown>).hasSharedPool, undefined);
+  assert.equal((candidate.typeDetails as unknown as Record<string, unknown>).hasBalcony, undefined);
+  assert.deepEqual(candidate.nearbyServices, []);
+  assert.deepEqual(candidate.locationEnrichment, baseline.locationEnrichment);
+  assert.equal(validateProperty(candidate).ok, true);
+});

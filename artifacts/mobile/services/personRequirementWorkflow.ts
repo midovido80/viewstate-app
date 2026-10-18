@@ -23,6 +23,7 @@ export interface RequirementFormValues {
   readonly maximumBudget?: number;
   readonly currencyCode: string;
   readonly notes: string;
+  readonly preferredNearbyServices?: readonly string[];
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
   readonly occupancy?: RequirementOccupancy;
@@ -114,6 +115,7 @@ export function buildPersonRequirement(
       currencyCode: values.currencyCode,
     },
     notes: values.notes,
+    ...(values.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...values.preferredNearbyServices] } : {}),
     ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
     ...(values.bathroomsMinimum !== undefined ? { bathroomsMinimum: values.bathroomsMinimum } : {}),
     ...(values.centralAC !== undefined ? { centralAC: values.centralAC } : {}),
@@ -160,6 +162,7 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     maximumBudget: requirement.budget.maximum,
     currencyCode: requirement.budget.currencyCode,
     notes: requirement.notes,
+    ...(requirement.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...requirement.preferredNearbyServices] } : {}),
     ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
     ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),
     ...(requirement.centralAC !== undefined ? { centralAC: requirement.centralAC } : {}),

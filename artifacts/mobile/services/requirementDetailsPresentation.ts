@@ -1,3 +1,4 @@
+import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { CatalogPreference, PropertyDetailField, SeekerRequirement } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
@@ -156,6 +157,9 @@ export function getRequirementDetailsRows(
     formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language));
   add('budget', 'budget.maximum', label('Maximum budget', 'الحد الأقصى للميزانية'),
     formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language));
+  if (requirement.preferredNearbyServices?.length) {
+    add('preferences', 'preferredNearbyServices', label('Nearby services', 'الخدمات القريبة'), requirement.preferredNearbyServices.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · '));
+  }
   if (requirement.notes.length) {
     add('notes', 'notes', label('Notes', 'ملاحظات'), requirement.notes);
   }

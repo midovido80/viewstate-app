@@ -46,8 +46,8 @@ test('Offered Studio is recognized from canonical apartment subtype and omits ge
   assert.equal(details.bathroomCount, 1);
   assert.equal(details.builtUpAreaSquareMeters, 42);
   assert.equal(details.hasKitchen, true);
-  assert.equal(details.hasBalcony, undefined);
-  assert.equal(details.hasElevator, undefined);
+  assert.equal(details.hasBalcony, true);
+  assert.equal(details.hasElevator, true);
   assert.equal(isOfferedStudio({
     ...property,
     core: { ...property.core, propertyType: 'house' },
