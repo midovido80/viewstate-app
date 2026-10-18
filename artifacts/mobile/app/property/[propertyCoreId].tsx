@@ -1,3 +1,5 @@
+import { filterPropertySourcePeople, suggestPropertySourceRole, retainVisibleSourceSelection, type PropertySourceClassificationFilter } from '@/services/propertySourceSelection';
+import { ChoiceChip } from '@/components/ChoiceChip';
 import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged, getSavedPropertyTypeLabel } from '@/services/savedPropertyClassification';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -146,6 +148,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [sourcePeople, setSourcePeople] = useState<Person[]>([]);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [sourcePersonId, setSourcePersonId] = useState('');
+  const [sourceClassification, setSourceClassification] = useState<PropertySourceClassificationFilter>('all');
+  const [sourceSearch, setSourceSearch] = useState('');
   const [sourceRole, setSourceRole] = useState<PropertySourceRole>('owner');
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceConfirmVisible, setSourceConfirmVisible] = useState(false);
@@ -308,6 +312,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     try {
       setSourcePeople(await store.getPeople());
       setSourcePersonId(source?.personId ?? '');
+      setSourceClassification('all');
+      setSourceSearch('');
       setSourceRole(source?.role ?? 'owner');
       setSourceOpen(true);
     } catch {
@@ -315,8 +321,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
+  const visibleSourcePeople = filterPropertySourcePeople(sourcePeople, sourceClassification, sourceSearch);
+  const visibleSourceSelection = retainVisibleSourceSelection(visibleSourcePeople, sourcePersonId);
+
   const saveSource = async () => {
-    if (!id || !sourcePersonId || sourceBusy) return;
+    if (!id || !visibleSourceSelection || sourceBusy) return;
     setSourceBusy(true);
     setError('');
     try {
@@ -1934,40 +1943,64 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={styles.content}>
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.role')}</Text>
-            <View style={styles.options}>
-              {PROPERTY_SOURCE_ROLES.map(role => (
-                <Choice
-                  key={role}
-                  selected={sourceRole === role}
-                  onPress={() => setSourceRole(role)}
-                  title={t(`source.role.${role}`)}
-                  testID={`property-source-role-${role}`}
-                />
-              ))}
+          <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 10 }}>
+            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{language === 'ar' ? 'تصنيف جهة الاتصال' : 'Contact classification'}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', direction: isRTL ? 'rtl' : 'ltr', gap: 8 }} testID="property-source-classification-filters">
+              {(['all', ...PROPERTY_SOURCE_ROLES] as const).map(classification => <ChoiceChip key={classification}
+                label={classification === 'all' ? (language === 'ar' ? 'الكل' : 'All') : t(`source.role.${classification}`)}
+                selected={sourceClassification === classification}
+                onPress={() => {
+                  if (sourceBusy) return;
+                  const next = classification === sourceClassification ? 'all' : classification;
+                  setSourceClassification(next);
+                  setSourcePersonId(retainVisibleSourceSelection(filterPropertySourcePeople(sourcePeople, next, sourceSearch), sourcePersonId));
+                  if (next !== 'all') setSourceRole(next);
+                }} testID={`property-source-filter-${classification}`} role="radio" />)}
             </View>
+            <TextInput value={sourceSearch} onChangeText={query => {
+              setSourceSearch(query);
+              setSourcePersonId(retainVisibleSourceSelection(filterPropertySourcePeople(sourcePeople, sourceClassification, query), sourcePersonId));
+            }} editable={!sourceBusy} placeholder={language === 'ar' ? 'ابحث بالاسم أو رقم الهاتف' : 'Search name or phone'} accessibilityLabel={language === 'ar' ? 'ابحث بالاسم أو رقم الهاتف' : 'Search name or phone'}
+              placeholderTextColor={colors.mutedForeground} testID="property-source-search"
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" testID="property-source-results">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.person')}</Text>
-            {sourcePeople.map(person => (
+            {visibleSourcePeople.map(person => (
               <TouchableOpacity
                 key={person.id}
-                onPress={() => setSourcePersonId(person.id)}
+                disabled={sourceBusy}
+                onPress={() => {
+                  setSourcePersonId(person.id);
+                  setSourceRole(person.id === source?.personId && sourceClassification === 'all' ? source.role : suggestPropertySourceRole(person, sourceClassification, sourceRole));
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: sourcePersonId === person.id }}
                 testID={`property-source-choice-${person.id}`}
                 style={[styles.choice, {
                   borderColor: sourcePersonId === person.id ? colors.primary : colors.border,
-                  backgroundColor: colors.card,
+                  backgroundColor: sourcePersonId === person.id ? colors.primary + '16' : colors.card,
                 }]}
               >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{person.name}</Text>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{person.name}</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{person.displayPhone}</Text>
+                </View>
               </TouchableOpacity>
             ))}
-            {sourcePeople.length === 0 ? (
-              <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{t('source.people_empty')}</Text>
+            {visibleSourcePeople.length === 0 ? (
+              <Text testID="property-source-no-results" style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{sourcePeople.length === 0 ? t('source.people_empty') : language === 'ar' ? 'لا توجد جهات اتصال تطابق التصنيف والبحث المختارين.' : 'No contacts match this classification and search.'}</Text>
             ) : null}
-            <Button title={t('source.save')} onPress={() => void saveSource()} disabled={!sourcePersonId} loading={sourceBusy} testID="property-source-save" />
           </ScrollView>
+          <View style={{ padding: 20, paddingBottom: Math.max(insets.bottom, 20), gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
+            {sourceClassification === 'all' && visibleSourceSelection ? <>
+              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.role')}</Text>
+              <View style={styles.options}>
+                {PROPERTY_SOURCE_ROLES.map(role => <Choice key={role} selected={sourceRole === role} onPress={() => setSourceRole(role)} title={t(`source.role.${role}`)} testID={`property-source-role-${role}`} />)}
+              </View>
+            </> : null}
+            <Button title={t('source.save')} onPress={() => void saveSource()} disabled={!visibleSourceSelection || sourceBusy} loading={sourceBusy} testID="property-source-save" />
+          </View>
         </View>
       </Modal>
 

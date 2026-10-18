@@ -149,7 +149,7 @@ test('person source picker remains role-first and persistence requires an existi
     readFile(sourcePath('../services/persistence.ts'), 'utf8'),
   ]);
   assert.match(detail, /onPress=\{\(\) => setSourceRole\(role\)\}/);
-  assert.match(detail, /sourcePeople\.map\(person =>/);
+  assert.match(detail, /visibleSourcePeople\.map\(person =>/);
   assert.match(persistence, /PROPERTY_SOURCE_TARGET_MISSING/);
 });
 
