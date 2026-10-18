@@ -1,3 +1,4 @@
+import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
 import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { ApartmentSubtype } from '@workspace/property-domain';
@@ -870,14 +871,14 @@ export default function CaptureWorkflow() {
       style={[styles.container, Platform.OS === 'web' ? { width: '100%', maxWidth: 430, alignSelf: 'center' } : null, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
         <View style={[styles.headerRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <TouchableOpacity onPress={handleBack} style={navigationButtonStyle} testID="capture-form-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}>
-            <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
+          <TouchableOpacity onPress={handleBack} style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]} testID="capture-form-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}>
+            <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('home.action.addProperty')}</Text>
-          <TouchableOpacity onPress={() => void goHome()} style={navigationButtonStyle} testID="capture-form-home" disabled={draftSaveStatus === 'saving' || submitting} accessibilityRole="button" accessibilityLabel={t('home.title')}>
-            <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text>
+          <Text numberOfLines={2} style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('home.action.addProperty')}</Text>
+          <TouchableOpacity onPress={() => void goHome()} style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]} testID="capture-form-home" disabled={draftSaveStatus === 'saving' || submitting} accessibilityRole="button" accessibilityLabel={t('home.title')}>
+            <Feather name="home" size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold, fontSize: 13 }]}>{t('home.title')}</Text>
           </TouchableOpacity>
         </View>
         <Text testID={`capture-stage-${stage}`} style={[styles.stageTitle, { color: colors.primary, fontFamily: fonts.semiBold }]}>{header}</Text>
@@ -1231,16 +1232,16 @@ export default function CaptureWorkflow() {
           </View>
         </View>
       </Modal>
-      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {stage === 2 ? <Button title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <Button title={t('capture.back')} onPress={handleBack} variant="navigation" testID="capture-back" />}
-      {stage === 1 ? <Button title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <Button title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <Button title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}
+      <View style={[styles.footer, { flexDirection: isRTL ? 'row' : 'row-reverse', backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {stage === 2 ? <ApprovedAction title={language === 'ar' ? 'حفظ كمسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <ApprovedAction title={t('capture.back')} onPress={handleBack} variant="outline" testID="capture-back" />}
+      {stage === 1 ? <ApprovedAction title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <ApprovedAction title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <ApprovedAction title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 function Section({ title, children, colors, fonts }: any) {
-  return <View style={styles.section}><Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{title}</Text>{children}</View>;
+  return <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.sectionTitle, { color: colors.accent, fontFamily: fonts.bold }]}>{title}</Text>{children}</View>;
 }
 function Check({ selected, colors, multi = false }: any) {
   return <View style={[styles.check, multi && styles.checkSquare, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : 'transparent' }]}>{selected && <Feather name="check" size={13} color={colors.background} />}</View>;
@@ -1311,17 +1312,17 @@ function QuickCount({ field, value, decimal, colors, fonts, error, onValidity, o
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 12, borderBottomWidth: 1 },
-  headerRow: { alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 18 },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1 },
+  headerRow: { alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  title: { flex: 1, minWidth: 0, fontSize: 17, textAlign: 'center' },
   stageTitle: { textAlign: 'center', marginTop: 12, fontSize: 13 },
   steps: { justifyContent: 'center', alignItems: 'center', marginTop: 12 },
   step: { flexDirection: 'row', alignItems: 'center' },
   stepDot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   connector: { width: 40, height: 2, marginHorizontal: 5 },
-  content: { padding: 18 },
+  content: { padding: 16 },
   intro: { lineHeight: 22, marginBottom: 18 },
-  section: { marginBottom: 22 },
+  section: { marginBottom: 16, padding: 16, borderRadius: 18, borderWidth: 1 },
   sectionTitle: { fontSize: 17, marginBottom: 12 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   category: { width: '47%', minHeight: 68, borderWidth: 1, borderRadius: 12, padding: 10, justifyContent: 'flex-start', position: 'relative' },
@@ -1344,7 +1345,7 @@ const styles = StyleSheet.create({
   areaOptionText: { flex: 1, gap: 2 },
   emptyArea: { textAlign: 'center', paddingVertical: 28 },
   textarea: { minHeight: 82, textAlignVertical: 'top', paddingTop: 12 },
-  footer: { borderTopWidth: 1, paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', gap: 10 },
+  footer: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', gap: 12, flexShrink: 0 },
   footerButton: { flex: 1 },
   draftStatusPanel: { borderWidth: 1, borderRadius: 12, marginHorizontal: 18, marginBottom: 8, padding: 12, gap: 8 },
   draftStatusTitle: { fontSize: 15 },

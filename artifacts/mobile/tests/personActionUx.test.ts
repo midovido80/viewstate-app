@@ -121,7 +121,7 @@ test('Link Property modal orders valid role selection before search and requires
   assert.match(modal, /eligibleSourceRoles\.map\(role/);
   assert.match(modal, /selectedSourceRole === role/);
   assert.match(modal, /selectedProperty \? \(/);
-  assert.match(modal, /Confirm linking this property\?/);
+  assert.match(modal, /Selected property/);
   assert.doesNotMatch(modal.slice(choices), /link-source-role-\$\{role\}/);
 
   const link = source.slice(source.indexOf('const link = async () =>'), source.indexOf('const unlink = async'));
@@ -175,4 +175,20 @@ test('Person and Requirement saved confirmation uses neutral success styling', a
   assert.match(confirmation, /borderColor: colors\.success/);
   assert.match(confirmation, /color: colors\.success/);
   assert.doesNotMatch(confirmation, /colors\.accent|colors\.destructive/);
+});
+
+
+test('Property linking keeps final confirmation outside the virtualized property list', async () => {
+  const source = await readFile('app/person/[personId].tsx', 'utf8');
+  const modal = source.slice(source.indexOf('<Modal visible={linkOpen}'), source.indexOf('</Modal>', source.indexOf('<Modal visible={linkOpen}')));
+  const list = modal.indexOf('<FlatList');
+  const footer = modal.indexOf('testID="link-property-fixed-footer"');
+  assert.ok(list >= 0 && footer > list);
+  assert.match(modal.slice(list, footer), /data=\{linkableProperties\}/);
+  assert.match(modal.slice(list, footer), /initialNumToRender=\{12\}/);
+  assert.match(modal.slice(list, footer), /testID=\{`link-property-choice-\$\{property.core.id\}`\}/);
+  assert.match(modal.slice(footer), /testID="link-property-confirm"/);
+  assert.match(modal.slice(footer), /!selectedProperty \|\| !selectedSourceRole \|\| linkBusy/);
+  assert.match(modal.slice(footer), /selectedLinkSummary\?\.valueLabel/);
+  assert.doesNotMatch(modal.slice(footer), /<ScrollView|<FlatList/);
 });
