@@ -52,6 +52,27 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="properties"
+        options={{
+          title: t('properties.title'),
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="building.2" tintColor={color} size={24} />
+            ) : (
+              <Feather name="list" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="matching"
+        options={{
+          title: t('matching.title'),
+          tabBarIcon: ({ color }) => (
+            <Feather name="target" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="people"
         options={{
           title: t('people.title'),
@@ -64,12 +85,15 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="matching"
+        name="more"
         options={{
-          title: t('matching.title'),
-          tabBarIcon: ({ color }) => (
-            <Feather name="target" size={22} color={color} />
-          ),
+          title: t('more.title'),
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="ellipsis" tintColor={color} size={24} />
+            ) : (
+              <Feather name="more-horizontal" size={22} color={color} />
+            ),
         }}
       />
     </Tabs>

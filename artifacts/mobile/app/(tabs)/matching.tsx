@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { SelectCard } from '@/components/SelectCard';
+import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { KUWAIT_AREAS, getAreaById, searchAreas } from '@/constants/kuwait-areas';
@@ -104,8 +105,8 @@ function ChoiceChip({
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.accent : colors.card,
-          borderColor: selected ? colors.turquoise : colors.border,
+          backgroundColor: selected ? colors.primary : colors.card,
+          borderColor: selected ? colors.primary : colors.border,
         },
       ]}
     >
@@ -113,7 +114,7 @@ function ChoiceChip({
         style={[
           styles.chipText,
           {
-            color: selected ? colors.primary : colors.foreground,
+            color: selected ? colors.primaryForeground : colors.foreground,
             fontFamily: fonts.medium,
           },
         ]}
@@ -290,7 +291,9 @@ function ResultCard({
                 {criterion}: {status}
               </Text>
               <Text style={[styles.points, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
-                {explanation.awardedPoints}/{explanation.possiblePoints}
+                {explanation.criterion === 'eligibility' && explanation.possiblePoints === 0
+                  ? status
+                  : `${explanation.awardedPoints}/${explanation.possiblePoints}`}
               </Text>
             </View>
           );
@@ -332,6 +335,7 @@ export default function MatchingScreen() {
   const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const runGenerationRef = useRef(0);
 
   const seekerPeople = useMemo(
     () => people.filter(person => person.classifications.includes('seeker')),
@@ -347,6 +351,12 @@ export default function MatchingScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      runGenerationRef.current += 1;
+      setLoading(false);
+      setRunResult(null);
+      setQuickRequirement(null);
+      setMatchAllGroups(null);
+      setError('');
       Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
         .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
           if (!active) return;
@@ -364,11 +374,14 @@ export default function MatchingScreen() {
         });
       return () => {
         active = false;
+        runGenerationRef.current += 1;
       };
     }, [requestedRequirementId, t]),
   );
 
   const clearRun = () => {
+    runGenerationRef.current += 1;
+    setLoading(false);
     setRunResult(null);
     setQuickRequirement(null);
     setMatchAllGroups(null);
@@ -392,6 +405,7 @@ export default function MatchingScreen() {
   };
 
   const runMatching = async () => {
+    const generation = ++runGenerationRef.current;
     setError('');
     setRunResult(null);
     setLoading(true);
@@ -405,7 +419,9 @@ export default function MatchingScreen() {
           requirements,
           requirementId => matching.runForRequirement(requirementId),
         );
-        setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
+        if (runGenerationRef.current === generation) {
+          setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
+        }
         return;
       }
 
@@ -436,13 +452,31 @@ export default function MatchingScreen() {
           id === transient.value.id ? transient.value : null,
       };
       matching = new BrokerInitiatedMatching(transientStore, candidateSource);
-      setQuickRequirement(transient.value);
-      setRunResult(await matching.runForRequirement(transient.value.id));
+      const result = await matching.runForRequirement(transient.value.id);
+      if (runGenerationRef.current === generation) {
+        setQuickRequirement(transient.value);
+        setRunResult(result);
+      }
     } catch (runError) {
       console.error(runError);
-      setError(t('matching.run_failed'));
+      if (runGenerationRef.current === generation) setError(t('matching.run_failed'));
     } finally {
-      setLoading(false);
+      if (runGenerationRef.current === generation) setLoading(false);
+    }
+  };
+
+  const openMatchedProperty = async (propertyId: string) => {
+    try {
+      if (!await store.getProperty(propertyId)) {
+        setError(t('matching.property_missing'));
+        setRunResult(null);
+        setQuickRequirement(null);
+        setMatchAllGroups(null);
+        return;
+      }
+      router.push(`/property/${encodeURIComponent(propertyId)}` as never);
+    } catch {
+      setError(t('matching.load_failed'));
     }
   };
 
@@ -453,10 +487,11 @@ export default function MatchingScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <PrimaryTabHeader title={t('matching.title')} />
       <KeyboardAwareScrollViewCompat
         style={styles.scroll}
         contentContainerStyle={{
-          paddingTop: topInset + 16,
+          paddingTop: 16,
           paddingBottom: insets.bottom + 112,
           paddingHorizontal: 20,
         }}
@@ -466,24 +501,10 @@ export default function MatchingScreen() {
       >
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.title')}
-            </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.subtitle')}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={toggleLanguage}
-            style={[styles.langButton, { borderColor: colors.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={language === 'en' ? 'عربي' : 'EN'}
-            testID="matching-language-toggle"
-          >
-            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
-              {language === 'en' ? 'عربي' : 'EN'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>
@@ -803,7 +824,7 @@ export default function MatchingScreen() {
                       rank={index + 1}
                       requirement={requirementGroup.requirement}
                       property={properties.find(item => item.core.id === result.propertyId)}
-                      onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
+                      onPress={() => void openMatchedProperty(result.propertyId)}
                     />
                   )))}
               </View>
@@ -847,7 +868,7 @@ export default function MatchingScreen() {
                   rank={index + 1}
                   requirement={quickRequirement}
                   property={properties.find(item => item.core.id === result.propertyId)}
-                  onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
+                  onPress={() => void openMatchedProperty(result.propertyId)}
                 />
               ))
             ) : (
