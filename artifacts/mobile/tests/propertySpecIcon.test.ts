@@ -21,7 +21,7 @@ registerHooks({
 
 test('Every numeric Property icon renders with font loading unavailable', async () => {
   const { PropertySpecIcon } = await import('../components/PropertySpecIcon.tsx');
-  for (const name of ['bed-outline', 'shower', 'sofa-outline', 'car', 'stairs', 'set-square', 'percent'] as const) {
+  for (const name of ['bed-outline', 'shower', 'sofa-outline', 'car', 'stairs', 'set-square', 'percent', 'master-bedroom', 'users', 'calendar', 'money', 'building'] as const) {
     const icon = PropertySpecIcon({ name, color: '#173F78', size: 24 });
     assert.equal(icon.type, 'Svg');
     assert.equal(icon.props.width, 24);
@@ -36,5 +36,7 @@ test('Every numeric Property icon renders with font loading unavailable', async 
 test('Saved Property specifications never mount the additional icon-font family', async () => {
   const source = await readFile(resolveSourcePath('../app/property/[propertyCoreId].tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /MaterialCommunityIcons/);
-  assert.match(source, /<PropertySpecIcon name=\{spec.icon\}/);
+  assert.match(source, /<CompactPropertySpecs specs=\{compactSpecs\}/);
+  const compact = await readFile(resolveSourcePath('../components/CompactPropertySpecs.tsx', import.meta.url), 'utf8');
+  assert.match(compact, /<PropertySpecIcon name=\{spec.icon\}/);
 });

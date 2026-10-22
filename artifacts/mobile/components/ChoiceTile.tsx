@@ -13,11 +13,11 @@ export function ChoiceCard({ title, icon, selected, onSelect, testID }: { title:
 }
 
 /** One measured grid shared by ordinary, conditional and inline catalog choices. */
-export function ChoiceGrid({ children, testID, style }: { children: ReactNode; testID?: string; style?: StyleProp<ViewStyle> }) {
+export function ChoiceGrid({ children, testID, style, columns = 2, gap = CHOICE_GRID_GAP }: { children: ReactNode; testID?: string; style?: StyleProp<ViewStyle>; columns?: 2 | 3; gap?: number }) {
   const { isRTL } = useI18n();
   const [width, setWidth] = useState<number>();
-  return <View testID={testID} onLayout={event => setWidth(choiceTileWidth(event.nativeEvent.layout.width))}
-    style={[style, styles.grid, { direction: isRTL ? 'rtl' : 'ltr' }]}>
+  return <View testID={testID} onLayout={event => setWidth(choiceTileWidth(event.nativeEvent.layout.width, columns, gap))}
+    style={[style, styles.grid, { gap, direction: isRTL ? 'rtl' : 'ltr' }]}>
     <GridWidth.Provider value={width}>{children}</GridWidth.Provider>
   </View>;
 }
@@ -42,12 +42,12 @@ export function ChoiceTile({ label, selected, onPress, testID, accessibilityLabe
 }
 
 /** Saved facts have no checkbox or press handler; unknown values are filtered by callers. */
-export function ChoiceFact({ label, optionId, testID }: { label: string; optionId?: string; testID?: string }) {
+export function ChoiceFact({ label, optionId, testID, compact = false, vertical = false }: { label: string; optionId?: string; testID?: string; compact?: boolean; vertical?: boolean }) {
   const width = useContext(GridWidth);
   const { isRTL, fonts } = useI18n();
-  return <View testID={testID} style={[styles.tile, styles.fact, { width: width ?? '47%', flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+  return <View testID={testID} style={[styles.tile, styles.fact, compact && { minHeight: vertical ? 48 : 38, paddingVertical: 6, paddingHorizontal: 7, borderRadius: 8, borderWidth: 0 }, { width: width ?? '47%', flexDirection: vertical ? 'column' : compact ? (isRTL ? 'row' : 'row-reverse') : (isRTL ? 'row-reverse' : 'row') }]}>
     <Feather name={choiceIcon(label, optionId)} size={21} color="#173F78" accessible={false} />
-    <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{label}</Text>
+    <Text style={[styles.label, compact && { fontSize: 13, lineHeight: 19 }, vertical && { flex: 0, textAlign: 'center' }, { color: '#173F78', fontFamily: fonts.medium, textAlign: vertical ? 'center' : isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{label}</Text>
   </View>;
 }
 

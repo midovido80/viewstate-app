@@ -1,9 +1,9 @@
 /** Presentation only: never derives or changes a persisted selection. */
 export const CHOICE_GRID_GAP = 8;
 
-export function choiceTileWidth(containerWidth: number): number | undefined {
-  return Number.isFinite(containerWidth) && containerWidth > CHOICE_GRID_GAP
-    ? (containerWidth - CHOICE_GRID_GAP) / 2
+export function choiceTileWidth(containerWidth: number, columns: 2 | 3 = 2, gap = CHOICE_GRID_GAP): number | undefined {
+  return Number.isFinite(containerWidth) && containerWidth > gap * (columns - 1)
+    ? (containerWidth - gap * (columns - 1)) / columns
     : undefined;
 }
 

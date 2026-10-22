@@ -1,4 +1,6 @@
-import { PropertySpecIcon, type PropertySpecIconName } from '@/components/PropertySpecIcon';
+import { CompactPropertySpecs } from '@/components/CompactPropertySpecs';
+import { compactPropertySpecs } from '@/services/compactPropertyDetails';
+import { type PropertySpecIconName } from '@/components/PropertySpecIcon';
 import { ApprovedAction, approvedNavigationStyle, approvedActionStyle } from '@/components/ApprovedActions';
 import { filterPropertySourcePeople, suggestPropertySourceRole, retainVisibleSourceSelection, type PropertySourceClassificationFilter } from '@/services/propertySourceSelection';
 import { ChoiceChip } from '@/components/ChoiceChip';
@@ -1180,7 +1182,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const visibleContent = getPropertyDetailVisibleContent(property);
 
   const galleryImages = (property?.attachments ?? []).filter(a => a.kind === 'image');
-  const galleryPageWidth = Dimensions.get('window').width - 32;
+  const galleryPageWidth = Dimensions.get('window').width - 24;
   const otherFiles = (property?.attachments ?? []).filter(a => a.kind !== 'image');
 
   const handleShare = () => {
@@ -1315,11 +1317,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     : [];
   const propertySupplementalDetails = [...supplementalDetails, ...categoryDetails, ...studioFacilityDetails, ...studioAreaDetails];
   const nearbyServicesTextList = property.nearbyServices?.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id) ?? [];
+  const compactSpecs = compactPropertySpecs([
+    ...numericSpecTiles,
+    ...propertySupplementalDetails.map(item => ({ fieldId: item.field, label: item.label, value: item.value })),
+    ...(floorYield === undefined ? [] : [{ fieldId: 'grossAnnualRentalYield', label: language === 'ar' ? 'العائد السنوي الإجمالي' : 'Gross annual yield', value: `${floorYield.toFixed(2)}%` }]),
+  ], language, property.core.propertyType);
+  const compactLocation = [areaName(property.core.locationArea.id), property.core.block ? `${language === 'ar' ? 'قطعة' : 'Block'} ${property.core.block}` : ''].filter(Boolean).join(' · ');
+  const descriptionText = locationDisplay.find(item => item.field === 'description')?.value;
+
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       {mode === 'detail' ? (
-        <View testID="property-approved-header" style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 12, flexDirection: isRTL ? 'row' : 'row-reverse', alignItems: 'center', gap: 12 }}>
+        <View testID="property-approved-header" style={{ backgroundColor: colors.background, paddingHorizontal: 12, paddingVertical: 8, direction: 'ltr', flexDirection: isRTL ? 'row' : 'row-reverse', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity onPress={() => router.replace('/' as never)} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'} testID="property-home-action" style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>
             <Feather name="home" size={18} color="#FFFFFF" />
             <Text style={{ color: '#FFFFFF', fontFamily: fonts.semiBold, fontSize: 13 }}>{language === 'ar' ? 'الرئيسية' : 'Home'}</Text>
@@ -1360,7 +1370,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       )}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 20 } : styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
         {error ? <Text testID="property-edit-error" style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}>{error}</Text> : null}
         {pendingOperation && (recoveryStatus === 'retry_required' || recoveryStatus === 'update_failed') ? (
           <Button title={t('edit.retry_update')} onPress={() => void retryRecovery(true)} loading={saving} testID="property-update-retry" />
@@ -1371,142 +1381,57 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
         {mode === 'detail' ? (
           <>
-            <View style={{ paddingHorizontal: 16, gap: 16 }}>
-              <View testID="property-identity-card" style={{ backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.border, flexDirection: isRTL ? 'row' : 'row-reverse', alignItems: 'center', gap: 12 }}>
-                {identityImage && (Platform.OS !== 'web' || galleryImageSources[identityImage.id]) ? <TouchableOpacity onPress={() => void openPropertyAttachment(identityImage)} accessibilityRole="button" accessibilityLabel={t('detail.expand_photo')} testID="property-identity-image" style={{ width: 108, height: 112, borderRadius: 12, overflow: 'hidden' }}>
-                  <Image source={{ uri: Platform.OS === 'web' ? galleryImageSources[identityImage.id] : identityImage.managedUri }} style={{ width: 108, height: 112, resizeMode: 'cover' }} />
-                </TouchableOpacity> : null}
-                <View style={{ flex: 1, minWidth: 0, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
-                  <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 22, paddingRight: isRTL ? 36 : 0, paddingLeft: isRTL ? 0 : 36, textAlign: isRTL ? 'right' : 'left' }}>{savedTypeLabel}</Text>
-                  <View style={{ marginTop: 8, borderWidth: 1, borderColor: propertyIntent.valid ? colors.primary : colors.destructive, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 }}>
-                    <Text style={{ color: propertyIntent.valid ? colors.primary : colors.destructive, fontFamily: fonts.semiBold, fontSize: 13 }}>{propertyIntent.label}</Text>
+            <View style={{ paddingHorizontal: 12, gap: 8 }}>
+              <View testID="property-identity-card" style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                  <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 21, lineHeight: 28, textAlign: isRTL ? 'right' : 'left' }}>{savedTypeLabel}</Text>
+                  <View style={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', backgroundColor: '#EFF6FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ color: propertyIntent.valid ? '#173F78' : colors.destructive, fontFamily: fonts.semiBold, fontSize: 13 }}>{propertyIntent.label}</Text>
                   </View>
-               {shownPrice !== undefined ? (
-                 <View style={{ marginTop: 12, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-                   <Text style={{ color: colors.primary, fontFamily: fonts.bold, fontSize: 26, flexShrink: 1 }}>
-                     {propertyIntent.id === 'offered_rent'
-                       ? formatRentalPrice(shownPrice, 'KWD', shownRentalPeriodId, language, t)
-                       : formatPrice(shownPrice, 'KWD', language)}
-                   </Text>
-                   {propertyIntent.id === 'offered_rent' && (
-                     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 15 }}>
-                       {formatRentalCadence(shownRentalPeriodId, t)}
-                     </Text>
-                   )}
-                 </View>
-               ) : null}
+                  <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
+                    <Feather name="map-pin" size={16} color="#173F78" />
+                    <Text testID="property-compact-location" style={{ flex: 1, color: '#173F78', fontFamily: fonts.medium, fontSize: 13, lineHeight: 19, textAlign: isRTL ? 'right' : 'left' }}>{compactLocation}</Text>
+                  </View>
                 </View>
-                <View testID="property-favorite-icon" style={{ width: 36, height: 36, position: 'absolute', top: 12, right: isRTL ? 12 : undefined, left: isRTL ? undefined : 12, borderRadius: 18, backgroundColor: '#FFF1F2', alignItems: 'center', justifyContent: 'center' }}>
-                  <Feather name="heart" size={22} color={colors.accent} />
-                </View>
+                {shownPrice !== undefined ? <View style={{ flexShrink: 1, maxWidth: '46%', gap: 3 }}>
+                  <Text testID="property-compact-price" style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 24, lineHeight: 31, textAlign: isRTL ? 'left' : 'right' }}>{formatPrice(shownPrice, 'KWD', language)}</Text>
+                  {propertyIntent.id === 'offered_rent' ? <Text testID="property-compact-cadence" style={{ color: '#64748B', fontFamily: fonts.medium, fontSize: 13, textAlign: isRTL ? 'left' : 'right' }}>{formatRentalCadence(shownRentalPeriodId, t)}</Text> : null}
+                </View> : null}
               </View>
 
-              <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <Feather name="map-pin" size={20} color={colors.primary} />
-                  <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18 }}>
-                    {language === 'ar' ? 'الموقع' : 'Location'}
-                  </Text>
+              <CompactPropertySpecs specs={compactSpecs} />
+
+              {availableFeatures.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
+                <Text style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}</Text>
+                <ChoiceGrid gap={6}>
+                  {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} compact />)}
+                </ChoiceGrid>
+              </View>}
+
+              {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
+                <Text style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
+                <ChoiceGrid columns={3} gap={6}>
+                  {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} compact vertical />)}
+                </ChoiceGrid>
+              </View>}
+
+              <View testID="property-compact-source" style={{ backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#E2E8F0', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="user" size={19} color="#173F78" />
+                <Text style={{ color: '#AE313B', fontFamily: fonts.semiBold, fontSize: 13, maxWidth: '28%', textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {sourcePerson ? <>
+                    <Text testID="property-source-person" style={{ color: '#173F78', fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
+                    <Text style={{ color: '#64748B', fontFamily: fonts.regular, fontSize: 11, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source?.role}` as any)}</Text>
+                  </> : <Text style={{ color: '#64748B', fontFamily: fonts.regular, fontSize: 13, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'غير مرتبط' : 'Not linked'}</Text>}
                 </View>
-                <View style={{ gap: 10 }}>
-                  {locationDisplay.map(item => item.field === 'description' ? (
-                    <View key={item.field} style={{ gap: 6 }}>
-                      <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>
-                        {t('enrich.description')}
-                      </Text>
-                      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 15, lineHeight: 24, textAlign: isRTL ? 'right' : 'left' }}>
-                        {item.value}
-                      </Text>
-                    </View>
-                  ) : (
-                    <DetailRow
-                      key={item.field}
-                      label={t(`detail.${item.field}` as keyof Translations)}
-                      value={item.value}
-                    />
-                  ))}
-                </View>
+                <TouchableOpacity onPress={() => void openSource()} accessibilityRole="button" accessibilityLabel={sourcePerson ? t('source.change') : t('source.choose')} testID="property-source-change" style={{ minHeight: 40, minWidth: 48, paddingHorizontal: 8, borderWidth: 1, borderColor: '#2474D6', borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#2474D6', fontFamily: fonts.semiBold, fontSize: 13 }}>{sourcePerson ? (language === 'ar' ? 'تغيير' : 'Change') : (language === 'ar' ? 'ربط' : 'Link')}</Text>
+                </TouchableOpacity>
+                {sourcePerson && <TouchableOpacity onPress={() => setSourceConfirmVisible(true)} accessibilityRole="button" accessibilityLabel={t('source.unlink')} testID="property-source-unlink" style={{ minHeight: 44, minWidth: 32, alignItems: 'center', justifyContent: 'center' }}><Feather name="link-2" size={18} color={colors.destructive} /></TouchableOpacity>}
               </View>
-
-              {numericSpecTiles.length > 0 && (
-                <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 20, padding: 16, gap: 12 }}>
-                  <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'مواصفات العقار' : 'Property specifications'}</Text>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 12 }}>
-                    {numericSpecTiles.map(spec => <View key={spec.fieldId} style={{ backgroundColor: colors.background, borderRadius: 12, padding: 12, flexBasis: '45%', flexGrow: 1, minWidth: 0, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-                      <PropertySpecIcon name={spec.icon} size={24} color={colors.primary} />
-                      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                        <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{spec.label}</Text>
-                        <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, fontSize: 16, textAlign: isRTL ? 'right' : 'left' }}>{spec.value}</Text>
-                      </View>
-                    </View>)}
-                  </View>
-                </View>
-              )}
-
-              {propertySupplementalDetails.length > 0 && (
-                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18, marginBottom: 8, textAlign: isRTL ? 'right' : 'left' }}>
-                    {language === 'ar' ? 'تفاصيل العقار' : 'Property details'}
-                  </Text>
-                  {propertySupplementalDetails.map(item => <DetailRow key={item.field} label={item.label} value={item.value} />)}
-                  {floorYield !== undefined && <DetailRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي (%)' : 'Gross annual rental yield (%)'} value={`${floorYield.toFixed(2)}%`} />}
-                </View>
-              )}
-
-              {availableFeatures.length > 0 && (
-                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <Feather name="check-circle" size={20} color={colors.primary} />
-                    <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18 }}>
-                      {language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}
-                    </Text>
-                  </View>
-                  <ChoiceGrid>
-                    {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} />)}
-                  </ChoiceGrid>
-                </View>
-              )}
-
-              <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 16 }}>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10 }}>
-                    <Feather name="user" size={20} color={colors.primary} />
-                    <View>
-                      <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18, textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
-                      <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 14, textAlign: isRTL ? 'right' : 'left' }}>{t('source.private')}</Text>
-                    </View>
-                  </View>
-                </View>
-                {sourcePerson ? (
-                  <View style={{ gap: 8 }}>
-                    <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 16, textAlign: isRTL ? 'right' : 'left' }} testID="property-source-person">{sourcePerson.name}</Text>
-                     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 14, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source?.role}` as any)}</Text>
-                    <TouchableOpacity onPress={() => setSourceConfirmVisible(true)} accessibilityRole="button" testID="property-source-unlink" style={{ marginTop: 8, padding: 10, borderWidth: 1, borderColor: colors.destructive, borderRadius: 10 }}>
-                      <Text style={{ color: colors.destructive, fontFamily: fonts.semiBold, textAlign: 'center' }}>{t('source.unlink')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{t('source.none')}</Text>
-                )}
-                <View style={{ marginTop: 12 }}><ApprovedAction title={sourcePerson ? t('source.change') : t('source.choose')} onPress={() => void openSource()} variant="outline" icon="repeat" testID="property-source-change" style={{ flex: 0 }} /></View>
-              </View>
-
-              {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && (
-                <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <Feather name="map" size={20} color={colors.primary} />
-                    <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18 }}>
-                      {language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}
-                    </Text>
-                  </View>
-                  <ChoiceGrid>
-                    {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} />)}
-                  </ChoiceGrid>
-                </View>
-              )}
 
               {(detailMapsHref || property.locationEnrichment?.coordinates) ? (
-              <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 10, padding: 0, borderWidth: 1, borderColor: '#2474D6' }}>
                 {Platform.OS === 'web' ? detailMapsHref ? (
                   <a
                     href={detailMapsHref}
@@ -1514,10 +1439,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     rel="noopener noreferrer"
                     data-testid="property-maps-action"
                     aria-label={language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
-                    style={{ backgroundColor: colors.foreground, borderRadius: 16, padding: 14, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, color: colors.background, textDecoration: 'none' }}
+                    style={{ backgroundColor: '#FFFFFF', borderRadius: 10, minHeight: 40, padding: 8, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, color: '#2474D6', textDecoration: 'none' }}
                   >
-                    <Feather name="map" size={20} color={colors.background} />
-                    <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
+                    <Feather name="map" size={20} color="#2474D6" />
+                    <Text style={{ color: '#2474D6', fontFamily: fonts.bold, fontSize: 14 }}>
                       {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
                     </Text>
                   </a>
@@ -1526,17 +1451,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     testID="property-maps-action"
                     accessibilityRole="button"
                     accessibilityState={{ disabled: true }}
-                    style={{ backgroundColor: colors.foreground, borderRadius: 16, padding: 14, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, opacity: 0.55 }}
+                    style={{ backgroundColor: '#FFFFFF', borderRadius: 10, minHeight: 40, padding: 8, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, opacity: 0.55 }}
                   >
-                    <Feather name="map" size={20} color={colors.background} />
-                    <Text style={{ color: colors.background, fontFamily: fonts.bold, fontSize: 16 }}>
+                    <Feather name="map" size={20} color="#2474D6" />
+                    <Text style={{ color: '#2474D6', fontFamily: fonts.bold, fontSize: 14 }}>
                       {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
                     </Text>
                   </View>
                 ) : (
-                  <LocationAttachmentRow>
-                    <LocationAttachmentButton icon="map" label={language === 'ar' ? 'عرض على الخريطة' : 'View on map'} onPress={openDetailMapsLink} testID="property-maps-action" />
-                  </LocationAttachmentRow>
+                  <TouchableOpacity onPress={openDetailMapsLink} accessibilityRole="button" testID="property-maps-action" style={{ minHeight: 40, direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="map" size={20} color="#2474D6" /><Text style={{ color: '#2474D6', fontFamily: fonts.semiBold, fontSize: 14 }}>{language === 'ar' ? 'عرض على الخريطة' : 'View on map'}</Text>
+                  </TouchableOpacity>
                 )}
                 {mapsActionError ? (
                   <Text
@@ -1550,9 +1475,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
               ) : null}
 
+              {descriptionText ? <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 }}>
+                <Text style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.description')}</Text>
+                <Text style={{ color: '#173F78', fontFamily: fonts.regular, fontSize: 14, lineHeight: 22, textAlign: isRTL ? 'right' : 'left' }}>{descriptionText}</Text>
+              </View> : null}
+
             {shouldShowPropertyGallery(galleryImages.length) ? (
-              <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
-                  <View style={{ height: 260, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
+              <View style={{ paddingBottom: 4 }}>
+                  <View style={{ height: 180, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
                   <ScrollView
                     horizontal
                     pagingEnabled
@@ -1579,9 +1509,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   >
                     {galleryImages.map(img => (
                       (Platform.OS !== 'web' || galleryImageSources[img.id]) ? (
-                        <Image key={img.id} source={{ uri: Platform.OS === 'web' ? galleryImageSources[img.id] : img.managedUri }} style={{ width: galleryPageWidth, height: 260, resizeMode: 'cover' }} />
+                        <Image key={img.id} source={{ uri: Platform.OS === 'web' ? galleryImageSources[img.id] : img.managedUri }} style={{ width: galleryPageWidth, height: 180, resizeMode: 'cover' }} />
                       ) : (
-                        <View key={img.id} style={{ width: galleryPageWidth, height: 260, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                        <View key={img.id} style={{ width: galleryPageWidth, height: 180, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
                           {galleryResolutionError ? (
                             <Text
                               accessibilityRole="alert"
@@ -1622,7 +1552,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             ) : null}
 
             {otherFiles.length > 0 && (
-              <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+              <View style={{ marginBottom: 4 }}>
                 <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                   <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <Feather name="paperclip" size={20} color={colors.primary} />
@@ -2209,7 +2139,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       </Modal>
 
       {mode === 'detail' && (
-        <View style={{ flexShrink: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 12, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }}>
+        <View style={{ flexShrink: 0, paddingHorizontal: 12, paddingBottom: Math.max(insets.bottom, 10), paddingTop: 8, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: colors.border, direction: 'ltr', flexDirection: isRTL ? 'row' : 'row-reverse', gap: 10 }}>
           {Platform.OS === 'web' ? (
             <Link
               href={getPropertyDetailActionHref(property.core.id, 'share') as never}
