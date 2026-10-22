@@ -1,3 +1,4 @@
+import { PropertySpecIcon, type PropertySpecIconName } from '@/components/PropertySpecIcon';
 import { ApprovedAction, approvedNavigationStyle, approvedActionStyle } from '@/components/ApprovedActions';
 import { filterPropertySourcePeople, suggestPropertySourceRole, retainVisibleSourceSelection, type PropertySourceClassificationFilter } from '@/services/propertySourceSelection';
 import { ChoiceChip } from '@/components/ChoiceChip';
@@ -73,7 +74,7 @@ import {
   savePropertyEditDraft,
 } from '@/services/propertyUpdateRecovery';
 import { Alert } from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import {
   applyPropertyTransition,
   createTransactionTransitionProposal,
@@ -1223,19 +1224,19 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const identityImage = galleryImages.find(image => image.isCover) ?? galleryImages[0];
   const editTitle = language === 'ar' ? `تعديل تفاصيل ${savedTypeLabel}` : `Edit ${savedTypeLabel} Details`;
 
-  const numericSpecTiles: { fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons', label: string }[] = [];
-  const addSpec = (fieldId: string, value: string | number | boolean, icon: any, family: 'Feather' | 'MaterialCommunityIcons') => {
-    numericSpecTiles.push({ fieldId, value, icon, family, label: propertyDetailLabels[fieldId as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? fieldId });
+  const numericSpecTiles: { fieldId: string, value: string | number | boolean, icon: PropertySpecIconName, label: string }[] = [];
+  const addSpec = (fieldId: string, value: string | number | boolean, icon: PropertySpecIconName) => {
+    numericSpecTiles.push({ fieldId, value, icon, label: propertyDetailLabels[fieldId as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? fieldId });
   };
   if (offeredStudio) {
-    addSpec('studioRoomCount', 1, 'bed-outline', 'MaterialCommunityIcons');
+    addSpec('studioRoomCount', 1, 'bed-outline');
     numericSpecTiles[numericSpecTiles.length - 1].label = language === 'ar' ? 'غرفة مفتوحة' : 'Open room';
-  } else if (propertyFacts.templateFacts.bedroomCount !== undefined) addSpec('bedroomCount', propertyFacts.templateFacts.bedroomCount, 'bed-outline', 'MaterialCommunityIcons');
-  if (propertyFacts.templateFacts.bathroomCount !== undefined) addSpec('bathroomCount', propertyFacts.templateFacts.bathroomCount, 'shower', 'MaterialCommunityIcons');
-  if (propertyFacts.templateFacts.livingRoomCount !== undefined) addSpec('livingRoomCount', propertyFacts.templateFacts.livingRoomCount, 'sofa-outline', 'MaterialCommunityIcons');
-  if (propertyFacts.templateFacts.parkingSpaceCount !== undefined) addSpec('parkingSpaceCount', propertyFacts.templateFacts.parkingSpaceCount, 'car', 'MaterialCommunityIcons');
-  if (propertyFacts.templateFacts.floorNumber !== undefined) addSpec('floorNumber', propertyFacts.templateFacts.floorNumber, 'stairs', 'MaterialCommunityIcons');
-  if (!offeredStudio && propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square', 'MaterialCommunityIcons');
+  } else if (propertyFacts.templateFacts.bedroomCount !== undefined) addSpec('bedroomCount', propertyFacts.templateFacts.bedroomCount, 'bed-outline');
+  if (propertyFacts.templateFacts.bathroomCount !== undefined) addSpec('bathroomCount', propertyFacts.templateFacts.bathroomCount, 'shower');
+  if (propertyFacts.templateFacts.livingRoomCount !== undefined) addSpec('livingRoomCount', propertyFacts.templateFacts.livingRoomCount, 'sofa-outline');
+  if (propertyFacts.templateFacts.parkingSpaceCount !== undefined) addSpec('parkingSpaceCount', propertyFacts.templateFacts.parkingSpaceCount, 'car');
+  if (propertyFacts.templateFacts.floorNumber !== undefined) addSpec('floorNumber', propertyFacts.templateFacts.floorNumber, 'stairs');
+  if (!offeredStudio && propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square');
 
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
@@ -1432,7 +1433,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'مواصفات العقار' : 'Property specifications'}</Text>
                   <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 12 }}>
                     {numericSpecTiles.map(spec => <View key={spec.fieldId} style={{ backgroundColor: colors.background, borderRadius: 12, padding: 12, flexBasis: '45%', flexGrow: 1, minWidth: 0, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-                      {spec.family === 'Feather' ? <Feather name={spec.icon} size={24} color={colors.primary} /> : <MaterialCommunityIcons name={spec.icon} size={24} color={colors.primary} />}
+                      <PropertySpecIcon name={spec.icon} size={24} color={colors.primary} />
                       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                         <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{spec.label}</Text>
                         <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, fontSize: 16, textAlign: isRTL ? 'right' : 'left' }}>{spec.value}</Text>
