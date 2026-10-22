@@ -63,5 +63,5 @@ test('capture routes save first and offer one authoritative post-save linking de
   assert.match(personDetails, /loadState === 'loading'/);
   assert.doesNotMatch(personDetails, /error \|\| t\('people\.not_found'\)/);
   assert.match(summary, /getPropertyCardSummary\(previewProperty/);
-  assert.match(summary, /value=\{previewSubtypeLabel\}/);
+  assert.match(summary, /propertyLabel=\{previewSubtypeLabel \?\?/);
 });
