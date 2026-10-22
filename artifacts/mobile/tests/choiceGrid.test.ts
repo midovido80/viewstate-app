@@ -118,7 +118,7 @@ test('Area and Block stay in reading order, share a row, and stack for enlarged 
 
 test('Form cards do not add press handlers or alter their field controls', async () => {
   const { PropertyFormCard } = await import('../components/PropertyFormCard.tsx');
-  const control = { type: 'TextInput', props: { value: '500', onChangeText: () => undefined } };
+  const control = { type: 'TextInput', key: null, props: { value: '500', onChangeText: () => undefined } };
   const card = PropertyFormCard({ title: 'المواصفات', children: control });
   assert.equal(card.props.onPress, undefined);
   assert.equal(card.props.children[1], control);

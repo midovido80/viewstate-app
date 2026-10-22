@@ -337,7 +337,7 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
     },
   });
   assert.match(price, /apartmentSubtype\?: string/);
-  assert.match(price, /pathname: '\/capture\/location'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
+  assert.match(price, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
   assert.match(location, /apartmentSubtype\?: string/);
   assert.match(location, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
   assert.match(summary, /isBasicApartmentFollowUpCapture\(\s*draft\.propertyType,\s*apartmentSubtype,\s*captureDetails\.apartmentSubtype/);
