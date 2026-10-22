@@ -269,7 +269,7 @@ test('Requirement return navigation guards destructive click-through on Person d
 test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   const scrollEnd = source.indexOf('</KeyboardAwareScrollViewCompat>');
-   const footerStart = source.indexOf('<View style={styles.footer');
+   const footerStart = source.search(/<View style=\{\[?styles\.footer/);
 
   assert.match(source, /paddingTop:\s*insets\.top/);
   assert.match(source, /<KeyboardAvoidingView behavior="padding" style=\{styles\.body\}>/);
