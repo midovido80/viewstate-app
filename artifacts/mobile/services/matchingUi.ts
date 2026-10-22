@@ -53,6 +53,7 @@ export function validMatchingRequirements(
   requirements: readonly SeekerRequirement[],
 ): SeekerRequirement[] {
   return requirements.flatMap(requirement => {
+    if (!requirement.seekerId) return [];
     const validation = validateSeekerRequirement(requirement, {
       isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
     });
@@ -85,6 +86,7 @@ export function groupMatchAllResultsByPerson(
 
   for (const requirement of requirements) {
     const run = runsByRequirementId.get(requirement.id);
+    if (!requirement.seekerId) continue;
     const person = peopleById.get(requirement.seekerId);
     if (!run?.matches.length || !person) continue;
     const existing = groups.get(person.id);

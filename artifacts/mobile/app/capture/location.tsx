@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
@@ -12,9 +12,13 @@ import { KUWAIT_AREAS, Area, getAreaById, searchAreas } from '@/constants/kuwait
 
 export default function LocationScreen() {
   const router = useRouter();
-  const { linkPersonId } = useLocalSearchParams<{ linkPersonId?: string }>();
+  const { linkPersonId, sourceRole, apartmentSubtype } = useLocalSearchParams<{
+    linkPersonId?: string;
+    sourceRole?: string;
+    apartmentSubtype?: string;
+  }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { draft, updateDraft } = useCapture();
   const { t, isRTL, language, fonts } = useI18n();
 
@@ -31,7 +35,14 @@ export default function LocationScreen() {
 
   const handleNext = () => {
     if (!isValid) return;
-    router.push({ pathname: '/capture/summary', params: linkPersonId ? { linkPersonId } : {} } as never);
+    router.push({
+      pathname: '/capture/summary',
+      params: {
+        ...(linkPersonId ? { linkPersonId } : {}),
+        ...(sourceRole ? { sourceRole } : {}),
+        ...(apartmentSubtype ? { apartmentSubtype } : {}),
+      },
+    } as never);
   };
 
   const sections = useMemo(() => {

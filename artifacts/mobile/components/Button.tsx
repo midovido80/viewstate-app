@@ -1,3 +1,4 @@
+import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
@@ -6,7 +7,7 @@ import { useI18n } from '@/contexts/I18nContext';
 interface ButtonProps {
   onPress: () => void;
   title: string;
-  variant?: 'primary' | 'secondary' | 'outline' | 'whatsapp';
+  variant?: 'primary' | 'secondary' | 'outline' | 'whatsapp' | 'navigation';
   size?: 'default' | 'large';
   disabled?: boolean;
   loading?: boolean;
@@ -27,9 +28,10 @@ export function Button({
   testID
 }: ButtonProps) {
   const colors = useColors();
-  const { fonts } = useI18n();
+  const { fonts, t } = useI18n();
 
-  const isPrimary = variant === 'primary';
+  const isNavigation = variant === 'navigation' || [t('capture.back'), t('studio.back'), t('detail.edit'), t('home.title')].includes(title);
+  const isPrimary = variant === 'primary' && !isNavigation;
   const isOutline = variant === 'outline';
   const isWhatsApp = variant === 'whatsapp';
   
@@ -44,6 +46,7 @@ export function Button({
     ...(isOutline ? { borderWidth: 1, borderColor: colors.border } : {}),
     ...(variant === 'secondary' ? { backgroundColor: colors.secondary } : {}),
     ...(isWhatsApp ? { backgroundColor: colors.whatsapp } : {}),
+    ...(isNavigation ? navigationButtonStyle : {}),
   };
 
   const textColors = {
@@ -51,6 +54,7 @@ export function Button({
     secondary: colors.secondaryForeground,
     outline: colors.foreground,
     whatsapp: colors.whatsappForeground,
+    navigation: navigationButtonTextStyle.color,
   };
 
   const content = (
@@ -60,7 +64,7 @@ export function Button({
       ) : null}
       <Text style={[
         {
-          color: textColors[variant],
+          color: isNavigation ? navigationButtonTextStyle.color : textColors[variant],
           fontFamily: fonts.semiBold,
           fontSize: size === 'large' ? 18 : 16,
         },
