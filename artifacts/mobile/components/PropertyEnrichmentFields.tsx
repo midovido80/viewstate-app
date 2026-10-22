@@ -199,7 +199,7 @@ export function PropertyEnrichmentFields({
               const label = isFalse ? (language === 'ar' ? 'بدون ' + baseLabel : 'No ' + baseLabel.toLowerCase()) : baseLabel;
               return (
                 <ChoiceTile key={field} optionId={field} label={label} selected={isTrue || isFalse} role="checkbox"
-                  onPress={() => onChange(field, isTrue ? 'false' : 'true')} />
+                  onPress={() => onChange(field, isTrue || isFalse ? '' : 'true')} />
               );
             })}
             {amenityRenderExtra}
