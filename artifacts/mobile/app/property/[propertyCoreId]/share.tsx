@@ -1,3 +1,4 @@
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -76,7 +77,7 @@ function CheckRow({
 export default function PropertyShareScreen() {
   const rawId = useLocalSearchParams<{ propertyCoreId?: string | string[] }>().propertyCoreId;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
-  const router = useRouter(); const colors = useColors(); const { t, language, fonts, isRTL } = useI18n();
+  const router = useRouter(); const colors = useColors(); const insets = useScreenInsets(); const { t, language, fonts, isRTL } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
   const [selection, setSelection] = useState<PropertyShareSelection | null>(null);
   const [error, setError] = useState('');
@@ -195,9 +196,9 @@ export default function PropertyShareScreen() {
     ['disclosePaci', t('enrich.paci'), !!property.locationEnrichment?.paciNumber],
     ['discloseMapsLink', t('enrich.maps_link'), !!property.locationEnrichment?.mapsLink],
   ] as const;
-  return <View style={[styles.container, { backgroundColor: colors.background }]}>
+  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
     <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('capture.back')} testID="share-back" style={navigationButtonStyle}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text accessibilityRole="header" style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.share')}</Text><View /></View>
-    <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content}>
+    <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
       <Text style={[styles.note, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive_off')}</Text>
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.normal_fields')}</Text>
       {PROPERTY_SHARE_NORMAL_FIELDS.map(field => <CheckRow key={field} checked={selection.normalFields.includes(field)} title={normalLabel(field)} onPress={() => toggleNormal(field)} testID={`share-normal-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}

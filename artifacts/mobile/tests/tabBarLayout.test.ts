@@ -89,3 +89,15 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
   assert.doesNotMatch(properties, /bottom:\s*insets\.bottom \+ \(Platform\.OS/);
   assert.doesNotMatch(people, /paddingBottom:\s*150/);
 });
+
+test('share, person capture and Requirement save actions also reserve the bottom safe area', async () => {
+  const [share, person, requirement] = await Promise.all([
+    readFile('app/property/[propertyCoreId]/share.tsx', 'utf8'),
+    readFile('app/person/new.tsx', 'utf8'),
+    readFile('app/requirement/[requirementId].tsx', 'utf8'),
+  ]);
+  assert.match(share, /paddingTop: insets\.top/);
+  for (const source of [share, person]) assert.match(source, /paddingBottom: insets\.bottom \+ 24/);
+  assert.doesNotMatch(requirement, /<View style=\{styles\.footer\}>/);
+  assert.match(requirement, /paddingBottom: Math\.max\(insets\.bottom, 16\)/);
+});

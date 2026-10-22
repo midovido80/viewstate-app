@@ -123,7 +123,7 @@ export default function NewPersonScreen() {
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.add')}</Text>
         <View style={{ width: 45 }} />
       </View>
-      <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={60}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" bottomOffset={60}>
         <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
         <ChoiceGrid style={styles.choicesWrap}>
           {PERSON_CLASSIFICATIONS.map(value => (
