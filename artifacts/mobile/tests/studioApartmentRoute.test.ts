@@ -80,6 +80,7 @@ const stubSources = new Map<string, string>([
   `],
   ['@/components/CaptureHeader', "export const CaptureHeader = 'CaptureHeader';"],
   ['@/components/SelectCard', "export const SelectCard = 'SelectCard';"],
+  ['@/components/ChoiceTile', "export const ChoiceCard = 'SelectCard'; export const ChoiceGrid = 'View';"],
   ['@/components/Button', "export const Button = 'Button';"],
   ['@workspace/property-domain', `
     export const PROPERTY_TYPES = ['whole_building', 'commercial_complex', 'apartment', 'floor', 'house', 'villa', 'office', 'shop', 'warehouse', 'chalet', 'other_built_property'];

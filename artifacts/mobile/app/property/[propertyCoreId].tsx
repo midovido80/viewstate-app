@@ -1463,8 +1463,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   <ChoiceGrid>
                     {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} />)}
                   </ChoiceGrid>
-                    ))}
-                  </View>
                 </View>
               )}
 
@@ -1503,8 +1501,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   <ChoiceGrid>
                     {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} />)}
                   </ChoiceGrid>
-                    ))}
-                  </View>
                 </View>
               )}
 
