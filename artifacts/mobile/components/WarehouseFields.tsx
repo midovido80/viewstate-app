@@ -1,6 +1,6 @@
 import { Text, TextInput, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -34,8 +34,8 @@ export function WarehouseFields({ recordScopeKey, values, onChange, onInvalidQui
     const options = definition.control === 'boolean' ? [['true', 'Yes', 'نعم'], ['false', 'No', 'لا']] : WAREHOUSE_CHOICES[field] ?? COMMERCIAL_COMPLEX_CHOICES[field];
     return <View key={field} style={{ gap: 8 }} testID={`warehouse-field-${field}`}>
       <Text style={labelStyle}>{label}</Text>
-      {options ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', direction: isRTL ? 'rtl' : 'ltr', gap: 8 }}>{options.map(([value, en, ar]) => <ChoiceChip key={value} label={language === 'ar' ? ar : en} selected={field === 'warehouseLevels' ? raw.split(',').includes(value) : raw === value}
-        role={field === 'warehouseLevels' ? 'checkbox' : 'radio'} testID={`warehouse-${field}-${value}`} onPress={() => change(field, field === 'warehouseLevels' ? toggleWarehouseLevel(raw, value) : raw === value ? '' : value)} />)}</View>
+      {options ? <ChoiceGrid style={{ flexDirection: 'row', flexWrap: 'wrap', direction: isRTL ? 'rtl' : 'ltr', gap: 8 }}>{options.map(([value, en, ar]) => <ChoiceChip key={value} optionId={`${field}:${value}`} label={language === 'ar' ? ar : en} selected={field === 'warehouseLevels' ? raw.split(',').includes(value) : raw === value}
+        role={field === 'warehouseLevels' ? 'checkbox' : 'radio'} testID={`warehouse-${field}-${value}`} onPress={() => change(field, field === 'warehouseLevels' ? toggleWarehouseLevel(raw, value) : raw === value ? '' : value)} />)}</ChoiceGrid>
       : <TextInput value={raw} onChangeText={input => {
           const value = input.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
           if (value === '' || /^\d+(\.\d*)?$/.test(value)) change(field, value);

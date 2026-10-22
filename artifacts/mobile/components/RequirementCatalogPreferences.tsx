@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type CatalogPreference, type FloorUse, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { getRequirementCatalogFields } from '@/services/requirementFieldMap';
@@ -47,14 +47,14 @@ export function RequirementCatalogPreferences({ scopeKey, propertyType, floorUse
     if (isBoolean) {
       const selected = current?.kind === 'feature';
       const forbidden = selected && !current.value;
-      return <ChoiceChip key={field} label={`${selected ? '✓ ' : ''}${label}${forbidden ? (language === 'ar' ? ' · يجب ألا تتوفر' : ' · Must not have') : ''}`} selected={selected} onPress={() => {
+      return <ChoiceChip key={field} optionId={field} label={`${selected ? '✓ ' : ''}${label}${forbidden ? (language === 'ar' ? ' · يجب ألا تتوفر' : ' · Must not have') : ''}`} selected={selected} onPress={() => {
         if (!selected) update(field, { field, kind: 'feature', value: true });
         else clear(field);
       }} testID={`requirement-preference-${field}`} role="checkbox" />;
     }
     if (isChoice) {
       const options = field === 'apartmentSubtype' ? APARTMENT_SUBTYPES : field === 'furnishing' ? FURNISHING_VALUES : field === 'intendedUse' ? INTENDED_USE_VALUES : COMMERCIAL_ACTIVITY_VALUES;
-      return <View key={field} style={styles.field}><Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{label}</Text><View style={styles.row}>{options.map(option => <TouchableOpacity key={option} onPress={() => current?.kind === 'choice' && current.value === option ? clear(field) : update(field, { field, kind: 'choice', value: option })} style={[styles.chip, { borderColor: current?.kind === 'choice' && current.value === option ? colors.primary : colors.border, backgroundColor: current?.kind === 'choice' && current.value === option ? colors.primary : colors.card }]}><Text style={{ color: current?.kind === 'choice' && current.value === option ? colors.primaryForeground : colors.foreground }}>{field === 'furnishing' ? t(`enrich.furnishing.${option}` as any) : field === 'apartmentSubtype' ? t(`enrich.apartment_subtype.${option}` as any) : field === 'intendedUse' ? (language === 'ar' ? ({ office: 'مكتب', retail: 'تجزئة', warehouse: 'مستودع', residential: 'سكني' } as Record<string, string>)[option] : option) : (language === 'ar' ? ({ retail: 'تجزئة', office: 'مكتب', restaurant: 'مطعم', clinic: 'عيادة', warehouse: 'مستودع' } as Record<string, string>)[option] : option)}</Text></TouchableOpacity>)}</View></View>;
+      return <View key={field} style={styles.field}><Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{label}</Text><ChoiceGrid>{options.map(option => <ChoiceChip key={option} optionId={`${field}:${option}`} role="radio" selected={current?.kind === 'choice' && current.value === option} onPress={() => current?.kind === 'choice' && current.value === option ? clear(field) : update(field, { field, kind: 'choice', value: option })} label={field === 'furnishing' ? t(`enrich.furnishing.${option}` as any) : field === 'apartmentSubtype' ? t(`enrich.apartment_subtype.${option}` as any) : field === 'intendedUse' ? (language === 'ar' ? ({ office: 'مكتب', retail: 'تجزئة', warehouse: 'مستودع', residential: 'سكني' } as Record<string, string>)[option] : option) : (language === 'ar' ? ({ retail: 'تجزئة', office: 'مكتب', restaurant: 'مطعم', clinic: 'عيادة', warehouse: 'مستودع' } as Record<string, string>)[option] : option)} />)}</ChoiceGrid></View>;
     }
     const isDecimal = definition.control === 'decimal';
     // Free-text catalog values have no stable Requirement contract. They are
@@ -65,6 +65,6 @@ export function RequirementCatalogPreferences({ scopeKey, propertyType, floorUse
   });
   // Boolean chips share their parent's flow; numeric/choice fields retain full rows.
   const onlyFeatures = definitions.every(definition => definition.control === 'boolean' || definition.field.startsWith('has'));
-  return inlineFeatures && onlyFeatures ? <>{controls}</> : <View style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]}>{controls}</View>;
+  return inlineFeatures && onlyFeatures ? <>{controls}</> : <ChoiceGrid style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]}>{controls}</ChoiceGrid>;
 }
 const styles = StyleSheet.create({ wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, field: { width: '100%', gap: 6 }, label: { fontSize: 14 }, clear: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }, row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 7 }, chip: { minHeight: 40, paddingHorizontal: 14, borderWidth: 1, borderRadius: 10, justifyContent: 'center' }, input: { flex: 1, minWidth: 120, minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12 } });

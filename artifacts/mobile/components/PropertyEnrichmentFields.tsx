@@ -1,6 +1,6 @@
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
@@ -115,7 +115,7 @@ export function PropertyEnrichmentFields({
         : FURNISHING_VALUES;
 
       return (
-        <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           {options.map(value => {
             const isSelected = values[field] === value;
             let label = value;
@@ -127,70 +127,27 @@ export function PropertyEnrichmentFields({
             }
 
             return (
-              <TouchableOpacity
-                key={value}
+              <ChoiceTile key={value} optionId={`${field}:${value}`} label={label} selected={isSelected} role="radio"
                 onPress={() => onChange(field, field === 'occupancy' && isSelected ? '' : value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                testID={`enrich-${testIdField}-${value}`}
-                style={[
-                  styles.chip,
-                  {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? (field === 'occupancy' ? colors.primary : colors.primary + '11') : colors.card
-                  }
-                ]}
-              >
-                <Text style={[
-                  styles.chipText,
-                  {
-                    color: isSelected ? (field === 'occupancy' ? colors.primaryForeground : colors.primary) : colors.foreground,
-                    fontFamily: isSelected ? fonts.semiBold : fonts.medium
-                  }
-                ]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
+                testID={`enrich-${testIdField}-${value}`} />
             );
           })}
-        </View>
+        </ChoiceGrid>
       );
     }
 
     if (definition.control === 'boolean') {
       return (
-        <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           {['true', 'false'].map(value => {
             const isSelected = values[field] === value;
             const label = value === 'true' ? t('enrich.yes') : t('enrich.no');
             return (
-              <TouchableOpacity
-                key={value}
-                onPress={() => onChange(field, value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                testID={`enrich-${testIdField}-${value}`}
-                style={[
-                  styles.chip,
-                  {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? (field === 'occupancy' ? colors.primary : colors.primary + '11') : colors.card
-                  }
-                ]}
-              >
-                <Text style={[
-                  styles.chipText,
-                  {
-                    color: isSelected ? (field === 'occupancy' ? colors.primaryForeground : colors.primary) : colors.foreground,
-                    fontFamily: isSelected ? fonts.semiBold : fonts.medium
-                  }
-                ]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
+              <ChoiceTile key={value} optionId={`${field}:${value}`} label={label} selected={isSelected} role="radio"
+                onPress={() => onChange(field, value)} testID={`enrich-${testIdField}-${value}`} />
             );
           })}
-        </View>
+        </ChoiceGrid>
       );
     }
 
@@ -220,7 +177,7 @@ export function PropertyEnrichmentFields({
         return (
           <View key={definition.field}>
             {!usesResidentialQuickPick && (
-              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+              <Text style={[styles.label, { color: '#AE313B', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
                 {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
               </Text>
             )}
@@ -230,10 +187,10 @@ export function PropertyEnrichmentFields({
       })}
       {(applicableDefinitions.some(definition => definition.group === 'amenity') || amenityRenderExtra) && (
         <View>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+          <Text style={[styles.label, { color: '#AE313B', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
             {language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'}
           </Text>
-          <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             {applicableDefinitions.filter(definition => definition.group === 'amenity').map(({ field }) => {
               const value = values[field];
               const isTrue = value === 'true';
@@ -241,28 +198,12 @@ export function PropertyEnrichmentFields({
               const baseLabel = propertyDetailLabels[field][language === 'ar' ? 1 : 0];
               const label = isFalse ? (language === 'ar' ? 'بدون ' + baseLabel : 'No ' + baseLabel.toLowerCase()) : baseLabel;
               return (
-                <TouchableOpacity
-                  key={field}
-                  onPress={() => onChange(field, isTrue ? 'false' : 'true')}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: isTrue }}
-                  style={[styles.chip, {
-                    borderColor: isTrue ? colors.primary : isFalse ? colors.border : colors.border,
-                    backgroundColor: isTrue ? colors.primary + '11' : colors.card,
-                    paddingLeft: isTrue || isFalse ? 12 : 16,
-                    paddingRight: isTrue || isFalse ? 12 : 16,
-                  }]}
-                >
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
-                    {isTrue && <Feather name="check" size={14} color={colors.primary} />}
-                    {isFalse && <Feather name="x" size={14} color={colors.mutedForeground} />}
-                    <Text style={[styles.chipText, { color: isTrue ? colors.primary : isFalse ? colors.mutedForeground : colors.foreground, fontFamily: isTrue ? fonts.semiBold : fonts.medium }]}>{label}</Text>
-                  </View>
-                </TouchableOpacity>
+                <ChoiceTile key={field} optionId={field} label={label} selected={isTrue || isFalse} role="checkbox"
+                  onPress={() => onChange(field, isTrue ? 'false' : 'true')} />
               );
             })}
-          </View>
-          {amenityRenderExtra}
+            {amenityRenderExtra}
+          </ChoiceGrid>
         </View>
       )}
     </View>

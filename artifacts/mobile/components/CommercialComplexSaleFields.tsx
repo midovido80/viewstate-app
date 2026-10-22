@@ -1,6 +1,6 @@
 import { Text, TextInput, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -35,19 +35,19 @@ export function CommercialComplexSaleFields({ profile = 'complex', recordScopeKe
       return <View key={field} style={{ gap: 6 }}>
         {isFloor && field === 'rentalOccupancy' && <View style={{ gap: 8 }}>
           <Text style={labelStyle}>{language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'}</Text>
-          <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>
-            {COMMERCIAL_FLOOR_SALE_AMENITIES.map(amenity => <ChoiceChip key={amenity} label={labelFor(amenity)} selected={values[amenity] === 'true'} testID={`commercial-floor-${amenity}`} onPress={() => onChange(amenity, values[amenity] === 'true' ? '' : 'true')} />)}
-          </View>
+          <ChoiceGrid style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>
+            {COMMERCIAL_FLOOR_SALE_AMENITIES.map(amenity => <ChoiceChip key={amenity} optionId={amenity} label={labelFor(amenity)} selected={values[amenity] === 'true'} testID={`commercial-floor-${amenity}`} onPress={() => onChange(amenity, values[amenity] === 'true' ? '' : 'true')} />)}
+          </ChoiceGrid>
         </View>}
         <Text style={labelStyle}>{label}</Text>
-        {options ? <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>
-          {options.map(([value, en, ar]) => <ChoiceChip key={value} label={language === 'ar' ? ar : en}
+        {options ? <ChoiceGrid style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>
+          {options.map(([value, en, ar]) => <ChoiceChip key={value} optionId={`${field}:${value}`} label={language === 'ar' ? ar : en}
             role={field === 'parkingTypes' ? 'checkbox' : 'radio'} selected={field === 'parkingTypes' ? (values[field] ?? '').split(',').includes(value) : values[field] === value}
             testID={`complex-${field}-${value}`} onPress={() => {
               const next = field === 'parkingTypes' ? toggleComplexParking(values[field] ?? '', value) : values[field] === value ? '' : value;
               onChange(field, next);
             }} />)}
-        </View> : <TextInput value={values[field] ?? ''} keyboardType={field === 'intendedUse' ? 'default' : field === 'monthlyIncome' ? 'decimal-pad' : 'number-pad'}
+        </ChoiceGrid> : <TextInput value={values[field] ?? ''} keyboardType={field === 'intendedUse' ? 'default' : field === 'monthlyIncome' ? 'decimal-pad' : 'number-pad'}
           accessibilityLabel={label} testID={`complex-${field}`} onChangeText={raw => {
             if (field === 'intendedUse') { onChange(field, raw); return; }
             const next = raw.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');

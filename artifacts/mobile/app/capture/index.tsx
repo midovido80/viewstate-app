@@ -1,3 +1,4 @@
+import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
 import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
 import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
@@ -916,11 +917,11 @@ export default function CaptureWorkflow() {
               {language === 'ar' ? 'ابدأ بالتصنيف والمعاملة، وستظهر المواصفات المناسبة تلقائياً.' : 'Start with the transaction and category. Applicable specifications appear automatically.'}
             </Text>
             <Section title={language === 'ar' ? 'نوع المعاملة' : 'Transaction'} colors={colors} fonts={fonts}>
-              <View style={styles.chips}>
+              <ChoiceGrid style={styles.chips}>
                 {(['sale', 'rent'] as const).map(value => (
                   <Choice key={value} selected={draft.transaction === value} label={t(`transaction.${value}` as keyof Translations)} onPress={() => selectTransaction(value)} colors={colors} fonts={fonts} />
                 ))}
-              </View>
+              </ChoiceGrid>
             </Section>
             <Section title={language === 'ar' ? 'تصنيف العقار' : 'Property category'} colors={colors} fonts={fonts}>
               <View style={[styles.categoryGrid, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -978,10 +979,10 @@ export default function CaptureWorkflow() {
                 updateDraft(draft.transaction === 'rent' ? { rentalPrice: { amount, currencyCode: 'KWD' } } : { salePrice: { amount, currencyCode: 'KWD' } });
               }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'السعر' : 'Price'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               {draft.transaction === 'rent' && (
-                <View style={styles.chips}>
+                <ChoiceGrid style={styles.chips}>
                   <Choice selected={draft.rentalPeriodId === 'monthly'} label={language === 'ar' ? 'شهرياً' : 'Monthly'} onPress={() => updateDraft({ rentalPeriodId: 'monthly' })} colors={colors} fonts={fonts} />
                   <Choice selected={draft.rentalPeriodId === 'yearly'} label={language === 'ar' ? 'سنوياً' : 'Yearly'} onPress={() => updateDraft({ rentalPeriodId: 'yearly' })} colors={colors} fonts={fonts} />
-                </View>
+                </ChoiceGrid>
               )}
               {!isBasicApartmentFollowUp && (
                 <>
@@ -1238,6 +1239,7 @@ function Check({ selected, colors, multi = false }: any) {
   return <View style={[styles.check, multi && styles.checkSquare, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : 'transparent' }]}>{selected && <Feather name="check" size={13} color={colors.background} />}</View>;
 }
 function Choice({ selected, label, onPress, colors, fonts, multi = false, testID }: any) {
+  if (!/^\+?\d+$/.test(label)) return <ChoiceTile label={label} selected={selected} onPress={onPress} testID={testID} role={multi ? 'checkbox' : 'radio'} />;
   return <TouchableOpacity onPress={onPress} testID={testID} accessibilityRole={multi ? 'checkbox' : 'radio'} accessibilityState={{ selected, checked: multi ? selected : undefined }} style={[styles.choice, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '16' : colors.card }]}><Check selected={selected} colors={colors} multi={multi} /><Text style={[styles.choiceText, { color: selected ? colors.primary : colors.foreground, fontFamily: selected ? fonts.semiBold : fonts.medium }]}>{label}</Text></TouchableOpacity>;
 }
 function PreviewRow({ label, value, colors, fonts }: any) {
@@ -1279,14 +1281,14 @@ function DemoSpecificationFields({ category, metadata, language, colors, fonts, 
       {category.choices.map((choice: any) => (
         <View key={choice.id} style={styles.demoField}>
           <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{choice.label[language === 'ar' ? 1 : 0]}</Text>
-          <View style={styles.chips}>{choice.options.map((option: any) => <Choice key={option.id} selected={metadata?.choices?.[choice.id] === option.id} label={option.label[language === 'ar' ? 1 : 0]} onPress={() => onChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} colors={colors} fonts={fonts} />)}</View>
+          <ChoiceGrid style={styles.chips}>{choice.options.map((option: any) => <Choice key={option.id} selected={metadata?.choices?.[choice.id] === option.id} label={option.label[language === 'ar' ? 1 : 0]} onPress={() => onChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} colors={colors} fonts={fonts} />)}</ChoiceGrid>
         </View>
       ))}
       <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المزايا الخاصة بالفئة' : 'Category features'}</Text>
-      <View style={styles.chips}>{category.features.map((feature: any) => {
+      <ChoiceGrid style={styles.chips}>{category.features.map((feature: any) => {
         const selected = metadata?.selectedFeatures?.includes(feature.id);
         return <Choice key={feature.id} selected={selected} multi label={feature.label[language === 'ar' ? 1 : 0]} onPress={() => onChange({ selectedFeatures: selected ? (metadata?.selectedFeatures ?? []).filter((id: string) => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} colors={colors} fonts={fonts} />;
-      })}</View>
+      })}</ChoiceGrid>
     </View>
   */);
 }

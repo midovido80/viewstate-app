@@ -5,7 +5,7 @@ import { parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { ModernPropertyFields } from '@/components/ModernPropertyFields';
 import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentFields';
 import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { FLOOR_NUMBER_QUICK_PICK_VALUES } from '@/services/numericQuickPick';
 import { WarehouseFields } from '@/components/WarehouseFields';
@@ -54,14 +54,9 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
         hidePropertyUse={hidePropertyUse}
         amenityRenderExtra={
           category && onDemoChange ? (
-            <View style={{ gap: 10, marginTop: 8 }}>
-              {category.features.length > 0 && (
-                <View style={styles.chips}>
-                  {category.features.filter(feature => !isDemoFeatureSuppressed(feature.id, propertyType, values as Record<string, unknown>, (values as Record<string, string>).floorUse)).map(feature => <ChoiceChip key={feature.id} label={feature.label[language === 'ar' ? 1 : 0]} selected={metadata?.selectedFeatures?.includes(feature.id) ?? false} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} />)}
-                </View>
-              )}
-
-            </View>
+            <>
+              {category.features.filter(feature => !isDemoFeatureSuppressed(feature.id, propertyType, values as Record<string, unknown>, (values as Record<string, string>).floorUse)).map(feature => <ChoiceChip key={feature.id} optionId={feature.id} label={feature.label[language === 'ar' ? 1 : 0]} selected={metadata?.selectedFeatures?.includes(feature.id) ?? false} onPress={() => onDemoChange({ selectedFeatures: metadata?.selectedFeatures?.includes(feature.id) ? metadata.selectedFeatures.filter(id => id !== feature.id) : [...(metadata?.selectedFeatures ?? []), feature.id] })} />)}
+            </>
           ) : null
         }
       />
@@ -93,7 +88,7 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
             onDemoChange({ numericValues });
           }} onPendingValidityChange={(_scope, invalid) => onInvalidQuickPickChange?.(item.id as PropertyDetailField, recordScopeKey, invalid)} testID={`demo-${item.id}-quick-pick`} />;
         })}
-        {category.choices.filter(choice => !isMappedTemplateField(choice.id)).map(choice => <View key={choice.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{choice.label[language === 'ar' ? 1 : 0]}</Text><View style={styles.chips}>{choice.options.map(option => <ChoiceChip key={option.id} label={option.label[language === 'ar' ? 1 : 0]} selected={metadata?.choices?.[choice.id] === option.id} role="radio" onPress={() => onDemoChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} />)}</View></View>)}
+        {category.choices.filter(choice => !isMappedTemplateField(choice.id)).map(choice => <View key={choice.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{choice.label[language === 'ar' ? 1 : 0]}</Text><ChoiceGrid style={styles.chips}>{choice.options.map(option => <ChoiceChip key={option.id} label={option.label[language === 'ar' ? 1 : 0]} selected={metadata?.choices?.[choice.id] === option.id} role="radio" onPress={() => onDemoChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} />)}</ChoiceGrid></View>)}
       </View> : null}
     </View>
   );

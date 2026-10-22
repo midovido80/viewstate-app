@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Property, type SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, formatRentalPrice, toEnglishDigits } from '@/constants/market';
@@ -475,9 +476,9 @@ export default function PersonDetailScreen() {
                 testID="person-edit-phone"
               />
             </View>
-            <View style={styles.choicesWrap}>
+            <ChoiceGrid style={styles.choicesWrap}>
               {PERSON_CLASSIFICATIONS.map(value => (
-                <ChoiceChip
+                <ChoiceTile
                   key={value}
                   label={t(`people.classification.${value}` as keyof Translations)}
                   selected={classifications.includes(value)}
@@ -486,7 +487,7 @@ export default function PersonDetailScreen() {
                   role="checkbox"
                 />
               ))}
-            </View>
+            </ChoiceGrid>
             <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} multiline style={[inputStyle, styles.notes]} testID="person-edit-notes" />
             <Button title={t('people.save')} onPress={() => void save()} loading={busy} testID="person-edit-save" />
           </>
@@ -629,9 +630,9 @@ export default function PersonDetailScreen() {
           </View>
           <Text style={{ color: colors.mutedForeground, textAlign: 'center', fontFamily: fonts.regular }}>{language === 'ar' ? 'ربط العقار بجهة الاتصال المحددة' : 'Link property to this contact'}</Text>
           <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left', marginHorizontal: 16, marginTop: 12 }]}>{language === 'ar' ? 'صفة العلاقة' : 'Relationship role'}</Text>
-          <View style={[styles.choicesWrap, styles.roleChoices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <ChoiceGrid style={[styles.choicesWrap, styles.roleChoices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             {eligibleSourceRoles.map(role => <ChoiceChip key={role} label={t(`source.role.${role}`)} selected={selectedSourceRole === role} onPress={() => !linkBusy && setSelectedSourceRole(role)} testID={`link-source-role-${role}`} role="radio" />)}
-          </View>
+          </ChoiceGrid>
           <TextInput value={propertySearch} onChangeText={value => void searchProperties(value)} placeholder={t('common.search')} placeholderTextColor={colors.mutedForeground} style={[inputStyle, styles.modalSearch]} testID="link-property-search" editable={!linkBusy} />
           <FlatList data={linkableProperties} keyExtractor={property => property.core.id} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled" testID="link-property-list" initialNumToRender={12} windowSize={7}
             ListEmptyComponent={<Text style={{ color: colors.mutedForeground, textAlign: 'center' }}>{language === 'ar' ? 'لا توجد عقارات متاحة تطابق البحث.' : 'No available properties match this search.'}</Text>}

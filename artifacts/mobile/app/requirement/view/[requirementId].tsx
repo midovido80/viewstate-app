@@ -1,3 +1,4 @@
+import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -229,7 +230,19 @@ export default function RequirementDetailsScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: fonts.semiBold, textAlign: align }]}>
                   {sectionLabels[section]}
                 </Text>
-                <View style={[styles.rowGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {section === 'preferences' ? <View style={{ gap: 12 }}>
+                  <ChoiceGrid>
+                    {group.filter(row => row.field !== 'preferredNearbyServices').flatMap(row =>
+                      row.field === 'preferredAmenities'
+                        ? row.value.split(language === 'ar' ? '، ' : ', ').map((value, index) => <ChoiceFact key={`${row.field}:${index}`} testID={index === 0 ? `requirement-details-row-${row.field}` : undefined} label={value} />)
+                        : [<ChoiceFact key={row.field} testID={`requirement-details-row-${row.field}`} label={`${row.label} · ${row.value}`} />]
+                    )}
+                  </ChoiceGrid>
+                  {group.filter(row => row.field === 'preferredNearbyServices').map(row => <View key={row.field} testID={`requirement-details-row-${row.field}`} style={{ gap: 8 }}>
+                    <Text style={{ color: colors.accent, fontFamily: fonts.semiBold, textAlign: align }}>{row.label}</Text>
+                    <ChoiceGrid>{row.value.split(' · ').map(value => <ChoiceFact key={value} label={value} />)}</ChoiceGrid>
+                  </View>)}
+                </View> : <View style={[styles.rowGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   {group.map((row, index) => (
                     <View key={row.field} testID={`requirement-details-row-${row.field}`}
                       style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
@@ -237,7 +250,7 @@ export default function RequirementDetailsScreen() {
                       <Text selectable style={[styles.rowValue, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: align }]}>{row.value}</Text>
                     </View>
                   ))}
-                </View>
+                </View>}
               </View>
             );
           })}

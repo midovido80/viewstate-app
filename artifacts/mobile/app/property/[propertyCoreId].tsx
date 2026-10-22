@@ -1,6 +1,7 @@
 import { ApprovedAction, approvedNavigationStyle, approvedActionStyle } from '@/components/ApprovedActions';
 import { filterPropertySourcePeople, suggestPropertySourceRole, retainVisibleSourceSelection, type PropertySourceClassificationFilter } from '@/services/propertySourceSelection';
 import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
 import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged, getSavedPropertyTypeLabel } from '@/services/savedPropertyClassification';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -1459,11 +1460,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                       {language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {availableFeatures.map(feat => (
-                      <View key={feat} style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
-                        <Text style={{ color: colors.foreground, fontFamily: fonts.medium, fontSize: 15 }}>{feat}</Text>
-                      </View>
+                  <ChoiceGrid>
+                    {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} />)}
+                  </ChoiceGrid>
                     ))}
                   </View>
                 </View>
@@ -1501,11 +1500,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                       {language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {nearbyServicesTextList.map(srv => (
-                      <View key={srv} style={{ backgroundColor: colors.background, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
-                        <Text style={{ color: colors.foreground, fontFamily: fonts.medium, fontSize: 15 }}>{srv}</Text>
-                      </View>
+                  <ChoiceGrid>
+                    {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} />)}
+                  </ChoiceGrid>
                     ))}
                   </View>
                 </View>

@@ -6,7 +6,7 @@ import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
-import { SelectCard } from '@/components/SelectCard';
+import { ChoiceCard as SelectCard, ChoiceGrid } from '@/components/ChoiceTile';
 import { Button } from '@/components/Button';
 import { APARTMENT_SUBTYPES, PROPERTY_TYPES, type ApartmentSubtype, type Transaction } from '@workspace/property-domain';
 import { getPropertyTypeChoices, canonicalPropertyTypeChoice, restorePropertyTypeChoice, getPropertyTypeChoiceLabel, parseFloorUse, parsePropertySector, togglePropertySector, type PropertySectorFilter, type PropertyTypeChoice } from '@/services/propertySectorSelection';
@@ -153,6 +153,7 @@ export default function PropertyTypeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        <ChoiceGrid>
         {visibleTypes.map(type => (
           <SelectCard
             key={type}
@@ -162,12 +163,15 @@ export default function PropertyTypeScreen() {
             testID={`select-type-${type}`}
           />
         ))}
+        </ChoiceGrid>
         {mode === 'offered' && propertyType === 'other_built_property' && sector === 'all' ? (
           <View testID="property-other-use-selection" style={styles.floorChoices}>
             <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'استخدام العقار' : 'Property use'}</Text>
+            <ChoiceGrid>
             {(['residential', 'commercial'] as const).map(value => (
               <SelectCard key={value} title={value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')} selected={selectedPropertyUse === value} testID={`select-other-use-${value}`} onSelect={() => { setSelectedPropertyUse(value); router.setParams({ propertyUse: value }); }} />
             ))}
+            </ChoiceGrid>
           </View>
         ) : null}
 

@@ -6,7 +6,7 @@ import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
-import { SelectCard } from '@/components/SelectCard';
+import { ChoiceCard as SelectCard, ChoiceGrid } from '@/components/ChoiceTile';
 import { Button } from '@/components/Button';
 import type { Transaction } from '@workspace/property-domain';
 import { getPropertyFormRoute } from '@/services/propertyFormRoutes';
@@ -100,6 +100,7 @@ export default function ApartmentSubtypeScreen() {
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {languageLabel('Apartment type', 'نوع الشقة')}
         </Text>
+        <ChoiceGrid>
         <SelectCard
           title={languageLabel('Studio apartment', 'شقة استوديو')}
           selected={apartmentSubtype === 'studio'}
@@ -118,6 +119,7 @@ export default function ApartmentSubtypeScreen() {
           }}
           testID="select-apartment-standard"
         />
+        </ChoiceGrid>
       </View>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border }]}>
         <Button

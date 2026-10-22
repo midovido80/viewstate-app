@@ -5,7 +5,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
 import { formatRentalCadence, MARKET_CONFIG } from '@/constants/market';
@@ -119,7 +119,7 @@ export default function PriceScreen() {
         />
 
         {!isSale ? (
-          <View style={styles.choicesWrap}>
+          <ChoiceGrid style={styles.choicesWrap}>
             {(['monthly', 'yearly'] as const).map(period => (
               <ChoiceChip
                 key={period}
@@ -130,7 +130,7 @@ export default function PriceScreen() {
                 role="radio"
               />
             ))}
-          </View>
+          </ChoiceGrid>
         ) : null}
       </KeyboardAwareScrollViewCompat>
       

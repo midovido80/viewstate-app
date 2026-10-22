@@ -6,7 +6,7 @@ import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
-import { SelectCard } from '@/components/SelectCard';
+import { ChoiceCard as SelectCard, ChoiceGrid } from '@/components/ChoiceTile';
 import { Button } from '@/components/Button';
 import { Transaction } from '@workspace/property-domain';
 import { getPropertyTypeSelectionRoute } from '@/services/propertyFormRoutes';
@@ -64,6 +64,7 @@ export default function TransactionScreen() {
         <Text style={[styles.groupTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
           {label('Offered or Wanted', 'معروض أم مطلوب')}
         </Text>
+        <ChoiceGrid>
         <SelectCard
           title={label('Offered', 'معروض')}
           icon="home"
@@ -84,10 +85,12 @@ export default function TransactionScreen() {
           }}
           testID="select-wanted"
         />
+        </ChoiceGrid>
 
         <Text style={[styles.groupTitle, styles.transactionHeading, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
           {offerMode === 'wanted' ? label('Purchase or Rent', 'شراء أم إيجار') : label('Sale or Rent', 'بيع أم إيجار')}
         </Text>
+        <ChoiceGrid>
         <SelectCard
           title={offerMode === 'wanted' ? label('To buy', 'للشراء') : label('For sale', 'للبيع')}
           icon="tag"
@@ -108,6 +111,7 @@ export default function TransactionScreen() {
           }}
           testID="select-rent"
         />
+        </ChoiceGrid>
       </View>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), borderTopColor: colors.border }]}>
         <Button

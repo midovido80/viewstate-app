@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import type { Property, PropertyAttachmentMetadata, SeekerRequirement, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
@@ -1012,7 +1012,7 @@ export default function StudioCaptureRoute() {
     return (
       <View key={field} style={styles.field} testID={`studio-${field}-field`}>
         <Text style={[styles.label, labelStyle]}>{catalogLabel(field)}</Text>
-        <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           {choices.map((choice, index) => {
             const semanticValue = choice.modeValues[mode] as StudioSelection | undefined;
             if (!semanticValue) return null;
@@ -1025,11 +1025,10 @@ export default function StudioCaptureRoute() {
                 onPress={() => update(field, semanticValue)}
                 testID={`studio-${field}-${index === 0 ? 'positive' : 'negative'}`}
                 role="radio"
-                style={styles.flexChip}
               />
             );
           })}
-        </View>
+        </ChoiceGrid>
         {getError(field) ? <FieldError message={localizedFieldError(field)!} /> : null}
       </View>
     );
@@ -1091,7 +1090,7 @@ export default function StudioCaptureRoute() {
   const renderCadence = () => values.transaction === 'rent' ? (
     <View ref={setFocusTarget('cadence')} style={styles.field} testID="studio-cadence-field">
       <Text style={[styles.label, labelStyle]}>{catalogLabel('rentalPeriodId')}</Text>
-      <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+      <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         {getStudioCatalogField('rentalPeriodId').quickPicks?.map(choice => {
           const period = choice.modeValues[mode];
           if (!period) return null;
@@ -1104,11 +1103,10 @@ export default function StudioCaptureRoute() {
               onPress={() => update('rentalPeriodId', period as StudioFormValues['rentalPeriodId'])}
               testID={`studio-cadence-${period}`}
               role="radio"
-              style={styles.flexChip}
             />
           );
         })}
-      </View>
+      </ChoiceGrid>
       {getError('rentalPeriodId') ? <FieldError message={localizedFieldError('rentalPeriodId')!} /> : null}
     </View>
   ) : null;
@@ -1120,7 +1118,7 @@ export default function StudioCaptureRoute() {
         return (
           <View key={fieldId} style={styles.field} testID="studio-transaction-field">
             <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
-            <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {getStudioCatalogField(fieldId).quickPicks?.map(choice => {
                 const transaction = choice.modeValues[mode];
                 if (!transaction) return null;
@@ -1133,11 +1131,10 @@ export default function StudioCaptureRoute() {
                     onPress={() => update('transaction', transaction as Transaction)}
                     testID={`studio-transaction-${transaction}`}
                     role="radio"
-                    style={styles.flexChip}
                   />
                 );
               })}
-            </View>
+            </ChoiceGrid>
           </View>
         );
       case 'locationAreaId':
@@ -1155,7 +1152,7 @@ export default function StudioCaptureRoute() {
         ) : (
           <View key={fieldId} ref={setFocusTarget('preferredAreaIds')} style={styles.field} testID="studio-preferred-area-field">
             <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
-            <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {(['specific_areas', 'all_kuwait'] as const).map(scope => (
                 <ChoiceChip
                   key={scope}
@@ -1167,10 +1164,9 @@ export default function StudioCaptureRoute() {
                   }}
                   testID={`studio-area-mode-${scope}`}
                   role="radio"
-                  style={styles.flexChip}
-                />
+                  />
               ))}
-            </View>
+            </ChoiceGrid>
             {values.preferredAreaMode === 'specific_areas' ? (
               <KuwaitAreaSelector
                 selectedIds={values.preferredAreaIds}
@@ -1219,12 +1215,12 @@ export default function StudioCaptureRoute() {
       case 'amenities':
         return <View key={fieldId} style={styles.field} testID="studio-amenities">
           <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
-          <View style={[styles.chips, { direction: isRTL ? 'rtl' : 'ltr' }]}>{STUDIO_FEATURES.map(item => {
+          <ChoiceGrid style={[styles.chips, { direction: isRTL ? 'rtl' : 'ltr' }]}>{STUDIO_FEATURES.map(item => {
             const selection = values.amenitySelections?.[item.field];
             const selected = selection === 'yes' || selection === 'required' || selection === 'no' || selection === 'must_not_have';
-            return <ChoiceChip key={item.field} label={`${item.label[language === 'ar' ? 1 : 0]}${selection === 'no' || selection === 'must_not_have' ? (isRTL ? ' · بدون' : ' · Without') : ''}`} selected={selected}
+            return <ChoiceChip key={item.field} optionId={item.field} label={`${item.label[language === 'ar' ? 1 : 0]}${selection === 'no' || selection === 'must_not_have' ? (isRTL ? ' · بدون' : ' · Without') : ''}`} selected={selected}
               onPress={() => update('amenitySelections', { ...values.amenitySelections, [item.field]: selected ? (mode === 'offered' ? 'unknown' : 'not_important') : (mode === 'offered' ? 'yes' : 'required') })} testID={`studio-amenity-${item.field}`} role="checkbox" />;
-          })}</View>
+          })}</ChoiceGrid>
         </View>;
       case 'nearbyServices':
         return <NearbyServicesSelector key={fieldId} values={values.nearbyServices ?? []} onChange={value => update('nearbyServices', value)} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />;
@@ -1262,7 +1258,7 @@ export default function StudioCaptureRoute() {
           {mode === 'offered' ? (
             <View style={styles.field} testID="studio-occupancy-field">
               <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'نوع السكن' : 'Occupancy'}</Text>
-              <View style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+              <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 {(['family', 'bachelor', 'any'] as const).map(value => (
                   <ChoiceChip
                     key={value}
@@ -1271,10 +1267,9 @@ export default function StudioCaptureRoute() {
                     onPress={() => update('occupancy', values.occupancy === value ? undefined : value)}
                     role="radio"
                     testID={`studio-occupancy-${value}`}
-                    style={styles.flexChip}
                   />
                 ))}
-              </View>
+              </ChoiceGrid>
             </View>
           ) : null}
           {mode === 'offered' ? renderExactLocationSection() : null}

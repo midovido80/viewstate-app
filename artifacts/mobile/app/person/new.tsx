@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { BatchContactImportModal } from '@/components/BatchContactImportModal';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/services/people';
@@ -125,7 +125,7 @@ export default function NewPersonScreen() {
       </View>
       <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={60}>
         <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
-        <View style={styles.choicesWrap}>
+        <ChoiceGrid style={styles.choicesWrap}>
           {PERSON_CLASSIFICATIONS.map(value => (
             <ChoiceChip
               key={value}
@@ -136,7 +136,7 @@ export default function NewPersonScreen() {
               role="checkbox"
             />
           ))}
-        </View>
+        </ChoiceGrid>
         {classifications.length > 0 && entryMode === 'choose' ? (
           <View style={styles.entryChoices}>
             <Button title={t('people.manual_entry')} onPress={() => setEntryMode('manual')} testID="person-manual-entry" />
