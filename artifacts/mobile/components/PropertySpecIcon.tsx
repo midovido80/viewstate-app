@@ -1,9 +1,11 @@
+import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
 // These detail icons render directly. They never download a font when a saved
 // property's specification section first appears (including on slow Preview links).
-export type PropertySpecIconName = 'bed-outline' | 'shower' | 'sofa-outline' | 'car' | 'stairs' | 'set-square';
+export type PropertySpecIconName = 'bed-outline' | 'shower' | 'sofa-outline' | 'car' | 'stairs' | 'set-square' | 'percent';
 const paths: Record<PropertySpecIconName, string> = {
+  percent: 'M4 20L20 4 M8 6A2 2 0 1 1 4 6A2 2 0 1 1 8 6 M20 18A2 2 0 1 1 16 18A2 2 0 1 1 20 18',
   'bed-outline': 'M3 18V6 M21 18V10 M3 14H21 M3 10H21V14 M6 10V7H11V10 M13 10V7H18V10 M3 18V21 M21 18V21',
   shower: 'M5 10V7A5 5 0 0 1 15 7 M11 10A4 4 0 0 1 19 10H11 M11 13V14 M15 13V14 M19 13V14 M12 17V18 M16 17V18 M20 17V18',
   'sofa-outline': 'M5 12V7A2 2 0 0 1 7 5H17A2 2 0 0 1 19 7V12 M5 12A2 2 0 0 0 1 12V18H23V12A2 2 0 0 0 19 12V15H5V12 M4 18V21 M20 18V21',

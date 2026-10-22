@@ -1251,7 +1251,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   if (property.core.propertyType === 'commercial_complex' && property.activeOffer.transaction === 'sale') {
     const yieldPercent = grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined);
     if (yieldPercent !== undefined) {
-      addSpec('grossAnnualRentalYield', `${yieldPercent.toFixed(2)}%`, 'percent', 'Feather');
+      addSpec('grossAnnualRentalYield', `${yieldPercent.toFixed(2)}%`, 'percent');
       numericSpecTiles[numericSpecTiles.length - 1].label = language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield';
     }
   }
