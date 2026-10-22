@@ -1,3 +1,4 @@
+import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useState, useMemo } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -73,7 +74,7 @@ export default function LocationScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <CaptureHeader step={4} totalSteps={5} />
       
-      <View style={styles.content}>
+      <View style={styles.content}><PropertyFormCard title={t('location.title')} icon="map-pin">
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {t('location.title')}
         </Text>
@@ -108,7 +109,7 @@ export default function LocationScreen() {
             {t('location.datasetUnavailable')}
           </Text>
         )}
-      </View>
+      </PropertyFormCard></View>
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <Button 

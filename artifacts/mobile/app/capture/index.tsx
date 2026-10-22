@@ -1,3 +1,4 @@
+import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { formatPrice, formatRentalCadence } from '@/constants/market';
@@ -953,7 +954,7 @@ export default function CaptureWorkflow() {
           <>
             <Section title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} colors={colors} fonts={fonts}>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''}</Text>
-               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
+              <PropertyAreaBlockRow area={<>               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
                <KuwaitAreaSelector
                  selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
                   onCancel={() => setAreaValidation(current => transitionCaptureAreaValidation(current, { type: 'cancel' }))}
@@ -975,15 +976,16 @@ export default function CaptureWorkflow() {
                     {language === 'ar' ? 'اختر المنطقة للمتابعة.' : 'Select an area to continue.'}
                   </Text>
                 ) : null}
-              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
-              <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+</>} block={<>              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
+              <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+</>} />
               <Text style={[styles.label, { color: priceError ? colors.destructive : colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
               <TextInput testID="capture-price" onBlur={() => setPriceAttempted(true)} value={draft.transaction === 'rent' ? (draft.rentalPrice?.amount ? String(draft.rentalPrice.amount) : '') : (draft.salePrice?.amount ? String(draft.salePrice.amount) : '')} onChangeText={value => {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
                 const amount = Number(normalized);
                 if (!Number.isFinite(amount) || amount < 0) return;
                 updateDraft(draft.transaction === 'rent' ? { rentalPrice: { amount, currencyCode: 'KWD' } } : { salePrice: { amount, currencyCode: 'KWD' } });
-              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'السعر' : 'Price'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: priceError ? colors.destructive : colors.border, backgroundColor: colors.card }]} />
+              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'السعر' : 'Price'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: priceError ? colors.destructive : colors.border, backgroundColor: colors.card }]} />
               {priceError ? <Text accessibilityRole="alert" testID="capture-price-error" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('errors.invalid_price')}</Text> : null}
               {draft.transaction === 'rent' && (
                 <ChoiceGrid style={styles.chips}>
@@ -998,17 +1000,17 @@ export default function CaptureWorkflow() {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
                 const number = Number(normalized);
                  if (normalized === '' || Number.isFinite(number)) updateCaptureDetails({ areaSquareMeters: normalized === '' ? undefined : number, areaUnit: 'square_meter' });
-              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               {!commercialFloorSale && draft.propertyType !== 'warehouse' && <>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
-              <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+              <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               </>}
                 </>
               )}
             </Section>
             {!isBasicApartmentFollowUp && (
               <>
-            <Section title={language === 'ar' ? 'المواصفات' : 'Property specifications'} colors={colors} fonts={fonts}>
+            <View style={{ gap: 14 }}>
               <ModernPropertyForm
                 requireExactValue
                 transaction={draft.transaction}
@@ -1040,16 +1042,16 @@ export default function CaptureWorkflow() {
               />
               {(commercialFloorSale || draft.propertyType === 'warehouse') && <View style={{ gap: 8, marginTop: 12 }}>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
-              <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+              <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
               </View>}
-            </Section>
+            </View>
             <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="capture-location-card">
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
               <TextInput
                 value={captureDetails.mapsLink ?? ''}
                 onChangeText={value => updateCaptureDetails({ mapsLink: value || undefined })}
                 placeholder={language === 'ar' ? 'الصق الرابط هنا' : 'Paste link here'}
-                style={[styles.input, locationLinkInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+                style={[styles.input, propertyFormInputStyle, locationLinkInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
                 accessibilityLabel={t('enrich.maps_link')}
                 accessibilityHint={mapsLinkError ?? undefined}
                 testID="capture-maps-link"
@@ -1244,7 +1246,7 @@ export default function CaptureWorkflow() {
 }
 
 function Section({ title, children, colors, fonts }: any) {
-  return <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.sectionTitle, { color: colors.accent, fontFamily: fonts.bold }]}>{title}</Text>{children}</View>;
+  return <PropertyFormCard title={title}>{children}</PropertyFormCard>;
 }
 function Check({ selected, colors, multi = false }: any) {
   return <View style={[styles.check, multi && styles.checkSquare, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : 'transparent' }]}>{selected && <Feather name="check" size={13} color={colors.background} />}</View>;
@@ -1311,7 +1313,7 @@ function QuickCount({ field, value, decimal, colors, fonts, error, onValidity, o
     setExpanded(isExpanded);
     if (isExpanded) setExact(String(value));
   }, [value]);
-  return <View><View style={styles.chips}>{DEMO_NUMERIC_QUICK_PICK_VALUES.map(number => <Choice key={number} testID={`capture-quick-${field}-${number}`} selected={value === number} label={String(number)} onPress={() => { const selected = selectNumericQuickPick(number, DEMO_NUMERIC_QUICK_PICK_VALUES); setExpanded(false); setExact(''); onValidity(field, false); onChange(Number(selected)); }} colors={colors} fonts={fonts} />)}<Choice testID={`capture-quick-${field}-more`} selected={expanded && value !== undefined && value >= 6} label="+6" onPress={() => { const transition = openNumericQuickPickMore(); setExpanded(transition.expanded); setExact(transition.value); onValidity(field, false); onChange(Number(transition.value)); }} colors={colors} fonts={fonts} /></View>{(expanded || value !== undefined && value >= 6) && <><TextInput testID={`capture-quick-${field}-exact`} value={exact} onChangeText={text => { setExact(text); if (text === '') { onValidity(field, false); onChange(undefined); return; } const number = parseDemoNumericInput(text, decimal); const valid = number !== null && number >= 6; onValidity(field, !valid); if (valid) onChange(number); }} keyboardType={decimal ? 'decimal-pad' : 'number-pad'} placeholder="6+" placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: error ? colors.destructive : colors.border, backgroundColor: colors.card }]} />{error ? <Text testID={`capture-quick-${field}-error`} style={{ color: colors.destructive, marginTop: 4 }}>{error}</Text> : null}</>}</View>;
+  return <View><View style={styles.chips}>{DEMO_NUMERIC_QUICK_PICK_VALUES.map(number => <Choice key={number} testID={`capture-quick-${field}-${number}`} selected={value === number} label={String(number)} onPress={() => { const selected = selectNumericQuickPick(number, DEMO_NUMERIC_QUICK_PICK_VALUES); setExpanded(false); setExact(''); onValidity(field, false); onChange(Number(selected)); }} colors={colors} fonts={fonts} />)}<Choice testID={`capture-quick-${field}-more`} selected={expanded && value !== undefined && value >= 6} label="+6" onPress={() => { const transition = openNumericQuickPickMore(); setExpanded(transition.expanded); setExact(transition.value); onValidity(field, false); onChange(Number(transition.value)); }} colors={colors} fonts={fonts} /></View>{(expanded || value !== undefined && value >= 6) && <><TextInput testID={`capture-quick-${field}-exact`} value={exact} onChangeText={text => { setExact(text); if (text === '') { onValidity(field, false); onChange(undefined); return; } const number = parseDemoNumericInput(text, decimal); const valid = number !== null && number >= 6; onValidity(field, !valid); if (valid) onChange(number); }} keyboardType={decimal ? 'decimal-pad' : 'number-pad'} placeholder="6+" placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: error ? colors.destructive : colors.border, backgroundColor: colors.card }]} />{error ? <Text testID={`capture-quick-${field}-error`} style={{ color: colors.destructive, marginTop: 4 }}>{error}</Text> : null}</>}</View>;
 }
 
 const styles = StyleSheet.create({

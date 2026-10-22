@@ -1,3 +1,4 @@
+import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { formatPrice, formatRentalCadence, toEnglishDigits } from '@/constants/market';
 import { STUDIO_FEATURES } from '@/services/studioAmenities';
@@ -1254,10 +1255,15 @@ export default function StudioCaptureRoute() {
               </View>
             </View>
           ) : null}
-          {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}
-          {mode === 'offered'
-            ? textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })
-            : null}
+          {mode === 'offered' ? <>
+            <PropertyFormCard title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} icon="map-pin" testID="studio-basic-card">
+              {renderCatalogField('locationAreaId')}
+              {renderCatalogField('price')}
+              {renderCatalogField('rentalPeriodId')}
+              {renderCatalogField('transaction')}
+            </PropertyFormCard>
+            <PropertyFormCard title={language === 'ar' ? 'مواصفات الاستوديو' : 'Studio specifications'} icon="home">
+              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'amenities', 'nearbyServices', 'description'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}
           {mode === 'offered' ? (
             <View style={styles.field} testID="studio-occupancy-field">
               <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'نوع السكن' : 'Occupancy'}</Text>
@@ -1275,6 +1281,14 @@ export default function StudioCaptureRoute() {
               </ChoiceGrid>
             </View>
           ) : null}
+            </PropertyFormCard>
+            <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة' : 'Available features'} icon="check-square">{renderCatalogField('amenities')}</PropertyFormCard>
+            {renderCatalogField('nearbyServices')}
+            <PropertyFormCard title={language === 'ar' ? 'ملاحظات إضافية' : 'Additional notes'} icon="file-text">
+              {renderCatalogField('description')}
+              {textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })}
+            </PropertyFormCard>
+          </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>

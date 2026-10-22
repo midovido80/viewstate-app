@@ -37,7 +37,10 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
   const [discarding, setDiscarding] = useState(false);
   const currentStep = step;
   const showProgress = currentStep !== undefined;
-  const progressTotal = totalSteps === CAPTURE_STEPS.length ? totalSteps : CAPTURE_STEPS.length;
+  const progressSteps = totalSteps === 4
+    ? ['capture.progress.transaction', 'capture.progress.type', 'capture.progress.basics', 'capture.progress.review'] as const
+    : CAPTURE_STEPS;
+  const progressTotal = progressSteps.length;
   const showBack = Boolean(onBack || title || (currentStep && currentStep > 1));
 
   const handleCancel = () => {
@@ -129,7 +132,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
             accessibilityRole="progressbar"
             accessibilityValue={{ min: 1, max: progressTotal, now: currentStep }}
           >
-            {CAPTURE_STEPS.map((translationKey, index) => {
+            {progressSteps.map((translationKey, index) => {
               const chipStep = index + 1;
               const isCompleted = chipStep < currentStep;
               const isCurrent = chipStep === currentStep;

@@ -1,3 +1,4 @@
+import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { CompactPropertySpecs } from '@/components/CompactPropertySpecs';
 import { compactPropertySpecs } from '@/services/compactPropertyDetails';
@@ -1373,7 +1374,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       )}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView removeClippedSubviews={false} style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
         {error ? <Text testID="property-edit-error" style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}>{error}</Text> : null}
         {pendingOperation && (recoveryStatus === 'retry_required' || recoveryStatus === 'update_failed') ? (
           <Button title={t('edit.retry_update')} onPress={() => void retryRecovery(true)} loading={saving} testID="property-update-retry" />
@@ -1617,6 +1618,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 </Text>
               </View>
             ) : null}
+            <PropertyFormCard title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} icon="map-pin" testID="property-edit-basic-card">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.type')}</Text>
             <Text testID="property-fixed-type" style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{savedTypeLabel}</Text>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.transaction')}</Text>
@@ -1625,6 +1627,24 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Choice key={transaction} selected={shownTransaction === transaction} onPress={() => selectTransaction(transaction)} title={t(`transaction.${transaction}` as keyof Translations)} testID={`edit-transaction-${transaction}`} />
               ))}
             </View>
+<PropertyAreaBlockRow area={<>            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
+            <TouchableOpacity
+              onPress={() => setAreaOpen(true)}
+              style={[styles.input, propertyFormInputStyle, { borderColor: colors.border, backgroundColor: colors.card }]}
+              accessibilityRole="button"
+              testID="edit-area-selector"
+            >
+              <Text style={{ color: colors.foreground, fontFamily: fonts.regular }}>{areaName(choices.locationAreaId)}</Text>
+            </TouchableOpacity>
+</>} block={<>            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
+            <TextInput
+              value={choices.block ?? ''}
+              onChangeText={value => updateChoices({ block: value || undefined })}
+              keyboardType="number-pad"
+              testID="edit-block"
+              style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+            />
+</>} />
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
               {shownTransaction === 'rent'
                 ? `${t('price.amount')} · ${formatRentalCadence(shownRentalPeriodId, t)}`
@@ -1638,19 +1658,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 if (parsed === undefined || parsed !== null) updateChoices({ priceAmount: parsed ?? undefined });
               }}
               keyboardType="decimal-pad"
-              style={[styles.input, { color: colors.foreground, borderColor: priceAttempted && isMissingPositiveAmount(shownPrice) ? colors.destructive : colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: priceAttempted && isMissingPositiveAmount(shownPrice) ? colors.destructive : colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="edit-price"
             />
             {priceAttempted && isMissingPositiveAmount(shownPrice) ? <Text accessibilityRole="alert" testID="edit-price-error" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('errors.invalid_price')}</Text> : null}
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
-            <TouchableOpacity
-              onPress={() => setAreaOpen(true)}
-              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card }]}
-              accessibilityRole="button"
-              testID="edit-area-selector"
-            >
-              <Text style={{ color: colors.foreground, fontFamily: fonts.regular }}>{areaName(choices.locationAreaId)}</Text>
-            </TouchableOpacity>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
             <TextInput
               value={choices.areaSquareMeters === undefined ? '' : String(choices.areaSquareMeters)}
@@ -1660,16 +1671,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               }}
               keyboardType="decimal-pad"
               testID="edit-area-square-meters"
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+              style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
             />
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
-            <TextInput
-              value={choices.block ?? ''}
-              onChangeText={value => updateChoices({ block: value || undefined })}
-              keyboardType="number-pad"
-              testID="edit-block"
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-            />
+</PropertyFormCard>
             <ModernPropertyForm
               transaction={shownTransaction}
               salePrice={shownTransaction === 'sale' ? shownPrice : undefined}
@@ -1700,12 +1704,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 });
               }}
             />
+            <PropertyFormCard title={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} icon="file-text">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.description')}</Text>
             <TextInput
               value={choices.description ?? ''}
               onChangeText={value => updateChoices({ description: value })}
               multiline
-              style={[styles.input, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              style={[styles.input, propertyFormInputStyle, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-description"
             />
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.private_notes')}</Text>
@@ -1713,16 +1718,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               value={choices.privateNotes ?? ''}
               onChangeText={value => updateChoices({ privateNotes: value })}
               multiline
-              style={[styles.input, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              style={[styles.input, propertyFormInputStyle, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-private-notes"
             />
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.paci')}</Text>
             <TextInput
               value={choices.paciNumber ?? ''}
               onChangeText={value => updateChoices({ paciNumber: value })}
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-paci"
             />
+</PropertyFormCard>
             <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="property-edit-location-card">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
             <TextInput
@@ -1732,7 +1738,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 setMapsFieldError(getPropertyEditMapsFieldError(value, language));
               }}
               placeholder={language === 'ar' ? 'الصق الرابط هنا' : 'Paste link here'}
-              style={[styles.input, locationLinkInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              style={[styles.input, propertyFormInputStyle, locationLinkInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-maps-link"
             />
             {mapsFieldError ? (
@@ -1811,7 +1817,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             onChangeText={setAreaSearch}
             placeholder={t('location.search')}
             placeholderTextColor={colors.mutedForeground}
-            style={[styles.input, styles.areaSearch, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+            style={[styles.input, propertyFormInputStyle, styles.areaSearch, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
             testID="edit-area-search"
           />
           <ScrollView contentContainerStyle={styles.content}>
@@ -1863,9 +1869,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               setSourcePersonId(retainVisibleSourceSelection(filterPropertySourcePeople(sourcePeople, sourceClassification, query), sourcePersonId));
             }} editable={!sourceBusy} placeholder={language === 'ar' ? 'ابحث بالاسم أو رقم الهاتف' : 'Search name or phone'} accessibilityLabel={language === 'ar' ? 'ابحث بالاسم أو رقم الهاتف' : 'Search name or phone'}
               placeholderTextColor={colors.mutedForeground} testID="property-source-search"
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]} />
+              style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]} />
           </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" testID="property-source-results">
+          <ScrollView removeClippedSubviews={false} style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" testID="property-source-results">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('source.person')}</Text>
             {visibleSourcePeople.map(person => (
               <TouchableOpacity

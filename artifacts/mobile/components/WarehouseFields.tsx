@@ -1,3 +1,4 @@
+import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { Text, TextInput, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
 import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
@@ -39,12 +40,11 @@ export function WarehouseFields({ recordScopeKey, values, onChange, onInvalidQui
       : <TextInput value={raw} onChangeText={input => {
           const value = input.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
           if (value === '' || /^\d+(\.\d*)?$/.test(value)) change(field, value);
-        }} accessibilityLabel={label} testID={`warehouse-${field}`} keyboardType="decimal-pad" style={{ minHeight: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }} />}
+        }} accessibilityLabel={label} testID={`warehouse-${field}`} keyboardType="decimal-pad" style={{ ...propertyFormInputStyle, minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }} />}
     </View>;
   };
   return <View style={{ gap: 16 }} testID="warehouse-specifications">
-    {WAREHOUSE_SPEC_FIELDS.map(renderField)}
-    <Text style={[labelStyle, { color: colors.foreground, marginTop: 8 }]}>{language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}</Text>
-    {WAREHOUSE_EXTRA_FIELDS.map(renderField)}
+    <PropertyFormCard title={language === 'ar' ? 'مواصفات المخزن وتجهيزاته' : 'Warehouse specifications and equipment'} icon="box">{WAREHOUSE_SPEC_FIELDS.map(renderField)}</PropertyFormCard>
+    <PropertyFormCard title={language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}>{WAREHOUSE_EXTRA_FIELDS.map(renderField)}</PropertyFormCard>
   </View>;
 }

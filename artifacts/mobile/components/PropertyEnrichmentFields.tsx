@@ -1,3 +1,4 @@
+import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
@@ -163,7 +164,7 @@ export function PropertyEnrichmentFields({
           if (normalized !== null) onChange(field, normalized);
         }}
         keyboardType={definition.control === 'decimal' ? 'decimal-pad' : 'default'}
-        style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+        style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
         testID={`enrich-field-${field}`}
         accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
       />
@@ -172,7 +173,7 @@ export function PropertyEnrichmentFields({
 
   return (
     <View style={styles.wrap}>
-      {ordered.map(definition => {
+      {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">{ordered.map(definition => {
         const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
         return (
           <View key={definition.field}>
@@ -184,12 +185,9 @@ export function PropertyEnrichmentFields({
             {renderFieldContent(definition)}
           </View>
         );
-      })}
+      })}</PropertyFormCard>}
       {(applicableDefinitions.some(definition => definition.group === 'amenity') || amenityRenderExtra) && (
-        <View>
-          <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'}
-          </Text>
+        <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
           <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             {applicableDefinitions.filter(definition => definition.group === 'amenity').map(({ field }) => {
               const value = values[field];
@@ -204,7 +202,7 @@ export function PropertyEnrichmentFields({
             })}
             {amenityRenderExtra}
           </ChoiceGrid>
-        </View>
+        </PropertyFormCard>
       )}
     </View>
   );

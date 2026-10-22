@@ -141,7 +141,7 @@ export default function PropertyTypeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader step={2} totalSteps={5} />
+      <CaptureHeader step={2} totalSteps={4} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {t('propertyType.title')}

@@ -338,7 +338,7 @@ export default function SummaryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader title={language === 'ar' ? 'مراجعة العقار' : 'Property review'} step={5} totalSteps={5} review />
+      <CaptureHeader title={language === 'ar' ? 'مراجعة العقار' : 'Property review'} step={4} totalSteps={4} review />
       
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <PropertyReview

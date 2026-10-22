@@ -1,3 +1,5 @@
+import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
+import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useState } from 'react';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { View, StyleSheet, Text, TextInput } from 'react-native';
@@ -22,7 +24,7 @@ export default function PriceScreen() {
   const colors = useColors();
   const insets = useScreenInsets();
   const { draft, updateDraft, isReady } = useCapture();
-  const { t, isRTL, fonts } = useI18n();
+  const { t, isRTL, fonts, language } = useI18n();
   
   const isSale = draft.transaction === 'sale';
   const amount = isSale
@@ -30,6 +32,7 @@ export default function PriceScreen() {
     : draft.rentalPrice?.amount?.toString() ?? '';
   const [priceAttempted, setPriceAttempted] = useState(false);
   const priceError = priceAttempted && isMissingPositiveAmount(amount);
+  const areaError = priceAttempted && !draft.locationAreaId;
   const numAmount = Number(amount);
   const workingRentalPeriodId = draft.rentalPeriodId
     ?? (draft.transaction === 'rent' ? MARKET_CONFIG.defaultRentalPeriodId : undefined);
@@ -57,7 +60,7 @@ export default function PriceScreen() {
 
   const handleNext = () => {
     setPriceAttempted(true);
-    if (!isReady || !isValid) return;
+    if (!isReady || !isValid || !draft.locationAreaId) return;
     
     if (isSale) {
       updateDraft({ 
@@ -74,7 +77,7 @@ export default function PriceScreen() {
       });
     }
     router.push({
-      pathname: '/capture/location',
+      pathname: '/capture/summary',
       params: {
         ...(linkPersonId ? { linkPersonId } : {}),
         ...(sourceRole ? { sourceRole } : {}),
@@ -85,7 +88,7 @@ export default function PriceScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader step={3} totalSteps={5} />
+      <CaptureHeader step={3} totalSteps={4} />
       
       <KeyboardAwareScrollViewCompat
         style={styles.container}
@@ -93,9 +96,16 @@ export default function PriceScreen() {
         bottomOffset={100}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-          {isSale ? t('price.sale.title') : t('price.rent.title')}
-        </Text>
+        <PropertyFormCard title={t('capture.progress.basics')} icon="map-pin">
+          <PropertyAreaBlockRow area={<>
+            <Text style={{ color: areaError ? colors.destructive : '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('location.areaId')}</Text>
+            <KuwaitAreaSelector selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []} multiSelect={false} onChange={ids => updateDraft({ locationAreaId: ids[0] })} testID="basic-capture-area" />
+            {areaError ? <Text accessibilityRole="alert" style={{ color: colors.destructive }}>{language === 'ar' ? 'اختر المنطقة للمتابعة.' : 'Select an area to continue.'}</Text> : null}
+          </>} block={<>
+            <Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
+            <TextInput value={draft.block ?? ''} onChangeText={block => updateDraft({ block: block || undefined })} keyboardType="number-pad" testID="basic-capture-block" style={[propertyFormInputStyle, { textAlign: isRTL ? 'right' : 'left', fontFamily: fonts.semiBold }]} />
+          </>} />
+
 
         <Text style={[styles.label, { color: priceError ? colors.destructive : colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
           {isSale
@@ -111,6 +121,7 @@ export default function PriceScreen() {
           placeholderTextColor={colors.mutedForeground}
           style={[
             styles.input,
+            propertyFormInputStyle,
             { 
               backgroundColor: colors.card,
               borderColor: priceError ? colors.destructive : colors.border,
@@ -140,6 +151,7 @@ export default function PriceScreen() {
             ))}
           </ChoiceGrid>
         ) : null}
+        </PropertyFormCard>
       </KeyboardAwareScrollViewCompat>
       
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>

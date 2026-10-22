@@ -1,3 +1,4 @@
+import { propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { ChoiceChip } from '@/components/ChoiceChip';
@@ -68,7 +69,7 @@ export function NumericQuickPick({
 
   return (
     <View style={styles.container} testID={testID}>
-      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
         {label}
       </Text>
       <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -129,6 +130,7 @@ export function NumericQuickPick({
             accessibilityHint={invalid ? invalidLabel : undefined}
             style={[
               styles.input,
+            propertyFormInputStyle,
               {
                 color: colors.foreground,
                 borderColor: invalid ? colors.destructive : colors.border,
@@ -159,7 +161,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   choices: {
     flexWrap: 'wrap',
@@ -168,7 +170,8 @@ const styles = StyleSheet.create({
   choice: {
     minWidth: 46,
     minHeight: 44,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
+    borderRadius: 9,
   },
   input: {
     minHeight: 48,

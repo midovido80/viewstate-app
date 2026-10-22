@@ -1,3 +1,4 @@
+import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { Text, TextInput, View, StyleSheet } from 'react-native';
 import type { PropertyType, PropertyCaptureCategoryId, PropertyDemoCaptureMetadata, PropertyDetailField } from '@workspace/property-domain';
 import type { DemoCategoryDefinition } from '@/services/propertyDemoCatalog';
@@ -37,6 +38,7 @@ export interface ModernPropertyFormProps {
 
 export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
   if (propertyType === 'warehouse') return <WarehouseFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
+  const hasExtraFields = category && (category.numericFields.some(item => !isMappedTemplateField(item.id)) || category.choices.some(choice => !isMappedTemplateField(choice.id)));
   const nearbySection = onNearbyChange ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
   if (propertyType === 'commercial_complex' && transaction === 'sale') return <View><CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
   if (isCommercialFloorSale(propertyType, values.floorUse, transaction)) return <View><CommercialComplexSaleFields profile="floor" recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
@@ -64,10 +66,10 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
       {propertyType === 'other_built_property' ? (
         <View>
           <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'توضيح نوع العقار' : 'Property clarification'}</Text>
-          <TextInput value={(values as Record<string, string>).clarification ?? ''} onChangeText={value => onChange('clarification', value)} style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} testID="property-edit-clarification" />
+          <TextInput value={(values as Record<string, string>).clarification ?? ''} onChangeText={value => onChange('clarification', value)} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border }]} testID="property-edit-clarification" />
         </View>
       ) : null}
-      {category && onDemoChange ? <View style={styles.demo}>
+      {category && onDemoChange && hasExtraFields ? <PropertyFormCard title={language === 'ar' ? 'تفاصيل النوع' : 'Type-specific details'} icon="list">
         {category.numericFields.filter(item => !isMappedTemplateField(item.id)).map(item => {
           const current = metadata?.numericValues?.[item.id];
           if (item.kind === 'decimal') {
@@ -80,7 +82,7 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
                 if (parsed === undefined) delete numericValues[item.id]; else numericValues[item.id] = parsed;
                 onDemoChange({ numericValues });
               }
-            }} keyboardType="decimal-pad" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} /></View>;
+            }} keyboardType="decimal-pad" style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border }]} /></View>;
           }
           return <NumericQuickPick key={item.id} scopeKey={`${recordScopeKey}:demo:${item.id}`} label={item.label[language === 'ar' ? 1 : 0]} value={current === undefined ? '' : String(current)} quickPickValues={item.id === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined} requireExactValue onChangeText={value => {
             const numericValues = { ...(metadata?.numericValues ?? {}) };
@@ -89,7 +91,7 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
           }} onPendingValidityChange={(_scope, invalid) => onInvalidQuickPickChange?.(item.id as PropertyDetailField, recordScopeKey, invalid)} testID={`demo-${item.id}-quick-pick`} />;
         })}
         {category.choices.filter(choice => !isMappedTemplateField(choice.id)).map(choice => <View key={choice.id}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{choice.label[language === 'ar' ? 1 : 0]}</Text><ChoiceGrid style={styles.chips}>{choice.options.map(option => <ChoiceChip key={option.id} label={option.label[language === 'ar' ? 1 : 0]} selected={metadata?.choices?.[choice.id] === option.id} role="radio" onPress={() => onDemoChange({ choices: { ...(metadata?.choices ?? {}), [choice.id]: option.id } })} />)}</ChoiceGrid></View>)}
-      </View> : null}
+      </PropertyFormCard> : null}
     </View>
   );
 }

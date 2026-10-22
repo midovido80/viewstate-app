@@ -1,3 +1,4 @@
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useMemo, useState, useEffect } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ export function KuwaitAreaSelector({
   testID = 'kuwait-area-selector',
 }: KuwaitAreaSelectorProps) {
   const colors = useColors();
+  const insets = useScreenInsets();
   const { language, isRTL, fonts } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -114,7 +116,7 @@ export function KuwaitAreaSelector({
         onPress={() => setOpen(true)}
         style={[styles.collapsedField, { borderColor: colors.border, backgroundColor: colors.card }]}
       >
-        <Text style={{ color: selected.length > 0 ? colors.foreground : colors.mutedForeground, fontFamily: fonts.regular }}>
+        <Text style={{ color: selected.length > 0 ? colors.foreground : colors.mutedForeground, fontFamily: fonts.semiBold, flex: 1, minWidth: 0, textAlign: isRTL ? 'right' : 'left' }}> 
           {summary}
         </Text>
         <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
@@ -133,7 +135,7 @@ export function KuwaitAreaSelector({
                 </Text>
               </TouchableOpacity>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={{ flex: 1, minHeight: 0 }} removeClippedSubviews={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
               <TextInput
                 value={query}
                 onChangeText={setQuery}
@@ -214,7 +216,7 @@ export function KuwaitAreaSelector({
             </ScrollView>
 
             {multiSelect && (
-              <View style={[styles.modalFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+              <View style={[styles.modalFooter, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
                 <TouchableOpacity
                   onPress={() => {
                     onChange(localSelectedIds);

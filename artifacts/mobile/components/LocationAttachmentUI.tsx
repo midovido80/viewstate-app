@@ -1,3 +1,4 @@
+import { PropertyFormCard } from '@/components/PropertyFormCard';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -7,12 +8,7 @@ import { useI18n } from '@/contexts/I18nContext';
 type ActionIcon = 'crosshair' | 'map' | 'image' | 'video' | 'file-text';
 
 export function LocationAttachmentCard({ title, children, testID }: { title: string; children: ReactNode; testID?: string }) {
-  const colors = useColors();
-  const { fonts, isRTL } = useI18n();
-  return <View testID={testID} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <Text accessibilityRole="header" style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 18, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
-    {children}
-  </View>;
+  return <PropertyFormCard title={title} testID={testID} icon={/attachment|media/.test(testID ?? '') ? 'paperclip' : 'map-pin'}>{children}</PropertyFormCard>;
 }
 
 export function LocationAttachmentRow({ children }: { children: ReactNode }) {

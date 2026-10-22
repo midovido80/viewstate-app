@@ -3195,10 +3195,10 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(batchImport, /people\.import_choose_country/);
   assert.match(batchImport, /people\.import_excluded/);
 
-  // Five callers supply the five-chip capture progression; chip state is
+  // Basic capture combines area, block and price; the legacy area route remains readable. Chip state is
   // explicitly completed/current/future rather than inferred from labels.
-  for (const [screen, step] of [[transaction, 1], [propertyType, 2], [price, 3], [location, 4], [summary, 5]] as const) {
-    assert.match(screen, new RegExp(`<CaptureHeader[^>]*step=\\{${step}\\}[^>]*totalSteps=\\{5\\}`));
+  for (const [screen, step] of [[transaction, 1], [propertyType, 2], [price, 3], [summary, 4]] as const) {
+    assert.match(screen, new RegExp(`<CaptureHeader[^>]*step=\\{${step}\\}[^>]*totalSteps=\\{4\\}`));
   }
   assert.match(captureHeader, /CAPTURE_STEPS = \[[\s\S]*capture\.progress\.review/);
   assert.match(captureHeader, /const isCompleted = chipStep < currentStep/);
