@@ -116,7 +116,7 @@ export function KuwaitAreaSelector({
         onPress={() => setOpen(true)}
         style={[styles.collapsedField, { borderColor: colors.border, backgroundColor: colors.card }]}
       >
-        <Text style={{ color: selected.length > 0 ? colors.foreground : colors.mutedForeground, fontFamily: fonts.semiBold, flex: 1, minWidth: 0, textAlign: isRTL ? 'right' : 'left' }}> 
+        <Text style={{ color: selected.length > 0 ? colors.foreground : colors.mutedForeground, fontFamily: fonts.semiBold, flex: 1, minWidth: 0, textAlign: isRTL ? 'right' : 'left' }}>
           {summary}
         </Text>
         <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
