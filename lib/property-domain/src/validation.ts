@@ -17,6 +17,7 @@ import type {
   PropertyAttachmentMetadata,
   PropertyCore,
   PropertySource,
+  PropertyDemoCaptureMetadata,
   ShareDisclosurePolicy,
   TypeDetails,
   ValidationIssue,
@@ -147,6 +148,38 @@ export function validateTypeDetails(
   }
 
   const candidate = details as TypeDetails & Record<string, unknown>;
+  if (details.propertyType === "apartment") {
+    if (candidate.studioRoomCount !== undefined
+      && (details.apartmentSubtype !== "studio" || candidate.studioRoomCount !== 1)) {
+      issues.push(issue(
+        "incompatible_detail_field",
+        ["typeDetails", "studioRoomCount"],
+        "Studio room count is fixed at one and is valid only for a Studio apartment.",
+      ));
+    }
+    for (const field of ["hasKitchen", "hasHall", "hasParking", "hasSplitAC", "hasSharedPool", "hasSharedGym", "hasSeaView"] as const) {
+      if (candidate[field] !== undefined && details.apartmentSubtype !== "studio") {
+        issues.push(issue(
+          "incompatible_detail_field",
+          ["typeDetails", field],
+          `${field} is supported only for a Studio apartment.`,
+        ));
+      }
+    }
+  }
+  if (candidate.occupancy !== undefined && !["family", "bachelor", "any"].includes(candidate.occupancy as string)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "occupancy"], "Occupancy must be family, bachelor, or any."));
+  }
+  if (candidate.propertyUse !== undefined && !isFloorUse(candidate.propertyUse)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "propertyUse"], "Property use must be residential or commercial."));
+  }
+  if (details.propertyType === "apartment" && details.apartmentSubtype === "studio" && candidate.masterBedroomCount !== undefined) {
+    issues.push(issue("incompatible_detail_field", ["typeDetails", "masterBedroomCount"], "Master bedrooms are not applicable to a Studio."));
+  }
+  if (typeof candidate.masterBedroomCount === "number" && typeof candidate.bedroomCount === "number"
+    && candidate.masterBedroomCount > candidate.bedroomCount) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "masterBedroomCount"], "Master bedrooms cannot exceed total bedrooms."));
+  }
   if (candidate.furnishing !== undefined && !isFurnishing(candidate.furnishing)) {
     issues.push(issue("invalid_furnishing", ["typeDetails", "furnishing"], "Furnishing must be unfurnished, semi_furnished, or furnished."));
   }
@@ -183,6 +216,10 @@ export function validateTypeDetails(
       continue;
     }
 
+    if (details.propertyType === "other_built_property" && definition.propertyUses
+      && !definition.propertyUses.includes(candidate.propertyUse as "residential" | "commercial")) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", definition.field], "This field requires residential Property use."));
+    }
     if (
       details.propertyType === "floor" &&
       definition.floorUses !== undefined &&
@@ -202,7 +239,52 @@ export function validateTypeDetails(
     "builtUpAreaSquareMeters",
     "frontageWidthMeters",
     "ceilingHeightMeters",
+    "serviceElevatorCapacityTons",
+    "electricityCapacity",
   ] as const;
+  const commercialChoices = {
+    buildingAgeBand: ["1_5", "6_12", "over_12"],
+    warehouseFinish: ["normal", "good", "super_deluxe"],
+    warehouseKind: ["industrial", "food"],
+    rampVehicleSize: ["large", "medium", "small"],
+    electricityPhase: ["two_phase", "three_phase"],
+    electricityCapacityUnit: ["A", "kW", "kVA"],
+    streetPosition: ["one_street", "two_streets", "corner", "front_back"],
+    rentalOccupancy: details.propertyType === "floor" ? ["vacant", "rented"] : ["vacant", "fully_rented", "partially_rented"],
+  };
+  for (const [field, options] of Object.entries(commercialChoices)) {
+    if (candidate[field] !== undefined && !options.includes(candidate[field] as string)) {
+      issues.push(issue("invalid_physical_value", ["typeDetails", field], "Invalid commercial choice."));
+    }
+  }
+  if (candidate.parkingTypes !== undefined && (!Array.isArray(candidate.parkingTypes)
+    || candidate.parkingTypes.some(value => !["private", "public", "paid"].includes(value))
+    || new Set(candidate.parkingTypes).size !== candidate.parkingTypes.length)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "parkingTypes"], "Invalid parking types."));
+  }
+  if (candidate.privateParkingCount !== undefined && (!Array.isArray(candidate.parkingTypes) || !candidate.parkingTypes.includes("private"))) {
+    issues.push(issue("incompatible_detail_field", ["typeDetails", "privateParkingCount"], "Private parking count requires private parking."));
+  }
+  if (candidate.monthlyIncome !== undefined && (typeof candidate.monthlyIncome !== "number" || !Number.isFinite(candidate.monthlyIncome) || candidate.monthlyIncome < 0)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "monthlyIncome"], "Monthly income must be a non-negative finite amount."));
+  }
+  if (candidate.warehouseLevels !== undefined && (!Array.isArray(candidate.warehouseLevels)
+    || candidate.warehouseLevels.some(value => !["basement", "ground"].includes(value))
+    || new Set(candidate.warehouseLevels).size !== candidate.warehouseLevels.length)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "warehouseLevels"], "Select unique basement/ground levels."));
+  }
+  for (const [child, active] of [
+    ["rampVehicleSize", candidate.hasVehicleRamp === true],
+    ["serviceElevatorCapacityTons", candidate.hasServiceElevator === true],
+    ["hasColdStorage", candidate.warehouseKind !== "industrial"],
+  ] as const) {
+    if (details.propertyType === "warehouse" && candidate[child] !== undefined && !active) {
+      issues.push(issue("incompatible_detail_field", ["typeDetails", child], "Warehouse detail requires its applicable parent selection."));
+    }
+  }
+  if (candidate.electricityCapacity !== undefined && candidate.electricityCapacityUnit === undefined) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "electricityCapacityUnit"], "Choose a unit for electrical capacity."));
+  }
   for (const field of positiveFields) {
     const value = candidate[field];
     if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
@@ -211,19 +293,28 @@ export function validateTypeDetails(
   }
 
   const countFields = [
+    "privateParkingCount",
     "bathroomCount",
     "parkingSpaceCount",
     "floorCount",
     "unitCount",
+    "roomsPerUnit",
+    "bathroomsPerUnit",
     "apartmentCount",
     "shopCount",
     "officeCount",
     "elevatorCount",
     "bedroomCount",
+    "masterBedroomCount",
+    "studioRoomCount",
     "livingRoomCount",
     "floorNumber",
     "loadingBayCount",
+    "entranceCount",
   ] as const;
+  if (details.propertyType === "commercial_complex" && candidate.floorCount !== undefined && (typeof candidate.floorCount !== "number" || candidate.floorCount < 1)) {
+    issues.push(issue("invalid_physical_value", ["typeDetails", "floorCount"], "A commercial complex must have at least one floor."));
+  }
   for (const field of countFields) {
     const value = candidate[field];
     if (
@@ -234,7 +325,36 @@ export function validateTypeDetails(
     }
   }
 
-  for (const field of ["hasMaidRoom", "hasPool", "hasWaterfront", "hasColdStorage"] as const) {
+  for (const field of [
+    "hasBasement",
+    "hasPrivateEntrance",
+    "hasAccessibleEntrance",
+    "hasMortgage",
+    "hasMaidRoom",
+    "hasHeating",
+    "hasBalcony",
+    "hasLaundryRoom",
+    "hasSolarHeater",
+    "hasElevator",
+    "hasGarden",
+    "hasSecurityGuard",
+    "hasBBQArea",
+    "hasPool",
+    "hasWaterfront",
+    "hasColdStorage",
+    "hasVehicleRamp",
+    "hasServiceElevator",
+    "hasEscalator",
+    "hasFireSystem",
+    "hasCentralAC",
+    "hasSplitAC",
+    "hasSharedPool",
+    "hasSharedGym",
+    "hasSeaView",
+    "hasKitchen",
+    "hasHall",
+    "hasParking",
+  ] as const) {
     const value = candidate[field];
     if (value !== undefined && typeof value !== "boolean") {
       issues.push(issue("invalid_physical_value", ["typeDetails", field], `${field} must be boolean.`));
@@ -252,7 +372,13 @@ export function validateTypeDetails(
     }
   }
 
+  const aggregateUnitFields = ["unitCount", "apartmentCount", "shopCount", "officeCount"] as const;
+  const aggregateUnitCountsApplicable = aggregateUnitFields.every(field =>
+    PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)
+      ?.appliesTo.includes(details.propertyType) === true,
+  );
   if (
+    aggregateUnitCountsApplicable &&
     typeof candidate.unitCount === "number" &&
     ["apartmentCount", "shopCount", "officeCount"].reduce(
       (sum, field) => sum + (typeof candidate[field] === "number" ? candidate[field] as number : 0),
@@ -419,6 +545,10 @@ export function validateProperty(
   const issues: ValidationIssue[] = [];
   const coreResult = validatePropertyCore(property.core);
   const offerResult = validateOffer(property.activeOffer);
+  const demoResult = validateDemoCapture(property.demoCapture);
+  if (!demoResult.ok) issues.push(...demoResult.issues);
+  if (property.areaSquareMeters !== undefined && (!Number.isFinite(property.areaSquareMeters) || property.areaSquareMeters < 0)) issues.push(issue("invalid_area", ["areaSquareMeters"], "Area must be finite and non-negative."));
+  if (property.areaUnit !== undefined && property.areaUnit !== "square_meter" && property.areaUnit !== "square_foot") issues.push(issue("invalid_area_unit", ["areaUnit"], "Area unit is invalid."));
 
   if (!coreResult.ok) issues.push(...coreResult.issues);
   if (!offerResult.ok) issues.push(...offerResult.issues);
@@ -443,4 +573,27 @@ export function validateProperty(
   }
 
   return issues.length === 0 ? valid(property) : invalid(issues);
+}
+
+const CAPTURE_CATEGORY_IDS = new Set([
+  "whole_building_corporate_rent", "whole_building_sale", "commercial_complex_sale",
+  "family_apartment", "bachelor_apartment", "house", "villa", "chalet", "warehouse", "duplex",
+]);
+
+export function validateDemoCapture(value: PropertyDemoCaptureMetadata | undefined): ValidationResult<PropertyDemoCaptureMetadata | undefined> {
+  if (value === undefined) return valid(undefined);
+  const issues: ValidationIssue[] = [];
+  if (!CAPTURE_CATEGORY_IDS.has(value.categoryId)) issues.push(issue("invalid_demo_category", ["demoCapture", "categoryId"], "Demo category is not approved."));
+  if (value.areaSquareMeters !== undefined && (!Number.isFinite(value.areaSquareMeters) || value.areaSquareMeters < 0)) issues.push(issue("invalid_demo_area", ["demoCapture", "areaSquareMeters"], "Demo area must be finite and non-negative."));
+  if (value.areaUnit !== undefined && value.areaUnit !== "square_meter" && value.areaUnit !== "square_foot") issues.push(issue("invalid_demo_area_unit", ["demoCapture", "areaUnit"], "Demo area unit is invalid."));
+  for (const [name, values] of [["numericValues", value.numericValues], ["choices", value.choices]] as const) {
+    if (!values) continue;
+    for (const [key, entry] of Object.entries(values)) {
+      if (!key || (name === "numericValues" ? typeof entry !== "number" || !Number.isFinite(entry) || entry < 0 : typeof entry !== "string" || !entry)) issues.push(issue("invalid_demo_value", ["demoCapture", name, key], "Demo metadata value is invalid."));
+    }
+  }
+  for (const [name, values] of [["selectedFeatures", value.selectedFeatures], ["nearbyServices", value.nearbyServices]] as const) {
+    if (values && values.some(entry => typeof entry !== "string" || !entry)) issues.push(issue("invalid_demo_id", ["demoCapture", name], "Demo metadata identifier is invalid."));
+  }
+  return issues.length ? invalid(issues) : valid(value);
 }

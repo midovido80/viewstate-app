@@ -7,34 +7,34 @@
 const colors = {
   light: {
     text: '#0F1D2E',
-    tint: '#1976F3',
+    tint: '#1A56FF',
 
-    background: '#F6F8FA',
+    background: '#F7F8FB',
     foreground: '#0F1D2E',
 
     card: '#FFFFFF',
     cardForeground: '#0F1D2E',
 
-    primary: '#1976F3',
+    primary: '#1A56FF',
     primaryForeground: '#FFFFFF',
 
     turquoise: '#18B5A6',
 
-    secondary: '#E6F7F5',
-    secondaryForeground: '#18B5A6',
+    secondary: '#E5E7EB',
+    secondaryForeground: '#0F1D2E',
 
-    muted: '#E5E7EB', // Slightly darker than background for dividers/empty backgrounds
+    muted: '#E5E7EB',
     mutedForeground: '#6B7280',
 
-    accent: '#E6F7F5', // Secondary turquoise background
-    accentForeground: '#18B5A6',
+    accent: '#173F78',
+    accentForeground: '#FFFFFF',
 
-    destructive: '#FF6B6B',
+    destructive: '#E11D48',
     destructiveForeground: '#FFFFFF',
 
-    success: '#A6D96A',
-    whatsapp: '#25D366',
-    whatsappForeground: '#062B18',
+    success: '#16A34A',
+    whatsapp: '#16A34A',
+    whatsappForeground: '#FFFFFF',
     warning: '#FFB84D',
 
     border: '#E5E7EB',

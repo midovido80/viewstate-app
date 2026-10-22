@@ -123,6 +123,27 @@ test('normalizes approved local fields and keeps non-M2 data out of evidence', (
   assert.equal('hasWaterfront' in (candidate.property.typeDetails ?? {}), false);
 });
 
+test('new residential Property facts never enter Matching evidence', () => {
+  const candidate = normalizeMyPropertyCandidate(property({
+    typeDetails: {
+      propertyType: 'apartment',
+      bedroomCount: 2,
+      bathroomCount: 1,
+      hasHeating: true,
+      hasBalcony: false,
+      hasMaidRoom: true,
+      hasLaundryRoom: true,
+      hasSolarHeater: true,
+      hasElevator: true,
+      hasGarden: true,
+      hasSecurityGuard: true,
+      hasBBQArea: true,
+    },
+  }));
+  assert.ok(candidate);
+  assert.deepEqual(candidate.evidence, { bedrooms: 2, bathrooms: 1 });
+});
+
 test('maps supported chalet pool evidence without treating waterfront as sea view', () => {
   const candidate = normalizeMyPropertyCandidate(property({
     propertyType: 'chalet',
