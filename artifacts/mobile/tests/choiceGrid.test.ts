@@ -33,15 +33,15 @@ registerHooks({
   },
 });
 
-const tiles = await import('../components/ChoiceTile.tsx');
-const { PropertyEnrichmentFields } = await import('../components/PropertyEnrichmentFields.tsx');
+const loadComponents = () => Promise.all([import('../components/ChoiceTile.tsx'), import('../components/PropertyEnrichmentFields.tsx')]);
 const props = (element: any) => element.props;
 function elements(element: any): any[] {
   if (Array.isArray(element)) return element.flatMap(elements);
   return element && typeof element === 'object' && 'props' in element ? [element, ...elements(element.props.children)] : [];
 }
 
-test('Choice grids fit two equal columns after measurement at narrow, phone and tablet widths', () => {
+test('Choice grids fit two equal columns after measurement at narrow, phone and tablet widths', async () => {
+  const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
   for (const width of [240, 280, 320, 350, 362, 728]) {
     const grid = tiles.ChoiceGrid({ children: null });
     props(grid).onLayout({ nativeEvent: { layout: { width } } });
@@ -52,7 +52,8 @@ test('Choice grids fit two equal columns after measurement at narrow, phone and 
   assert.equal(choiceTileWidth(NaN), undefined);
 });
 
-test('Editable tiles retain radio/checkbox semantics, full labels and exactly one press callback in both directions', () => {
+test('Editable tiles retain radio/checkbox semantics, full labels and exactly one press callback in both directions', async () => {
+  const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
   for (const rtl of [false, true]) {
     state.rtl = rtl;
     for (const role of ['radio', 'checkbox'] as const) {
@@ -69,14 +70,16 @@ test('Editable tiles retain radio/checkbox semantics, full labels and exactly on
   }
 });
 
-test('Saved choice facts contain no input role, selection indicator or press action', () => {
+test('Saved choice facts contain no input role, selection indicator or press action', async () => {
+  const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
   const fact = tiles.ChoiceFact({ label: 'بلكونة' });
   assert.equal(props(fact).onPress, undefined);
   assert.equal(props(fact).accessibilityRole, undefined);
   assert.equal(elements(fact).some(item => item.props.name === 'check'), false);
 });
 
-test('Amenity taps select or clear a fact while historical false is readable and other fields stay untouched', () => {
+test('Amenity taps select or clear a fact while historical false is readable and other fields stay untouched', async () => {
+  const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
   for (const initial of ['', 'true', 'false']) {
     const changes: unknown[] = [];
     const form = PropertyEnrichmentFields({ recordScopeKey: 'test', propertyType: 'apartment', values: { hasBalcony: initial, bedroomCount: '3' }, onChange: (field, value) => changes.push([field, value]) });
