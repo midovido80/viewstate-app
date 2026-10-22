@@ -1,3 +1,5 @@
+import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
+import { formatPrice, formatRentalCadence, toEnglishDigits } from '@/constants/market';
 import { STUDIO_FEATURES } from '@/services/studioAmenities';
 import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
 import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
@@ -407,6 +409,7 @@ export default function StudioCaptureRoute() {
       && selectedPerson.classifications.includes('seeker')
       && (!seekerParam || selectedPerson.id === seekerParam));
   const showingReview = step === 'review' && wantedIdentityReady;
+  const propertyReview = showingReview && mode === 'offered' && !editing;
   const getEditBackTarget = () => getStudioEditBackTarget(
     mode,
     editing,
@@ -1485,6 +1488,19 @@ export default function StudioCaptureRoute() {
     </View>
   );
 
+  const renderPropertyReview = () => (
+    <PropertyReview progress={{ step: 2, total: 2 }} propertyLabel={t('enrich.apartment_subtype.studio')}
+      intent={studioReviewIntent().label} area={areaTitle(values.locationAreaId)}
+      price={values.price.trim() ? formatPrice(Number(toEnglishDigits(values.price).replace(/[٫,]/g, '.')), 'KWD', language) : undefined}
+      priceLabel={language === 'ar' ? (values.transaction === 'sale' ? 'السعر' : 'الإيجار') : (values.transaction === 'sale' ? 'Price' : 'Rent')}
+      cadence={values.transaction === 'rent' ? formatRentalCadence(values.rentalPeriodId, t) : undefined}>
+      {STUDIO_FORM_FIELD_ORDER[mode].filter(field => !['transaction', 'locationAreaId', 'price', 'rentalPeriodId', 'mapsLink'].includes(field)).map(fieldId => renderReviewCatalogField(fieldId))}
+      {values.occupancy ? reviewItem(language === 'ar' ? 'نوع السكن' : 'Occupancy', ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0]) : null}
+      {values.privateNotes ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes) : null}
+      {values.mapsLink ? reviewItem(language === 'ar' ? 'الموقع الدقيق' : 'Exact location', values.mapsLink) : null}
+    </PropertyReview>
+  );
+
   if (!isValidRoute) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: topInset + 16 }]}>
@@ -1506,7 +1522,7 @@ export default function StudioCaptureRoute() {
           <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('studio.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-          {editing ? t('studio.edit_title') : t(mode === 'offered' ? 'studio.title.offered' : 'studio.title.wanted')}
+          {propertyReview ? (language === 'ar' ? 'مراجعة العقار' : 'Property review') : editing ? t('studio.edit_title') : t(mode === 'offered' ? 'studio.title.offered' : 'studio.title.wanted')}
         </Text>
       </View>
       {loading ? (
@@ -1535,8 +1551,8 @@ export default function StudioCaptureRoute() {
             ) : null}
             {!showingReview ? renderForm() : (
               <>
-                <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('studio.review')}</Text>
-                {renderReview()}
+                {!propertyReview && <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('studio.review')}</Text>}
+                {propertyReview ? renderPropertyReview() : renderReview()}
                 {mode === 'offered' ? renderStudioAttachments() : null}
               </>
             )}
@@ -1612,7 +1628,7 @@ export default function StudioCaptureRoute() {
                 disabled={saving}
               />
             ) : null}
-            <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            {!propertyReview && <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {showingReview ? (
                 <Button title={t('studio.back')} onPress={returnToForm} disabled={saving} />
               ) : null}
@@ -1630,8 +1646,11 @@ export default function StudioCaptureRoute() {
                   testID="studio-save"
                 />
               )}
-            </View>
+            </View>}
           </KeyboardAwareScrollViewCompat>
+          {propertyReview && <PropertyReviewFooter title={saving ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : t('summary.submit')}
+            onPress={() => void doSave()} loading={saving}
+            disabled={saving || !!propertyRecovery || !!committedRequirement.current || !!savedProperty || !!savedRequirement} testID="studio-save" />}
         </>
       )}
     </View>

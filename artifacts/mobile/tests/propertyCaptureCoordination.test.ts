@@ -368,7 +368,7 @@ test('Capture Review summary uses the canonical Offered intent label', async () 
   const summary = await readFile('app/capture/summary.tsx', 'utf8');
   const summaryView = summary.slice(summary.indexOf('<ScrollView'), summary.indexOf('</ScrollView>'));
   assert.match(summary, /projectRecordIntent\('offered', draft\.transaction, language\)\.label/);
-  assert.match(summaryView, /value=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
+  assert.match(summaryView, /intent=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
   assert.doesNotMatch(summaryView, /t\(`transaction\.\$\{draft\.transaction\}/);
 });
 
@@ -376,9 +376,9 @@ test('Capture stage-3 Preview uses the canonical Offered intent presentation', a
   const capture = await readFile('app/capture/index.tsx', 'utf8');
   const preview = capture.slice(
     capture.indexOf('{stage === 3 && ('),
-    capture.indexOf('</Section>', capture.indexOf('{stage === 3 && (')),
+    capture.indexOf('</PropertyReview>', capture.indexOf('{stage === 3 && (')),
   );
-  assert.match(preview, /<PreviewRow label=\{t\('summary\.transaction'\)\} value=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
+  assert.match(preview, /intent=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
   assert.doesNotMatch(preview, /t\(`transaction\.\$\{draft\.transaction\}/);
 });
 

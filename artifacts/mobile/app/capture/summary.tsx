@@ -1,3 +1,4 @@
+import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { useRef, useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
@@ -9,7 +10,7 @@ import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
 import { Button } from '@/components/Button';
 import { getAreaById } from '@/constants/kuwait-areas';
-import { formatPrice, formatRentalPrice } from '@/constants/market';
+import { formatPrice, formatRentalPrice, formatRentalCadence } from '@/constants/market';
 import { SingleFlight } from '@/services/serialTaskQueue';
 import { store } from '@/services/persistence';
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
@@ -337,21 +338,18 @@ export default function SummaryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader title={t('summary.title')} step={5} totalSteps={5} />
+      <CaptureHeader title={language === 'ar' ? 'مراجعة العقار' : 'Property review'} step={5} totalSteps={5} review />
       
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {t('summary.details')}
-          </Text>
-        </View>
-        
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.cardRadius }]}>
-          <SummaryRow
-            label={t('summary.transaction')}
-            value={projectRecordIntent('offered', draft.transaction, language).label}
-          />
-          {!isBasicApartmentFollowUp ? PROPERTY_FORM_CATALOG.map(({ field }) => [field, previewDetails[field]] as const)
+        <PropertyReview
+          propertyLabel={previewSubtypeLabel ?? (draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : '')}
+          intent={projectRecordIntent('offered', draft.transaction, language).label}
+          area={areaDisplay}
+          price={draft.transaction === 'sale' && draft.salePrice ? formatPrice(draft.salePrice.amount, draft.salePrice.currencyCode, language) : draft.transaction === 'rent' && draft.rentalPrice ? formatPrice(draft.rentalPrice.amount, draft.rentalPrice.currencyCode, language) : undefined}
+          priceLabel={language === 'ar' ? (draft.transaction === 'sale' ? 'السعر' : 'الإيجار') : (draft.transaction === 'sale' ? 'Price' : 'Rent')}
+          cadence={draft.transaction === 'rent' ? formatRentalCadence(draft.rentalPeriodId, t) : undefined}
+        >
+          {!isBasicApartmentFollowUp && Object.keys(previewDetails).some(field => field !== 'propertyType' && previewDetails[field] !== undefined && previewDetails[field] !== '') ? PROPERTY_FORM_CATALOG.map(({ field }) => [field, previewDetails[field]] as const)
             .filter(([, value]) => value !== undefined && value !== '')
             .map(([field, value]) => (
               <SummaryRow
@@ -367,60 +365,14 @@ export default function SummaryScreen() {
                 )}
               />
             )) : null}
-          <SummaryRow 
-            label={t('summary.property_type')}
-            value={draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : ''}
-          />
-          {previewSubtypeLabel ? (
-            <SummaryRow
-              label={t('studio.apartment_subtype')}
-              value={previewSubtypeLabel}
-            />
-          ) : null}
-          
-          {draft.transaction === 'sale' && draft.salePrice && (
-            <SummaryRow 
-              label={t('summary.sale_price')}
-              value={formatPrice(draft.salePrice.amount, draft.salePrice.currencyCode, language)}
-            />
-          )}
-          
-          {draft.transaction === 'rent' && draft.rentalPrice && (
-            <SummaryRow 
-              label={t('summary.rent_price')}
-              value={formatRentalPrice(
-                draft.rentalPrice.amount,
-                draft.rentalPrice.currencyCode,
-                draft.rentalPeriodId,
-                language,
-                t,
-              )}
-            />
-          )}
-
-          <SummaryRow 
-            label={t('summary.location')}
-            value={areaDisplay}
-          />
-        </View>
+        </PropertyReview>
 
       </ScrollView>
       
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background, borderTopColor: colors.border }]}>
-        <Button 
-          title={t(
-            saveRecoveryStatus === 'cleanup_pending'
-              ? 'summary.retry_cleanup'
-              : saveRecoveryStatus === 'retry_required'
-                ? 'summary.retry_save'
-                : 'summary.submit'
-          )}
-          onPress={() => { void handleFinish(); }}
-          loading={submitting}
-          size="large"
-          testID="btn-submit"
-        />
-      </View>
+      <PropertyReviewFooter
+        title={t(saveRecoveryStatus === 'cleanup_pending' ? 'summary.retry_cleanup' : saveRecoveryStatus === 'retry_required' ? 'summary.retry_save' : 'summary.submit')}
+        onPress={() => { void handleFinish(); }} loading={submitting} testID="btn-submit"
+      />
     </View>
   );
 }

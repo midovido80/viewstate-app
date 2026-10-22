@@ -1,3 +1,5 @@
+import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
+import { formatPrice, formatRentalCadence } from '@/constants/market';
 import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
 import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
 import { warehouseFieldVisible } from '@/services/warehouseForm';
@@ -877,7 +879,7 @@ export default function CaptureWorkflow() {
           <TouchableOpacity onPress={handleBack} style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]} testID="capture-form-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}>
             <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
           </TouchableOpacity>
-          <Text numberOfLines={2} style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('home.action.addProperty')}</Text>
+          <Text numberOfLines={2} style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{stage === 3 ? (language === 'ar' ? 'مراجعة العقار' : 'Property review') : t('home.action.addProperty')}</Text>
           <TouchableOpacity onPress={() => void goHome()} style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]} testID="capture-form-home" disabled={draftSaveStatus === 'saving' || submitting} accessibilityRole="button" accessibilityLabel={t('home.title')}>
             <Feather name="home" size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold, fontSize: 13 }]}>{t('home.title')}</Text>
           </TouchableOpacity>
@@ -888,7 +890,7 @@ export default function CaptureWorkflow() {
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 96 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: stage === 3 ? 24 : Math.max(insets.bottom, 20) + 96 }]}
       >
         {isStudioCaptureBlocked ? (
           <View
@@ -1103,7 +1105,15 @@ export default function CaptureWorkflow() {
         )}
 
         {stage === 3 && (
-          <Section title={language === 'ar' ? 'مراجعة وتأكيد' : 'Preview and confirmation'} colors={colors} fonts={fonts}>
+          <PropertyReview
+            progress={{ step: 3, total: 3 }}
+            propertyLabel={draft.propertyType === 'apartment' && captureDetails.apartmentSubtype ? t(`enrich.apartment_subtype.${captureDetails.apartmentSubtype}` as keyof Translations) : draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : ''}
+            intent={projectRecordIntent('offered', draft.transaction, language).label}
+            area={selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : ''}
+            price={draft.transaction === 'sale' && draft.salePrice ? formatPrice(draft.salePrice.amount, draft.salePrice.currencyCode, language) : draft.transaction === 'rent' && draft.rentalPrice ? formatPrice(draft.rentalPrice.amount, draft.rentalPrice.currencyCode, language) : undefined}
+            priceLabel={language === 'ar' ? (draft.transaction === 'sale' ? 'السعر' : 'الإيجار') : (draft.transaction === 'sale' ? 'Price' : 'Rent')}
+            cadence={draft.transaction === 'rent' ? formatRentalCadence(draft.rentalPeriodId, t) : undefined}
+          >
             {saveError ? (
               <View
                 accessibilityRole="alert"
@@ -1118,13 +1128,7 @@ export default function CaptureWorkflow() {
             <TouchableOpacity onPress={() => { setSaveError(null); setStage(2); }} accessibilityRole="button" testID="capture-preview-back-edit" style={[styles.previewEdit, navigationButtonStyle]}>
               <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('detail.edit')}</Text>
             </TouchableOpacity>
-            <Text style={[styles.previewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{demoCategory?.label[language === 'ar' ? 1 : 0] ?? (draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : '')}</Text>
-            <Text style={[styles.previewMeta, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{selectedArea ? (language === 'ar' ? selectedArea.ar : selectedArea.en) : ''}</Text>
-            <PreviewRow label={t('summary.transaction')} value={projectRecordIntent('offered', draft.transaction, language).label} colors={colors} fonts={fonts} />
-            <PreviewRow label={t('summary.property_type')} value={draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : ''} colors={colors} fonts={fonts} />
             <PreviewRow label={language === 'ar' ? 'القطعة' : 'Block'} value={draft.block ?? ''} colors={colors} fonts={fonts} />
-            <PreviewRow label={draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')} value={String((draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount) ?? '')} colors={colors} fonts={fonts} />
-            {draft.transaction === 'rent' && <PreviewRow label={language === 'ar' ? 'الدورية' : 'Cadence'} value={draft.rentalPeriodId === 'yearly' ? (language === 'ar' ? 'سنوياً' : 'Yearly') : (language === 'ar' ? 'شهرياً' : 'Monthly')} colors={colors} fonts={fonts} />}
             {!isBasicApartmentFollowUp && (
               <>
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
@@ -1145,7 +1149,7 @@ export default function CaptureWorkflow() {
              {captureAttachments.length ? <PreviewRow label={language === 'ar' ? 'المرفقات' : 'Attachments'} value={captureAttachments.map(item => item.originalName).join(', ')} colors={colors} fonts={fonts} /> : null}
               </>
             )}
-          </Section>
+          </PropertyReview>
         )}
       </ScrollView>
       {stage === 2 && draftSaveStatus !== 'idle' && (
@@ -1224,10 +1228,12 @@ export default function CaptureWorkflow() {
           </View>
         </View>
       </Modal>
+      {stage === 3 ? <PropertyReviewFooter title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" /> : (
       <View style={[styles.footer, { flexDirection: isRTL ? 'row' : 'row-reverse', backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage === 2 ? <ApprovedAction title={language === 'ar' ? 'حفظ مسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <ApprovedAction title={t('capture.back')} onPress={handleBack} variant="outline" testID="capture-back" />}
       {stage === 1 ? <ApprovedAction title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <ApprovedAction title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <ApprovedAction title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}
       </View>
+      )}
     </KeyboardAvoidingView>
   );
 }

@@ -1,3 +1,4 @@
+import { PropertyReviewProgress } from '@/components/PropertyReview';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
@@ -14,6 +15,7 @@ interface CaptureHeaderProps {
   title?: string;
   step?: number;
   totalSteps?: number;
+  review?: boolean;
 }
 
 const CAPTURE_STEPS = [
@@ -24,7 +26,7 @@ const CAPTURE_STEPS = [
   'capture.progress.review',
 ] as const;
 
-export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: CaptureHeaderProps) {
+export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, review = false }: CaptureHeaderProps) {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const router = useRouter();
@@ -95,8 +97,8 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
           </View>
 
           <View style={styles.center}>
-            {showProgress ? <TouchableOpacity onPress={() => { setHomeExit(true); setCancelVisible(true); }} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('home.title')} testID="capture-home"><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text></TouchableOpacity> : null}
-            {!showProgress && title ? (
+            {showProgress && !review ? <TouchableOpacity onPress={() => { setHomeExit(true); setCancelVisible(true); }} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('home.title')} testID="capture-home"><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text></TouchableOpacity> : null}
+            {(review || !showProgress) && title ? (
               <Text
                 numberOfLines={1}
                 style={[styles.title, { color: colors.foreground, fontFamily: fonts.semiBold }]}
@@ -119,7 +121,8 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps }: Cap
           </View>
         </View>
 
-        {showProgress && currentStep ? (
+        {review && currentStep ? <PropertyReviewProgress step={currentStep} total={progressTotal} /> : null}
+        {showProgress && currentStep && !review ? (
           <View
             style={[styles.progressContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
             accessible
