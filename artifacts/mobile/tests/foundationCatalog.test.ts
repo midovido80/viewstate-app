@@ -150,7 +150,8 @@ test('Requirement presentation and field allow-lists derive from Foundation meta
   for (const propertyType of PROPERTY_TYPES) {
     const expected = getApplicablePropertyFormFields(propertyType)
       .filter(item => item.wanted?.storage === 'catalogPreference'
-        && APPROVED_REQUIREMENT_CATALOG_FIELDS.has(item.field))
+        && APPROVED_REQUIREMENT_CATALOG_FIELDS.has(item.field)
+        && expectedGlobalApproval(item.field))
       .map(item => item.field);
     assert.deepEqual(getRequirementCatalogFields(propertyType).map(item => item.field), expected, propertyType);
     for (const definition of PROPERTY_FORM_CATALOG) {

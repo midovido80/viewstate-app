@@ -16,8 +16,8 @@ function basic(propertyType: PropertyType): Property {
 }
 const residential: readonly PropertyType[] = ['whole_building', 'apartment', 'floor', 'house', 'villa', 'chalet', 'other_built_property'];
 
-test('Residential actual facts save, reload, edit and clear on every residential type', () => {
-  for (const type of residential) {
+test('Unit-level residential actual facts save, reload, edit and clear on every applicable type', () => {
+  for (const type of residential.filter(value => value !== 'whole_building')) {
     const scope = type === 'floor' ? { floorUse: 'residential' }
       : type === 'other_built_property' ? { propertyUse: 'residential', clarification: 'Residential annex' }
         : type === 'apartment' ? { apartmentSubtype: 'standard_apartment' } : {};
