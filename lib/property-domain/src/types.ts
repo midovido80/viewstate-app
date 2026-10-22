@@ -565,4 +565,3 @@ export type ValidationResult<T> =
       readonly ok: false;
       readonly issues: readonly ValidationIssue[];
     };
-

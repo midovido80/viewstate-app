@@ -645,4 +645,3 @@ export function validateDemoCapture(value: PropertyDemoCaptureMetadata | undefin
   }
   return issues.length ? invalid(issues) : valid(value);
 }
-

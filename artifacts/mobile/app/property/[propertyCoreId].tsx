@@ -2288,4 +2288,3 @@ const styles = StyleSheet.create({
   },
   modalActionText: { fontSize: 15, textAlign: 'center' },
 });
-

@@ -222,4 +222,3 @@ export function summarizeCaptureDetails(
       propertyFormValueToDraft(key, value),
     ])) as CaptureDetailValues;
 }
-

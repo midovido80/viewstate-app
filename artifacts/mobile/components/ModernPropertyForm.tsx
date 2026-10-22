@@ -101,4 +101,3 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
 }
 
 const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } });
-

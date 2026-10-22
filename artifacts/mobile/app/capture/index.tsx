@@ -1376,4 +1376,3 @@ const styles = StyleSheet.create({
   previewValue: { flex: 1, textAlign: 'right', fontSize: 13 },
   demoField: { marginBottom: 10 },
 });
-

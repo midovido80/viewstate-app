@@ -3332,4 +3332,3 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(enrichmentFields, /\['true', 'false'\]\.map\(value =>/);
   assert.doesNotMatch(enrichmentFields, /value \|\| 'clear'|enrich\.clear/);
 });
-

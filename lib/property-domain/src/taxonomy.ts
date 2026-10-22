@@ -302,4 +302,3 @@ export function isResidentialAmenity(value: unknown): value is ResidentialAmenit
   return typeof value === "string" &&
     (RESIDENTIAL_AMENITIES as readonly string[]).includes(value);
 }
-

@@ -444,4 +444,3 @@ export function getGalleryIndexFromScrollOffset(offset: number, pageWidth: numbe
   if (imageCount <= 0 || pageWidth <= 0 || !Number.isFinite(offset)) return 0;
   return Math.max(0, Math.min(imageCount - 1, Math.round(offset / pageWidth)));
 }
-

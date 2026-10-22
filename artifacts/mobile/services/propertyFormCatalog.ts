@@ -463,4 +463,3 @@ export function isPropertyFormFieldApplicable(
   return getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype)
     .some(definition => definition.field === field);
 }
-
