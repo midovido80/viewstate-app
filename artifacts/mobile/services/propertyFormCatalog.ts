@@ -234,6 +234,32 @@ const WANTED_BY_FIELD: Partial<Record<PropertyDetailField, PropertyWantedDescrip
 };
 
 const LABELS: Record<string, readonly [string, string]> = {
+  housingTypes: ['Housing suitability', 'نوع السكن'],
+  hasBuildingParking: ['Parking available', 'توجد مواقف؟'],
+  buildingParkingTypes: ['Parking location', 'مكان المواقف'],
+  sameApartmentLayout: ['Do all apartments have the same layout?', 'هل جميع الشقق بنفس التقسيم؟'],
+  sameApartmentsPerFloor: ['Same apartment count on every floor?', 'هل عدد الشقق متساوٍ في كل دور؟'],
+  apartmentsPerFloor: ['Apartments per floor', 'عدد الشقق في الدور'],
+  apartmentLayouts: ['Apartment layouts', 'تقسيمات الشقق'],
+  floorApartmentCounts: ['Apartments by floor', 'الشقق حسب الدور'],
+  hasCommercialShops: ['Commercial shops', 'محلات تجارية'],
+  hasCommercialFloors: ['Commercial floors', 'أدوار تجارية'],
+  commercialFloorCount: ['Commercial floor count', 'عدد الأدوار التجارية'],
+  hasGuardRoom: ['Guard room', 'غرفة حارس'],
+  hasCCTV: ['Building CCTV', 'كاميرات مراقبة بالمبنى'],
+  hasLoadingArea: ['Loading / unloading area', 'منطقة تحميل وتنزيل'],
+  hasSharedBathrooms: ['Shared bathrooms', 'دورات مياه مشتركة'],
+  hasPrivateBathroom: ['Private bathroom', 'حمام خاص'],
+  hasGlassFront: ['Glass frontage', 'واجهة زجاجية'],
+  hasMezzanine: ['Mezzanine', 'ميزانين'],
+  hasAttachedStorage: ['Attached storage', 'مخزن ملحق'],
+  hasWaterDrainage: ['Water and drainage connections', 'تمديدات مياه وصرف'],
+  hasVentilation: ['Ventilation / extraction provision', 'تجهيز تهوية / شفاط'],
+  rentalScope: ['Available for rent', 'المتاح للتأجير'],
+  availableUnitCount: ['Units available for rent', 'عدد الوحدات المتاحة للتأجير'],
+  availableAreaSquareMeters: ['Area available for rent (m²)', 'المساحة المتاحة للتأجير (م²)'],
+  availableFrom: ['Available from (YYYY-MM-DD)', 'تاريخ الإتاحة (YYYY-MM-DD)'],
+
   warehouseFinish: ['Warehouse finishing', 'التشطيب'],
   warehouseKind: ['Warehouse type', 'نوع المخزن'],
   warehouseLevels: ['Levels', 'الطابق'],
@@ -249,7 +275,7 @@ const LABELS: Record<string, readonly [string, string]> = {
   electricityCapacityUnit: ['Electrical capacity unit', 'وحدة قوة الكهرباء'],
 
   buildingAgeBand: ['Building age', 'عمر البناء'],
-  hasPrivateEntrance: ['Private entrance', 'مدخل مستقل للدور'],
+  hasPrivateEntrance: ['Private entrance', 'مدخل مستقل'],
   hasAccessibleEntrance: ['Wheelchair access', 'إمكانية وصول للكراسي المتحركة'],
   hasBasement: ['Basement', 'سرداب'],
   streetPosition: ['Street position', 'الموقع'],
@@ -309,6 +335,7 @@ const LABELS: Record<string, readonly [string, string]> = {
 };
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
+  'apartmentsPerFloor', 'commercialFloorCount', 'availableUnitCount',
   'privateParkingCount',
   'entranceCount',
   'masterBedroomCount', 'bedroomCount', 'studioRoomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
@@ -317,11 +344,12 @@ const COUNT_FIELDS = new Set<PropertyDetailField>([
   'roomsPerUnit', 'bathroomsPerUnit',
 ]);
 const DECIMAL_FIELDS = new Set<PropertyDetailField>([
-  'serviceElevatorCapacityTons', 'electricityCapacity',
+  'availableAreaSquareMeters', 'serviceElevatorCapacityTons', 'electricityCapacity',
   'monthlyIncome',
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
+  'sameApartmentLayout', 'sameApartmentsPerFloor', 'hasBuildingParking', 'hasCommercialShops', 'hasCommercialFloors', 'hasGuardRoom', 'hasCCTV', 'hasLoadingArea', 'hasSharedBathrooms', 'hasPrivateBathroom', 'hasGlassFront', 'hasMezzanine', 'hasAttachedStorage', 'hasWaterDrainage', 'hasVentilation',
   'hasVehicleRamp', 'hasServiceElevator', 'hasEscalator', 'hasFireSystem',
   'hasPrivateEntrance', 'hasAccessibleEntrance',
   'hasBasement', 'hasMortgage',
@@ -329,6 +357,7 @@ const BOOLEAN_FIELDS = new Set<string>([
   'hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
+  'housingTypes', 'buildingParkingTypes', 'rentalScope',
   'warehouseFinish', 'warehouseKind', 'warehouseLevels', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit',
   'buildingAgeBand', 'streetPosition', 'parkingTypes', 'rentalOccupancy',
   'apartmentSubtype', 'floorUse', 'furnishing', 'occupancy', 'propertyUse',
@@ -357,7 +386,7 @@ export const PROPERTY_FORM_CATALOG: readonly PropertyFormFieldDefinition[] = [
       ...definition,
       control: controlFor(definition.field),
       label: LABELS[definition.field] ?? ['Unknown', 'غير معروف'],
-      group: definition.field.startsWith('has') && !['hasBasement', 'hasMortgage'].includes(definition.field) ? 'amenity' as const : 'detail' as const,
+      group: definition.field.startsWith('has') && !['hasBasement', 'hasMortgage', 'hasBuildingParking', 'hasCommercialShops', 'hasCommercialFloors', 'hasGuardRoom'].includes(definition.field) ? 'amenity' as const : 'detail' as const,
       offered: { kind: 'actual_fact' as const, field: definition.field },
       ...(wanted ? { wanted } : {}),
     };
@@ -434,3 +463,4 @@ export function isPropertyFormFieldApplicable(
   return getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype)
     .some(definition => definition.field === field);
 }
+

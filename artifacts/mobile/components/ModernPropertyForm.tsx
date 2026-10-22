@@ -1,3 +1,5 @@
+import { PropertyProfileFields } from '@/components/PropertyProfileFields';
+import { getPropertyFormProfile } from '@/services/propertyProfileForm';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { Text, TextInput, View, StyleSheet } from 'react-native';
 import type { PropertyType, PropertyCaptureCategoryId, PropertyDemoCaptureMetadata, PropertyDetailField } from '@workspace/property-domain';
@@ -42,6 +44,8 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
   const nearbySection = onNearbyChange ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
   if (propertyType === 'commercial_complex' && transaction === 'sale') return <View><CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
   if (isCommercialFloorSale(propertyType, values.floorUse, transaction)) return <View><CommercialComplexSaleFields profile="floor" recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
+  const profile = getPropertyFormProfile(propertyType, transaction, values);
+  if (profile) return <View><PropertyProfileFields recordScopeKey={recordScopeKey} propertyType={propertyType} transaction={transaction} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{profile.nearby ? nearbySection : null}</View>;
   return (
     <View>
       <ModernPropertyFields
@@ -97,3 +101,4 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
 }
 
 const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } });
+

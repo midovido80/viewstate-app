@@ -234,6 +234,52 @@ export function validateTypeDetails(
     }
   }
 
+  const isTrue = (value: unknown) => value === true;
+  for (const [child, active] of [
+    ['buildingParkingTypes', isTrue(candidate.hasBuildingParking)],
+    ['apartmentsPerFloor', isTrue(candidate.sameApartmentsPerFloor)],
+    ['floorApartmentCounts', candidate.sameApartmentsPerFloor === false],
+    ['apartmentLayouts', candidate.sameApartmentLayout === false],
+    ['commercialFloorCount', isTrue(candidate.hasCommercialFloors)],
+    ['availableUnitCount', candidate.rentalScope === 'partial'],
+    ['availableAreaSquareMeters', candidate.rentalScope === 'partial'],
+  ] as const) if (candidate[child] !== undefined && !active) issues.push(issue('incompatible_detail_field', ['typeDetails', child], 'This fact requires its parent selection.'));
+  // Additive optional facts: no hydration rewrites are needed for older rows.
+  const newChoices: Record<string, readonly string[]> = { rentalScope: ['entire', 'partial'] };
+  for (const [field, choices] of Object.entries(newChoices)) if (candidate[field] !== undefined && !choices.includes(candidate[field] as string)) {
+    issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Invalid form choice.'));
+  }
+  for (const [field, options] of [
+    ['housingTypes', ['company_staff', 'bachelor', 'family', 'women', 'mixed']],
+    ['buildingParkingTypes', ['public_yard', 'in_building']],
+  ] as const) {
+    const value = candidate[field];
+    if (value !== undefined && (!Array.isArray(value) || value.some(item => !(options as readonly unknown[]).includes(item)) || new Set(value).size !== value.length)) {
+      issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Select unique approved values.'));
+    }
+  }
+  for (const field of ['sameApartmentLayout', 'sameApartmentsPerFloor', 'hasBuildingParking', 'hasCommercialShops', 'hasCommercialFloors', 'hasGuardRoom', 'hasCCTV', 'hasLoadingArea', 'hasSharedBathrooms', 'hasPrivateBathroom', 'hasGlassFront', 'hasMezzanine', 'hasAttachedStorage', 'hasWaterDrainage', 'hasVentilation']) {
+    if (candidate[field] !== undefined && typeof candidate[field] !== 'boolean') issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Expected a boolean.'));
+  }
+  for (const field of ['apartmentsPerFloor', 'commercialFloorCount', 'availableUnitCount']) {
+    const value = candidate[field];
+    if (value !== undefined && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)) issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Expected a positive integer.'));
+  }
+  if (candidate.hasCommercialShops === true && candidate.shopCount !== undefined && ![1, 2, 3, 4].includes(candidate.shopCount as number)) issues.push(issue('invalid_physical_value', ['typeDetails', 'shopCount'], 'Choose one to four shops.'));
+  if (candidate.commercialFloorCount !== undefined && ![1, 2].includes(candidate.commercialFloorCount as number)) issues.push(issue('invalid_physical_value', ['typeDetails', 'commercialFloorCount'], 'Choose one or two commercial floors.'));
+  if (typeof candidate.commercialFloorCount === 'number' && typeof candidate.floorCount === 'number' && candidate.commercialFloorCount > candidate.floorCount) issues.push(issue('invalid_physical_value', ['typeDetails', 'commercialFloorCount'], 'Commercial floors cannot exceed total floors.'));
+  if (candidate.availableFrom !== undefined && (typeof candidate.availableFrom !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate.availableFrom) || Number.isNaN(Date.parse(candidate.availableFrom)) || new Date(candidate.availableFrom).toISOString().slice(0, 10) !== candidate.availableFrom)) issues.push(issue('invalid_physical_value', ['typeDetails', 'availableFrom'], 'Use a valid YYYY-MM-DD date.'));
+  for (const [field, keys] of [['apartmentLayouts', ['apartmentCount', 'bedrooms', 'bathrooms']], ['floorApartmentCounts', ['floorNumber', 'apartmentCount']]] as const) {
+    const rows = candidate[field];
+    if (rows === undefined) continue;
+    const validRows = Array.isArray(rows) && rows.length > 0 && rows.every(row => row && typeof row === 'object' && keys.every(key => typeof row[key] === 'number' && Number.isSafeInteger(row[key]) && row[key] >= (key === 'apartmentCount' ? 1 : 0)));
+    if (!validRows) { issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Enter valid counts for every row.')); continue; }
+    const sum = rows.reduce((total: number, row: Record<string, number>) => total + row.apartmentCount, 0);
+    if (typeof candidate.apartmentCount === 'number' && sum !== candidate.apartmentCount) issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Row apartment counts must equal total apartments.'));
+    if (field === 'floorApartmentCounts' && (new Set(rows.map(row => row.floorNumber)).size !== rows.length || (typeof candidate.floorCount === 'number' && rows.some(row => row.floorNumber > (candidate.floorCount as number))))) issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Floor numbers must be unique and within the building.'));
+  }
+  if (typeof candidate.availableUnitCount === 'number' && typeof candidate.unitCount === 'number' && candidate.availableUnitCount > candidate.unitCount) issues.push(issue('invalid_physical_value', ['typeDetails', 'availableUnitCount'], 'Available units cannot exceed total units.'));
+
   const positiveFields = [
     "plotAreaSquareMeters",
     "builtUpAreaSquareMeters",
@@ -241,6 +287,7 @@ export function validateTypeDetails(
     "ceilingHeightMeters",
     "serviceElevatorCapacityTons",
     "electricityCapacity",
+    "availableAreaSquareMeters",
   ] as const;
   const commercialChoices = {
     buildingAgeBand: ["1_5", "6_12", "over_12"],
@@ -379,6 +426,7 @@ export function validateTypeDetails(
   );
   if (
     aggregateUnitCountsApplicable &&
+    !(details.propertyType === 'whole_building' && (candidate.sameApartmentLayout !== undefined || candidate.sameApartmentsPerFloor !== undefined || candidate.hasCommercialShops !== undefined)) &&
     typeof candidate.unitCount === "number" &&
     ["apartmentCount", "shopCount", "officeCount"].reduce(
       (sum, field) => sum + (typeof candidate[field] === "number" ? candidate[field] as number : 0),
@@ -597,3 +645,4 @@ export function validateDemoCapture(value: PropertyDemoCaptureMetadata | undefin
   }
   return issues.length ? invalid(issues) : valid(value);
 }
+

@@ -1,3 +1,4 @@
+import { getPropertyFormProfile, isPropertyProfileFieldVisible, projectPropertyProfileDetails } from '@workspace/property-domain';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { CompactPropertySpecs } from '@/components/CompactPropertySpecs';
@@ -1244,9 +1245,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   if (propertyFacts.templateFacts.floorNumber !== undefined) addSpec('floorNumber', propertyFacts.templateFacts.floorNumber, 'stairs');
   if (!offeredStudio && propertyFacts.areaSquareMeters !== undefined) addSpec('areaSquareMeters', `${propertyFacts.areaSquareMeters} ${language === 'ar' ? 'م²' : 'm²'}`, 'set-square');
 
+  const rawProfileDetails = visibleContent.typeDetails as Record<string, unknown>;
+  const activeProfile = getPropertyFormProfile(property.core.propertyType, property.activeOffer.transaction, rawProfileDetails);
+  const projectedProfileDetails = projectPropertyProfileDetails(property.core.propertyType, property.activeOffer.transaction, rawProfileDetails);
+  if (activeProfile) {
+    for (let index = numericSpecTiles.length - 1; index >= 0; index--) {
+      if (numericSpecTiles[index].fieldId !== 'areaSquareMeters' && !isPropertyProfileFieldVisible(numericSpecTiles[index].fieldId, property.core.propertyType, property.activeOffer.transaction, rawProfileDetails)) numericSpecTiles.splice(index, 1);
+    }
+  }
   const detailValues = (offeredStudio
     ? getOfferedStudioDetailValues(visibleContent.typeDetails)
-    : visibleContent.typeDetails) as Record<string, unknown>;
+    : projectedProfileDetails) as Record<string, unknown>;
   const commercialFloorSale = isCommercialFloorSale(property.core.propertyType, detailValues?.floorUse, property.activeOffer.transaction);
   const floorYield = commercialFloorSale && property.activeOffer.transaction === 'sale' ? grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined) : undefined;
   if (commercialFloorSale) {
@@ -1254,7 +1263,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       if (numericSpecTiles[index].fieldId !== 'areaSquareMeters') numericSpecTiles.splice(index, 1);
     }
   }
-  if (property.core.propertyType === 'commercial_complex' && property.activeOffer.transaction === 'sale') {
+  if (['commercial_complex', 'whole_building'].includes(property.core.propertyType) && property.activeOffer.transaction === 'sale') {
     const yieldPercent = grossAnnualRentalYield(property.activeOffer.salePrice.amount, typeof detailValues?.monthlyIncome === 'number' ? detailValues.monthlyIncome : undefined);
     if (yieldPercent !== undefined) {
       addSpec('grossAnnualRentalYield', `${yieldPercent.toFixed(2)}%`, 'percent');
@@ -1274,7 +1283,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     ...propertyDetailDisplayDefinitions
       .filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (property.core.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, detailValues)) && property.core.propertyType !== 'warehouse' && definition.group === 'amenity' && detailValues[definition.field] === true)
       .map(definition => commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]),
-    ...(property.core.propertyType === 'warehouse' ? [] : property.demoCapture?.selectedFeatures ?? [])
+    ...(property.core.propertyType === 'warehouse' || activeProfile ? [] : property.demoCapture?.selectedFeatures ?? [])
       .filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, detailValues, detailValues.floorUse as string | undefined))
       .map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id),
   ]));
@@ -1289,14 +1298,15 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       && definition.field !== 'builtUpAreaSquareMeters')
     .map(definition => ({
       field: definition.field,
-      label: commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0],
+      label: property.core.propertyType === 'whole_building' && ['apartmentCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(definition.field) ? ({ apartmentCount: ['Total apartments', 'إجمالي عدد الشقق'], roomsPerUnit: ['Bedrooms per apartment', 'غرف النوم لكل شقة'], bathroomsPerUnit: ['Bathrooms per apartment', 'الحمامات لكل شقة'] } as Record<string, string[]>)[definition.field][language === 'ar' ? 1 : 0] : commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0],
       value: formatPropertyDetailValue(definition.field, detailValues[definition.field], language, t),
     }));
   if (commercialFloorSale) supplementalDetails.sort((a, b) => commercialFloorSaleFieldRank(a.field) - commercialFloorSaleFieldRank(b.field));
   const existingSupplementalFields = new Set<string>(supplementalDetails.map(item => item.field));
   const categoryDetails = getPropertyDetailCategoryRows(property.demoCapture, detailValues, language, property.core.propertyType)
     .filter(item =>
-      !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
+      (!activeProfile || isPropertyProfileFieldVisible(item.field, property.core.propertyType, property.activeOffer.transaction, rawProfileDetails))
+      && !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
       && !(offeredStudio && item.field === 'builtUpAreaSquareMeters')
       && !numericSpecTiles.some(tile => tile.fieldId === item.field)
       && !existingSupplementalFields.has(item.field))
@@ -1320,7 +1330,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }]
     : [];
   const propertySupplementalDetails = [...supplementalDetails, ...categoryDetails, ...studioFacilityDetails, ...studioAreaDetails];
-  const nearbyServicesTextList = property.nearbyServices?.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id) ?? [];
+  const nearbyServicesTextList = (activeProfile && !activeProfile.nearby ? [] : property.nearbyServices)?.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id) ?? [];
   const compactSpecs = compactPropertySpecs([
     ...numericSpecTiles,
     ...propertySupplementalDetails.map(item => ({ fieldId: item.field, label: item.label, value: item.value })),
@@ -2278,3 +2288,4 @@ const styles = StyleSheet.create({
   },
   modalActionText: { fontSize: 15, textAlign: 'center' },
 });
+

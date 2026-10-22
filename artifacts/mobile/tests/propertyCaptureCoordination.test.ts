@@ -120,8 +120,9 @@ test('BEHAVIOR: commercial complex canonical counts round-trip through capture b
   });
   const details = candidate.typeDetails as unknown as Record<string, unknown>;
   assert.equal(details.unitCount, 3);
-  assert.equal(details.frontageWidthMeters, 50);
-  assert.equal(details.roomsPerUnit, 2);
+  assert.equal(details.frontageWidthMeters, undefined);
+  assert.equal(details.roomsPerUnit, undefined);
+  assert.equal(details.apartmentCount, undefined);
 });
 
 test('BEHAVIOR: fresh Rent draft applies monthly cadence without inventing values', () => {
@@ -139,6 +140,7 @@ test('BEHAVIOR: one capture target combines BASIC and optional applicable detail
     floorUse: 'commercial',
     builtUpAreaSquareMeters: '250',
     bathroomCount: '2',
+    intendedUse: 'Company HQ',
     commercialActivity: 'retail',
     ceilingHeightMeters: '4',
   });
@@ -147,11 +149,10 @@ test('BEHAVIOR: one capture target combines BASIC and optional applicable detail
     floorUse: 'commercial',
     builtUpAreaSquareMeters: 250,
     bathroomCount: 2,
-    commercialActivity: {
-      value: 'retail',
+    intendedUse: {
+      value: 'Company HQ',
       privacy: { classification: 'normal', disclosurePolicy: 'normal' },
     },
-    ceilingHeightMeters: 4,
   });
   assert.equal(candidate.activeOffer.transaction, 'rent');
   if (candidate.activeOffer.transaction === 'rent') {

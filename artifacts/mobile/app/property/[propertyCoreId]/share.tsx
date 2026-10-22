@@ -1,3 +1,4 @@
+import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -109,6 +110,7 @@ export default function PropertyShareScreen() {
         contacts: contacts.filter(person => !!person.displayPhone).map(person => ({ id: person.id, name: person.name, phone: toEnglishDigits(person.displayPhone) })),
         labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact') },
         detailLabels: Object.fromEntries(Object.entries(propertyDetailLabels).map(([field, labels]) => [field, labels[language === 'ar' ? 1 : 0]])),
+        formattedDetailValues: Object.fromEntries(Object.entries(property.typeDetails ?? {}).filter(([field]) => field in propertyDetailLabels).map(([field, value]) => [field, formatPropertyDetailValue(field as keyof typeof propertyDetailLabels, value, language)])),
         detailValueLabels: {
           true: t('enrich.yes'),
           false: t('enrich.no'),

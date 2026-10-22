@@ -1,3 +1,4 @@
+import { parsePropertyProfileValue, preserveHistoricalProfileFacts, isPropertyProfileFieldVisible, propertyFormValueToDraft } from '@/services/propertyProfileForm';
 import { sanitizeWarehouseDetails } from '@/services/warehouseForm';
 import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged } from '@/services/savedPropertyClassification';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -189,9 +190,7 @@ export function migratePropertyEditDraft(draft: PropertyEditDraftV1): PropertyEd
         canonicalDetails: Object.fromEntries(
           Object.entries((baseline.typeDetails ?? {}) as Record<string, unknown>)
             .filter(([key]) => PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition => definition.field === key))
-            .map(([key, value]) => [key, typeof value === 'object' && value && 'value' in value
-              ? String((value as { value: unknown }).value)
-              : String(value)]),
+            .map(([key, value]) => [key, propertyFormValueToDraft(key, value)]),
         ),
       }),
     },
@@ -325,9 +324,7 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
         ...Object.fromEntries(
         Object.entries((baseline.typeDetails ?? {}) as Record<string, unknown>)
           .filter(([key]) => PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition => definition.field === key))
-          .map(([key, value]) => [key, typeof value === 'object' && value && 'value' in value
-            ? String((value as { value: unknown }).value)
-            : String(value)]),
+          .map(([key, value]) => [key, propertyFormValueToDraft(key, value)]),
         ),
         ...Object.fromEntries(Object.entries(projected.templateFacts).map(([key, value]) => [key, String(value)])),
         ...((baseline.typeDetails as unknown as Record<string, unknown> | undefined)
@@ -416,9 +413,12 @@ export function buildPropertyUpdateCandidate(
   }
   for (const definition of writesCanonicalDetails ? PROPERTY_DETAIL_FIELD_DEFINITIONS : []) {
     if (!definition.appliesTo.includes(choices.propertyType)) continue;
-    const raw = canonicalDetails[definition.field];
+    if (!isPropertyProfileFieldVisible(definition.field, choices.propertyType, choices.transaction, canonicalDetails)) continue;
+    const raw = canonicalDetails[definition.field] ?? (choices.propertyType === 'whole_building' && definition.field === 'apartmentCount' ? canonicalDetails.unitCount : undefined);
     if (!raw?.trim() || definition.field === 'clarification') continue;
-    if (definition.field === 'intendedUse' || definition.field === 'commercialActivity') {
+    const profileValue = parsePropertyProfileValue(definition.field, raw);
+    if (profileValue !== undefined) details[definition.field] = profileValue;
+    else if (definition.field === 'intendedUse' || definition.field === 'commercialActivity') {
       details[definition.field] = { value: raw, privacy: { classification: 'normal', disclosurePolicy: 'normal' } };
     } else if ((definition.field === 'parkingTypes' || definition.field === 'warehouseLevels')) {
       details[definition.field] = raw.split(',').filter(Boolean);
@@ -432,6 +432,7 @@ export function buildPropertyUpdateCandidate(
       details[definition.field] = Number(raw);
     }
   }
+  if (writesCanonicalDetails) preserveHistoricalProfileFacts(baseline, details);
   if (choices.propertyType === 'warehouse') { const cleaned = sanitizeWarehouseDetails(details); for (const key of Object.keys(details)) delete details[key]; Object.assign(details, cleaned); }
   if (Object.keys(details).length) candidate.typeDetails = details;
   else delete candidate.typeDetails;
@@ -736,3 +737,4 @@ export async function executePropertyUpdateRecovery(options: {
     return { status: 'cleanup_failed', error };
   }
 }
+

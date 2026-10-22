@@ -96,7 +96,67 @@ export interface ClassifiedLiteralText {
  * Physical facts shared by built properties. Values are optional so an
  * existing BASIC-only record remains a complete Property.
  */
-export interface WholeBuildingTypeDetails {
+export interface ApartmentLayout {
+  readonly apartmentCount: number;
+  readonly bedrooms: number;
+  readonly bathrooms: number;
+}
+export interface FloorApartmentCount {
+  readonly floorNumber: number;
+  readonly apartmentCount: number;
+}
+export interface ApprovedPropertyFormFacts {
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly housingTypes?: readonly ("company_staff" | "bachelor" | "family" | "women" | "mixed")[];
+  readonly hasBuildingParking?: boolean;
+  readonly buildingParkingTypes?: readonly ("public_yard" | "in_building")[];
+  readonly sameApartmentLayout?: boolean;
+  readonly sameApartmentsPerFloor?: boolean;
+  readonly apartmentsPerFloor?: number;
+  readonly apartmentLayouts?: readonly ApartmentLayout[];
+  readonly floorApartmentCounts?: readonly FloorApartmentCount[];
+  readonly hasCommercialShops?: boolean;
+  readonly hasCommercialFloors?: boolean;
+  readonly commercialFloorCount?: number;
+  readonly hasGuardRoom?: boolean;
+  readonly hasBasement?: boolean;
+  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly hasMortgage?: boolean;
+  readonly rentalOccupancy?: "vacant" | "fully_rented" | "partially_rented" | "rented";
+  readonly monthlyIncome?: number;
+  readonly rentalScope?: "entire" | "partial";
+  readonly availableUnitCount?: number;
+  readonly availableAreaSquareMeters?: number;
+  readonly availableFrom?: string;
+  readonly entranceCount?: number;
+  readonly bathroomCount?: number;
+  readonly livingRoomCount?: number;
+  readonly furnishing?: Furnishing;
+  readonly intendedUse?: ClassifiedLiteralText;
+  readonly hasCentralAC?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasKitchen?: boolean;
+  readonly hasPrivateEntrance?: boolean;
+  readonly hasAccessibleEntrance?: boolean;
+  readonly hasFireSystem?: boolean;
+  readonly hasCCTV?: boolean;
+  readonly hasLoadingArea?: boolean;
+  readonly hasSharedBathrooms?: boolean;
+  readonly hasPrivateBathroom?: boolean;
+  readonly hasGlassFront?: boolean;
+  readonly hasMezzanine?: boolean;
+  readonly hasAttachedStorage?: boolean;
+  readonly hasWaterDrainage?: boolean;
+  readonly hasVentilation?: boolean;
+  readonly hasMaidRoom?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+}
+
+export interface WholeBuildingTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "whole_building";
   readonly occupancy?: PropertyOccupancy;
   readonly masterBedroomCount?: number;
@@ -115,7 +175,7 @@ export interface WholeBuildingTypeDetails {
   readonly hasCentralAC?: boolean;
 }
 
-export interface CommercialComplexTypeDetails {
+export interface CommercialComplexTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "commercial_complex";
   readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
   readonly hasBasement?: boolean;
@@ -203,7 +263,7 @@ export interface ResidentialFloorTypeDetails {
   readonly hasCentralAC?: boolean;
 }
 
-export interface CommercialFloorTypeDetails {
+export interface CommercialFloorTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "floor";
   readonly floorUse: "commercial";
   readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
@@ -262,7 +322,7 @@ export interface VillaTypeDetails extends Omit<HouseTypeDetails, "propertyType">
   readonly propertyType: "villa";
 }
 
-export interface OfficeTypeDetails {
+export interface OfficeTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "office";
   readonly builtUpAreaSquareMeters?: number;
   readonly floorNumber?: number;
@@ -313,7 +373,7 @@ export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"
   readonly hasWaterfront?: boolean;
 }
 
-export interface OtherBuiltPropertyTypeDetails {
+export interface OtherBuiltPropertyTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "other_built_property";
   readonly propertyUse?: FloorUse;
   readonly occupancy?: PropertyOccupancy;
@@ -505,3 +565,4 @@ export type ValidationResult<T> =
       readonly ok: false;
       readonly issues: readonly ValidationIssue[];
     };
+

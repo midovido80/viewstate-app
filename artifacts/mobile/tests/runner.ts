@@ -2365,6 +2365,95 @@ test('Approved Dynamic Details matrix including residential facts validates all 
     warehouse: ['buildingAgeBand', 'warehouseFinish', 'warehouseKind', 'warehouseLevels', 'entranceCount', 'hasVehicleRamp', 'rampVehicleSize', 'hasServiceElevator', 'serviceElevatorCapacityTons', 'hasEscalator', 'hasFireSystem', 'electricityPhase', 'electricityCapacity', 'electricityCapacityUnit', 'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'bathroomCount', 'parkingSpaceCount', 'intendedUse', 'commercialActivity', 'ceilingHeightMeters', 'loadingBayCount', 'hasColdStorage', 'hasCentralAC'],
     other_built_property: ['propertyUse', 'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'parkingSpaceCount', 'clarification', 'hasCentralAC'],
   } as const;
+  const approvedFactExtensions: Record<string, readonly string[]> = {
+  "whole_building": [
+    "buildingAgeBand",
+    "parkingTypes",
+    "privateParkingCount",
+    "rentalOccupancy",
+    "monthlyIncome",
+    "hasBasement",
+    "streetPosition",
+    "hasMortgage",
+    "hasAccessibleEntrance",
+    "furnishing",
+    "hasSecurityGuard",
+    "hasFireSystem",
+    "housingTypes",
+    "hasBuildingParking",
+    "buildingParkingTypes",
+    "sameApartmentLayout",
+    "sameApartmentsPerFloor",
+    "apartmentsPerFloor",
+    "apartmentLayouts",
+    "floorApartmentCounts",
+    "hasCommercialShops",
+    "hasCommercialFloors",
+    "commercialFloorCount",
+    "hasGuardRoom",
+    "hasCCTV"
+  ],
+  "commercial_complex": [
+    "hasAccessibleEntrance",
+    "hasElevator",
+    "hasSecurityGuard",
+    "hasEscalator",
+    "hasFireSystem",
+    "hasCCTV",
+    "hasLoadingArea",
+    "hasSharedBathrooms",
+    "rentalScope",
+    "availableUnitCount",
+    "availableAreaSquareMeters"
+  ],
+  "office": [
+    "buildingAgeBand",
+    "parkingTypes",
+    "privateParkingCount",
+    "hasPrivateEntrance",
+    "hasAccessibleEntrance",
+    "hasElevator",
+    "hasKitchen",
+    "hasSecurityGuard",
+    "hasFireSystem",
+    "hasCCTV",
+    "hasPrivateBathroom"
+  ],
+  "shop": [
+    "buildingAgeBand",
+    "parkingTypes",
+    "privateParkingCount",
+    "entranceCount",
+    "hasFireSystem",
+    "hasLoadingArea",
+    "hasGlassFront",
+    "hasMezzanine",
+    "hasAttachedStorage",
+    "hasWaterDrainage",
+    "hasVentilation"
+  ],
+  "floor_commercial": [
+    "hasFireSystem",
+    "hasCCTV",
+    "availableFrom"
+  ],
+  "other_built_property": [
+    "buildingAgeBand",
+    "parkingTypes",
+    "privateParkingCount",
+    "hasPrivateEntrance",
+    "hasAccessibleEntrance",
+    "bathroomCount",
+    "hasElevator",
+    "hasSecurityGuard",
+    "hasKitchen",
+    "intendedUse",
+    "hasFireSystem",
+    "hasCCTV",
+    "hasLoadingArea"
+  ]
+};
+  const expectedFields = (key: string) => [...(exactFields as Record<string, readonly string[]>)[key], ...(approvedFactExtensions[key] ?? [])].sort();
   const fieldsFor = (
     propertyType: Property['core']['propertyType'],
     floorUse?: 'residential' | 'commercial',
@@ -2385,7 +2474,7 @@ test('Approved Dynamic Details matrix including residential facts validates all 
       .map(definition => definition.field)
       .sort();
   for (const propertyType of PROPERTY_TYPES.filter(type => type !== 'floor')) {
-    assert.deepEqual(fieldsFor(propertyType), [...(exactFields as Record<string, readonly string[]>)[propertyType]].sort(), `${propertyType} exact field set`);
+    assert.deepEqual(fieldsFor(propertyType), expectedFields(propertyType), `${propertyType} exact field set`);
   }
   assert.deepEqual(
     fieldsFor('apartment', undefined, 'studio'),
@@ -2393,11 +2482,11 @@ test('Approved Dynamic Details matrix including residential facts validates all 
     'Studio apartment adds only its scoped fields',
   );
   assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential].sort());
-  assert.deepEqual(fieldsFor('floor', 'commercial'), [...exactFields.floor_commercial].sort());
+  assert.deepEqual(fieldsFor('floor', 'commercial'), expectedFields('floor_commercial'));
   assert.deepEqual(fieldsFor('other_built_property', undefined, undefined, 'residential'),
-    [...exactFields.other_built_property, 'bedroomCount', 'masterBedroomCount', 'occupancy'].sort());
+    [...expectedFields('other_built_property'), 'bedroomCount', 'masterBedroomCount', 'occupancy', 'livingRoomCount', 'furnishing', 'hasMaidRoom', 'hasBalcony', 'hasLaundryRoom'].sort());
   assert.deepEqual(fieldsFor('other_built_property', undefined, undefined, 'commercial'),
-    [...exactFields.other_built_property].sort());
+    expectedFields('other_built_property'));
   assert.deepEqual(FURNISHING_VALUES, ['unfurnished', 'semi_furnished', 'furnished']);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('constructionYear' as never)), false);
   assert.equal(PROPERTY_DETAIL_FIELD_DEFINITIONS.some(item => item.field === ('roomCount' as never)), false);
@@ -3243,3 +3332,4 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(enrichmentFields, /\['true', 'false'\]\.map\(value =>/);
   assert.doesNotMatch(enrichmentFields, /value \|\| 'clear'|enrich\.clear/);
 });
+

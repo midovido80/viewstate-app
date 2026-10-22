@@ -1,3 +1,4 @@
+import { PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import {
   APARTMENT_SUBTYPES,
   type Property,
@@ -32,8 +33,16 @@ export function formatPropertyDetailValue(
   language: 'en' | 'ar',
   translate?: (key: string) => string,
 ): string {
+  if (field === 'apartmentLayouts' || field === 'floorApartmentCounts') {
+    let rows: unknown;
+    try { rows = typeof value === 'string' ? JSON.parse(value) : value; } catch { return ''; }
+    if (!Array.isArray(rows)) return '';
+    return rows.map(row => field === 'apartmentLayouts'
+      ? language === 'ar' ? `${row.apartmentCount} شقة: ${row.bedrooms} غرف نوم، ${row.bathrooms} حمامات لكل شقة` : `${row.apartmentCount} apartments: ${row.bedrooms} bedrooms, ${row.bathrooms} bathrooms each`
+      : language === 'ar' ? `الدور ${row.floorNumber}: ${row.apartmentCount} شقة` : `Floor ${row.floorNumber}: ${row.apartmentCount} apartments`).join(' · ');
+  }
   if (field === 'rentalOccupancy' && value === 'rented') return language === 'ar' ? 'مؤجر' : 'Rented';
-  const choices = WAREHOUSE_CHOICES[field] ?? COMMERCIAL_COMPLEX_CHOICES[field];
+  const choices = PROFILE_CHOICES[field] ?? WAREHOUSE_CHOICES[field] ?? COMMERCIAL_COMPLEX_CHOICES[field];
   if (choices) return (Array.isArray(value) ? value : String(value).split(',')).map(item => {
     const choice = choices.find(option => option[0] === item);
     return choice?.[language === 'ar' ? 2 : 1] ?? String(item);
@@ -435,3 +444,4 @@ export function getGalleryIndexFromScrollOffset(offset: number, pageWidth: numbe
   if (imageCount <= 0 || pageWidth <= 0 || !Number.isFinite(offset)) return 0;
   return Math.max(0, Math.min(imageCount - 1, Math.round(offset / pageWidth)));
 }
+

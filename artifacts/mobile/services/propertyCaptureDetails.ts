@@ -1,3 +1,4 @@
+import { parsePropertyProfileValue, preserveHistoricalProfileFacts, getPropertyFormProfile, isPropertyProfileFieldVisible, propertyFormValueToDraft } from '@/services/propertyProfileForm';
 import { sanitizeWarehouseDetails } from '@/services/warehouseForm';
 import {
   validateProperty,
@@ -132,10 +133,13 @@ export function buildPropertyWithCaptureDetails(
     }
   }
   for (const { field } of applicable) {
-    const raw = fields[field];
+    if (!isPropertyProfileFieldVisible(field, baseline.core.propertyType, baseline.activeOffer.transaction, fields)) continue;
+    const raw = fields[field] ?? (baseline.core.propertyType === 'whole_building' && field === 'apartmentCount' ? fields.unitCount : undefined);
     if (!raw?.trim()) continue;
     if (field === 'clarification') continue;
-    if (field === 'intendedUse' || field === 'commercialActivity') rawDetails[field] = { value: raw, privacy: normalPrivacy };
+    const profileValue = parsePropertyProfileValue(field, raw);
+    if (profileValue !== undefined) rawDetails[field] = profileValue;
+    else if (field === 'intendedUse' || field === 'commercialActivity') rawDetails[field] = { value: raw, privacy: normalPrivacy };
     else if ((field === 'parkingTypes' || field === 'warehouseLevels')) rawDetails[field] = raw.split(',').filter(Boolean);
     else if (field === 'privateParkingCount' && !fields.parkingTypes?.split(',').includes('private')) continue;
     else if (field === 'floorUse' || field === 'apartmentSubtype' || field === 'furnishing' || field === 'occupancy' || field === 'propertyUse' || field === 'buildingAgeBand' || field === 'streetPosition' || field === 'rentalOccupancy' || ['warehouseFinish', 'warehouseKind', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit'].includes(field)) rawDetails[field] = raw;
@@ -147,6 +151,7 @@ export function buildPropertyWithCaptureDetails(
     rawDetails.clarification = { value: fields.clarification, privacy: normalPrivacy };
   }
   if (baseline.core.propertyType === 'warehouse') { const cleaned = sanitizeWarehouseDetails(rawDetails); for (const key of Object.keys(rawDetails)) delete rawDetails[key]; Object.assign(rawDetails, cleaned); }
+  preserveHistoricalProfileFacts(baseline, rawDetails);
   const populatedDetailKeys = Object.keys(rawDetails).filter(key => key !== 'propertyType');
   if (
     strict
@@ -214,8 +219,7 @@ export function summarizeCaptureDetails(
     .filter(([key]) => key !== 'propertyType' && key !== 'clarification')
     .map(([key, value]) => [
       key,
-      typeof value === 'object' && value && 'value' in value
-        ? String((value as { value: unknown }).value)
-        : String(value),
+      propertyFormValueToDraft(key, value),
     ])) as CaptureDetailValues;
 }
+

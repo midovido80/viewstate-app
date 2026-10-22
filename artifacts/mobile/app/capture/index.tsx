@@ -1,3 +1,4 @@
+import { getPropertyFormProfile, isPropertyProfileFieldVisible } from '@workspace/property-domain';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
@@ -299,11 +300,13 @@ export default function CaptureWorkflow() {
       : [],
     [captureDetails.floorUse, captureDetails.apartmentSubtype, captureDetails.propertyUse, draft.propertyType],
   );
+  const activeProfile = draft.propertyType ? getPropertyFormProfile(draft.propertyType, draft.transaction, captureDetails) : undefined;
+  const profileFieldVisible = (field: string) => !draft.propertyType || isPropertyProfileFieldVisible(field, draft.propertyType, draft.transaction, captureDetails);
   const previewFeatureLabels = Array.from(new Set([
     ...applicable
-      .filter(definition => definition.group === 'amenity' && captureDetails[definition.field] === 'true')
+      .filter(definition => profileFieldVisible(definition.field) && definition.group === 'amenity' && captureDetails[definition.field] === 'true')
       .map(definition => commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]),
-    ...(demoMetadata?.selectedFeatures ?? [])
+    ...(activeProfile ? [] : demoMetadata?.selectedFeatures ?? [])
       .filter(id => !isDemoFeatureSuppressed(id, draft.propertyType ?? 'other_built_property', captureDetails as Record<string, unknown>, captureDetails.floorUse))
       .map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id),
   ]));
@@ -1139,15 +1142,15 @@ export default function CaptureWorkflow() {
             {!isBasicApartmentFollowUp && (
               <>
              <PreviewRow label={language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'} value={captureDetails.areaSquareMeters === undefined ? '' : `${captureDetails.areaSquareMeters} ${language === 'ar' ? 'متر مربع' : 'm²'}`} colors={colors} fonts={fonts} />
-             {draft.propertyType === 'commercial_complex' && draft.transaction === 'sale' && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
-             {applicable.filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (draft.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, captureDetails)) && (draft.propertyType === 'warehouse' || definition.group !== 'amenity') && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private')) ).sort((a, b) => commercialFloorSale ? commercialFloorSaleFieldRank(a.field) - commercialFloorSaleFieldRank(b.field) : 0).map(definition => <PreviewRow key={definition.field} label={commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
+             {(draft.propertyType === 'commercial_complex' || draft.propertyType === 'whole_building') && draft.transaction === 'sale' && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
+             {applicable.filter(definition => profileFieldVisible(definition.field) && (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (draft.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, captureDetails)) && (draft.propertyType === 'warehouse' || definition.group !== 'amenity') && captureDetails[definition.field] !== undefined && (definition.field !== 'privateParkingCount' || captureDetails.parkingTypes?.split(',').includes('private')) ).sort((a, b) => commercialFloorSale ? commercialFloorSaleFieldRank(a.field) - commercialFloorSaleFieldRank(b.field) : 0).map(definition => <PreviewRow key={definition.field} label={commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]} value={formatPropertyDetailValue(definition.field, captureDetails[definition.field], language, key => t(key as keyof Translations))} colors={colors} fonts={fonts} />)}
              {commercialFloorSale && <PreviewRow label={language === 'ar' ? 'العائد الإيجاري السنوي الإجمالي' : 'Gross annual rental yield'} value={(() => { const result = grossAnnualRentalYield(draft.salePrice?.amount, captureDetails.monthlyIncome?.trim() ? Number(captureDetails.monthlyIncome) : undefined); return result === undefined ? '—' : `${result.toFixed(2)}%`; })()} colors={colors} fonts={fonts} />}
-            {draft.propertyType !== 'warehouse' && nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
+            {draft.propertyType !== 'warehouse' && (!activeProfile || activeProfile.nearby) && nearby.length > 0 && <PreviewRow label={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} value={nearby.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0]).join(', ')} colors={colors} fonts={fonts} />}
             <PreviewRow label={language === 'ar' ? 'الوصف' : 'Description'} value={description} colors={colors} fonts={fonts} />
-             {demoCategory?.numericFields.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (
+             {demoCategory?.numericFields.filter(item => !activeProfile && !isMappedTemplateField(item.id) && demoMetadata?.numericValues?.[item.id] !== undefined).map(item => (
                <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={metadataValue(demoMetadata?.numericValues?.[item.id])} colors={colors} fonts={fonts} />
             ))}
-             {demoCategory?.choices.filter(item => !isMappedTemplateField(item.id) && demoMetadata?.choices?.[item.id] !== undefined).map(item => (
+             {demoCategory?.choices.filter(item => !activeProfile && !isMappedTemplateField(item.id) && demoMetadata?.choices?.[item.id] !== undefined).map(item => (
               <PreviewRow key={item.id} label={item.label[language === 'ar' ? 1 : 0]} value={item.options.find(option => option.id === demoMetadata?.choices?.[item.id])?.label[language === 'ar' ? 1 : 0] ?? ''} colors={colors} fonts={fonts} />
             ))}
               {draft.propertyType !== 'warehouse' && previewFeatureLabels.length ? <PreviewRow label={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available Property Features'} value={previewFeatureLabels.join(', ')} colors={colors} fonts={fonts} /> : null}
@@ -1373,3 +1376,4 @@ const styles = StyleSheet.create({
   previewValue: { flex: 1, textAlign: 'right', fontSize: 13 },
   demoField: { marginBottom: 10 },
 });
+
