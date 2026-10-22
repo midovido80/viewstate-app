@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { parseFloorUse, getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import {
   PROPERTY_TYPES,
@@ -119,7 +119,7 @@ export default function RequirementEditor() {
   const editing = routeRequirementId !== 'new';
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const ownerFromRoute = Array.isArray(seekerId) ? seekerId[0] : seekerId;
   const routePurpose = Array.isArray(purposeParam) ? purposeParam[0] : purposeParam;

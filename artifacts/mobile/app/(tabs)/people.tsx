@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -38,7 +38,7 @@ const PEOPLE_FILTER_OPTIONS = [
 export default function PeopleScreen() {
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [people, setPeople] = useState<Person[]>([]);
   const [activityByPerson, setActivityByPerson] = useState<Map<string, PersonActivityLine[]>>(new Map());

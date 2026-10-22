@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { getAreaById } from '@/constants/kuwait-areas';
@@ -146,7 +146,7 @@ function propertySubtitle(
 
 export default function GlobalSearchScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const colors = useColors();
   const { t, isRTL, fonts, language } = useI18n();
   const [query, setQuery] = useState('');

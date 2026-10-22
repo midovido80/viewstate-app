@@ -4,7 +4,7 @@ import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/na
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import type { SeekerRequirement } from '@workspace/property-domain';
 import type { Person } from '@/services/people';
 import { linkRequirementToSeeker } from '@/services/requirementOwnership';
@@ -28,7 +28,7 @@ export default function RequirementDetailsScreen() {
   const id = getRequirementDetailIdentity(params.requirementId);
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [record, setRecord] = useState<SeekerRequirement | null>(null);
   const [state, setState] = useState<LoadState>('loading');
@@ -182,7 +182,7 @@ export default function RequirementDetailsScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: direction, borderBottomColor: colors.border }]}>
         <TouchableOpacity testID="requirement-details-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}
           onPress={back} disabled={!record} style={[styles.headerAction, navigationButtonStyle]}>
@@ -211,7 +211,7 @@ export default function RequirementDetailsScreen() {
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 42 }]}
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 42 }]}
           testID={`requirement-details-record-${record.id}`}>
           <View style={[styles.hero, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.eyebrow, { color: colors.primary, fontFamily: fonts.semiBold, textAlign: align }]}>

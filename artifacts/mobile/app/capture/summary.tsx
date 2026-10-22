@@ -3,7 +3,7 @@ import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { useRef, useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
@@ -48,7 +48,7 @@ export default function SummaryScreen() {
   }>();
   const selectedSourceRole = Array.isArray(sourceRole) ? sourceRole[0] : sourceRole;
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const {
     draft,
     draftLoadFailed,

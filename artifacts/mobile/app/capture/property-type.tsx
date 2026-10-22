@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
@@ -35,7 +35,7 @@ export default function PropertyTypeScreen() {
     propertyUse?: string | string[];
   }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { draft, updateDraft, captureDetails, replaceCaptureDetails, updateCaptureDetails, getCurrentCaptureDetails } = useCapture();
   const { t, fonts, isRTL, language } = useI18n();
   const initialType = firstParam(params.propertyType);

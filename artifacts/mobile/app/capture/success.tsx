@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -23,7 +23,7 @@ export default function SuccessScreen() {
     basicApartmentFollowUp?: string;
   }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, isRTL, fonts } = useI18n();
   const navigateOnce = (destination: string, replace = false) => {
     if (navigationStartedRef.current) return;

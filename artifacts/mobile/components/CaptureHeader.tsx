@@ -2,7 +2,7 @@ import { PropertyReviewProgress } from '@/components/PropertyReview';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -27,7 +27,7 @@ const CAPTURE_STEPS = [
 ] as const;
 
 export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, review = false }: CaptureHeaderProps) {
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const colors = useColors();
   const router = useRouter();
   const { isRTL, t, fonts } = useI18n();

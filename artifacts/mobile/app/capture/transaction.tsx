@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
@@ -27,7 +27,7 @@ export default function TransactionScreen() {
     sourceRole?: string | string[];
   }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { draft } = useCapture();
   const { t, fonts, isRTL, language } = useI18n();
   const initialMode = firstParam(params.mode);

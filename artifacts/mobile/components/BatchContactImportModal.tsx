@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Contacts from 'expo-contacts';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, type Translations } from '@/contexts/I18nContext';
@@ -46,7 +46,7 @@ export function BatchContactImportModal({
   onImported: () => void;
 }) {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, isRTL, fonts } = useI18n();
   const [stage, setStage] = useState<Stage>('select');
   const [permissionState, setPermissionState] = useState<PermissionState>('idle');

@@ -1,3 +1,4 @@
+import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { CompactPropertySpecs } from '@/components/CompactPropertySpecs';
 import { compactPropertySpecs } from '@/services/compactPropertyDetails';
 import { type PropertySpecIconName } from '@/components/PropertySpecIcon';
@@ -21,7 +22,7 @@ import {
   View,
 } from 'react-native';
 import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -115,7 +116,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const completionOrigin = Array.isArray(completion) ? completion[0] : completion;
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
   const standardApartment = Boolean(property?.core.propertyType === 'apartment' && !isOfferedStudio(property));
@@ -128,6 +129,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [mode, setMode] = useState<'detail' | 'edit'>('detail');
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'unreadable'>('loading');
   const [error, setError] = useState('');
+  const [priceAttempted, setPriceAttempted] = useState(false);
   const [pendingPropertyTransition, setPendingPropertyTransition] = useState<{
     proposal: PropertyTransitionProposal;
     title: string;
@@ -953,6 +955,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   };
 
   const save = async () => {
+    setPriceAttempted(true);
     if (!draft || saving || saveFlight.current) return;
     saveFlight.current = true;
     setSaving(true);
@@ -1394,7 +1397,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   </View>
                 </View>
                 {shownPrice !== undefined ? <View style={{ flexShrink: 1, maxWidth: '46%', gap: 3 }}>
-                  <Text testID="property-compact-price" style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 24, lineHeight: 31, textAlign: isRTL ? 'left' : 'right' }}>{formatPrice(shownPrice, 'KWD', language)}</Text>
+                  <Text testID="property-compact-price" style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 24, lineHeight: 31, textAlign: isRTL ? 'left' : 'right' }}>{formatPrice(shownPrice, 'KWD', language)}</Text>
                   {propertyIntent.id === 'offered_rent' ? <Text testID="property-compact-cadence" style={{ color: '#64748B', fontFamily: fonts.medium, fontSize: 13, textAlign: isRTL ? 'left' : 'right' }}>{formatRentalCadence(shownRentalPeriodId, t)}</Text> : null}
                 </View> : null}
               </View>
@@ -1402,14 +1405,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               <CompactPropertySpecs specs={compactSpecs} />
 
               {availableFeatures.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
-                <Text style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}</Text>
+                <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}</Text>
                 <ChoiceGrid gap={6}>
                   {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} compact />)}
                 </ChoiceGrid>
               </View>}
 
               {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
-                <Text style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
+                <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
                 <ChoiceGrid columns={3} gap={6}>
                   {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} compact vertical />)}
                 </ChoiceGrid>
@@ -1417,7 +1420,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
               <View testID="property-compact-source" style={{ backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#E2E8F0', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
                 <Feather name="user" size={19} color="#173F78" />
-                <Text style={{ color: '#AE313B', fontFamily: fonts.semiBold, fontSize: 13, maxWidth: '28%', textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
+                <Text style={{ color: '#173F78', fontFamily: fonts.semiBold, fontSize: 13, maxWidth: '28%', textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   {sourcePerson ? <>
                     <Text testID="property-source-person" style={{ color: '#173F78', fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
@@ -1476,7 +1479,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               ) : null}
 
               {descriptionText ? <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 }}>
-                <Text style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.description')}</Text>
+                <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.description')}</Text>
                 <Text style={{ color: '#173F78', fontFamily: fonts.regular, fontSize: 14, lineHeight: 22, textAlign: isRTL ? 'right' : 'left' }}>{descriptionText}</Text>
               </View> : null}
 
@@ -1628,15 +1631,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 : t('price.amount')}
             </Text>
             <TextInput
+              onBlur={() => setPriceAttempted(true)}
               value={shownPrice === undefined ? '' : String(shownPrice)}
               onChangeText={value => {
                 const parsed = value.trim() === '' ? undefined : parseDemoNumericInput(value, true);
                 if (parsed === undefined || parsed !== null) updateChoices({ priceAmount: parsed ?? undefined });
               }}
               keyboardType="decimal-pad"
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+              style={[styles.input, { color: colors.foreground, borderColor: priceAttempted && isMissingPositiveAmount(shownPrice) ? colors.destructive : colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="edit-price"
             />
+            {priceAttempted && isMissingPositiveAmount(shownPrice) ? <Text accessibilityRole="alert" testID="edit-price-error" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('errors.invalid_price')}</Text> : null}
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
             <TouchableOpacity
               onPress={() => setAreaOpen(true)}
@@ -1800,7 +1805,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       </ScrollView>
 
       <Modal visible={areaOpen} animationType="slide" onRequestClose={() => setAreaOpen(false)}>
-        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) }]}>
+        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
           <TextInput
             value={areaSearch}
             onChangeText={setAreaSearch}

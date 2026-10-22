@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { BatchContactImportModal } from '@/components/BatchContactImportModal';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -25,7 +25,7 @@ export default function NewPersonScreen() {
     ? params.returnRequirementId[0]
     : params.returnRequirementId;
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, isRTL, fonts } = useI18n();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');

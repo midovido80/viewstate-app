@@ -1,3 +1,4 @@
+import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { formatPrice, formatRentalCadence } from '@/constants/market';
 import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
@@ -22,7 +23,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -159,7 +160,7 @@ export default function CaptureWorkflow() {
   const hasInvalidExplicitPropertyType = routePropertyTypeParam !== undefined && routePropertyType === undefined;
   const routeTransaction = firstCaptureParam(routeParams.transaction);
   // sourceRole remains on the capture route contract for the summary handoff.
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const colors = useColors();
   const { t, isRTL, fonts, language } = useI18n();
   const {
@@ -187,6 +188,8 @@ export default function CaptureWorkflow() {
   const [reviewApartmentDetails, setReviewApartmentDetails] = useState(false);
   const isBasicApartmentFollowUp = isStandardApartmentCapture && !reviewApartmentDetails;
   const [stage, setStage] = useState<1 | 2 | 3>(draft.propertyType && draft.transaction ? 2 : 1);
+  const [priceAttempted, setPriceAttempted] = useState(false);
+  const priceError = priceAttempted && isMissingPositiveAmount(draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount);
   const [nearby, setNearby] = useState<string[]>(() => {
     try {
       return captureDetails.nearbyServices ? JSON.parse(captureDetails.nearbyServices) as string[] : [];
@@ -638,6 +641,7 @@ export default function CaptureWorkflow() {
 
   const openPreview = () => {
     if (isStudioCaptureBlocked) return;
+    setPriceAttempted(true);
     if (!draft.locationAreaId) {
       setAreaValidation(current => transitionCaptureAreaValidation(current, {
         type: 'preview',
@@ -973,13 +977,14 @@ export default function CaptureWorkflow() {
                 ) : null}
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
               <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
-              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
-              <TextInput value={draft.transaction === 'rent' ? (draft.rentalPrice?.amount ? String(draft.rentalPrice.amount) : '') : (draft.salePrice?.amount ? String(draft.salePrice.amount) : '')} onChangeText={value => {
+              <Text style={[styles.label, { color: priceError ? colors.destructive : colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
+              <TextInput testID="capture-price" onBlur={() => setPriceAttempted(true)} value={draft.transaction === 'rent' ? (draft.rentalPrice?.amount ? String(draft.rentalPrice.amount) : '') : (draft.salePrice?.amount ? String(draft.salePrice.amount) : '')} onChangeText={value => {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
                 const amount = Number(normalized);
                 if (!Number.isFinite(amount) || amount < 0) return;
                 updateDraft(draft.transaction === 'rent' ? { rentalPrice: { amount, currencyCode: 'KWD' } } : { salePrice: { amount, currencyCode: 'KWD' } });
-              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'السعر' : 'Price'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'السعر' : 'Price'} placeholderTextColor={colors.mutedForeground} style={[styles.input, { color: colors.foreground, borderColor: priceError ? colors.destructive : colors.border, backgroundColor: colors.card }]} />
+              {priceError ? <Text accessibilityRole="alert" testID="capture-price-error" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('errors.invalid_price')}</Text> : null}
               {draft.transaction === 'rent' && (
                 <ChoiceGrid style={styles.chips}>
                   <Choice selected={draft.rentalPeriodId === 'monthly'} label={language === 'ar' ? 'شهرياً' : 'Monthly'} onPress={() => updateDraft({ rentalPeriodId: 'monthly' })} colors={colors} fonts={fonts} />

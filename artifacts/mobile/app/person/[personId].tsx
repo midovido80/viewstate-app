@@ -18,7 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Property, type SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { ChoiceChip } from '@/components/ChoiceChip';
@@ -69,7 +69,7 @@ export default function PersonDetailScreen() {
   const id = Array.isArray(params.personId) ? params.personId[0] : params.personId;
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [person, setPerson] = useState<Person | null>(null);
   const [requirements, setRequirements] = useState<SeekerRequirement[]>([]);

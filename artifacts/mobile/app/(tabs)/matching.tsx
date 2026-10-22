@@ -10,7 +10,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import {
   MATCH_QUALIFICATION_THRESHOLD,
   PROPERTY_TYPES,
@@ -308,8 +308,8 @@ export default function MatchingScreen() {
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
+  const insets = useScreenInsets();
+  const topInset = insets.top;
 
   const [mode, setMode] = useState<MatchingMode>('saved');
   const [requirements, setRequirements] = useState<SeekerRequirement[]>([]);

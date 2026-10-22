@@ -20,7 +20,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import type { Property, PropertyAttachmentMetadata, SeekerRequirement, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
@@ -162,7 +162,7 @@ export default function StudioCaptureRoute() {
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const translateRef = useRef(t);
   translateRef.current = t;
@@ -235,8 +235,8 @@ export default function StudioCaptureRoute() {
   const routeTransaction = isTransaction(transactionParam) ? transactionParam : undefined;
   const isValidRoute = editing
     || ((modeParam === 'offered' || modeParam === 'wanted') && routeTransaction !== undefined);
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
+  const topInset = insets.top;
+  const bottomInset = insets.bottom;
   const returnToForm = useCallback(() => {
     setError('');
     setStep('form');

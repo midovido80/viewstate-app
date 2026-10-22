@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
@@ -18,7 +18,7 @@ export default function LocationScreen() {
     apartmentSubtype?: string;
   }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { draft, updateDraft } = useCapture();
   const { t, isRTL, language, fonts } = useI18n();
 

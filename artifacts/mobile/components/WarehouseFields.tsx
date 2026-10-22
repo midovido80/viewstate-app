@@ -44,7 +44,7 @@ export function WarehouseFields({ recordScopeKey, values, onChange, onInvalidQui
   };
   return <View style={{ gap: 16 }} testID="warehouse-specifications">
     {WAREHOUSE_SPEC_FIELDS.map(renderField)}
-    <Text style={[labelStyle, { color: colors.destructive, marginTop: 8 }]}>{language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}</Text>
+    <Text style={[labelStyle, { color: colors.foreground, marginTop: 8 }]}>{language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}</Text>
     {WAREHOUSE_EXTRA_FIELDS.map(renderField)}
   </View>;
 }

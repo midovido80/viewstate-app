@@ -4,14 +4,14 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 
 export default function HomeScreen() {
   const router = useRouter();
   const colors = useColors();
   const { t, isRTL, fonts } = useI18n();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
 
   const handleImport = () => {
     Alert.alert(t('common.comingLater'), t('home.importComingLater'));

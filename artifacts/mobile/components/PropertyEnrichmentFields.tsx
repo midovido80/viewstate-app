@@ -177,7 +177,7 @@ export function PropertyEnrichmentFields({
         return (
           <View key={definition.field}>
             {!usesResidentialQuickPick && (
-              <Text style={[styles.label, { color: '#AE313B', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+              <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
                 {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
               </Text>
             )}
@@ -187,7 +187,7 @@ export function PropertyEnrichmentFields({
       })}
       {(applicableDefinitions.some(definition => definition.group === 'amenity') || amenityRenderExtra) && (
         <View>
-          <Text style={[styles.label, { color: '#AE313B', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+          <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
             {language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'}
           </Text>
           <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';
 import { choiceIcon } from '@/services/choicePresentation';
 
@@ -49,17 +49,17 @@ export function PropertyReview({ propertyLabel, intent, area, price, priceLabel,
       <View style={[styles.factRow, row, { alignItems: 'center' }]}>
         <View style={{ flex: 1, gap: 6 }}>
           <Text style={{ color: '#64748B', fontFamily: fonts.regular, fontSize: 14, textAlign: align }}>{priceLabel}</Text>
-          <Text testID="review-price" style={{ color: '#AE313B', fontFamily: fonts.bold, fontSize: 27, lineHeight: 36, textAlign: align }}>{price ?? '—'}</Text>
+          <Text testID="review-price" style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 27, lineHeight: 36, textAlign: align }}>{price ?? '—'}</Text>
           {cadence ? <Text testID="review-cadence" style={{ color: '#64748B', fontFamily: fonts.medium, fontSize: 14, textAlign: align }}>{cadence}</Text> : null}
         </View>
         <Feather name={cadence ? 'calendar' : 'tag'} size={24} color="#64748B" />
       </View>
     </View>
-    {children ? <View style={styles.card}><Text style={{ color: '#AE313B', fontFamily: fonts.semiBold, fontSize: 17, textAlign: align, marginBottom: 10 }}>{language === 'ar' ? 'المواصفات المسجلة' : 'Entered details'}</Text>{children}</View> : null}
+    {children ? <View style={styles.card}><Text style={{ color: '#173F78', fontFamily: fonts.semiBold, fontSize: 17, textAlign: align, marginBottom: 10 }}>{language === 'ar' ? 'المواصفات المسجلة' : 'Entered details'}</Text>{children}</View> : null}
     <View style={[styles.card, row, { alignItems: 'flex-start', gap: 12 }]}>
       <Feather name="file-plus" size={26} color="#2474D6" />
       <View style={{ flex: 1, gap: 7 }}>
-        <Text style={{ color: '#AE313B', fontFamily: fonts.semiBold, fontSize: 17, textAlign: align }}>{language === 'ar' ? 'التفاصيل الإضافية' : 'Additional details'}</Text>
+        <Text style={{ color: '#173F78', fontFamily: fonts.semiBold, fontSize: 17, textAlign: align }}>{language === 'ar' ? 'التفاصيل الإضافية' : 'Additional details'}</Text>
         <Text style={{ color: '#64748B', fontFamily: fonts.regular, fontSize: 15, lineHeight: 24, textAlign: align }}>{language === 'ar' ? 'يمكنك استكمال المواصفات والصور والموقع الدقيق بعد الحفظ.' : 'You can complete specifications, photos and the precise location after saving.'}</Text>
       </View>
     </View>
@@ -68,7 +68,7 @@ export function PropertyReview({ propertyLabel, intent, area, price, priceLabel,
 
 export function PropertyReviewFooter({ title, onPress, loading = false, disabled = false, testID }: { title: string; onPress: () => void; loading?: boolean; disabled?: boolean; testID: string }) {
   const { language, isRTL, fonts } = useI18n();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   return <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
     <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled || loading} accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ busy: loading, disabled: disabled || loading }}
       style={[styles.save, { direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', opacity: disabled || loading ? 0.55 : 1 }]}>

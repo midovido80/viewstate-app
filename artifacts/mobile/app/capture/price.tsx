@@ -1,6 +1,8 @@
+import { useState } from 'react';
+import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { View, StyleSheet, Text, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
@@ -18,7 +20,7 @@ export default function PriceScreen() {
     apartmentSubtype?: string;
   }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { draft, updateDraft, isReady } = useCapture();
   const { t, isRTL, fonts } = useI18n();
   
@@ -26,6 +28,8 @@ export default function PriceScreen() {
   const amount = isSale
     ? draft.salePrice?.amount?.toString() ?? ''
     : draft.rentalPrice?.amount?.toString() ?? '';
+  const [priceAttempted, setPriceAttempted] = useState(false);
+  const priceError = priceAttempted && isMissingPositiveAmount(amount);
   const numAmount = Number(amount);
   const workingRentalPeriodId = draft.rentalPeriodId
     ?? (draft.transaction === 'rent' ? MARKET_CONFIG.defaultRentalPeriodId : undefined);
@@ -52,6 +56,7 @@ export default function PriceScreen() {
   };
 
   const handleNext = () => {
+    setPriceAttempted(true);
     if (!isReady || !isValid) return;
     
     if (isSale) {
@@ -92,13 +97,14 @@ export default function PriceScreen() {
           {isSale ? t('price.sale.title') : t('price.rent.title')}
         </Text>
 
-        <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
+        <Text style={[styles.label, { color: priceError ? colors.destructive : colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
           {isSale
             ? t('price.amount')
             : `${t('price.amount')} · ${formatRentalCadence(workingRentalPeriodId, t)}`}
         </Text>
         <TextInput
           value={amount}
+          onBlur={() => setPriceAttempted(true)}
           onChangeText={handleAmountChange}
           keyboardType="numeric"
           placeholder="0"
@@ -107,7 +113,7 @@ export default function PriceScreen() {
             styles.input,
             { 
               backgroundColor: colors.card,
-              borderColor: colors.border,
+              borderColor: priceError ? colors.destructive : colors.border,
               color: colors.foreground,
               textAlign: isRTL ? 'right' : 'left',
               fontFamily: fonts.semiBold,
@@ -117,6 +123,8 @@ export default function PriceScreen() {
           ]}
           testID="input-price"
         />
+
+        {priceError ? <Text accessibilityRole="alert" testID="price-required-error" style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left', marginBottom: 12 }}>{t('errors.invalid_price')}</Text> : null}
 
         {!isSale ? (
           <ChoiceGrid style={styles.choicesWrap}>
@@ -138,7 +146,7 @@ export default function PriceScreen() {
         <Button 
           title={t('capture.next')} 
           onPress={handleNext} 
-          disabled={!isReady || !isValid}
+          disabled={!isReady}
           size="large"
           testID="btn-next"
         />

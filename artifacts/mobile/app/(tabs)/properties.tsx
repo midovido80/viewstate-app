@@ -6,7 +6,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { store } from '@/services/persistence';
 import { Button } from '@/components/Button';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
@@ -45,7 +45,7 @@ export default function PropertiesScreen() {
   const listRef = useRef<FlatList<OfferedWantedRow> | null>(null);
   const colors = useColors();
   const { t, isRTL, language, fonts } = useI18n();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const loadCoordinatorRef = useRef(createOfferedWantedLoadCoordinator());
 
   const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
@@ -202,7 +202,7 @@ export default function PropertiesScreen() {
       {loadResult ? (
         Object.entries(loadResult.errors).filter(([, failed]) => failed).length > 0 ? (
           <View
-            style={[styles.errorBanner, { backgroundColor: colors.accent + '1A', borderColor: colors.accent }]}
+            style={[styles.errorBanner, { backgroundColor: colors.destructive + '1A', borderColor: colors.destructive }]}
             testID="properties-load-warnings"
             accessibilityRole="alert"
           >

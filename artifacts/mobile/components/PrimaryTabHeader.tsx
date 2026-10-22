@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';
 
 interface PrimaryTabHeaderProps {
@@ -13,7 +13,7 @@ interface PrimaryTabHeaderProps {
 export function PrimaryTabHeader({ title }: PrimaryTabHeaderProps) {
   const router = useRouter();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, isRTL, fonts } = useI18n();
 
   return (

@@ -63,7 +63,7 @@ const stubSources = new Map<string, string>([
     export const useLocalSearchParams = () => globalThis.__apartmentRouteHarness.params;
     export const useRouter = () => globalThis.__apartmentRouteHarness.router;
   `],
-  ['react-native-safe-area-context', 'export const useSafeAreaInsets = () => ({ top: 0, bottom: 0 });'],
+  ['@/hooks/useScreenInsets', 'export const useScreenInsets = () => ({ top: 8, bottom: 12, left: 0, right: 0 });'],
   ['@/contexts/CaptureContext', 'export const useCapture = () => globalThis.__apartmentRouteHarness.capture;'],
   ['@/contexts/I18nContext', `
     export const useI18n = () => ({
