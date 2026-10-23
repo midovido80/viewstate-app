@@ -1,104 +1,75 @@
-import { useMemo, useState } from 'react';
-import { FlatList, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Contacts from 'expo-contacts';
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
+import { useRef, useState } from 'react';
+import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
+import { BatchContactImportModal } from '@/components/BatchContactImportModal';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/services/people';
 import { store } from '@/services/persistence';
 import {
-  buildContactPhoneChoices,
-  ContactPhoneChoice,
-  inferPhoneCountry,
   normalizePhoneForCountry,
   PHONE_COUNTRIES,
   PhoneCountryCode,
-  phoneDigits,
 } from '@/services/phoneEntry';
 import { generateDomainId } from '@/services/identity';
-
-let sessionContactChoices: ContactPhoneChoice[] | null = null;
+import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 
 export default function NewPersonScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnRequirementId?: string | string[] }>();
+  const returnRequirementId = Array.isArray(params.returnRequirementId)
+    ? params.returnRequirementId[0]
+    : params.returnRequirementId;
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const { t, isRTL, fonts } = useI18n();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>('KW');
   const [countryOpen, setCountryOpen] = useState(false);
   const [notes, setNotes] = useState('');
-  const [classifications, setClassifications] = useState<PersonClassification[]>([]);
-  const [contactChoices, setContactChoices] = useState<ContactPhoneChoice[]>([]);
-  const [contactsOpen, setContactsOpen] = useState(false);
-  const [contactSearch, setContactSearch] = useState('');
-  const [contactStatus, setContactStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [classifications, setClassifications] = useState<PersonClassification[]>(
+    returnRequirementId ? ['seeker'] : [],
+  );
+  const [entryMode, setEntryMode] = useState<'choose' | 'manual'>(
+    returnRequirementId ? 'manual' : 'choose',
+  );
+  const [batchImportOpen, setBatchImportOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const saveFlight = useRef(false);
+  const personId = useRef(generateDomainId()).current;
 
-  const toggle = (value: PersonClassification) => setClassifications(current =>
-    current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
+  const toggle = (value: PersonClassification) => setClassifications(current => {
+    const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
+    return PERSON_CLASSIFICATIONS.filter(item => next.includes(item));
+  });
 
-  const filteredContactChoices = useMemo(() => {
-    const literalQuery = contactSearch.trim().toLocaleLowerCase();
-    const digitQuery = phoneDigits(contactSearch);
-    if (!literalQuery) return contactChoices;
-    return contactChoices.filter(choice =>
-      choice.name.toLocaleLowerCase().includes(literalQuery)
-      || (!!digitQuery && choice.normalizedDigits.includes(digitQuery)));
-  }, [contactChoices, contactSearch]);
   const selectedCountry = PHONE_COUNTRIES.find(country => country.code === phoneCountry)
     ?? PHONE_COUNTRIES[0];
 
-  const loadContacts = async () => {
-    try {
-      const permission = await Contacts.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setContactStatus('error');
-        return;
-      }
-      const result = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.FirstName, Contacts.Fields.LastName, Contacts.Fields.PhoneNumbers],
-        sort: Contacts.SortTypes.FirstName,
-      });
-      const normalized = buildContactPhoneChoices(result.data);
-      sessionContactChoices = normalized;
-      setContactChoices(normalized);
-      setContactStatus('ready');
-    } catch {
-      setContactStatus('error');
-    }
-  };
-
   const importContact = () => {
     setError('');
-    if (Platform.OS === 'web') {
-      setError(t('people.contacts_unavailable'));
+    if (classifications.length !== 1) {
+      setError(t('people.import_one_classification'));
       return;
     }
-    setContactSearch('');
-    setContactsOpen(true);
-    if (sessionContactChoices !== null) {
-      setContactChoices(sessionContactChoices);
-      setContactStatus('ready');
-      return;
-    }
-    setContactChoices([]);
-    setContactStatus('loading');
-    void loadContacts();
+    setBatchImportOpen(true);
   };
 
   const save = async () => {
-    if (saving) return;
+    if (saveFlight.current) return;
     setError('');
+    saveFlight.current = true;
     setSaving(true);
     try {
       const person = createPerson({
-        id: generateDomainId(),
+        id: personId,
         name,
         displayPhone: phone,
         normalizedPhone: normalizePhoneForCountry(phone, phoneCountry),
@@ -106,7 +77,24 @@ export default function NewPersonScreen() {
         classifications,
       });
       const resolved = await store.savePerson(person);
-      router.replace({ pathname: `/person/${encodeURIComponent(resolved.id)}`, params: { saved: '1' } } as never);
+      if (returnRequirementId) {
+        const requirement = await store.getRequirement(returnRequirementId);
+        if (!requirement) throw new Error('RETURN_REQUIREMENT_NOT_FOUND');
+        const outcome = await linkRequirementToSeeker({
+          expected: requirement,
+          seekerId: resolved.id,
+          store,
+        });
+        if (outcome.status !== 'linked' && outcome.status !== 'already_linked') {
+          throw new Error('RETURN_REQUIREMENT_LINK_FAILED');
+        }
+        router.replace({
+          pathname: '/requirement/view/[requirementId]',
+          params: { requirementId: returnRequirementId },
+        } as never);
+      } else {
+        router.replace({ pathname: `/person/${encodeURIComponent(resolved.id)}`, params: { saved: '1' } } as never);
+      }
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : '';
       setError(code.includes('NAME') ? t('people.name_required')
@@ -114,6 +102,7 @@ export default function NewPersonScreen() {
           : code.includes('CLASSIFICATION') ? t('people.classification_required')
             : t('people.save_failed'));
     } finally {
+      saveFlight.current = false;
       setSaving(false);
     }
   };
@@ -126,18 +115,37 @@ export default function NewPersonScreen() {
     fontFamily: fonts.regular,
   }];
   const textAlign = isRTL ? 'right' as const : 'left' as const;
-  const contactAlignItems = isRTL ? 'flex-end' as const : 'flex-start' as const;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <TouchableOpacity onPress={() => router.back()} testID="person-new-cancel" accessibilityRole="button">
-          <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
+          <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.add')}</Text>
         <View style={{ width: 45 }} />
       </View>
-      <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={60}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" bottomOffset={60}>
+        <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
+        <ChoiceGrid style={styles.choicesWrap}>
+          {PERSON_CLASSIFICATIONS.map(value => (
+            <ChoiceChip
+              key={value}
+              label={t(`people.classification.${value}` as keyof Translations)}
+              selected={classifications.includes(value)}
+              onPress={() => toggle(value)}
+              testID={`person-classification-${value}`}
+              role="checkbox"
+            />
+          ))}
+        </ChoiceGrid>
+        {classifications.length > 0 && entryMode === 'choose' ? (
+          <View style={styles.entryChoices}>
+            <Button title={t('people.manual_entry')} onPress={() => setEntryMode('manual')} testID="person-manual-entry" />
+            <Button title={t('people.import_contact')} onPress={importContact} variant="outline" testID="person-import-entry" />
+          </View>
+        ) : null}
+        {entryMode === 'choose' ? null : (
+        <>
         <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} placeholderTextColor={colors.mutedForeground} style={inputStyle} testID="person-name" />
         <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <TouchableOpacity
@@ -153,73 +161,23 @@ export default function NewPersonScreen() {
           </TouchableOpacity>
           <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
         </View>
-        <Button title={t('people.import_contact')} onPress={importContact} variant="outline" testID="person-import-contact" />
-        <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
-        <View style={styles.choices}>
-          {PERSON_CLASSIFICATIONS.map(value => (
-            <TouchableOpacity
-              key={value}
-              onPress={() => toggle(value)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: classifications.includes(value) }}
-              testID={`person-classification-${value}`}
-              style={[styles.choice, { borderColor: classifications.includes(value) ? colors.primary : colors.border, backgroundColor: colors.card }]}
-            >
-              <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>{t(`people.classification.${value}` as keyof Translations)}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
+        </>
+        )}
       </KeyboardAwareScrollViewCompat>
-      <Modal visible={contactsOpen} animationType="slide" onRequestClose={() => setContactsOpen(false)}>
-        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-          <View style={[styles.modalHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign }]}>{t('people.choose_contact')}</Text>
-            <TouchableOpacity onPress={() => setContactsOpen(false)} accessibilityRole="button" testID="contact-picker-cancel">
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign }}>{t('capture.cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            value={contactSearch}
-            onChangeText={setContactSearch}
-            placeholder={t('people.contact_search')}
-            placeholderTextColor={colors.mutedForeground}
-            style={[inputStyle, styles.contactSearch]}
-            testID="contact-search"
-          />
-          <FlatList
-            data={filteredContactChoices}
-            keyExtractor={item => item.key}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            scrollEnabled={filteredContactChoices.length > 0}
-            contentContainerStyle={styles.contactList}
-            ListEmptyComponent={(
-              <Text style={[styles.contactEmpty, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }]}>
-                {contactStatus === 'loading'
-                  ? t('people.contacts_loading')
-                  : contactStatus === 'error'
-                    ? t('people.contacts_load_failed')
-                    : t('people.contacts_empty')}
-              </Text>
-            )}
-            renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => {
-                setName(item.name);
-                setPhone(item.phone);
-                const inferredCountry = inferPhoneCountry(item.phone);
-                if (inferredCountry) setPhoneCountry(inferredCountry);
-                setContactsOpen(false);
-              }} style={[styles.contact, { borderBottomColor: colors.border, alignItems: contactAlignItems }]} testID={`contact-choice-${item.key}`}>
-                <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign }}>{item.name}</Text>
-                <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{item.phone}</Text>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      </Modal>
+      {classifications.length === 1 ? (
+        <BatchContactImportModal
+          visible={batchImportOpen}
+          classification={classifications[0]}
+          onClose={() => setBatchImportOpen(false)}
+          onImported={() => {
+            setBatchImportOpen(false);
+            router.replace('/people' as never);
+          }}
+        />
+      ) : null}
       <Modal visible={countryOpen} animationType="fade" transparent onRequestClose={() => setCountryOpen(false)}>
         <View style={[styles.modalBackdrop, { backgroundColor: `${colors.foreground}59` }]}>
           <View style={[styles.countryPicker, { backgroundColor: colors.card }]}>
@@ -261,14 +219,8 @@ const styles = StyleSheet.create({
   countryButton: { minHeight: 54, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 10 },
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   label: { fontSize: 16 },
-  choices: { gap: 8 },
-  choice: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderWidth: 1, borderRadius: 10 },
-  modalHeader: { minHeight: 64, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'space-between' },
-  modalTitle: { fontSize: 22 },
-  contactSearch: { marginHorizontal: 20, marginBottom: 8 },
-  contactList: { paddingHorizontal: 20, paddingBottom: 32 },
-  contactEmpty: { paddingVertical: 28, lineHeight: 22 },
-  contact: { minHeight: 64, borderBottomWidth: 1, justifyContent: 'center', gap: 4 },
+  choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  entryChoices: { gap: 10 },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24 },
   countryPicker: { borderRadius: 14, padding: 16, gap: 4 },
   countryTitle: { fontSize: 20, marginBottom: 8 },

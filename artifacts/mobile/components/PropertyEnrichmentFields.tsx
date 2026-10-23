@@ -1,92 +1,31 @@
-import { APARTMENT_SUBTYPES, FURNISHING_VALUES, PROPERTY_DETAIL_FIELD_DEFINITIONS, PropertyDetailField, PropertyType } from '@workspace/property-domain';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
+import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
+import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
-import { toEnglishDigits } from '@/constants/market';
+import { NumericQuickPick } from '@/components/NumericQuickPick';
+import { FLOOR_NUMBER_QUICK_PICK_VALUES, isPropertyNumericQuickPickSurface } from '@/services/numericQuickPick';
+import { propertyDetailLabels } from '@/services/propertyDetailPresentation';
+import {
+  getApplicablePropertyFormFields,
+  type PropertyFormFieldDefinition,
+} from '@/services/propertyFormCatalog';
+
+export {
+  formatPropertyDetailValue,
+  propertyDetailDisplayDefinitions,
+  propertyDetailLabels,
+  RESIDENTIAL_AMENITY_PROPERTY_FIELDS,
+} from '@/services/propertyDetailPresentation';
 
 export type EnrichmentFieldValues = Partial<Record<PropertyDetailField, string>>;
-
-const coreFieldOrder: readonly PropertyDetailField[] = [
-  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
-];
-
-// Presentation only: keep domain applicability and persistence definitions unchanged.
-export const propertyDetailDisplayDefinitions = [
-  ...coreFieldOrder.map(field => PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)!),
-  ...PROPERTY_DETAIL_FIELD_DEFINITIONS.filter(definition => !coreFieldOrder.includes(definition.field)),
-];
-
-export const propertyDetailLabels: Record<PropertyDetailField, [string, string]> = {
-  plotAreaSquareMeters: ['Plot area (m²)', 'مساحة الأرض (م²)'],
-  builtUpAreaSquareMeters: ['Built-up area (m²)', 'مساحة البناء (م²)'],
-  bathroomCount: ['Bathrooms', 'الحمامات'],
-  parkingSpaceCount: ['Parking spaces', 'مواقف السيارات'],
-  floorCount: ['Floors', 'عدد الأدوار'],
-  unitCount: ['Units', 'عدد الوحدات'],
-  apartmentCount: ['Apartments', 'عدد الشقق'],
-  shopCount: ['Shops', 'عدد المحلات'],
-  officeCount: ['Offices', 'عدد المكاتب'],
-  elevatorCount: ['Elevators', 'عدد المصاعد'],
-  apartmentSubtype: ['Apartment subtype', 'نوع الشقة'],
-  bedroomCount: ['Bedrooms', 'غرف النوم'],
-  livingRoomCount: ['Living rooms', 'غرف المعيشة'],
-  floorNumber: ['Floor number', 'رقم الدور'],
-  floorUse: ['Floor use', 'استخدام الدور'],
-  furnishing: ['Furnishing', 'التأثيث'],
-  hasMaidRoom: ['Maid room', 'غرفة خادمة'],
-  hasPool: ['Pool', 'مسبح'],
-  hasWaterfront: ['Waterfront', 'واجهة بحرية'],
-  intendedUse: ['Intended use', 'الاستخدام المقصود'],
-  commercialActivity: ['Commercial activity', 'النشاط التجاري'],
-  frontageWidthMeters: ['Frontage width (m)', 'عرض الواجهة (م)'],
-  ceilingHeightMeters: ['Ceiling height (m)', 'ارتفاع السقف (م)'],
-  loadingBayCount: ['Loading bays', 'مناطق التحميل'],
-  hasColdStorage: ['Cold storage', 'تخزين مبرد'],
-  clarification: ['Clarification (required with details)', 'التوضيح (مطلوب عند إضافة تفاصيل)'],
-};
-
-export function formatPropertyDetailValue(field: PropertyDetailField, value: unknown, language: 'en' | 'ar'): string {
-  if (typeof value === 'object' && value && 'value' in value) {
-    return toEnglishDigits(String((value as { value: unknown }).value));
-  }
-  if (typeof value === 'boolean') {
-    return value ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No');
-  }
-  if (field === 'furnishing') {
-    const localized = language === 'ar'
-      ? { unfurnished: 'غير مؤثث', semi_furnished: 'نصف مؤثث', furnished: 'مؤثث' }
-      : { unfurnished: 'Unfurnished', semi_furnished: 'Semi-furnished', furnished: 'Furnished' };
-    return localized[value as keyof typeof localized] ?? String(value);
-  }
-  if (field === 'floorUse') {
-    return value === 'residential'
-      ? (language === 'ar' ? 'سكني' : 'Residential')
-      : value === 'commercial' ? (language === 'ar' ? 'تجاري' : 'Commercial') : String(value);
-  }
-  return toEnglishDigits(String(value));
-}
-
-const booleanFields = new Set<PropertyDetailField>(['hasMaidRoom', 'hasPool', 'hasWaterfront', 'hasColdStorage']);
-const literalFields = new Set<PropertyDetailField>(['intendedUse', 'commercialActivity', 'clarification']);
-const countFields = new Set<PropertyDetailField>([
-  'bedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount',
-  'floorCount', 'apartmentCount', 'shopCount', 'officeCount',
-  'unitCount', 'elevatorCount', 'floorNumber', 'loadingBayCount'
-]);
-const choiceFields = new Set<PropertyDetailField>(['apartmentSubtype', 'floorUse', 'furnishing']);
-const decimalFields = new Set<PropertyDetailField>(['plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters']);
 
 function normalizeDigits(value: string): string {
   return value
     .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
     .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
-}
-
-function safeCountInput(value: string): string | null {
-  const normalized = normalizeDigits(value);
-  if (!/^\d*$/.test(normalized)) return null;
-  if (normalized === '') return normalized;
-  return Number.isSafeInteger(Number(normalized)) ? normalized : null;
 }
 
 function safeDecimalInput(value: string): string | null {
@@ -98,161 +37,120 @@ function safeDecimalInput(value: string): string | null {
 }
 
 export function PropertyEnrichmentFields({
+  recordScopeKey,
   propertyType,
   values,
   onChange,
+  onInvalidQuickPickChange,
+  amenityRenderExtra,
+  requireExactValue = false,
+  hideFloorUse = false,
+  hideApartmentSubtype = false,
+  hidePropertyUse = false,
 }: {
+  recordScopeKey: string;
   propertyType: PropertyType;
   values: EnrichmentFieldValues;
   onChange: (field: PropertyDetailField, value: string) => void;
+  onInvalidQuickPickChange?: (field: PropertyDetailField, scopeKey: string, invalid: boolean) => void;
+  amenityRenderExtra?: React.ReactNode;
+  requireExactValue?: boolean;
+  hideFloorUse?: boolean;
+  hideApartmentSubtype?: boolean;
+  hidePropertyUse?: boolean;
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
   const floorUse = values.floorUse;
-  const definitions = propertyDetailDisplayDefinitions.filter(definition =>
-    definition.appliesTo.includes(propertyType)
-    && definition.field !== 'floorUse'
+  const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined).filter(definition => !(propertyType === 'floor' && floorUse === 'commercial' && ['hasBalcony', 'hasElevator', 'hasSecurityGuard', 'hasKitchen', 'hasPrivateEntrance', 'hasAccessibleEntrance'].includes(definition.field)) && !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field));
+  const definitions = applicableDefinitions.filter(definition =>
+    !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field)
+    &&
+    definition.field !== 'floorUse'
+    && (!hidePropertyUse || definition.field !== 'propertyUse')
+    && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')
+    && definition.field !== 'parkingSpaceCount'
+    && definition.group !== 'amenity'
+    && definition.field !== 'plotAreaSquareMeters'
+    && definition.field !== 'builtUpAreaSquareMeters'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
-  const ordered = propertyType === 'floor'
-    ? [PROPERTY_DETAIL_FIELD_DEFINITIONS.find(item => item.field === 'floorUse')!, ...definitions]
-    : definitions;
+  const specificationOrder: PropertyDetailField[] = [
+    'propertyUse', 'apartmentSubtype', 'bedroomCount', 'masterBedroomCount', 'bathroomCount',
+    'floorNumber', 'parkingSpaceCount', 'livingRoomCount', 'furnishing', 'occupancy',
+  ];
+  const rank = (field: PropertyDetailField) => {
+    const index = specificationOrder.indexOf(field);
+    return index < 0 ? specificationOrder.length : index;
+  };
+  const sorted = [...definitions].sort((left, right) => rank(left.field) - rank(right.field));
+  const ordered = propertyType === 'floor' && !hideFloorUse
+    ? [getApplicablePropertyFormFields(propertyType).find(item => item.field === 'floorUse')!, ...sorted]
+    : sorted;
 
-  function renderFieldContent(definition: typeof PROPERTY_DETAIL_FIELD_DEFINITIONS[number]) {
+  function renderFieldContent(definition: PropertyFormFieldDefinition) {
     const field = definition.field;
     const testIdField = field === 'floorUse' ? 'floor-use' : field === 'apartmentSubtype' ? 'apartment-subtype' : field;
+    const usesResidentialQuickPick = definition.control === 'numeric_quick_pick'
+      && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
 
-    if (choiceFields.has(field)) {
+    if (usesResidentialQuickPick) {
+      return (
+        <NumericQuickPick
+          scopeKey={recordScopeKey}
+          label={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
+          value={values[field] ?? ''}
+          onChangeText={value => onChange(field, value)}
+          onPendingValidityChange={(sourceScopeKey, invalid) =>
+            onInvalidQuickPickChange?.(field, sourceScopeKey, invalid)}
+          testID={`enrich-${field}-quick-pick`}
+          quickPickValues={field === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined}
+          requireExactValue={requireExactValue}
+        />
+      );
+    }
+
+    if (definition.control === 'choice') {
       const options = field === 'floorUse' ? ['residential', 'commercial']
+        : field === 'propertyUse' ? ['residential', 'commercial']
+        : field === 'occupancy' ? ['family', 'bachelor', 'any']
         : field === 'apartmentSubtype' ? APARTMENT_SUBTYPES
         : FURNISHING_VALUES;
 
       return (
-        <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           {options.map(value => {
             const isSelected = values[field] === value;
             let label = value;
-            if (field === 'floorUse') label = t(`enrich.${value}` as any);
+            if (field === 'occupancy') label = ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] } as Record<string, string[]>)[value][language === 'ar' ? 1 : 0];
+            else if (field === 'floorUse' || field === 'propertyUse') label = t(`enrich.${value}` as any);
             else if (field === 'furnishing') label = t(`enrich.furnishing.${value}` as any);
             else if (field === 'apartmentSubtype') {
-              label = language === 'ar'
-                ? ({ studio: 'استوديو', standard_apartment: 'شقة عادية', duplex: 'دوبلكس' } as any)[value] || value
-                : ({ studio: 'Studio', standard_apartment: 'Standard apartment', duplex: 'Duplex' } as any)[value] || value;
+              label = t(`enrich.apartment_subtype.${value}` as any);
             }
 
             return (
-              <TouchableOpacity
-                key={value}
-                onPress={() => onChange(field, value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                testID={`enrich-${testIdField}-${value}`}
-                style={[
-                  styles.chip,
-                  {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? colors.primary + '11' : colors.card
-                  }
-                ]}
-              >
-                <Text style={[
-                  styles.chipText,
-                  {
-                    color: isSelected ? colors.primary : colors.foreground,
-                    fontFamily: isSelected ? fonts.semiBold : fonts.medium
-                  }
-                ]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
+              <ChoiceTile key={value} optionId={`${field}:${value}`} label={label} selected={isSelected} role="radio"
+                onPress={() => onChange(field, field === 'occupancy' && isSelected ? '' : value)}
+                testID={`enrich-${testIdField}-${value}`} />
             );
           })}
-        </View>
+        </ChoiceGrid>
       );
     }
 
-    if (booleanFields.has(field)) {
+    if (definition.control === 'boolean') {
       return (
-        <View style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           {['true', 'false'].map(value => {
             const isSelected = values[field] === value;
             const label = value === 'true' ? t('enrich.yes') : t('enrich.no');
             return (
-              <TouchableOpacity
-                key={value}
-                onPress={() => onChange(field, value)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                testID={`enrich-${testIdField}-${value}`}
-                style={[
-                  styles.chip,
-                  {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? colors.primary + '11' : colors.card
-                  }
-                ]}
-              >
-                <Text style={[
-                  styles.chipText,
-                  {
-                    color: isSelected ? colors.primary : colors.foreground,
-                    fontFamily: isSelected ? fonts.semiBold : fonts.medium
-                  }
-                ]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
+              <ChoiceTile key={value} optionId={`${field}:${value}`} label={label} selected={isSelected} role="radio"
+                onPress={() => onChange(field, value)} testID={`enrich-${testIdField}-${value}`} />
             );
           })}
-        </View>
-      );
-    }
-
-    if (countFields.has(field)) {
-      return (
-        <View style={[styles.stepperWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <TouchableOpacity
-            style={[styles.stepperButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => {
-              const current = Number.parseInt(values[field] || '0', 10);
-              const next = Number.isNaN(current) ? 0 : Math.max(0, current - 1);
-              onChange(field, String(next));
-            }}
-            testID={`enrich-${field}-minus`}
-            accessibilityRole="button"
-            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} −`}
-          >
-            <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>-</Text>
-          </TouchableOpacity>
-
-          <TextInput
-            value={values[field] ?? ''}
-            onChangeText={value => {
-              const normalized = safeCountInput(value);
-              if (normalized !== null) onChange(field, normalized);
-            }}
-            keyboardType="number-pad"
-            style={[styles.stepperInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-            testID={`enrich-field-${field}`}
-            accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
-          />
-
-          <TouchableOpacity
-            style={[styles.stepperButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => {
-              const current = Number.parseInt(values[field] || '0', 10);
-              const next = Number.isNaN(current)
-                ? 1
-                : Number.isSafeInteger(current + 1) ? current + 1 : current;
-              onChange(field, String(next));
-            }}
-            testID={`enrich-${field}-plus`}
-            accessibilityRole="button"
-            accessibilityLabel={`${propertyDetailLabels[field][language === 'ar' ? 1 : 0]} +`}
-          >
-            <Text style={[styles.stepperButtonText, { color: colors.foreground, fontFamily: fonts.medium }]}>+</Text>
-          </TouchableOpacity>
-        </View>
+        </ChoiceGrid>
       );
     }
 
@@ -260,15 +158,15 @@ export function PropertyEnrichmentFields({
       <TextInput
         value={values[field] ?? ''}
         onChangeText={value => {
-          if (!decimalFields.has(field)) {
+          if (definition.control !== 'decimal') {
             onChange(field, value);
             return;
           }
           const normalized = safeDecimalInput(value);
           if (normalized !== null) onChange(field, normalized);
         }}
-        keyboardType={decimalFields.has(field) ? 'decimal-pad' : 'default'}
-        style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
+        keyboardType={definition.control === 'decimal' ? 'decimal-pad' : 'default'}
+        style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
         testID={`enrich-field-${field}`}
         accessibilityLabel={propertyDetailLabels[field][language === 'ar' ? 1 : 0]}
       />
@@ -277,14 +175,37 @@ export function PropertyEnrichmentFields({
 
   return (
     <View style={styles.wrap}>
-      {ordered.map(definition => (
-        <View key={definition.field}>
-          <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-             {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
-          </Text>
-          {renderFieldContent(definition)}
-        </View>
-      ))}
+      {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">{ordered.map(definition => {
+        const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
+        return (
+          <View key={definition.field}>
+            {!usesResidentialQuickPick && (
+              <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+                {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
+              </Text>
+            )}
+            {renderFieldContent(definition)}
+          </View>
+        );
+      })}</PropertyFormCard>}
+      {(applicableDefinitions.some(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount') || amenityRenderExtra) && (
+        <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
+          <OrderedPropertyAmenities entries={applicableDefinitions.filter(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount').map(definition => {
+              const { field } = definition;
+              if (field === 'parkingSpaceCount') return { field, details: true, content: <View>{definition.control !== 'numeric_quick_pick' && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[field][language === 'ar' ? 1 : 0]}</Text>}{renderFieldContent(definition)}</View> };
+              const value = values[field];
+              const isTrue = value === 'true';
+              const isFalse = value === 'false';
+              const baseLabel = propertyDetailLabels[field][language === 'ar' ? 1 : 0];
+              const label = isFalse ? (language === 'ar' ? 'بدون ' + baseLabel : 'No ' + baseLabel.toLowerCase()) : baseLabel;
+              return { field, content: (
+                <ChoiceTile key={field} optionId={field} label={label} selected={isTrue || isFalse} role="checkbox"
+                  onPress={() => onChange(field, isTrue || isFalse ? '' : 'true')} />
+              ) };
+            })} />
+          {amenityRenderExtra && <ChoiceGrid>{amenityRenderExtra}</ChoiceGrid>}
+        </PropertyFormCard>
+      )}
     </View>
   );
 }
@@ -305,29 +226,4 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 14,
   },
-  stepperWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepperButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperButtonText: {
-    fontSize: 22,
-  },
-  stepperInput: {
-    flex: 1,
-    height: 46,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    textAlign: 'center',
-    fontSize: 16,
-  }
 });
