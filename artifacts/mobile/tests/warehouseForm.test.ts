@@ -101,7 +101,7 @@ test('Warehouse uses dedicated fields ahead of nearby rendering and keeps shared
   const source = await readFile(resolveSourcePath('../components/ModernPropertyForm.tsx', import.meta.url), 'utf8');
   assert.ok(source.indexOf("if (propertyType === 'warehouse')") < source.indexOf('const nearbySection'));
   const ui = await readFile(resolveSourcePath('../components/WarehouseFields.tsx', import.meta.url), 'utf8');
-  assert.match(ui, /WAREHOUSE_SPEC_FIELDS.map\(renderField\)/);
+  assert.match(ui, /WAREHOUSE_SPEC_FIELDS\.filter\(field => !equipmentFields\.has\(field\)\)\.map\(renderField\)/);
   assert.match(ui, /flexWrap: 'wrap'/);
   assert.doesNotMatch(ui, /NearbyServicesSelector|غير مهم/);
   const capture = await readFile(resolveSourcePath('../app/capture/index.tsx', import.meta.url), 'utf8');

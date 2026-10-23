@@ -1,3 +1,4 @@
+import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
@@ -1475,7 +1476,7 @@ export default function StudioCaptureRoute() {
       case 'floorNumber':
         return reviewItem(catalogLabel(fieldId), values.floorNumber || '—');
       case 'amenities':
-        return reviewItem(catalogLabel(fieldId), STUDIO_FEATURES.flatMap(item => {
+        return reviewItem(catalogLabel(fieldId), orderPropertyAmenities(STUDIO_FEATURES, item => item.field).flatMap(item => {
           const selected = values.amenitySelections?.[item.field];
           return selected === 'yes' || selected === 'required' ? [item.label[language === 'ar' ? 1 : 0]] : selected === 'no' || selected === 'must_not_have' ? [`${item.label[language === 'ar' ? 1 : 0]} · ${language === 'ar' ? 'بدون' : 'Without'}`] : [];
         }).join(' · ') || '—');

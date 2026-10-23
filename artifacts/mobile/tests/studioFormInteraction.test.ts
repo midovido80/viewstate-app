@@ -19,7 +19,7 @@ test('STRUCTURAL: optional Wanted identity precedes criteria and pinned routing 
   assert.match(studio, /result\.filter\(person => person\.classifications\.includes\('seeker'\)\)/);
   assert.match(form, /\{mode === 'wanted' && \(seekerParam \|\| editing\) \? renderPersonSelector\(\) : null\}/);
   assert.doesNotMatch(form, /mode === 'wanted' && !wantedIdentityReady \? null :/);
-  assert.match(form, /STUDIO_FORM_FIELD_ORDER\[mode\]\.map\(fieldId => renderCatalogField\(fieldId\)\)/);
+  assert.match(form, /STUDIO_FORM_FIELD_ORDER\[mode\]\.filter\(fieldId => fieldId !== 'parking'\)\.map\(fieldId => renderCatalogField\(fieldId\)\)/);
   assert.ok(
     form.indexOf('renderPersonSelector()') < form.indexOf('STUDIO_FORM_FIELD_ORDER'),
     'the eligible identity selector must precede every Wanted criterion',

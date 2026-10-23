@@ -40,10 +40,15 @@ registerHooks({
   },
 });
 
-const loadComponents = () => Promise.all([import('../components/ChoiceTile.tsx'), import('../components/PropertyEnrichmentFields.tsx')]);
+let orderedAmenities: unknown;
+const loadComponents = async () => {
+  orderedAmenities = (await import('../components/OrderedPropertyAmenities.tsx')).OrderedPropertyAmenities;
+  return Promise.all([import('../components/ChoiceTile.tsx'), import('../components/PropertyEnrichmentFields.tsx')]);
+};
 const props = (element: any) => element.props;
 function elements(element: any): any[] {
   if (Array.isArray(element)) return element.flatMap(elements);
+  if (orderedAmenities && element?.type === orderedAmenities) return elements(element.type(element.props));
   return element && typeof element === 'object' && 'props' in element ? [element, ...elements(element.props.children)] : [];
 }
 
