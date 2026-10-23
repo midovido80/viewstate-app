@@ -1,13 +1,24 @@
+import { parsePropertyProfileValue, preserveHistoricalProfileFacts, isPropertyProfileFieldVisible, propertyFormValueToDraft } from '@/services/propertyProfileForm';
+import { sanitizeWarehouseDetails } from '@/services/warehouseForm';
+import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged } from '@/services/savedPropertyClassification';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Property,
   PropertyType,
   Transaction,
+  PropertyDemoCaptureMetadata,
+  CoordinatesMetadata,
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
   validateProperty,
 } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { MARKET_CONFIG } from '@/constants/market';
 import { SerialTaskQueue } from '@/services/serialTaskQueue';
+import { optionalClassifiedLiteral } from '@/services/literalText';
+import { getDemoCategory } from '@/services/propertyDemoCatalog';
+import { isMappedTemplateField, projectPropertyFacts, squareFeetToSquareMeters } from '@/services/propertyFactProjection';
+import type { AttachmentFileStore } from '@/services/attachmentOperations';
+import { normalizeGoogleMapsLink } from '@/services/mapsLink';
 
 export const PROPERTY_UPDATE_OPERATION_KEY = '@viewstate_property_update_operation_v1';
 export const PROPERTY_EDIT_DRAFT_PREFIX = '@viewstate_property_edit_draft_v1:';
@@ -24,6 +35,21 @@ export interface PropertyEditChoices {
   priceAmount?: number;
   locationAreaId: string;
   rentalPeriodId?: string;
+  demoMetadata?: PropertyDemoCaptureMetadata;
+  nearbyServices?: readonly string[];
+  areaSquareMeters?: number;
+  areaUnit?: 'square_meter' | 'square_foot';
+  block?: string;
+  /** Canonical typed fields are hydrated into the same modern edit draft. */
+  canonicalDetails?: Record<string, string>;
+  description?: string;
+  privateNotes?: string;
+  paciNumber?: string;
+  manualLocationText?: string;
+  mapsLink?: string;
+  coordinates?: CoordinatesMetadata;
+  attachments?: Property['attachments'];
+  newlyCopiedAttachmentUris?: readonly string[];
 }
 
 export interface PropertyEditDraftV1 {
@@ -42,6 +68,15 @@ export interface PropertyUpdateOperationV1 {
   candidate: Property;
   draftSnapshot: PropertyEditDraftV1;
   preparedAt: string;
+  /** Additive V1-compatible attachment cleanup journal. */
+  attachmentCleanup?: AttachmentCleanupEvidence;
+}
+
+export interface AttachmentCleanupEvidence {
+  readonly newlyCopiedUris: readonly string[];
+  readonly retiredManagedUris: readonly string[];
+  readonly phase: 'before_cas' | 'after_cas';
+  readonly status: 'pending' | 'retryable';
 }
 
 export class PropertyEditReadError extends Error {
@@ -136,14 +171,51 @@ function assertDraft(value: unknown, expectedId?: string): PropertyEditDraftV1 {
   return draft;
 }
 
+/** Backward-compatible draft hydration. Missing fields mean untouched legacy
+ * state, never an instruction to clear the baseline. */
+export function migratePropertyEditDraft(draft: PropertyEditDraftV1): PropertyEditDraftV1 {
+  const choices = draft.choices as PropertyEditChoices;
+  const baseline = draft.baseline;
+  return {
+    ...draft,
+    choices: {
+      ...choices,
+      ...(Object.prototype.hasOwnProperty.call(choices, 'description') ? {} : { description: baseline.core.description?.value ?? '' }),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'privateNotes') ? {} : { privateNotes: baseline.core.privateNotes?.value ?? '' }),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'paciNumber') ? {} : { paciNumber: baseline.locationEnrichment?.paciNumber?.value ?? '' }),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'manualLocationText') ? {} : { manualLocationText: baseline.locationEnrichment?.manualLocationText?.value ?? '' }),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'mapsLink') ? {} : { mapsLink: baseline.locationEnrichment?.mapsLink?.value ?? '' }),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'attachments') ? {} : (baseline.attachments ? { attachments: clone(baseline.attachments) } : {})),
+      ...(Object.prototype.hasOwnProperty.call(choices, 'canonicalDetails') ? {} : {
+        canonicalDetails: Object.fromEntries(
+          Object.entries((baseline.typeDetails ?? {}) as Record<string, unknown>)
+            .filter(([key]) => PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition => definition.field === key))
+            .map(([key, value]) => [key, propertyFormValueToDraft(key, value)]),
+        ),
+      }),
+    },
+  };
+}
+
 export async function loadPropertyEditDraft(
   propertyCoreId: string,
   storage: UpdateStorage = AsyncStorage,
+  migrate = true,
 ): Promise<PropertyEditDraftV1 | null> {
   const raw = await storage.getItem(propertyEditDraftKey(propertyCoreId));
   if (raw === null) return null;
   try {
-    return assertDraft(JSON.parse(raw), propertyCoreId);
+    const draft = assertDraft(JSON.parse(raw), propertyCoreId);
+    if (!migrate) return draft;
+    const migrated = migratePropertyEditDraft(draft);
+    const migratedSnapshot = JSON.stringify(migrated);
+    if (migratedSnapshot !== raw) {
+      await withStorageLock(storage, `viewstate-property-edit-draft:${propertyCoreId}`, async () => {
+        const current = await storage.getItem(propertyEditDraftKey(propertyCoreId));
+        if (current === raw) await storage.setItem(propertyEditDraftKey(propertyCoreId), migratedSnapshot);
+      });
+    }
+    return migrated;
   } catch (error) {
     throw error instanceof PropertyEditReadError
       ? error
@@ -225,6 +297,7 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
   const price = baseline.activeOffer.transaction === 'sale'
     ? baseline.activeOffer.salePrice
     : baseline.activeOffer.rentalPrice;
+  const projected = projectPropertyFacts(baseline);
   return {
     version: 1,
     propertyCoreId: baseline.core.id,
@@ -237,9 +310,50 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
       ...(baseline.activeOffer.transaction === 'rent'
         ? { rentalPeriodId: baseline.activeOffer.rentalPeriodId }
         : {}),
+      ...(baseline.demoCapture ? { demoMetadata: clone(baseline.demoCapture) } : {}),
+      ...(baseline.nearbyServices ? { nearbyServices: clone(baseline.nearbyServices) } : {}),
+      ...(baseline.areaSquareMeters !== undefined ? {
+        areaSquareMeters: baseline.areaUnit === 'square_foot' ? squareFeetToSquareMeters(baseline.areaSquareMeters) : baseline.areaSquareMeters,
+        areaUnit: 'square_meter' as const,
+      } : {}),
+       ...(baseline.areaSquareMeters === undefined && projected.areaSquareMeters !== undefined
+         ? { areaSquareMeters: projected.areaSquareMeters, areaUnit: projected.areaUnit }
+        : {}),
+      ...(baseline.core.block ? { block: baseline.core.block } : {}),
+      canonicalDetails: {
+        ...Object.fromEntries(
+        Object.entries((baseline.typeDetails ?? {}) as Record<string, unknown>)
+          .filter(([key]) => PROPERTY_DETAIL_FIELD_DEFINITIONS.some(definition => definition.field === key))
+          .map(([key, value]) => [key, propertyFormValueToDraft(key, value)]),
+        ),
+        ...Object.fromEntries(Object.entries(projected.templateFacts).map(([key, value]) => [key, String(value)])),
+        ...((baseline.typeDetails as unknown as Record<string, unknown> | undefined)
+          && typeof (baseline.typeDetails as unknown as Record<string, unknown>).clarification === 'object'
+          && (baseline.typeDetails as unknown as Record<string, unknown>).clarification
+          && 'value' in ((baseline.typeDetails as unknown as Record<string, unknown>).clarification as object)
+          ? {
+          clarification: String(((baseline.typeDetails as unknown as Record<string, unknown>).clarification as { value: unknown }).value),
+          }
+          : {}),
+      },
+      description: baseline.core.description?.value ?? '',
+      privateNotes: baseline.core.privateNotes?.value ?? '',
+      paciNumber: baseline.locationEnrichment?.paciNumber?.value ?? '',
+      manualLocationText: baseline.locationEnrichment?.manualLocationText?.value ?? '',
+      mapsLink: baseline.locationEnrichment?.mapsLink?.value ?? '',
+      ...(baseline.locationEnrichment?.coordinates ? { coordinates: clone(baseline.locationEnrichment.coordinates) } : {}),
+      ...(baseline.attachments ? { attachments: clone(baseline.attachments) } : {}),
     },
     writeGeneration: (generations.get(baseline.core.id) ?? 0) + 1,
   };
+}
+
+/** Candidate path for saved Property details; classification changes are not part of this workflow. */
+export function buildPropertyDetailsUpdateCandidate(baseline: Property, choices: PropertyEditChoices): Property {
+  assertPropertyDetailsEditClassification(baseline, choices);
+  const candidate = buildPropertyUpdateCandidate(baseline, choices);
+  assertSavedPropertyClassificationUnchanged(baseline, candidate);
+  return candidate;
 }
 
 export function buildPropertyUpdateCandidate(
@@ -268,15 +382,132 @@ export function buildPropertyUpdateCandidate(
   }
 
   const candidate = clone(baseline) as unknown as {
+    [key: string]: unknown;
     core: Record<string, unknown>;
     activeOffer: Record<string, unknown>;
   };
+  const hasCanonicalDetails = Object.prototype.hasOwnProperty.call(choices, 'canonicalDetails');
+  const details = { ...((baseline.typeDetails ?? {}) as Record<string, unknown>) };
+  const canonicalDetails = { ...(choices.canonicalDetails ?? {}) };
+  const categoryForCandidate = getDemoCategory(choices.demoMetadata?.categoryId);
+  for (const field of !hasCanonicalDetails ? categoryForCandidate?.numericFields ?? [] : []) {
+    const legacy = choices.demoMetadata?.numericValues?.[field.id];
+    if (isMappedTemplateField(field.id) && legacy !== undefined && canonicalDetails[field.id] === undefined) {
+      canonicalDetails[field.id] = String(legacy);
+    }
+  }
+  for (const field of !hasCanonicalDetails ? categoryForCandidate?.choices ?? [] : []) {
+    const legacy = choices.demoMetadata?.choices?.[field.id];
+    if (isMappedTemplateField(field.id) && legacy !== undefined && canonicalDetails[field.id] === undefined) {
+      canonicalDetails[field.id] = legacy;
+    }
+  }
+  const writesCanonicalDetails = hasCanonicalDetails || Object.keys(canonicalDetails).length > 0;
+  if (writesCanonicalDetails) for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) delete details[definition.field];
+  if (writesCanonicalDetails) details.propertyType = choices.propertyType;
+  if (choices.propertyType === 'other_built_property' && choices.canonicalDetails?.clarification?.trim()) {
+    details.clarification = {
+      value: choices.canonicalDetails.clarification,
+      privacy: { classification: 'normal', disclosurePolicy: 'normal' },
+    };
+  }
+  for (const definition of writesCanonicalDetails ? PROPERTY_DETAIL_FIELD_DEFINITIONS : []) {
+    if (!definition.appliesTo.includes(choices.propertyType)) continue;
+    if (!isPropertyProfileFieldVisible(definition.field, choices.propertyType, choices.transaction, canonicalDetails)) continue;
+    const raw = canonicalDetails[definition.field] ?? (choices.propertyType === 'whole_building' && definition.field === 'apartmentCount' ? canonicalDetails.unitCount : undefined);
+    if (!raw?.trim() || definition.field === 'clarification') continue;
+    const profileValue = parsePropertyProfileValue(definition.field, raw);
+    if (profileValue !== undefined) details[definition.field] = profileValue;
+    else if (definition.field === 'intendedUse' || definition.field === 'commercialActivity') {
+      details[definition.field] = { value: raw, privacy: { classification: 'normal', disclosurePolicy: 'normal' } };
+    } else if ((definition.field === 'parkingTypes' || definition.field === 'warehouseLevels')) {
+      details[definition.field] = raw.split(',').filter(Boolean);
+    } else if (definition.field === 'privateParkingCount' && !canonicalDetails.parkingTypes?.split(',').includes('private')) {
+      continue;
+    } else if (definition.field === 'floorUse' || definition.field === 'apartmentSubtype' || definition.field === 'furnishing' || definition.field === 'occupancy' || definition.field === 'propertyUse' || definition.field === 'buildingAgeBand' || definition.field === 'streetPosition' || definition.field === 'rentalOccupancy' || ['warehouseFinish', 'warehouseKind', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit'].includes(definition.field)) {
+      details[definition.field] = raw;
+    } else if (definition.field.startsWith('has')) {
+      details[definition.field] = raw === 'true';
+    } else {
+      details[definition.field] = Number(raw);
+    }
+  }
+  if (writesCanonicalDetails) preserveHistoricalProfileFacts(baseline, details);
+  if (choices.propertyType === 'warehouse') { const cleaned = sanitizeWarehouseDetails(details); for (const key of Object.keys(details)) delete details[key]; Object.assign(details, cleaned); }
+  if (Object.keys(details).length) candidate.typeDetails = details;
+  else delete candidate.typeDetails;
+  const hasDescription = Object.prototype.hasOwnProperty.call(choices, 'description');
+  const hasPrivateNotes = Object.prototype.hasOwnProperty.call(choices, 'privateNotes');
+  candidate.core.description = hasDescription
+    ? optionalClassifiedLiteral(choices.description ?? '', { classification: 'normal', disclosurePolicy: 'normal' })
+    : baseline.core.description;
+  candidate.core.privateNotes = hasPrivateNotes
+    ? optionalClassifiedLiteral(choices.privateNotes ?? '', { classification: 'private_notes', disclosurePolicy: 'never' })
+    : baseline.core.privateNotes;
+  if (candidate.core.description === undefined) delete candidate.core.description;
+  if (candidate.core.privateNotes === undefined) delete candidate.core.privateNotes;
+  const locationEnrichment = { ...((baseline.locationEnrichment ?? {}) as Record<string, unknown>) };
+  const exactPrivacy = { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' } as const;
+  for (const [key, value] of [
+    ['paciNumber', choices.paciNumber],
+    ['manualLocationText', choices.manualLocationText],
+    ['mapsLink', choices.mapsLink],
+  ] as const) {
+    if (!Object.prototype.hasOwnProperty.call(choices, key)) continue;
+    const normalizedValue = key === 'mapsLink' && value?.trim()
+      ? normalizeGoogleMapsLink(value)
+      : value;
+    const literal = optionalClassifiedLiteral(normalizedValue ?? '', exactPrivacy);
+    if (literal) locationEnrichment[key] = literal; else delete locationEnrichment[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(choices, 'coordinates')) {
+    if (choices.coordinates) locationEnrichment.coordinates = clone(choices.coordinates);
+    else delete locationEnrichment.coordinates;
+  }
+  if (Object.keys(locationEnrichment).length) candidate.locationEnrichment = locationEnrichment;
+  else delete candidate.locationEnrichment;
+  candidate.attachments = Object.prototype.hasOwnProperty.call(choices, 'attachments')
+    ? (choices.attachments?.length ? clone(choices.attachments) : undefined)
+    : baseline.attachments;
+  if (candidate.attachments === undefined) delete candidate.attachments;
   candidate.core.propertyType = choices.propertyType;
   candidate.core.locationArea = {
     ...(baseline.core.locationArea as unknown as Record<string, unknown>),
     id: choices.locationAreaId,
   };
   candidate.activeOffer.transaction = choices.transaction;
+  if (choices.demoMetadata) {
+    const demo = clone(choices.demoMetadata) as unknown as Record<string, unknown>;
+    delete demo.areaSquareMeters;
+    delete demo.areaUnit;
+    const category = getDemoCategory(choices.demoMetadata.categoryId);
+    const numericValues = { ...((demo.numericValues ?? {}) as Record<string, number>) };
+    const choiceValues = { ...((demo.choices ?? {}) as Record<string, string>) };
+    for (const field of category?.numericFields ?? []) {
+      if (isMappedTemplateField(field.id) && hasCanonicalDetails) delete numericValues[field.id];
+    }
+    for (const field of category?.choices ?? []) {
+      if (isMappedTemplateField(field.id) && hasCanonicalDetails) delete choiceValues[field.id];
+    }
+    if (Object.keys(numericValues).length) demo.numericValues = numericValues; else delete demo.numericValues;
+    if (Object.keys(choiceValues).length) demo.choices = choiceValues; else delete demo.choices;
+    candidate.demoCapture = demo;
+  } else {
+    delete candidate.demoCapture;
+  }
+  if (choices.nearbyServices !== undefined) candidate.nearbyServices = clone(choices.nearbyServices);
+  else delete candidate.nearbyServices;
+  if (choices.areaSquareMeters !== undefined) {
+    candidate.areaSquareMeters = choices.areaUnit === 'square_foot'
+      ? squareFeetToSquareMeters(choices.areaSquareMeters)
+      : choices.areaSquareMeters;
+    candidate.areaUnit = 'square_meter';
+  } else {
+    delete candidate.areaSquareMeters;
+    delete candidate.areaUnit;
+  }
+  if (choices.block !== undefined) candidate.core.block = choices.block;
+  else delete candidate.core.block;
   if (choices.transaction === 'sale') {
     delete candidate.activeOffer.rentalPrice;
     delete candidate.activeOffer.rentalPeriodId;
@@ -319,7 +550,15 @@ function parseOperation(raw: string): PropertyUpdateOperationV1 {
       || !validateProperty(value.candidate).ok
     ) throw new Error('invalid update operation');
     assertDraft(value.draftSnapshot, value.baseline.core.id);
-    return value;
+    if (value.attachmentCleanup) {
+      if (!Array.isArray(value.attachmentCleanup.newlyCopiedUris)
+        || !Array.isArray(value.attachmentCleanup.retiredManagedUris)
+        || !['before_cas', 'after_cas'].includes(value.attachmentCleanup.phase)
+        || !['pending', 'retryable'].includes(value.attachmentCleanup.status)) throw new Error('invalid attachment cleanup');
+    }
+    return { ...value, attachmentCleanup: value.attachmentCleanup
+      ? { ...value.attachmentCleanup, newlyCopiedUris: [...new Set(value.attachmentCleanup.newlyCopiedUris)], retiredManagedUris: [...new Set(value.attachmentCleanup.retiredManagedUris)] }
+      : undefined };
   } catch (error) {
     throw new PropertyEditReadError('The pending property update could not be read.', error);
   }
@@ -331,6 +570,7 @@ export function createPropertyUpdateOperation(options: {
   candidate: Property;
   draftSnapshot: PropertyEditDraftV1;
   preparedAt: string;
+  attachmentCleanup?: AttachmentCleanupEvidence;
 }): PropertyUpdateOperationV1 {
   const operation: PropertyUpdateOperationV1 = {
     version: 1,
@@ -340,6 +580,7 @@ export function createPropertyUpdateOperation(options: {
     candidate: clone(options.candidate),
     draftSnapshot: clone(options.draftSnapshot),
     preparedAt: options.preparedAt,
+    ...(options.attachmentCleanup ? { attachmentCleanup: clone(options.attachmentCleanup) } : {}),
   };
   return parseOperation(JSON.stringify(operation));
 }
@@ -384,12 +625,25 @@ export type PropertyUpdateRecoveryResult =
   | { status: 'update_failed'; error: unknown }
   | { status: 'cleanup_failed'; error: unknown };
 
+async function deleteExactUris(uris: readonly string[], fileStore?: AttachmentFileStore) {
+  if (!fileStore) return;
+  for (const uri of [...new Set(uris)]) {
+    try {
+      await fileStore.delete(uri);
+    } catch (error) {
+      if (error instanceof Error && (error.message === 'ATTACHMENT_FILE_MISSING' || error.message === 'ENOENT')) continue;
+      throw error;
+    }
+  }
+}
+
 export async function executePropertyUpdateRecovery(options: {
   operation: PropertyUpdateOperationV1;
   allowUpdate: boolean;
   getProperty: (id: string) => Promise<Property | null>;
   compareAndUpdate: (baseline: Property, candidate: Property) => Promise<boolean>;
   storage?: UpdateStorage;
+  attachmentFileStore?: AttachmentFileStore;
 }): Promise<PropertyUpdateRecoveryResult> {
   const storage = options.storage ?? AsyncStorage;
   let current: Property | null;
@@ -402,7 +656,13 @@ export async function executePropertyUpdateRecovery(options: {
   let operation = options.operation;
   let updatedNow = false;
   if (exactPropertyEqual(current, operation.candidate)) {
-    operation = { ...operation, state: 'confirmed' };
+    operation = {
+      ...operation,
+      state: 'confirmed',
+      ...(operation.attachmentCleanup ? {
+        attachmentCleanup: { ...operation.attachmentCleanup, phase: 'after_cas' as const },
+      } : {}),
+    };
   } else if (exactPropertyEqual(current, operation.baseline) && operation.state === 'prepared') {
     if (!options.allowUpdate) return { status: 'retry_required' };
     try {
@@ -410,7 +670,7 @@ export async function executePropertyUpdateRecovery(options: {
         storage,
         `viewstate-property-edit-draft:${operation.baseline.core.id}`,
         async () => {
-          const latestDraft = await loadPropertyEditDraft(operation.baseline.core.id, storage);
+           const latestDraft = await loadPropertyEditDraft(operation.baseline.core.id, storage, false);
           if (
             latestDraft === null
             || JSON.stringify(latestDraft) !== JSON.stringify(operation.draftSnapshot)
@@ -420,7 +680,13 @@ export async function executePropertyUpdateRecovery(options: {
       );
       if (!preparedResult) return { status: 'conflict' };
       updatedNow = true;
-      const confirmed = { ...operation, state: 'confirmed' as const };
+       const confirmed = {
+         ...operation,
+         state: 'confirmed' as const,
+         ...(operation.attachmentCleanup ? {
+           attachmentCleanup: { ...operation.attachmentCleanup, phase: 'after_cas' as const },
+         } : {}),
+       };
       await replaceOperation(operation, confirmed, storage);
       operation = confirmed;
     } catch (error) {
@@ -429,11 +695,27 @@ export async function executePropertyUpdateRecovery(options: {
         : { status: 'update_failed', error };
     }
   } else {
-    return { status: 'conflict' };
+    try {
+      if (operation.attachmentCleanup?.phase === 'before_cas') {
+        await deleteExactUris(operation.attachmentCleanup.newlyCopiedUris, options.attachmentFileStore);
+        await evidenceWrites.enqueue(async () => {
+          await withStorageLock(storage, 'viewstate-property-update-evidence', async () => {
+            const raw = await storage.getItem(PROPERTY_UPDATE_OPERATION_KEY);
+            if (raw === JSON.stringify(operation)) await storage.removeItem(PROPERTY_UPDATE_OPERATION_KEY);
+          });
+        });
+      }
+      return { status: 'conflict' };
+    } catch (error) {
+      return { status: 'cleanup_failed', error };
+    }
   }
 
   try {
-    const draft = await loadPropertyEditDraft(operation.baseline.core.id, storage);
+    if (operation.attachmentCleanup?.phase === 'after_cas') {
+      await deleteExactUris(operation.attachmentCleanup.retiredManagedUris, options.attachmentFileStore);
+    }
+    const draft = await loadPropertyEditDraft(operation.baseline.core.id, storage, false);
     if (
       draft
       && JSON.stringify(draft) === JSON.stringify(operation.draftSnapshot)

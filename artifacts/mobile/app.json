@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.viewstate.app",
-      "versionCode": 4,
+      "versionCode": 6,
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
