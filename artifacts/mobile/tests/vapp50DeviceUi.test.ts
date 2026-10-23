@@ -188,11 +188,11 @@ test('SOURCE ASSERTION: Contact review and results use bounded lists without cha
   assert.match(source, /createContactBatchSubmissionGuard/);
 });
 
-test('SOURCE ASSERTION: Matching changes are presentation-only', async () => {
+test('SOURCE ASSERTION: Matching UI delegates to one versioned engine without data writes', async () => {
   const source = await readFile('app/(tabs)/matching.tsx', 'utf8');
-  assert.match(source, /explanation\.criterion === 'eligibility' && explanation\.possiblePoints === 0/);
+  assert.match(source, /MatchingResultCard/);
   assert.match(source, /matching\.saved\.matchAllDescription/);
   assert.match(source, /new BrokerInitiatedMatching\(store, candidateSource\)/);
-  assert.match(source, /MATCH_QUALIFICATION_THRESHOLD/);
+  assert.match(source, /MATCH_ENGINE_VERSION/);
   assert.doesNotMatch(source, /saveRequirement|updateRequirement|saveProperty|setItem/);
 });

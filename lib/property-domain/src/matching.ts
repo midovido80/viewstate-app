@@ -1,611 +1,703 @@
 import type { Property } from "./types.ts";
-import type {
-  RequirementOccupancy,
-  SeekerRequirement,
-} from "./requirements.ts";
+import type { SeekerRequirement } from "./requirements.ts";
+import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
+import { projectPropertyProfileDetails } from "./formContracts.ts";
 
-export const MATCH_QUALIFICATION_THRESHOLD = 70;
-
-export const MATCH_SCORING_WEIGHTS = {
-  rent: {
-    budget: 40,
-    orderedLocation: 30,
-    bedrooms: 10,
-    bathrooms: 10,
-    occupancy: 5,
-    services: 5,
-  },
-  buy: {
-    budget: 60,
-    orderedLocation: 40,
-  },
+/** One executable policy. Old score results are never accepted by the selector. */
+export const MATCH_ENGINE_VERSION = "shortlist-v1" as const;
+export const MATCHING_DEFAULT_POLICY = {
+  maximumResults: 5,
+  maximumDifferences: 2,
+  maximumPriceIncrease: 0.1,
+  maximumAreaShortfall: 0.1,
+  minimumQuality: 75,
 } as const;
-
-export type MatchingService =
-  | "swimmingPool"
-  | "gym"
-  | "seaView"
-  | "centralAC";
-
-/**
- * Normalized, structured Property-side facts accepted by the pure Matching
- * Core. Callers must only provide values backed by approved structured
- * Property fields; literal text and hasWaterfront are never interpreted.
- */
-export interface MatchingPropertyEvidence {
-  readonly bedrooms?: number;
-  readonly bathrooms?: number;
-  readonly occupancy?: RequirementOccupancy;
-  readonly swimmingPool?: boolean;
-  readonly gym?: boolean;
-  readonly seaView?: boolean;
-  readonly centralAC?: boolean;
+export type MatchCriterion = string;
+export type MatchExplanationStatus =
+  "matched" | "not_met" | "unknown" | "ineligible";
+export type MatchCategory =
+  "direct" | "negotiation" | "needs_confirmation" | "excluded";
+export interface MatchingPolicy {
+  /** Explicit refinements scoped to this Requirement/run, never inferred from browsing. */
+  readonly strictFields?: readonly string[];
+  /** Alternative locations must be explicitly selected, not guessed from proximity. */
+  readonly alternativeAreaIds?: readonly string[];
 }
-
 export interface MatchingPropertyCandidate {
   readonly property: Property;
-  readonly evidence?: MatchingPropertyEvidence;
-  /** Explicit creation chronology used only as the final ranking tie-break. */
   readonly propertyChronology?: number;
 }
-
-export type MatchCriterion =
-  | "eligibility"
-  | "budget"
-  | "ordered_location"
-  | "bedrooms"
-  | "bathrooms"
-  | "occupancy"
-  | "swimming_pool"
-  | "gym"
-  | "sea_view"
-  | "central_ac";
-
-export type MatchExplanationStatus =
-  | "matched"
-  | "not_met"
-  | "unknown"
-  | "ineligible";
-
 export interface MatchExplanation {
   readonly criterion: MatchCriterion;
   readonly status: MatchExplanationStatus;
   readonly awardedPoints: number;
   readonly possiblePoints: number;
-  readonly code:
-    | "eligible"
-    | "ineligible_property_type"
-    | "ineligible_transaction"
-    | "ineligible_currency"
-    | "ineligible_price"
-    | "ineligible_location"
-    | "within_budget"
-    | "ordered_location_rank"
-    | "meets_minimum"
-    | "below_minimum"
-    | "exact_or_compatible"
-    | "occupancy_not_compatible"
-    | "service_present"
-    | "service_absent"
-    | "unknown_property_evidence";
+  readonly code: string;
   readonly message: string;
+  readonly expected?: string | number | boolean;
+  readonly actual?: string | number | boolean;
+  readonly difference?: number;
+  readonly percentDifference?: number;
+  readonly hard: boolean;
 }
-
-export type MatchIneligibilityReason =
-  | "property_type"
-  | "transaction"
-  | "currency"
-  | "price"
-  | "location";
-
+export type MatchIneligibilityReason = string;
 export interface MatchResult {
+  readonly engineVersion: typeof MATCH_ENGINE_VERSION;
   readonly requirementId: string;
   readonly propertyId: string;
   readonly eligible: boolean;
   readonly score: number;
+  readonly priceAmount: number;
   readonly qualifies: boolean;
+  readonly category: MatchCategory;
+  readonly differenceCount: number;
+  readonly unknownCount: number;
   readonly includedWeight: number;
   readonly locationRank: number | null;
-  readonly priceDistanceFromBudgetMidpoint: number | null;
   readonly propertyChronology?: number;
   readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
   readonly explanations: readonly MatchExplanation[];
 }
-
 export interface MatchEligibilityResult {
   readonly eligible: boolean;
   readonly locationRank: number | null;
   readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
 }
-
-interface CriterionPoints {
-  readonly explanation: MatchExplanation;
-  readonly awarded: number;
-  readonly possible: number;
-}
-
-type TypeDetailsLike = {
-  readonly bedroomCount?: unknown;
-  readonly bathroomCount?: unknown;
-  readonly hasPool?: unknown;
+const finite = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+const unwrap = (value: unknown): unknown =>
+  value && typeof value === "object" && "value" in value ? value.value : value;
+const amenityFields: Readonly<Record<string, string>> = {
+  heating: "hasHeating",
+  balcony: "hasBalcony",
+  maid_room: "hasMaidRoom",
+  laundry_room: "hasLaundryRoom",
+  solar_heater: "hasSolarHeater",
+  elevator: "hasElevator",
+  garden: "hasGarden",
+  security_guard: "hasSecurityGuard",
+  bbq_area: "hasBBQArea",
+  private_roof: "hasPrivateRoof",
 };
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function isBoolean(value: unknown): value is boolean {
-  return typeof value === "boolean";
-}
-
-function isOccupancy(value: unknown): value is RequirementOccupancy {
-  return value === "family" || value === "bachelor" || value === "any";
-}
-
-function derivePropertyEvidence(property: Property): MatchingPropertyEvidence {
-  const details = property.typeDetails as TypeDetailsLike | undefined;
-  return {
-    bedrooms: isFiniteNumber(details?.bedroomCount)
-      ? details.bedroomCount
-      : undefined,
-    bathrooms: isFiniteNumber(details?.bathroomCount)
-      ? details.bathroomCount
-      : undefined,
-    swimmingPool: isBoolean(details?.hasPool)
-      ? details.hasPool
-      : undefined,
-  };
-}
-
-function mergeEvidence(
+/** Remove stale hidden facts using the same applicability/conditional contract as forms. */
+export function matchingPropertyFacts(
   property: Property,
-  supplied: MatchingPropertyEvidence | undefined,
-): MatchingPropertyEvidence {
-  const derived = derivePropertyEvidence(property);
-  if (!supplied) return derived;
-  return {
-    bedrooms: isFiniteNumber(supplied.bedrooms) && supplied.bedrooms >= 0
-      ? supplied.bedrooms
-      : derived.bedrooms,
-    bathrooms: isFiniteNumber(supplied.bathrooms) && supplied.bathrooms >= 0
-      ? supplied.bathrooms
-      : derived.bathrooms,
-    occupancy: isOccupancy(supplied.occupancy)
-      ? supplied.occupancy
-      : undefined,
-    swimmingPool: isBoolean(supplied.swimmingPool)
-      ? supplied.swimmingPool
-      : derived.swimmingPool,
-    gym: isBoolean(supplied.gym) ? supplied.gym : undefined,
-    seaView: isBoolean(supplied.seaView) ? supplied.seaView : undefined,
-    centralAC: isBoolean(supplied.centralAC) ? supplied.centralAC : undefined,
-  };
-}
-
-function roundScore(value: number): number {
-  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
-  return Object.is(rounded, -0) ? 0 : rounded;
-}
-
-function locationFraction(rank: number | null): number {
-  if (rank === null) return 0.2;
-  return Math.max(20, 100 - ((rank - 1) * 20)) / 100;
-}
-
-function criterion(
-  criterionName: MatchCriterion,
-  status: MatchExplanationStatus,
-  awarded: number,
-  possible: number,
-  code: MatchExplanation["code"],
-  message: string,
-): CriterionPoints {
-  return {
-    awarded,
-    possible,
-    explanation: {
-      criterion: criterionName,
-      status,
-      awardedPoints: awarded,
-      possiblePoints: possible,
-      code,
-      message,
-    },
-  };
-}
-
-function serviceCriterionName(service: MatchingService): MatchCriterion {
-  if (service === "swimmingPool") return "swimming_pool";
-  if (service === "seaView") return "sea_view";
-  if (service === "centralAC") return "central_ac";
-  return "gym";
-}
-
-function evaluateService(
-  service: MatchingService,
-  evidence: MatchingPropertyEvidence,
-  possible: number,
-): CriterionPoints {
-  const value = evidence[service];
-  const name = serviceCriterionName(service);
-  if (value === undefined) {
-    return criterion(
-      name,
-      "unknown",
-      0,
-      possible,
-      "unknown_property_evidence",
-      `${service} evidence is Unknown.`,
-    );
-  }
-  if (value) {
-    return criterion(
-      name,
-      "matched",
-      possible,
-      possible,
-      "service_present",
-      `${service} is present in structured Property evidence.`,
-    );
-  }
-  return criterion(
-    name,
-    "not_met",
-    0,
-    possible,
-    "service_absent",
-    `${service} is explicitly absent in structured Property evidence.`,
+): Readonly<Record<string, unknown>> {
+  const raw = (property.typeDetails ?? {}) as Record<string, unknown>;
+  const details = projectPropertyProfileDetails(
+    property.core.propertyType,
+    property.activeOffer.transaction,
+    raw,
   );
-}
-
-function extractPrice(property: Property): {
-  readonly amount: number;
-  readonly currencyCode: string;
-} | null {
-  const offer = property.activeOffer;
-  if (offer.transaction === "rent") {
-    return isFiniteNumber(offer.rentalPrice.amount)
-      && typeof offer.rentalPrice.currencyCode === "string"
-      ? offer.rentalPrice
-      : null;
+  const facts: Record<string, unknown> = {};
+  for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
+    if (!definition.appliesTo.includes(property.core.propertyType)) continue;
+    if (
+      definition.floorUses &&
+      property.core.propertyType === "floor" &&
+      !definition.floorUses.includes(details.floorUse as never)
+    )
+      continue;
+    if (
+      definition.propertyUses &&
+      property.core.propertyType === "other_built_property" &&
+      !definition.propertyUses.includes(details.propertyUse as never)
+    )
+      continue;
+    if (
+      definition.apartmentSubtypes &&
+      property.core.propertyType === "apartment" &&
+      !definition.apartmentSubtypes.includes(details.apartmentSubtype as never)
+    )
+      continue;
+    if (details[definition.field] !== undefined)
+      facts[definition.field] = unwrap(details[definition.field]);
   }
-  return isFiniteNumber(offer.salePrice.amount)
-    && typeof offer.salePrice.currencyCode === "string"
-    ? offer.salePrice
-    : null;
-}
-
-function hardEligibility(
-  requirement: SeekerRequirement,
-  candidate: MatchingPropertyCandidate,
-  price: { readonly amount: number; readonly currencyCode: string } | null,
-): {
-  readonly reasons: readonly MatchIneligibilityReason[];
-  readonly locationRank: number | null;
-} {
-  const reasons: MatchIneligibilityReason[] = [];
-  const property = candidate.property;
-  const expectedTransaction = requirement.purpose === "rent" ? "rent" : "sale";
-  const locationRank = requirement.preferredAreaIds.indexOf(
-    property.core.locationArea.id,
-  );
-
-  if (property.core.propertyType !== requirement.propertyType) {
-    reasons.push("property_type");
-  }
-  if (property.activeOffer.transaction !== expectedTransaction) {
-    reasons.push("transaction");
-  }
+  // The approved physical area is distinct from land area. Missing does not mean zero.
   if (
-    price === null
-    || price.currencyCode !== requirement.budget.currencyCode
+    facts.builtUpAreaSquareMeters === undefined &&
+    finite(property.areaSquareMeters)
   ) {
-    reasons.push("currency");
-  } else if (
-    price.amount < requirement.budget.minimum
-    || price.amount > requirement.budget.maximum
-  ) {
-    reasons.push("price");
+    facts.builtUpAreaSquareMeters =
+      property.areaUnit === "square_foot"
+        ? property.areaSquareMeters * 0.092903
+        : property.areaSquareMeters;
   }
-  return {
-    reasons,
-    locationRank: locationRank < 0 ? null : locationRank + 1,
-  };
+  // A partial complex offer refers to the available portion, not the entire building.
+  if (
+    property.core.propertyType === "commercial_complex" &&
+    details.rentalScope === "partial"
+  ) {
+    facts.builtUpAreaSquareMeters = facts.availableAreaSquareMeters;
+  }
+  if (facts.hasElevator === undefined && finite(facts.elevatorCount))
+    facts.hasElevator = facts.elevatorCount > 0;
+  if (
+    facts.parkingSpaceCount === undefined &&
+    Array.isArray(facts.parkingTypes) &&
+    facts.parkingTypes.length === 1 &&
+    facts.parkingTypes[0] === "private" &&
+    finite(facts.privateParkingCount)
+  ) {
+    facts.parkingSpaceCount = facts.privateParkingCount;
+  }
+  return facts;
+}
+function price(property: Property): { amount: number; currencyCode: string } {
+  return property.activeOffer.transaction === "rent"
+    ? property.activeOffer.rentalPrice
+    : property.activeOffer.salePrice;
 }
 
-function ineligibleExplanation(
-  reasons: readonly MatchIneligibilityReason[],
-): MatchExplanation {
-  const code = reasons.includes("property_type")
-    ? "ineligible_property_type"
-    : reasons.includes("transaction")
-      ? "ineligible_transaction"
-      : reasons.includes("currency")
-        ? "ineligible_currency"
-        : reasons.includes("price")
-          ? "ineligible_price"
-          : "ineligible_location";
-  return {
-    criterion: "eligibility",
-    status: "ineligible",
-    awardedPoints: 0,
-    possiblePoints: 0,
-    code,
-    message: `Hard eligibility failed: ${reasons.join(", ")}.`,
-  };
-}
-
-function priceDistance(
-  requirement: SeekerRequirement,
-  price: { readonly amount: number } | null,
-): number | null {
-  if (!price) return null;
-  const midpoint = (
-    requirement.budget.minimum + requirement.budget.maximum
-  ) / 2;
-  return Math.abs(price.amount - midpoint);
-}
-
-interface HardEligibilityAssessment extends MatchEligibilityResult {
-  readonly price: {
-    readonly amount: number;
-    readonly currencyCode: string;
-  } | null;
-}
-
-function assessHardEligibility(
-  requirement: SeekerRequirement,
-  candidate: MatchingPropertyCandidate,
-): HardEligibilityAssessment {
-  const price = extractPrice(candidate.property);
-  const eligibility = hardEligibility(requirement, candidate, price);
-  return {
-    eligible: eligibility.reasons.length === 0,
-    locationRank: eligibility.locationRank,
-    ineligibilityReasons: eligibility.reasons,
-    price,
-  };
-}
-
-/**
- * Checks only the authoritative hard eligibility gates. It deliberately does
- * not normalize evidence or calculate score, denominator, or qualification.
- */
+/** Identity gates only. Price/area flexibility belongs to the single evaluator below. */
 export function checkMatchEligibility(
   requirement: SeekerRequirement,
   candidate: MatchingPropertyCandidate,
 ): MatchEligibilityResult {
-  const assessment = assessHardEligibility(requirement, candidate);
+  const property = candidate.property;
+  const reasons: string[] = [];
+  if (property.core.propertyType !== requirement.propertyType)
+    reasons.push("property_type");
+  if (
+    property.activeOffer.transaction !==
+    (requirement.purpose === "buy" ? "sale" : "rent")
+  )
+    reasons.push("transaction");
+  const offerPrice = price(property);
+  if (offerPrice.currencyCode !== requirement.budget.currencyCode)
+    reasons.push("currency");
+  if (!finite(offerPrice.amount) || offerPrice.amount <= 0)
+    reasons.push("invalid_price");
+  const index = requirement.preferredAreaIds.indexOf(
+    property.core.locationArea.id,
+  );
   return {
-    eligible: assessment.eligible,
-    locationRank: assessment.locationRank,
-    ineligibilityReasons: assessment.ineligibilityReasons,
+    eligible: reasons.length === 0,
+    locationRank: index < 0 ? null : index + 1,
+    ineligibilityReasons: reasons,
   };
 }
 
-/**
- * Evaluates one Requirement against one source-neutral Property candidate.
- * Property and Requirement are expected to satisfy their existing domain
- * contracts. Supplemental evidence is normalized defensively. Notes and
- * Rental Period are intentionally not read.
- */
+/** Optional session locks expose only criteria actually recorded on this request. */
+export function matchingRefinementFields(
+  requirement: SeekerRequirement,
+): string[] {
+  return [
+    ...new Set([
+      "budget",
+      ...(requirement.preferredAreaMode === "all_kuwait" ? [] : ["location"]),
+      ...(requirement.bedroomsMinimum === undefined ? [] : ["bedrooms"]),
+      ...(requirement.bathroomsMinimum === undefined ? [] : ["bathrooms"]),
+      ...(requirement.masterBedroomsMinimum === undefined
+        ? []
+        : ["masterBedrooms"]),
+      ...(requirement.centralAC === undefined ? [] : ["hasCentralAC"]),
+      ...(requirement.driverRoom === undefined ? [] : ["driverRoom"]),
+      ...(requirement.preferredAmenities ?? []).map(
+        (item) => amenityFields[item],
+      ),
+      ...(requirement.catalogPreferences ?? [])
+        .filter((item) => item.kind !== "feature" || item.value === true)
+        .map((item) => item.field),
+    ]),
+  ].filter(
+    (field) =>
+      ![
+        "apartmentSubtype",
+        "floorNumber",
+        "intendedUse",
+        "commercialActivity",
+      ].includes(field),
+  );
+}
+
 export function evaluateMatch(
   requirement: SeekerRequirement,
   candidate: MatchingPropertyCandidate,
+  policy: MatchingPolicy = {},
 ): MatchResult {
   const property = candidate.property;
-  const assessment = assessHardEligibility(requirement, candidate);
-  const midpointDistance = priceDistance(requirement, assessment.price);
-
-  if (!assessment.eligible) {
-    return {
-      requirementId: requirement.id,
-      propertyId: property.core.id,
-      eligible: false,
-      score: 0,
-      qualifies: false,
-      includedWeight: 0,
-      locationRank: assessment.locationRank,
-      priceDistanceFromBudgetMidpoint: midpointDistance,
-      propertyChronology: candidate.propertyChronology,
-      ineligibilityReasons: assessment.ineligibilityReasons,
-      explanations: [ineligibleExplanation(assessment.ineligibilityReasons)],
-    };
-  }
-
-  const evidence = mergeEvidence(property, candidate.evidence);
+  const identity = checkMatchEligibility(requirement, candidate);
+  const facts = matchingPropertyFacts(property);
   const explanations: MatchExplanation[] = [];
-  const points: CriterionPoints[] = [];
-  const weights = requirement.purpose === "rent"
-    ? MATCH_SCORING_WEIGHTS.rent
-    : MATCH_SCORING_WEIGHTS.buy;
+  const strict = new Set(policy.strictFields ?? []);
+  const add = (
+    field: string,
+    expected: string | number | boolean,
+    actual: unknown,
+    weight: number,
+    comparison: "minimum" | "maximum" | "exact" = "exact",
+    hard = false,
+    tolerance = 0,
+  ) => {
+    const isHard = hard || strict.has(field);
+    const unknown = actual === undefined || actual === null;
+    const matched =
+      !unknown &&
+      (comparison === "minimum"
+        ? finite(actual) && actual >= Number(expected)
+        : comparison === "maximum"
+          ? finite(actual) && actual <= Number(expected)
+          : actual === expected);
+    const difference =
+      finite(expected) && finite(actual) ? actual - expected : undefined;
+    const ratio =
+      difference === undefined
+        ? undefined
+        : Math.abs(difference) / Math.max(Math.abs(Number(expected)), 1);
+    const outsideTolerance =
+      !matched &&
+      !unknown &&
+      (tolerance === 0 || ratio === undefined || ratio > tolerance + 1e-9);
+    const status = unknown
+      ? "unknown"
+      : matched
+        ? "matched"
+        : isHard || outsideTolerance
+          ? "ineligible"
+          : "not_met";
+    const loss =
+      matched || unknown
+        ? 0
+        : ratio === undefined
+          ? 0.5
+          : Math.min(1, Math.max(0.25, ratio * 2.5));
+    explanations.push({
+      criterion: field,
+      status,
+      hard: isHard,
+      expected,
+      ...(typeof actual === "string" ||
+      typeof actual === "number" ||
+      typeof actual === "boolean"
+        ? { actual }
+        : {}),
+      ...(difference === undefined
+        ? {}
+        : { difference, percentDifference: Number((ratio! * 100).toFixed(2)) }),
+      possiblePoints: weight,
+      awardedPoints: matched
+        ? weight
+        : unknown || status === "ineligible"
+          ? 0
+          : weight * (1 - loss),
+      code: unknown
+        ? "unknown_property_evidence"
+        : matched
+          ? "matched"
+          : status === "ineligible"
+            ? "condition_not_met"
+            : "negotiation_required",
+      message: unknown
+        ? "Confirm the missing structured fact."
+        : matched
+          ? "Recorded requirement met."
+          : "Recorded requirement differs; acceptance is not confirmed.",
+    });
+  };
+  for (const reason of identity.ineligibilityReasons)
+    explanations.push({
+      criterion: reason,
+      status: "ineligible",
+      hard: true,
+      awardedPoints: 0,
+      possiblePoints: 0,
+      code: "ineligible_" + reason,
+      message: "Incompatible Property identity or offer.",
+    });
 
-  points.push(criterion(
+  if (property.core.propertyType === "floor")
+    add(
+      "floorUse",
+      requirement.floorUse ?? "residential / commercial",
+      requirement.floorUse === undefined ? undefined : facts.floorUse,
+      0,
+      "exact",
+      true,
+    );
+  if (property.core.propertyType === "other_built_property")
+    add("propertyUse", "residential / commercial", undefined, 0, "exact", true);
+  const subtype = requirement.catalogPreferences?.find(
+    (item) => item.field === "apartmentSubtype" && item.kind === "choice",
+  );
+  if (subtype)
+    add(
+      "apartmentSubtype",
+      subtype.value,
+      facts.apartmentSubtype,
+      0,
+      "exact",
+      true,
+    );
+  if (
+    requirement.purpose === "rent" &&
+    property.activeOffer.transaction === "rent"
+  ) {
+    // Missing historical cadence is not silently assumed; new requests already default monthly.
+    if (requirement.rentalPeriodId === undefined)
+      add(
+        "rentalPeriodId",
+        property.activeOffer.rentalPeriodId,
+        undefined,
+        0,
+        "exact",
+        true,
+      );
+    else
+      add(
+        "rentalPeriodId",
+        requirement.rentalPeriodId,
+        property.activeOffer.rentalPeriodId,
+        0,
+        "exact",
+        true,
+      );
+  }
+  add(
     "budget",
-    "matched",
-    weights.budget,
-    weights.budget,
-    "within_budget",
-    "Price is within the explicit Requirement budget.",
-  ));
-
-  const rank = assessment.locationRank;
-  if (rank === null) {
-    const locationPoints = weights.orderedLocation * locationFraction(rank);
-    points.push(criterion(
-      "ordered_location",
-      "not_met",
-      locationPoints,
-      weights.orderedLocation,
-      "ordered_location_rank",
-      "Property is outside the preferred locations; location receives 20% of its points.",
-    ));
-  } else {
-    const locationPoints = weights.orderedLocation * locationFraction(rank);
-    points.push(criterion(
-      "ordered_location",
-      "matched",
-      locationPoints,
-      weights.orderedLocation,
-      "ordered_location_rank",
-      `Property is the ${rank} preference; location receives ${locationFraction(rank) * 100}% of its points.`,
-    ));
+    requirement.budget.maximum,
+    price(property).amount,
+    35,
+    "maximum",
+    false,
+    MATCHING_DEFAULT_POLICY.maximumPriceIncrease,
+  );
+  // All Kuwait is unrestricted. Area selections are a set, not an inferred priority list.
+  if (
+    requirement.preferredAreaMode !== "all_kuwait" &&
+    requirement.preferredAreaIds.length > 0
+  ) {
+    const area = property.core.locationArea.id;
+    const accepted = requirement.preferredAreaIds.includes(area);
+    const alternative =
+      policy.alternativeAreaIds?.includes(area) === true &&
+      !strict.has("location");
+    if (accepted) add("location", area, area, 25);
+    else {
+      add(
+        "location",
+        requirement.preferredAreaIds.join(", "),
+        area,
+        25,
+        "exact",
+        !alternative,
+      );
+      if (alternative) {
+        const index = explanations.length - 1;
+        explanations[index] = {
+          ...explanations[index],
+          status: "not_met",
+          awardedPoints: 12.5,
+        };
+      }
+    }
   }
-
+  const minimums = [
+    ["bedrooms", requirement.bedroomsMinimum, "bedroomCount", 20],
+    ["bathrooms", requirement.bathroomsMinimum, "bathroomCount", 10],
+    [
+      "masterBedrooms",
+      requirement.masterBedroomsMinimum,
+      "masterBedroomCount",
+      6,
+    ],
+  ] as const;
+  for (const [field, expected, actualField, weight] of minimums) {
+    if (expected !== undefined)
+      add(
+        field,
+        expected,
+        facts[actualField],
+        weight,
+        "minimum",
+        false,
+        expected > 0 ? 1 / expected : 0,
+      );
+  }
+  const feature = (field: string, expected: boolean, weight = 4) =>
+    add(
+      field,
+      expected,
+      facts[field],
+      weight,
+      "exact",
+      !expected,
+      expected ? 1 : 0,
+    );
+  // Boolean mismatches have no numeric distance; explicitly permit one positive-feature trade-off.
+  const flexibleFeature = (field: string, expected: boolean, weight = 4) => {
+    feature(field, expected, weight);
+    const index = explanations.length - 1;
+    if (
+      expected &&
+      !strict.has(field) &&
+      explanations[index].status === "ineligible"
+    )
+      explanations[index] = {
+        ...explanations[index],
+        status: "not_met",
+        awardedPoints: weight / 2,
+      };
+  };
+  if (requirement.centralAC !== undefined)
+    flexibleFeature("hasCentralAC", requirement.centralAC, 8);
+  if (requirement.driverRoom !== undefined)
+    flexibleFeature("driverRoom", requirement.driverRoom);
   if (requirement.purpose === "rent") {
-    const rentWeights = MATCH_SCORING_WEIGHTS.rent;
-    if (requirement.bedroomsMinimum !== undefined) {
-      const possible = rentWeights.bedrooms;
-      const bedrooms = evidence.bedrooms;
-      points.push(bedrooms === undefined
-        ? criterion(
-          "bedrooms",
-          "unknown",
-          0,
-          possible,
-          "unknown_property_evidence",
-          "Bedroom evidence is Unknown.",
-        )
-        : criterion(
-          "bedrooms",
-          bedrooms >= requirement.bedroomsMinimum ? "matched" : "not_met",
-          bedrooms >= requirement.bedroomsMinimum ? possible : 0,
-          possible,
-          bedrooms >= requirement.bedroomsMinimum ? "meets_minimum" : "below_minimum",
-          bedrooms >= requirement.bedroomsMinimum
-            ? "Property meets the minimum bedrooms."
-            : "Property is below the minimum bedrooms.",
-        ));
+    if (
+      requirement.occupancy !== undefined &&
+      requirement.occupancy !== "any"
+    ) {
+      add(
+        "occupancy",
+        requirement.occupancy,
+        facts.occupancy === "any" ? requirement.occupancy : facts.occupancy,
+        8,
+        "exact",
+        true,
+      );
     }
-
-    if (requirement.bathroomsMinimum !== undefined) {
-      const possible = rentWeights.bathrooms;
-      const bathrooms = evidence.bathrooms;
-      points.push(bathrooms === undefined
-        ? criterion(
-          "bathrooms",
-          "unknown",
-          0,
-          possible,
-          "unknown_property_evidence",
-          "Bathroom evidence is Unknown.",
-        )
-        : criterion(
-          "bathrooms",
-          bathrooms >= requirement.bathroomsMinimum ? "matched" : "not_met",
-          bathrooms >= requirement.bathroomsMinimum ? possible : 0,
-          possible,
-          bathrooms >= requirement.bathroomsMinimum ? "meets_minimum" : "below_minimum",
-          bathrooms >= requirement.bathroomsMinimum
-            ? "Property meets the minimum bathrooms."
-            : "Property is below the minimum bathrooms.",
-        ));
-    }
-
-    if (requirement.occupancy !== undefined) {
-      const possible = rentWeights.occupancy;
-      const propertyOccupancy = evidence.occupancy;
-      if (propertyOccupancy === undefined) {
-        points.push(criterion(
-          "occupancy",
-          "unknown",
-          0,
-          possible,
-          "unknown_property_evidence",
-          "Occupancy evidence is Unknown.",
-        ));
-      } else {
-        const compatible = requirement.occupancy === "any"
-          || propertyOccupancy === "any"
-          || requirement.occupancy === propertyOccupancy;
-        points.push(criterion(
-          "occupancy",
-          compatible ? "matched" : "not_met",
-          compatible ? possible : 0,
-          possible,
-          compatible ? "exact_or_compatible" : "occupancy_not_compatible",
-          compatible
-            ? "Property occupancy is exact or compatible with the Requirement."
-            : "Property occupancy is not compatible with the Requirement.",
-        ));
-      }
-    }
-
-    const requestedServices = (
-      ["swimmingPool", "gym", "seaView", "centralAC"] as const
-    ).filter(service => requirement[service] === true);
-    if (requestedServices.length > 0) {
-      const possible = rentWeights.services / requestedServices.length;
-      for (const service of requestedServices) {
-        points.push(evaluateService(service, evidence, possible));
-      }
+    for (const [key, field] of [
+      ["swimmingPool", "hasPool"],
+      ["gym", "hasSharedGym"],
+      ["seaView", "hasSeaView"],
+    ] as const) {
+      if (requirement[key] !== undefined)
+        flexibleFeature(field, requirement[key]!);
     }
   }
-
-  let earned = 0;
-  let denominator = 0;
-  for (const item of points) {
-    earned += item.awarded;
-    denominator += item.possible;
-    explanations.push(item.explanation);
+  for (const [list, expected] of [
+    [requirement.preferredAmenities, true],
+    [requirement.preferredAmenityExclusions, false],
+  ] as const) {
+    for (const amenity of list ?? [])
+      flexibleFeature(amenityFields[amenity], expected);
   }
-  const score = roundScore((earned / denominator) * 100);
-
+  for (const preference of requirement.catalogPreferences ?? []) {
+    if (preference.field === "apartmentSubtype") continue;
+    const field = preference.field;
+    if (preference.kind === "number") {
+      const area =
+        field === "builtUpAreaSquareMeters" || field === "plotAreaSquareMeters";
+      const tolerance = area
+        ? MATCHING_DEFAULT_POLICY.maximumAreaShortfall
+        : preference.comparison === "exact"
+          ? 0
+          : preference.value > 0
+            ? 1 / preference.value
+            : 0;
+      add(
+        field,
+        preference.value,
+        facts[field],
+        area ? 15 : 6,
+        preference.comparison,
+        false,
+        tolerance,
+      );
+    } else if (preference.kind === "feature")
+      flexibleFeature(field, preference.value);
+    else {
+      add(
+        field,
+        preference.value,
+        facts[field],
+        6,
+        "exact",
+        ["intendedUse", "commercialActivity"].includes(field),
+      );
+      const index = explanations.length - 1;
+      if (
+        field === "furnishing" &&
+        !strict.has(field) &&
+        explanations[index].status === "ineligible"
+      )
+        explanations[index] = {
+          ...explanations[index],
+          status: "not_met",
+          awardedPoints: 3,
+        };
+    }
+  }
+  for (const service of requirement.preferredNearbyServices ?? []) {
+    const actual = property.nearbyServices?.includes(service)
+      ? true
+      : undefined;
+    add("nearby:" + service, true, actual, 1);
+    const index = explanations.length - 1;
+    if (
+      explanations[index].status === "ineligible" &&
+      !strict.has("nearby:" + service)
+    )
+      explanations[index] = {
+        ...explanations[index],
+        status: "not_met",
+        awardedPoints: 0,
+      };
+  }
+  const reasons = explanations
+    .filter((item) => item.status === "ineligible")
+    .map((item) => item.criterion);
+  const differences = explanations.filter((item) => item.status === "not_met");
+  const unknowns = explanations.filter((item) => item.status === "unknown");
+  const includedWeight = explanations.reduce(
+    (sum, item) => sum + item.possiblePoints,
+    0,
+  );
+  const earned = explanations.reduce(
+    (sum, item) => sum + item.awardedPoints,
+    0,
+  );
+  const score = includedWeight
+    ? Math.round((earned / includedWeight) * 10000) / 100
+    : 0;
+  const differenceCount = new Set(
+    differences.map((item) =>
+      item.criterion.startsWith("nearby:") ? "nearbyServices" : item.criterion,
+    ),
+  ).size;
+  const tooMany = differenceCount > MATCHING_DEFAULT_POLICY.maximumDifferences;
+  const potentialScore = includedWeight
+    ? ((earned + unknowns.reduce((sum, item) => sum + item.possiblePoints, 0)) /
+        includedWeight) *
+      100
+    : 0;
+  const category: MatchCategory =
+    reasons.length ||
+    tooMany ||
+    potentialScore < MATCHING_DEFAULT_POLICY.minimumQuality
+      ? "excluded"
+      : unknowns.length
+        ? "needs_confirmation"
+        : differences.length
+          ? "negotiation"
+          : "direct";
   return {
+    engineVersion: MATCH_ENGINE_VERSION,
     requirementId: requirement.id,
     propertyId: property.core.id,
-    eligible: true,
+    eligible: reasons.length === 0,
     score,
-    qualifies: score >= MATCH_QUALIFICATION_THRESHOLD,
-    includedWeight: denominator,
-    locationRank: assessment.locationRank,
-    priceDistanceFromBudgetMidpoint: midpointDistance,
+    priceAmount: price(property).amount,
+    category,
+    qualifies:
+      (category === "direct" || category === "negotiation") &&
+      score >= MATCHING_DEFAULT_POLICY.minimumQuality,
+    differenceCount,
+    unknownCount: unknowns.length,
+    includedWeight,
+    locationRank: identity.locationRank,
     propertyChronology: candidate.propertyChronology,
-    ineligibilityReasons: [],
-    explanations: [
-      {
-        criterion: "eligibility",
-        status: "matched",
-        awardedPoints: 0,
-        possiblePoints: 0,
-        code: "eligible",
-        message: "Property passes all hard eligibility rules.",
-      },
-      ...explanations,
+    ineligibilityReasons: [
+      ...reasons,
+      ...(tooMany ? ["too_many_differences"] : []),
     ],
+    explanations,
   };
 }
 
-/**
- * Deterministically ranks results without mutating the caller's array.
- * Ineligible results are placed after eligible results.
- */
+const categoryRank: Readonly<Record<MatchCategory, number>> = {
+  direct: 0,
+  negotiation: 1,
+  needs_confirmation: 2,
+  excluded: 3,
+};
 export function rankMatchResults(
   results: readonly MatchResult[],
 ): MatchResult[] {
+  const current = results.filter(
+    (result) => result.engineVersion === MATCH_ENGINE_VERSION,
+  );
+  if (new Set(current.map((result) => result.requirementId)).size > 1)
+    throw new Error("MIXED_MATCH_REQUIREMENTS");
   return results
+    .filter((result) => result.engineVersion === MATCH_ENGINE_VERSION)
     .map((result, index) => ({ result, index }))
-    .sort((left, right) => {
-      const a = left.result;
-      const b = right.result;
-      if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
-      if (a.score !== b.score) return b.score - a.score;
-      const aLocation = a.locationRank ?? Number.POSITIVE_INFINITY;
-      const bLocation = b.locationRank ?? Number.POSITIVE_INFINITY;
-      if (aLocation !== bLocation) return aLocation - bLocation;
-      const aDistance = a.priceDistanceFromBudgetMidpoint
-        ?? Number.POSITIVE_INFINITY;
-      const bDistance = b.priceDistanceFromBudgetMidpoint
-        ?? Number.POSITIVE_INFINITY;
-      if (aDistance !== bDistance) return aDistance - bDistance;
-      const aChronology = isFiniteNumber(a.propertyChronology)
-        ? a.propertyChronology
-        : Number.POSITIVE_INFINITY;
-      const bChronology = isFiniteNumber(b.propertyChronology)
-        ? b.propertyChronology
-        : Number.POSITIVE_INFINITY;
-      if (aChronology !== bChronology) return aChronology - bChronology;
-      return left.index - right.index;
-    })
-    .map(item => item.result);
+    .sort(
+      (a, b) =>
+        categoryRank[a.result.category] - categoryRank[b.result.category] ||
+        b.result.score - a.result.score ||
+        a.result.differenceCount - b.result.differenceCount ||
+        a.result.unknownCount - b.result.unknownCount ||
+        a.result.priceAmount - b.result.priceAmount ||
+        (a.result.propertyChronology ?? a.index) -
+          (b.result.propertyChronology ?? b.index) ||
+        a.result.propertyId.localeCompare(b.result.propertyId),
+    )
+    .map((item) => item.result);
+}
+
+/** Bounded, source-neutral shortlist. Deduplicate IDs, never infer duplicate buildings. */
+export function selectMatchShortlist(
+  results: readonly MatchResult[],
+  candidates: readonly MatchingPropertyCandidate[],
+  excludedIds: readonly string[] = [],
+): MatchResult[] {
+  const seen = new Set(excludedIds);
+  const pool = rankMatchResults(results).filter((result) => {
+    if (
+      !result.eligible ||
+      !result.qualifies ||
+      !["direct", "negotiation"].includes(result.category) ||
+      seen.has(result.propertyId)
+    )
+      return false;
+    seen.add(result.propertyId);
+    return true;
+  });
+  const byId = new Map(
+    candidates.map((candidate) => [
+      candidate.property.core.id,
+      candidate.property,
+    ]),
+  );
+  const chosen: MatchResult[] = [];
+  const diversityFacts = new Map(
+    candidates.map((candidate) => [
+      candidate.property.core.id,
+      matchingPropertyFacts(candidate.property),
+    ]),
+  );
+  const similarity = (left: MatchResult, right: MatchResult) => {
+    const a = byId.get(left.propertyId);
+    const b = byId.get(right.propertyId);
+    if (!a || !b) return 0;
+    const af = diversityFacts.get(left.propertyId)!;
+    const bf = diversityFacts.get(right.propertyId)!;
+    return (
+      Number(a.core.locationArea.id === b.core.locationArea.id) +
+      Number(
+        af.bedroomCount !== undefined && af.bedroomCount === bf.bedroomCount,
+      ) +
+      Number(af.furnishing !== undefined && af.furnishing === bf.furnishing) +
+      Number(
+        Math.abs(price(a).amount - price(b).amount) <=
+          Math.max(price(a).amount, 1) * 0.03,
+      )
+    );
+  };
+  while (
+    pool.length &&
+    chosen.length < MATCHING_DEFAULT_POLICY.maximumResults
+  ) {
+    const leader = pool[0];
+    let best = 0;
+    let utility = -Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const item = pool[i];
+      if (item.category !== leader.category || item.score < leader.score - 3)
+        continue;
+      const redundancy = chosen.length
+        ? Math.max(...chosen.map((previous) => similarity(item, previous)))
+        : 0;
+      const value = item.score - redundancy;
+      if (value > utility) {
+        utility = value;
+        best = i;
+      }
+    }
+    chosen.push(pool.splice(best, 1)[0]);
+  }
+  return chosen;
 }

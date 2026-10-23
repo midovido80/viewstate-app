@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { MATCH_ENGINE_VERSION, evaluateMatch } from '@workspace/property-domain';
 import type {
   MatchResult,
   MatchingPropertyCandidate,
@@ -73,6 +74,7 @@ test('builds the complete approved transient Rent Requirement without persistenc
     bedroomsMinimum: 2,
     bathroomsMinimum: 1,
     occupancy: 'family',
+    rentalPeriodId: 'monthly',
     swimmingPool: false,
     gym: true,
     seaView: false,
@@ -97,7 +99,7 @@ test('builds Buy without carrying any Rent-only input into M1', () => {
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal('bedroomsMinimum' in result.value, false);
+  assert.equal(result.value.bedroomsMinimum, 4);
   assert.equal('occupancy' in result.value, false);
   assert.equal('swimmingPool' in result.value, false);
 });
@@ -153,7 +155,6 @@ test('passes a quick transient Requirement through M4 without a Match store', as
   const candidates: MatchingPropertyCandidate[] = [
     {
       property: matchingProperty('qualified-property'),
-      evidence: { bedrooms: 2, bathrooms: 2 },
     },
   ];
   const result = await new BrokerInitiatedMatching(
@@ -170,7 +171,7 @@ test('passes a quick transient Requirement through M4 without a Match store', as
   assert.deepEqual(result.matches.map(match => match.propertyId), [
     'qualified-property',
   ]);
-  assert.ok(result.matches.every(match => match.score >= 70 && match.qualifies));
+  assert.ok(result.matches.every(match => match.engineVersion === MATCH_ENGINE_VERSION && match.qualifies));
 });
 
 test('Match All runs every valid Requirement in deterministic input order', async () => {
@@ -201,7 +202,7 @@ test('Match All runs every valid Requirement in deterministic input order', asyn
     [first.value, second.value],
     async requirementId => {
       called.push(requirementId);
-      return { requirementId, matches: [] };
+      return { engineVersion: MATCH_ENGINE_VERSION, requirementId, matches: [], needsConfirmation: [] };
     },
   );
   assert.deepEqual(called, [first.value.id, second.value.id]);
@@ -258,14 +259,16 @@ test('Match All groups multiple Requirements once per Person and omits empty Per
     }),
   ];
   const match = (propertyId: string, score: number): MatchResult => ({
+    engineVersion: MATCH_ENGINE_VERSION,
+    category: 'direct', differenceCount: 0, unknownCount: 0,
     requirementId: REQUIREMENT_ID,
     propertyId,
     eligible: true,
     score,
+    priceAmount: 650,
     qualifies: true,
     includedWeight: 100,
     locationRank: 0,
-    priceDistanceFromBudgetMidpoint: 0,
     ineligibilityReasons: [],
     explanations: [],
   });
@@ -273,9 +276,9 @@ test('Match All groups multiple Requirements once per Person and omits empty Per
     [first.value, second.value, empty.value],
     people,
     [
-      { requirementId: first.value.id, matches: [match('property-a', 92)] },
-      { requirementId: second.value.id, matches: [match('property-b', 83)] },
-      { requirementId: empty.value.id, matches: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: first.value.id, matches: [match('property-a', 92)], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: second.value.id, matches: [{ ...match('property-b', 83), requirementId: second.value.id }], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: empty.value.id, matches: [], needsConfirmation: [] },
     ],
   );
   assert.equal(groups.length, 1);
@@ -318,9 +321,9 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /testID="matching-mode-quick"/);
   assert.match(screen, /testID="matching-run"/);
   assert.match(screen, /testID="matching-zero-results"/);
-  assert.match(screen, /result\.explanations\.map/);
-  assert.match(screen, /matching\.results\.unknown/);
-  assert.match(screen, /MATCH_QUALIFICATION_THRESHOLD/);
+  assert.match(screen, /MatchingResultCard/);
+  assert.match(screen, /needsConfirmation/);
+  assert.match(screen, /MATCH_ENGINE_VERSION/);
   assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
   assert.match(screen, /runMatchingForAllRequirements/);
   assert.match(screen, /groupMatchAllResultsByPerson/);
@@ -342,7 +345,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(group\.person\.id\)\}`\)/);
   assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(propertyId\)\}`/);
 
-  const explicitHandler = screen.indexOf('const runMatching = async () =>');
+  const explicitHandler = screen.indexOf('const runMatching = async (');
   const firstExecution = screen.indexOf('.runForRequirement(');
   assert.ok(explicitHandler >= 0 && firstExecution > explicitHandler);
   assert.doesNotMatch(
@@ -352,12 +355,12 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.doesNotMatch(screen, /\.sort\(/);
 });
 
-test('Person entry opens the saved Match All mode without selecting one Requirement', async () => {
+test('Person entry scopes execution to the requested Requirement without falling back to Match All', async () => {
   const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
   assert.match(screen, /if \(requestedRequirementId\) setMode\('saved'\)/);
-  assert.doesNotMatch(screen, /selectedRequirementId|setSelectedRequirementId/);
+  assert.match(screen, /requirements\.filter\(item => item\.id === requestedRequirementId\)/);
 
-  const explicitHandler = screen.indexOf('const runMatching = async () =>');
+  const explicitHandler = screen.indexOf('const runMatching = async (');
   const routeSelection = screen.indexOf("if (requestedRequirementId) setMode('saved')");
   const firstExecution = screen.indexOf('.runForRequirement(');
   assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
@@ -370,4 +373,59 @@ test('Person Details keeps post-save feedback transient and uses classification 
   assert.match(personScreen, /getPersonWantedRequirementRoute\(person\.id\)/);
   assert.doesNotMatch(personScreen, /person-saved-next-step|person-saved-add-property|person-add-wanted-studio/);
   assert.doesNotMatch(personScreen, /person-add-requirement/);
+});
+
+test('result grouping rejects stale engine versions and filters cross-request results', () => {
+  const requirement = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 'person-1', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '' });
+  assert.ok(requirement.ok); if (!requirement.ok) return;
+  const people = [createPerson({ id: 'person-1', name: 'A', displayPhone: '+96550000001', classifications: ['seeker'], notes: '' })];
+  const match = evaluateMatch(requirement.value, { property: matchingProperty('p') });
+  const stale = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: 'old', requirementId: REQUIREMENT_ID, matches: [match], needsConfirmation: [] } as never]);
+  assert.deepEqual(stale, []);
+  const mixed = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: MATCH_ENGINE_VERSION, requirementId: REQUIREMENT_ID, matches: [match, { ...match, propertyId: 'other', requirementId: 'other' }], needsConfirmation: [] }]);
+  assert.deepEqual(mixed[0].requirementGroups[0].matches.map(item => item.propertyId), ['p']);
+});
+
+test('cards and refinements handle repeated taps in both languages without changing records', async () => {
+  const { registerHooks } = await import('node:module');
+  const state = { ar: false, open: true };
+  (globalThis as any).__matchingInteraction = state;
+  (globalThis as any).React = { createElement: (type: unknown, props: any, ...children: unknown[]) => ({ type, props: { ...props, children: children.length > 1 ? children : children[0] ?? props?.children } }) };
+  const stubs = new Map<string, string>([
+    ['react', `export const useState = () => [globalThis.__matchingInteraction.open, value => { globalThis.__matchingInteraction.open = value; }];`],
+    ['react-native', `export const Text = 'Text'; export const View = 'View';`],
+    ['@/components/Button', `export const Button = 'Button';`],
+    ['@/components/PropertyFormCard', `export const PropertyFormCard = 'PropertyFormCard';`],
+    ['@/components/ChoiceTile', `export const ChoiceGrid = 'ChoiceGrid'; export const ChoiceTile = 'ChoiceTile';`],
+    ['@/components/KuwaitAreaSelector', `export const KuwaitAreaSelector = 'KuwaitAreaSelector';`],
+    ['@/contexts/I18nContext', `export const useI18n = () => ({ language: globalThis.__matchingInteraction.ar ? 'ar' : 'en', isRTL: globalThis.__matchingInteraction.ar, fonts: { regular: 'r', medium: 'm', semiBold: 's', bold: 'b' }, t: key => key });`],
+    ['@/hooks/useColors', `export const useColors = () => ({ foreground: '#111', mutedForeground: '#555' });`],
+  ]);
+  const hooks = registerHooks({
+    resolve(specifier, context, next) { return stubs.has(specifier) ? { url: 'matching-interaction:' + encodeURIComponent(specifier), shortCircuit: true } : next(specifier, context); },
+    load(url, context, next) { return url.startsWith('matching-interaction:') ? { format: 'module', source: stubs.get(decodeURIComponent(url.slice('matching-interaction:'.length)))!, shortCircuit: true } : next(url, context); },
+  });
+  const elements = (value: any): any[] => Array.isArray(value) ? value.flatMap(elements) : value?.props ? [value, ...elements(value.props.children)] : [];
+  try {
+    const { MatchingResultCard } = await import('../components/MatchingResultCard.tsx');
+    const { MatchingRefinements } = await import('../components/MatchingRefinements.tsx');
+    const r = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 's', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '' });
+    assert.ok(r.ok); if (!r.ok) return;
+    const p = matchingProperty('p'); const result = evaluateMatch(r.value, { property: p });
+    const before = JSON.stringify([r.value, p]);
+    for (const ar of [false, true]) {
+      state.ar = ar; let opens = 0; let replacements = 0;
+      const buttons: any[] = elements(MatchingResultCard({ result, rank: 1, property: p, requirement: r.value, onPress: () => opens++, onReplace: () => replacements++ })).filter(item => item.type === 'Button');
+      assert.equal(buttons.length, 2);
+      buttons[0].props.onPress(); buttons[0].props.onPress(); buttons[1].props.onPress(); buttons[1].props.onPress();
+      assert.equal(opens, 2); assert.equal(replacements, 2);
+      assert.equal(buttons[0].props.title, ar ? 'عرض العقار' : 'View property');
+      let policy: import('@workspace/property-domain').MatchingPolicy = {};
+      const render = () => elements(MatchingRefinements({ requirement: r.value, policy, busy: false, onChange: next => { policy = next; } }));
+      render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, ['budget']);
+      render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, []);
+      render().find(item => item.type === 'KuwaitAreaSelector')!.props.onChange(['salmiya']); assert.deepEqual(policy.alternativeAreaIds, ['salmiya']);
+    }
+    assert.equal(JSON.stringify([r.value, p]), before);
+  } finally { hooks.deregister(); }
 });

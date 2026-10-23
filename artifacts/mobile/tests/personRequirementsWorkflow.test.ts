@@ -148,7 +148,7 @@ test('numeric input parser separates missing, valid, and malformed values', () =
   assert.deepEqual(parseOptionalRequirementNumber('-1'), { ok: false });
 });
 
-test('notes do not change frozen M2 matching output', () => {
+test('notes do not change structured shortlist matching', () => {
   const first = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', notes: 'first' });
   const second = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', notes: 'completely different' });
   assert.equal(first.ok && second.ok, true);
@@ -181,13 +181,14 @@ test('residential amenities preserve missing, explicit empty, canonical order, a
   assert.deepEqual(edited.ok ? edited.value.preferredAmenities : null, populated.value.preferredAmenities);
 });
 
-test('residential amenities validate IDs, duplicates, applicability, and remain informational to Matching', () => {
+test('residential amenities validate IDs, duplicates, applicability, and participate in Matching', () => {
   const source = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', preferredAmenities: ['garden'] });
   const without = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent' });
   assert.equal(source.ok && without.ok, true);
   if (!source.ok || !without.ok) return;
   const candidate: Parameters<typeof evaluateMatch>[1] = { property: { core: { id: 'p1', propertyType: 'apartment', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'o1', propertyCoreId: 'p1', transaction: 'rent', rentalPrice: { amount: 400, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' }, typeDetails: { propertyType: 'apartment', hasGarden: true } } };
-  assert.deepEqual(evaluateMatch(source.value, candidate), evaluateMatch(without.value, candidate));
+  assert.equal(evaluateMatch(source.value, candidate).explanations.find(item => item.criterion === 'hasGarden')?.status, 'matched');
+  assert.equal(evaluateMatch(without.value, candidate).explanations.some(item => item.criterion === 'hasGarden'), false);
   const duplicate = validateSeekerRequirement({ ...source.value, preferredAmenities: ['garden', 'garden'] });
   const invalid = validateSeekerRequirement({ ...source.value, preferredAmenities: ['private_pool'] });
   const floor = validateSeekerRequirement({ ...source.value, propertyType: 'floor', preferredAmenities: [] });

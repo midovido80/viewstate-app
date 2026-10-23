@@ -1,310 +1,157 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-
+import test from "node:test";
+import assert from "node:assert/strict";
 import {
-  checkMatchEligibility,
   evaluateMatch,
   type Property,
-  type RentSeekerRequirement,
-} from '@workspace/property-domain';
+  type SeekerRequirement,
+} from "@workspace/property-domain";
 import {
   MyPropertiesMatchingSource,
   normalizeMyPropertyCandidate,
-  type MyPropertiesStore,
-} from '../services/myPropertiesMatchingSource.ts';
-
-const requirement = (
-  overrides: Partial<RentSeekerRequirement> = {},
-): RentSeekerRequirement => ({
-  id: '11111111-1111-4111-8111-111111111111',
-  seekerId: 'seeker-1',
-  purpose: 'rent',
-  propertyType: 'apartment',
-  preferredAreaIds: ['area-1', 'area-2'],
-  budget: { minimum: 500, maximum: 800, currencyCode: 'KWD' },
-  notes: 'must not enter candidate evidence',
-  bedroomsMinimum: 2,
-  bathroomsMinimum: 1,
-  swimmingPool: true,
-  ...overrides,
+} from "../services/myPropertiesMatchingSource.ts";
+const requirement: SeekerRequirement = {
+  id: "11111111-1111-4111-8111-111111111111",
+  seekerId: "s",
+  purpose: "rent",
+  propertyType: "apartment",
+  preferredAreaIds: ["salmiya"],
+  preferredAreaMode: "specific_areas",
+  budget: { minimum: 400, maximum: 500, currencyCode: "KWD" },
+  rentalPeriodId: "monthly",
+  centralAC: true,
+  notes: "",
+};
+const property = (id = "p", amount = 490): Property => ({
+  core: {
+    id,
+    propertyType: "apartment",
+    locationArea: { id: "salmiya" },
+    privateNotes: {
+      value: "private",
+      privacy: { classification: "private_notes", disclosurePolicy: "never" },
+    },
+  },
+  activeOffer: {
+    id: id + "-offer",
+    propertyCoreId: id,
+    transaction: "rent",
+    rentalPrice: { amount, currencyCode: "KWD" },
+    rentalPeriodId: "monthly",
+  },
+  typeDetails: {
+    propertyType: "apartment",
+    apartmentSubtype: "standard_apartment",
+    bedroomCount: 3,
+    bathroomCount: 2,
+    masterBedroomCount: 1,
+    hasCentralAC: true,
+    hasElevator: true,
+    hasSecurityGuard: true,
+    parkingSpaceCount: 2,
+  },
+  nearbyServices: ["mosque"],
 });
 
-function property(options: {
-  readonly id?: string;
-  readonly area?: string;
-  readonly propertyType?: Property['core']['propertyType'];
-  readonly amount?: number;
-  readonly currencyCode?: string;
-  readonly typeDetails?: Property['typeDetails'];
-  readonly extra?: Record<string, unknown>;
-} = {}): Property {
-  const id = options.id ?? 'property-1';
-  return {
+test("candidate preserves approved modern facts and strips private data without rewriting the source", () => {
+  const p = property();
+  const before = JSON.stringify(p);
+  const result = normalizeMyPropertyCandidate(p)!;
+  assert.ok(result);
+  assert.equal((result.property.typeDetails as any).hasCentralAC, true);
+  assert.equal((result.property.typeDetails as any).masterBedroomCount, 1);
+  assert.equal((result.property.typeDetails as any).hasElevator, true);
+  assert.deepEqual(result.property.nearbyServices, ["mosque"]);
+  assert.equal(result.property.core.privateNotes, undefined);
+  assert.equal(result.property.attachments, undefined);
+  assert.equal(result.property.locationEnrichment, undefined);
+  assert.equal(JSON.stringify(p), before);
+  assert.equal(evaluateMatch(requirement, result).category, "direct");
+});
+test("one snapshot serves concurrent requests; each new explicit run refreshes it", async () => {
+  let reads = 0;
+  const store = {
+    getProperties: async () => {
+      reads++;
+      return [property()];
+    },
+  };
+  const source = new MyPropertiesMatchingSource(store);
+  await Promise.all([
+    source.getCandidates(requirement),
+    source.getCandidates({ ...requirement, id: "other" }),
+  ]);
+  assert.equal(reads, 1);
+  await new MyPropertiesMatchingSource(store).getCandidates(requirement);
+  assert.equal(reads, 2);
+});
+test("candidate retrieval does not prematurely remove price or location negotiation opportunities", async () => {
+  const over = property("over", 520);
+  const outside = {
+    ...property("outside"),
     core: {
-      id,
-      propertyType: options.propertyType ?? 'apartment',
-      locationArea: { id: options.area ?? 'area-1' },
-      privateNotes: {
-        value: 'private local note',
-        privacy: { classification: 'private_notes', disclosurePolicy: 'never' },
-      },
+      id: "outside",
+      propertyType: "apartment" as const,
+      locationArea: { id: "hawally" },
     },
-    activeOffer: {
-      id: `${id}-offer`,
-      propertyCoreId: id,
-      transaction: 'rent',
-      rentalPrice: {
-        amount: options.amount ?? 650,
-        currencyCode: options.currencyCode ?? 'KWD',
-      },
-      rentalPeriodId: 'monthly',
-    },
-    typeDetails: options.typeDetails ?? {
-      propertyType: 'apartment',
-      bedroomCount: 2,
+  };
+  const result = await new MyPropertiesMatchingSource({
+    getProperties: async () => [over, outside],
+  }).getCandidates(requirement);
+  assert.deepEqual(
+    result.map((item) => item.property.core.id),
+    ["over", "outside"],
+  );
+  assert.equal(evaluateMatch(requirement, result[0]).category, "negotiation");
+  assert.equal(evaluateMatch(requirement, result[1]).category, "excluded");
+});
+test("malformed records are ignored and duplicate IDs appear once in deterministic store order", async () => {
+  const p = property();
+  const result = await new MyPropertiesMatchingSource({
+    getProperties: async () =>
+      [null, {}, p, p, property("second")] as Property[],
+  }).getCandidates(requirement);
+  assert.deepEqual(
+    result.map((item) => item.property.core.id),
+    ["p", "second"],
+  );
+  assert.equal(normalizeMyPropertyCandidate({}), null);
+});
+test("false facts and Studio subtype survive projection without becoming unknown or a bedroom", () => {
+  const p = {
+    ...property(),
+    typeDetails: {
+      propertyType: "apartment",
+      apartmentSubtype: "studio",
+      studioRoomCount: 1,
       bathroomCount: 1,
+      hasCentralAC: false,
+      hasParking: false,
     },
-    ...options.extra,
   } as Property;
-}
-
-function storeWith(properties: unknown[]): MyPropertiesStore {
-  return {
-    getProperties: async () => properties as Property[],
-  };
-}
-
-test('normalizes approved local fields and keeps non-M2 data out of evidence', () => {
-  const localProperty = property({
-    propertyType: 'house',
-    typeDetails: {
-      propertyType: 'house',
-      bedroomCount: 3,
-      bathroomCount: 2,
-      hasPool: true,
-      // This is deliberately not a matching field.
-      furnishing: 'furnished',
-    },
-    extra: {
-      notes: 'unapproved free text',
-      locationEnrichment: {
-        mapsLink: {
-          value: 'https://private.example',
-          privacy: { classification: 'exact_location', disclosurePolicy: 'explicit_per_share' },
-        },
-      },
-    },
-  });
-
-  const candidate = normalizeMyPropertyCandidate(localProperty);
-  assert.ok(candidate);
-  assert.deepEqual(candidate.evidence, {
-    bedrooms: 3,
-    bathrooms: 2,
-    swimmingPool: true,
-  });
-  const evidence = candidate.evidence ?? {};
-  assert.equal('notes' in evidence, false);
-  assert.equal('privateNotes' in evidence, false);
-  assert.equal('hasWaterfront' in evidence, false);
-  assert.equal('locationEnrichment' in evidence, false);
-  assert.notEqual(candidate.property, localProperty);
-  assert.deepEqual(candidate.property.core, {
-    id: localProperty.core.id,
-    propertyType: 'house',
-    locationArea: { id: 'area-1' },
-  });
-  assert.equal('privateNotes' in candidate.property.core, false);
-  assert.equal('attachments' in candidate.property, false);
-  assert.equal('locationEnrichment' in candidate.property, false);
-  assert.equal('notes' in candidate.property, false);
-  assert.equal('furnishing' in (candidate.property.typeDetails ?? {}), false);
-  assert.equal('hasWaterfront' in (candidate.property.typeDetails ?? {}), false);
+  const result = normalizeMyPropertyCandidate(p)!;
+  assert.ok(result);
+  assert.equal((result.property.typeDetails as any).apartmentSubtype, "studio");
+  assert.equal((result.property.typeDetails as any).hasCentralAC, false);
+  assert.equal((result.property.typeDetails as any).hasParking, false);
+  assert.equal((result.property.typeDetails as any).bedroomCount, undefined);
 });
-
-test('new residential Property facts never enter Matching evidence', () => {
-  const candidate = normalizeMyPropertyCandidate(property({
+test("whole-building projection suppresses stale bedrooms and duplicate Unit facts", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, propertyType: "whole_building" },
     typeDetails: {
-      propertyType: 'apartment',
-      bedroomCount: 2,
-      bathroomCount: 1,
-      hasHeating: true,
-      hasBalcony: false,
-      hasMaidRoom: true,
-      hasLaundryRoom: true,
-      hasSolarHeater: true,
-      hasElevator: true,
-      hasGarden: true,
-      hasSecurityGuard: true,
-      hasBBQArea: true,
+      propertyType: "whole_building",
+      bedroomCount: 9,
+      apartmentCount: 20,
+      hasBuildingParking: false,
     },
-  }));
+  } as Property;
+  const candidate = normalizeMyPropertyCandidate(p)!;
   assert.ok(candidate);
-  assert.deepEqual(candidate.evidence, { bedrooms: 2, bathrooms: 1 });
-});
-
-test('maps supported chalet pool evidence without treating waterfront as sea view', () => {
-  const candidate = normalizeMyPropertyCandidate(property({
-    propertyType: 'chalet',
-    typeDetails: {
-      propertyType: 'chalet',
-      bedroomCount: 4,
-      bathroomCount: 3,
-      hasPool: true,
-      hasWaterfront: true,
-    },
-  }));
-
-  assert.ok(candidate);
-  assert.deepEqual(candidate.evidence, {
-    bedrooms: 4,
-    bathrooms: 3,
-    swimmingPool: true,
-  });
-  assert.equal('seaView' in (candidate.evidence ?? {}), false);
-  assert.deepEqual(candidate.property.typeDetails, {
-    propertyType: 'chalet',
-    bedroomCount: 4,
-    bathroomCount: 3,
-    hasPool: true,
-  });
-});
-
-test('local source keeps location mismatches while filtering hard-ineligible records and duplicate IDs', async () => {
-  const validFirst = property({ id: 'valid-first' });
-  const validSecond = property({ id: 'valid-second', area: 'area-2' });
-  const duplicate = property({ id: 'valid-first', amount: 700 });
-  const malformed = {
-    core: { id: 'valid-second', propertyType: 'apartment', locationArea: { id: 'area-1' } },
-    activeOffer: null,
-  };
-  const wrongType = property({ id: 'wrong-type', propertyType: 'villa' });
-  const wrongTransaction = {
-    ...property({ id: 'wrong-transaction' }),
-    activeOffer: {
-      id: 'wrong-transaction-offer',
-      propertyCoreId: 'wrong-transaction',
-      transaction: 'sale' as const,
-      salePrice: { amount: 650, currencyCode: 'KWD' },
-    },
-  };
-  const outsideBudget = property({ id: 'outside-budget', amount: 801 });
-  const outsideLocation = property({ id: 'outside-location', area: 'area-3' });
-  const wrongCurrency = property({
-    id: 'wrong-currency',
-    currencyCode: 'USD',
-  });
-
-  const source = new MyPropertiesMatchingSource(storeWith([
-    validFirst,
-    malformed,
-    wrongType,
-    wrongTransaction,
-    outsideBudget,
-    outsideLocation,
-    wrongCurrency,
-    duplicate,
-    validSecond,
-  ]));
-
-  const candidates = await source.getCandidates(requirement());
-  assert.deepEqual(
-    candidates.map(candidate => candidate.property.core.id),
-    ['valid-first', 'outside-location', 'valid-second'],
-  );
+  assert.equal((candidate.property.typeDetails as any).bedroomCount, undefined);
   assert.equal(
-    candidates.every(candidate =>
-      evaluateMatch(requirement(), candidate).eligible
-    ),
-    true,
+    (candidate.property.typeDetails as any).buildingParkingTypes,
+    undefined,
   );
-});
-
-test('a first valid duplicate deterministically wins before eligibility filtering', async () => {
-  const firstIneligible = property({ id: 'duplicate', amount: 801 });
-  const laterEligible = property({ id: 'duplicate', amount: 650 });
-  const source = new MyPropertiesMatchingSource(storeWith([
-    firstIneligible,
-    laterEligible,
-  ]));
-
-  assert.deepEqual(await source.getCandidates(requirement()), []);
-});
-
-test('preserves deterministic PropertyStore order after normalization and filtering', async () => {
-  const newest = property({ id: 'newest', area: 'area-2' });
-  const older = property({ id: 'older', area: 'area-1' });
-  const source = new MyPropertiesMatchingSource(storeWith([newest, older]));
-
-  const candidates = await source.getCandidates(
-    requirement({
-      bedroomsMinimum: undefined,
-      bathroomsMinimum: undefined,
-      swimmingPool: undefined,
-    }),
-  );
-  assert.deepEqual(
-    candidates.map(candidate => candidate.property.core.id),
-    ['newest', 'older'],
-  );
-  assert.deepEqual(
-    await source.getCandidates(
-      requirement({
-        bedroomsMinimum: undefined,
-        bathroomsMinimum: undefined,
-        swimmingPool: undefined,
-      }),
-    ),
-    candidates,
-  );
-});
-
-test('only valid local Property data is sent to the frozen M2 boundary', async () => {
-  const localProperty = property({
-    propertyType: 'house',
-    typeDetails: {
-      propertyType: 'house',
-      bedroomCount: 2,
-      bathroomCount: 1,
-      hasPool: true,
-    },
-    extra: {
-      notes: 'not a domain field',
-      source: 'not a domain field',
-    },
-  });
-  const source = new MyPropertiesMatchingSource(storeWith([localProperty]));
-  const [candidate] = await source.getCandidates(
-    requirement({ propertyType: 'house' }),
-  );
-
-  assert.ok(candidate);
-  const result = evaluateMatch(requirement({ propertyType: 'house' }), candidate);
-  assert.equal(result.eligible, true);
-  assert.equal(result.score, 100);
-  assert.equal(result.qualifies, true);
-  const evidence = candidate.evidence ?? {};
-  assert.equal('notes' in evidence, false);
-  assert.equal('source' in evidence, false);
-});
-
-test('the source uses eligibility-only M2 logic and never invokes full scoring', async () => {
-  const localProperty = property();
-  const candidate = normalizeMyPropertyCandidate(localProperty);
-  assert.ok(candidate);
-  assert.deepEqual(
-    checkMatchEligibility(requirement(), candidate),
-    {
-      eligible: true,
-      locationRank: 1,
-      ineligibilityReasons: [],
-    },
-  );
-  const sourceText = await readFile(
-    'services/myPropertiesMatchingSource.ts',
-    'utf8',
-  );
-  assert.match(sourceText, /checkMatchEligibility\(requirement, candidate\)/);
-  assert.doesNotMatch(sourceText, /evaluateMatch/);
+  assert.equal((candidate.property.typeDetails as any).apartmentCount, 20);
 });

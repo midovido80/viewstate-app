@@ -1,198 +1,49 @@
-# ViewState AI Skill — Matching Engine
+# ViewState Matching — shortlist-v1
 
-**Read this before implementing any matching functionality in ViewState.**
+Founder approved a new matching policy on 2026-10-24. This replaces the old M2 70% policy and the older illustrative 60% algorithm. They must not be restored as fallbacks.
 
----
+## One runtime path
 
-## Current Matching Eligibility
+`MyPropertiesMatchingSource` -> `BrokerInitiatedMatching` -> domain `evaluateMatch` / `selectMatchShortlist` -> Matching screen.
 
-Matching eligibility is based on separate Seeker-owned Requirements, not historical Tenant or Buyer roles. Requirement purpose is Rent or Buy, and multiple Requirements per Seeker are supported.
+- Only `MATCH_ENGINE_VERSION = shortlist-v1` results are accepted.
+- Each ranking operation belongs to exactly one Requirement ID. Mixed IDs fail closed.
+- Saved-request entry scopes to that exact request; Match All remains a separate manual tab action.
+- One local Property snapshot per explicit run; a new source refreshes it for every run.
+- Results and refinements are transient. No saved requirements or properties are changed by matching.
+- Commission, source prestige, private notes, media and exact coordinates never influence ranking.
 
+## Classification and comparisons
 
-## V001 Matching Scope — Governance Rule 12
+- Property type, transaction and currency are mandatory.
+- Explicit Apartment subtype and Floor use must agree. Missing requested evidence needs confirmation.
+- Only applicable structured facts may be compared; stale hidden form fields are suppressed.
+- Both Rent and Buy compare requested native specifications and catalog preferences.
+- Equal selected areas are accepted equally; All Kuwait adds no area penalty.
+- Other areas require explicit selection in this request's session refinements. No adjacency inference.
+- Rental periods must agree. No daily/monthly/annual arithmetic is silently assumed. Missing historical request cadence needs confirmation.
+- Physical/building and land areas are distinct; square feet are converted to square metres. Partial complex offers use available portion area.
+- Positive requested features can be a discussion point. Explicit forbidden features, occupancy conflicts and commercial-use conflicts cannot be relaxed automatically.
+- Other Built Property requests currently have no saved residential/commercial use; keep them in confirmation rather than guess the use.
+- Nearby lists confirm listed services only; an unlisted service remains Unknown, not absent.
+- Unsupported facts, including a request with no recorded counterpart, remain Unknown. Notes are not parsed to fill them.
 
-ViewState V001 matching does **exactly three things**. Nothing more.
+## Initial test policy (visible in UI, to be calibrated with Founder)
 
-| Capability | Description |
-|-----------|-------------|
-| **Compare** | Field-by-field comparison between a requirement and a property |
-| **Score** | Calculate a match score 0–100 based on how many criteria align |
-| **Explain** | Show the broker exactly which fields matched and which didn't (breakdown) |
+- At most five ready suggestions; do not pad empty places.
+- Price up to 10% above maximum may be a discussion candidate. A lower price is not rejected solely for being below the budget's lower endpoint.
+- At most 10% area shortfall, or one unit below a requested numeric minimum.
+- Exact floor number remains exact.
+- At most two logical differences; nearby services form one logical group.
+- Internal minimum quality 75/100; this is a ranking rule, never closing probability.
+- Direct results precede discussion alternatives. Equal quality/difference/unknown counts prefer the lower comparable price, then stable chronology. Small diversity reranking only within the same category and three quality points of its best candidate.
+- Unknown requested facts go into a separate, bounded confirmation list and never occupy ready slots.
+- Session strict fields can prohibit price/count/feature relaxation. Explicit alternative areas are per-request. Closing/reopening the screen clears these refinements; the UI says so.
 
-**Explicitly NOT in V001 matching:**
-- No ML / AI recommendation engine
-- No vector search or semantic similarity
-- No automated push notifications for new matches
-- No cross-broker matching
-- No "similar properties" suggestions
-- No natural language requirement parsing
+## Not included
 
-Architecture must allow upgrading to ML in V002 without breaking the API contract.
+No commission, ML, vector dependencies, cross-broker discovery, notifications, persisted rejection history, inferred building duplicates or automatic edits to client requirements.
 
----
+## Acceptance
 
-## What Is Matching?
-
-The matching engine is ViewState's core value proposition. It automatically compares a buyer's or tenant's stated requirements against all active properties and generates match records when criteria align.
-
----
-
-## Matching Philosophy (V001)
-
-- **Rule-based only (Rule 12).** No ML, no embeddings, no fuzzy logic. Simple field-to-field comparison.
-- **Transparent.** Every match has an explainable score — the broker sees exactly why a match was made.
-- **Conservative.** A match is only generated if the score reaches the threshold — not every property is shown.
-- **On-demand + triggered.** Matching runs when: a new property is added, a new requirement is added, or the broker manually requests a re-match.
-
----
-
-## Matching Algorithm (v1)
-
-### Input
-- `Property` record (from `properties` table)
-- `BuyerRequirement` record (from `buyer_requirements` table)
-
-### Fields compared
-
-| Field | Match condition | Points |
-|-------|----------------|--------|
-| `type` | `property.type` matches `requirement.type` (or requirement is `'any'`) | 30 |
-| `purpose` | `property.purpose` matches `requirement.purpose` (or requirement is `'any'`) | 20 |
-| `price` | `property.price` is between `requirement.budget_min` and `requirement.budget_max` | 25 |
-| location field | property location area is in requirement's preferred location areas | 15 |
-| `area_sqm` | `property.area_sqm` is between `requirement.area_min_sqm` and `requirement.area_max_sqm` | 5 |
-| `bedrooms` | `property.bedrooms >= requirement.bedrooms_min` | 5 |
-
-**Total possible: 100 points**
-
-### Threshold
-- Score ≥ 60: match is created (`status: 'pending'`)
-- Score < 60: no match created
-
-### Null handling
-- If a requirement field is null, that criterion is skipped (not penalized)
-- If a property field is null, that criterion scores 0 (counts against if requirement specifies it)
-
----
-
-## Match Score Implementation
-
-```typescript
-interface MatchInput {
-  property: Property;
-  requirement: BuyerRequirement;
-}
-
-interface MatchResult {
-  score: number; // 0-100
-  breakdown: MatchBreakdown;
-  isMatch: boolean; // score >= 60
-}
-
-interface MatchBreakdown {
-  type: number;      // 0 or 30
-  purpose: number;   // 0 or 20
-  price: number;     // 0 or 25
-  location: number;    // 0 or 15 — field name is illustrative; exact name deferred to Database stage
-  area: number;      // 0 or 5
-  bedrooms: number;  // 0 or 5
-}
-
-export function calculateMatchScore({ property, requirement }: MatchInput): MatchResult {
-  const breakdown: MatchBreakdown = {
-    type: 0,
-    purpose: 0,
-    price: 0,
-    location: 0,
-    area: 0,
-    bedrooms: 0,
-  };
-
-  // Type match
-  if (!requirement.type || requirement.type === 'any' || property.type === requirement.type) {
-    breakdown.type = 30;
-  }
-
-  // Purpose match
-  if (!requirement.purpose || requirement.purpose === 'any' || property.purpose === requirement.purpose) {
-    breakdown.purpose = 20;
-  }
-
-  // Price match
-  if (property.price != null) {
-    const minOk = requirement.budget_min == null || property.price >= requirement.budget_min;
-    const maxOk = requirement.budget_max == null || property.price <= requirement.budget_max;
-    if (minOk && maxOk) breakdown.price = 25;
-  }
-
-  // Location area match (market-configurable field)
-  // NOTE: exact field names (property.locationField / requirement.locationPreferences) are
-  // determined by the Database stage — use whatever names the schema settles on.
-  // The matching logic concept: property's location area is in the requirement's preferred areas.
-  // If requirement has no location preference, location scores full points.
-  if (property.locationField && requirement.locationPreferences?.length > 0) {
-    if (requirement.locationPreferences.includes(property.locationField)) {
-      breakdown.location = 15;
-    }
-  } else if (!requirement.locationPreferences || requirement.locationPreferences.length === 0) {
-    breakdown.location = 15; // No location restriction = full score
-  }
-
-  // Area match
-  if (property.area_sqm != null) {
-    const minOk = requirement.area_min_sqm == null || property.area_sqm >= requirement.area_min_sqm;
-    const maxOk = requirement.area_max_sqm == null || property.area_sqm <= requirement.area_max_sqm;
-    if (minOk && maxOk) breakdown.area = 5;
-  } else {
-    breakdown.area = 5; // No area data = no penalty
-  }
-
-  // Bedrooms match
-  if (property.bedrooms != null && requirement.bedrooms_min != null) {
-    if (property.bedrooms >= requirement.bedrooms_min) breakdown.bedrooms = 5;
-  } else {
-    breakdown.bedrooms = 5; // No data = no penalty
-  }
-
-  const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
-  return { score, breakdown, isMatch: score >= 60 };
-}
-```
-
----
-
-## Match Record Lifecycle
-
-```
-created (status: 'pending')
-  → broker views match (status: 'viewed')
-    → broker marks interested (status: 'interested')
-    → broker marks rejected (status: 'rejected')
-  → deal closes (status: 'closed')
-```
-
-- Only the owning broker can update match status
-- Closed and rejected matches are retained for analytics — never hard-deleted
-
----
-
-## When Matching Runs
-
-1. **New property saved** → run matching against all active requirements
-2. **New requirement saved** → run matching against all active properties  
-3. **Property updated** → invalidate old matches for this property, re-run
-4. **Requirement updated** → invalidate old matches for this requirement, re-run
-5. **Manual trigger** → broker presses "Find Matches" button on a property or requirement
-
----
-
-## Match Display Rules
-
-- Matches shown to the broker who owns the property (supply side)
-- Score shown as a percentage badge: `85%`
-- Breakdown shown in a collapsible section: "Why this match?"
-- Contact details of the buyer not shown — only name and general requirement summary
-- Broker must click "Express Interest" to reveal contact details (anti-spam)
-
-
----
+Behavior tests cover subtype/sector isolation, budgets and boundaries, area units, Rent cadence, Buy specifications, true/false/unknown, hidden legacy fields, one/two/multiple differences, privacy, deterministic bounded selection, replacement, shared snapshots, stale versions and mixed-request rejection. Full existing domain/mobile/typecheck gates must pass before Founder review.
