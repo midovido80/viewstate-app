@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
 import { Feather } from '@expo/vector-icons';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
@@ -438,9 +439,9 @@ export default function PersonDetailScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
-        <TouchableOpacity onPress={navigateBack} testID="person-detail-back" accessibilityRole="button" style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>
-          <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF', fontFamily: fonts.semiBold }}>{t(mode === 'edit' ? 'capture.cancel' : 'capture.back')}</Text>
+        <TouchableOpacity onPress={navigateBack} testID="person-detail-back" accessibilityRole="button" style={[approvedNavigationStyle, mode === 'edit' && { backgroundColor: colors.card }, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>
+          <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color={mode === 'edit' ? CANCEL_ACTION_COLOR : '#FFFFFF'} />
+          <Text style={{ color: mode === 'edit' ? CANCEL_ACTION_COLOR : '#FFFFFF', fontFamily: fonts.semiBold }}>{t(mode === 'edit' ? 'capture.cancel' : 'capture.back')}</Text>
         </TouchableOpacity>
         <Text numberOfLines={2} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{mode === 'edit' ? t('people.edit') : t('people.detail')}</Text>
         {mode === 'detail' ? <TouchableOpacity onPress={() => router.replace('/' as never)} testID="person-home" accessibilityRole="button" style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>

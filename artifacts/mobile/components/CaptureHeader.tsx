@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { PropertyReviewProgress } from '@/components/PropertyReview';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useState } from 'react';
@@ -119,7 +120,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
               accessibilityRole="button"
               accessibilityLabel={t('capture.cancel')}
             >
-              <Text style={[styles.cancelText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>{t('capture.cancel')}</Text>
+              <Text style={[styles.cancelText, { color: CANCEL_ACTION_COLOR, fontFamily: fonts.medium }]}>{t('capture.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

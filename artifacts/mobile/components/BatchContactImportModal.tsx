@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useMemo, useRef, useState } from 'react';
 import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Contacts from 'expo-contacts';
@@ -233,7 +234,7 @@ export function BatchContactImportModal({
             {t(`people.classification.${classification}` as keyof Translations)}
           </Text>
           <TouchableOpacity onPress={resetAndClose} accessibilityRole="button" testID="contact-import-cancel">
-            <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
+            <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
           </TouchableOpacity>
         </View>
 

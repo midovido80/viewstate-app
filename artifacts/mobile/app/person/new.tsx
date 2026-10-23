@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -118,7 +119,7 @@ export default function NewPersonScreen() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <TouchableOpacity onPress={() => router.back()} testID="person-new-cancel" accessibilityRole="button">
-          <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
+          <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.add')}</Text>
         <View style={{ width: 45 }} />

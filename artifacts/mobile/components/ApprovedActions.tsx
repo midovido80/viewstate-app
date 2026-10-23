@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR, isCancelActionLabel } from '@/constants/cancelAction';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -23,10 +24,11 @@ export function ApprovedAction({ title, onPress, variant = 'primary', disabled =
 }) {
   const colors = useColors();
   const { fonts, isRTL } = useI18n();
-  const foreground = variant === 'outline' ? colors.primary : variant === 'danger' ? colors.destructive : '#FFFFFF';
+  const isCancel = isCancelActionLabel(title);
+  const foreground = isCancel ? CANCEL_ACTION_COLOR : variant === 'outline' ? colors.primary : variant === 'danger' ? colors.destructive : '#FFFFFF';
   return <TouchableOpacity onPress={onPress} disabled={disabled || loading} testID={testID} activeOpacity={0.8}
     accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled: disabled || loading, busy: loading }}
-    style={[approvedActionStyle, { backgroundColor: variant === 'green' ? colors.whatsapp : variant === 'primary' ? colors.primary : colors.card, borderColor: variant === 'danger' ? colors.destructive : variant === 'green' ? colors.whatsapp : colors.primary, opacity: disabled || loading ? 0.55 : 1, flexDirection: isRTL ? 'row-reverse' : 'row' }, style]}>
+    style={[approvedActionStyle, { backgroundColor: isCancel ? colors.card : variant === 'green' ? colors.whatsapp : variant === 'primary' ? colors.primary : colors.card, borderColor: variant === 'danger' ? colors.destructive : variant === 'green' ? colors.whatsapp : colors.primary, opacity: disabled || loading ? 0.55 : 1, flexDirection: isRTL ? 'row-reverse' : 'row' }, style]}>
     {loading ? <ActivityIndicator color={foreground} /> : icon ? <Feather name={icon} size={20} color={foreground} /> : null}
     <Text numberOfLines={2} style={{ flexShrink: 1, color: foreground, fontFamily: fonts.semiBold, fontSize: 16, lineHeight: 20, textAlign: 'center' }}>{title}</Text>
   </TouchableOpacity>;

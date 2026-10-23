@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR, isCancelActionLabel } from '@/constants/cancelAction';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { TouchableOpacity, Text, ActivityIndicator, type ViewStyle, type TextStyle } from 'react-native';
 import { useColors } from '@/hooks/useColors';
@@ -20,9 +21,10 @@ export function Button({ onPress, title, variant = 'primary', size = 'default', 
   const colors = useColors();
   const { fonts, t } = useI18n();
   const isNavigation = variant === 'navigation' || [t('capture.back'), t('studio.back'), t('detail.edit'), t('home.title')].includes(title);
-  const foreground = isNavigation ? navigationButtonTextStyle.color
+  const isCancel = isCancelActionLabel(title);
+  const foreground = isCancel ? CANCEL_ACTION_COLOR : isNavigation ? navigationButtonTextStyle.color
     : variant === 'primary' || variant === 'whatsapp' ? '#FFFFFF' : variant === 'outline' ? colors.primary : colors.foreground;
-  const backgroundColor = isNavigation ? navigationButtonStyle.backgroundColor
+  const backgroundColor = isCancel ? colors.card : isNavigation ? navigationButtonStyle.backgroundColor
     : variant === 'whatsapp' ? colors.whatsapp : variant === 'primary' ? colors.primary
       : variant === 'secondary' ? colors.secondary : colors.card;
   return <TouchableOpacity
@@ -36,6 +38,6 @@ export function Button({ onPress, title, variant = 'primary', size = 'default', 
     style={[{ minHeight: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: variant === 'outline' ? colors.primary : backgroundColor, backgroundColor, opacity: disabled || loading ? 0.55 : 1 }, isNavigation && navigationButtonStyle, style]}
   >
     {loading ? <ActivityIndicator color={foreground} /> : null}
-    <Text style={[{ color: foreground, fontFamily: fonts.semiBold, fontSize: size === 'large' ? 18 : 16, lineHeight: 23, textAlign: 'center', flexShrink: 1 }, textStyle]}>{title}</Text>
+    <Text style={[{ color: foreground, fontFamily: fonts.semiBold, fontSize: size === 'large' ? 18 : 16, lineHeight: 23, textAlign: 'center', flexShrink: 1 }, textStyle, isCancel && { color: CANCEL_ACTION_COLOR }]}>{title}</Text>
   </TouchableOpacity>;
 }

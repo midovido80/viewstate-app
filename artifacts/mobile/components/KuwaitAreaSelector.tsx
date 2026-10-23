@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useMemo, useState, useEffect } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ScrollView } from 'react-native';
@@ -130,7 +131,7 @@ export function KuwaitAreaSelector({
                 {placeholder}
               </Text>
               <TouchableOpacity testID={`${testID}-cancel`} accessibilityRole="button" onPress={() => { onCancel?.(); setOpen(false); }}>
-                <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>
+                <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>
                   {language === 'ar' ? 'إلغاء' : 'Cancel'}
                 </Text>
               </TouchableOpacity>

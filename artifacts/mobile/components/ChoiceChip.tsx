@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR, isCancelActionLabel } from '@/constants/cancelAction';
 import { StyleSheet, Text, TouchableOpacity, ViewStyle, StyleProp } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -15,6 +16,7 @@ export interface ChoiceChipProps {
 export function ChoiceChip({ label, selected, onPress, testID, accessibilityLabel, style, role = 'checkbox' }: ChoiceChipProps) {
   const colors = useColors();
   const { fonts } = useI18n();
+  const isCancel = isCancelActionLabel(label);
 
   return (
     <TouchableOpacity
@@ -26,13 +28,13 @@ export function ChoiceChip({ label, selected, onPress, testID, accessibilityLabe
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.primary : colors.card,
+          backgroundColor: isCancel ? colors.card : selected ? colors.primary : colors.card,
           borderColor: selected ? colors.primary : colors.border,
         },
         style,
       ]}
     >
-      <Text style={[styles.label, { color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium }]}>
+      <Text style={[styles.label, { color: isCancel ? CANCEL_ACTION_COLOR : selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium }]}>
         {label}
       </Text>
     </TouchableOpacity>

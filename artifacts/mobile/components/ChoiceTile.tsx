@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR, isCancelActionLabel } from '@/constants/cancelAction';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -28,7 +29,7 @@ export function ChoiceTile({ label, selected, onPress, testID, accessibilityLabe
   const width = useContext(GridWidth);
   // Legacy callers may include a textual tick. The control supplies one accessible indicator.
   const displayLabel = label.replace(/^✓\s*/, '');
-  const foreground = selected ? '#173F78' : colors.foreground;
+  const foreground = isCancelActionLabel(displayLabel) ? CANCEL_ACTION_COLOR : selected ? '#173F78' : colors.foreground;
   return <TouchableOpacity onPress={onPress} testID={testID} activeOpacity={0.75}
     accessibilityRole={role} accessibilityLabel={accessibilityLabel ?? displayLabel}
     accessibilityState={role === 'button' ? { selected } : { checked: selected }}

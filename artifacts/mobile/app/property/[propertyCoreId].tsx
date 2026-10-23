@@ -1,3 +1,4 @@
+import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, projectPropertyProfileDetails } from '@workspace/property-domain';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
@@ -1857,7 +1858,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           <View style={[styles.sourcePickerHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('source.choose')}</Text>
             <TouchableOpacity onPress={() => setSourceOpen(false)} disabled={sourceBusy} testID="property-source-cancel" accessibilityRole="button">
-              <Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
+              <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 10 }}>
@@ -1956,7 +1957,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               {t('delete.message').replace('{identity}', `${t(`propertyType.${property.core.propertyType}` as keyof Translations)} · ${areaName(property.core.locationArea.id)} · ${property.core.id}`)}
             </Text>
             <TouchableOpacity onPress={() => setDeleteVisible(false)} disabled={deleting} style={[styles.modalAction, { borderColor: colors.border }]} testID="property-delete-cancel">
-              <Text style={[styles.modalActionText, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('capture.cancel')}</Text>
+              <Text style={[styles.modalActionText, { color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }]}>{t('capture.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => void confirmDelete()} disabled={deleting} style={[styles.modalAction, { borderColor: colors.destructive, opacity: deleting ? 0.6 : 1 }]} testID="property-delete-confirm">
               <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>{t('delete.confirm')}</Text>
@@ -2011,7 +2012,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 testID="property-transition-cancel"
                 accessibilityRole="button"
               >
-                <Text style={[styles.modalActionText, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+                <Text style={[styles.modalActionText, { color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }]}>
                   {t('capture.cancel')}
                 </Text>
               </TouchableOpacity>
