@@ -1,3 +1,4 @@
+import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { formatPrice, formatRentalCadence, toEnglishDigits } from '@/constants/market';
@@ -1219,12 +1220,15 @@ export default function StudioCaptureRoute() {
       case 'amenities':
         return <View key={fieldId} style={styles.field} testID="studio-amenities">
           <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
-          <ChoiceGrid style={[styles.chips, { direction: isRTL ? 'rtl' : 'ltr' }]}>{STUDIO_FEATURES.map(item => {
+          <OrderedPropertyAmenities entries={[
+            ...STUDIO_FEATURES.map(item => {
             const selection = values.amenitySelections?.[item.field];
             const selected = selection === 'yes' || selection === 'required' || selection === 'no' || selection === 'must_not_have';
-            return <ChoiceChip key={item.field} optionId={item.field} label={`${item.label[language === 'ar' ? 1 : 0]}${selection === 'no' || selection === 'must_not_have' ? (isRTL ? ' · بدون' : ' · Without') : ''}`} selected={selected}
-              onPress={() => update('amenitySelections', { ...values.amenitySelections, [item.field]: selected ? (mode === 'offered' ? 'unknown' : 'not_important') : (mode === 'offered' ? 'yes' : 'required') })} testID={`studio-amenity-${item.field}`} role="checkbox" />;
-          })}</ChoiceGrid>
+            return { field: item.field, content: <ChoiceChip key={item.field} optionId={item.field} label={`${item.label[language === 'ar' ? 1 : 0]}${selection === 'no' || selection === 'must_not_have' ? (isRTL ? ' · بدون' : ' · Without') : ''}`} selected={selected}
+              onPress={() => update('amenitySelections', { ...values.amenitySelections, [item.field]: selected ? (mode === 'offered' ? 'unknown' : 'not_important') : (mode === 'offered' ? 'yes' : 'required') })} testID={`studio-amenity-${item.field}`} role="checkbox" /> };
+          }),
+            { field: 'parking', details: true, content: binaryPreference('parking') },
+          ]} />
         </View>;
       case 'nearbyServices':
         return <NearbyServicesSelector key={fieldId} values={values.nearbyServices ?? []} onChange={value => update('nearbyServices', value)} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />;
@@ -1263,7 +1267,7 @@ export default function StudioCaptureRoute() {
               {renderCatalogField('transaction')}
             </PropertyFormCard>
             <PropertyFormCard title={language === 'ar' ? 'مواصفات الاستوديو' : 'Studio specifications'} icon="home">
-              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'amenities', 'nearbyServices', 'description'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}
+              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'parking', 'amenities', 'nearbyServices', 'description'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}
           {mode === 'offered' ? (
             <View style={styles.field} testID="studio-occupancy-field">
               <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'نوع السكن' : 'Occupancy'}</Text>
@@ -1288,7 +1292,7 @@ export default function StudioCaptureRoute() {
               {renderCatalogField('description')}
               {textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })}
             </PropertyFormCard>
-          </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
+          </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => fieldId !== 'parking').map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>

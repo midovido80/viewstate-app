@@ -1,3 +1,4 @@
+import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible } from '@workspace/property-domain';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
@@ -303,7 +304,7 @@ export default function CaptureWorkflow() {
   const activeProfile = draft.propertyType ? getPropertyFormProfile(draft.propertyType, draft.transaction, captureDetails) : undefined;
   const profileFieldVisible = (field: string) => !draft.propertyType || isPropertyProfileFieldVisible(field, draft.propertyType, draft.transaction, captureDetails);
   const previewFeatureLabels = Array.from(new Set([
-    ...applicable
+    ...orderPropertyAmenities(applicable, definition => definition.field)
       .filter(definition => profileFieldVisible(definition.field) && definition.group === 'amenity' && captureDetails[definition.field] === 'true')
       .map(definition => commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]),
     ...(activeProfile ? [] : demoMetadata?.selectedFeatures ?? [])

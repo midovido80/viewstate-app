@@ -1,3 +1,4 @@
+import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import {
   APARTMENT_SUBTYPES,
@@ -21,7 +22,8 @@ const coreFieldOrder: readonly PropertyDetailField[] = [
 
 export const propertyDetailDisplayDefinitions = [
   ...coreFieldOrder.map(field => PROPERTY_FORM_CATALOG.find(definition => definition.field === field)!),
-  ...PROPERTY_FORM_CATALOG.filter(definition => !coreFieldOrder.includes(definition.field)),
+  ...PROPERTY_FORM_CATALOG.filter(definition => !coreFieldOrder.includes(definition.field) && definition.group !== 'amenity'),
+  ...orderPropertyAmenities(PROPERTY_FORM_CATALOG.filter(definition => definition.group === 'amenity'), definition => definition.field),
 ];
 
 export const propertyDetailLabels: Record<PropertyDetailField, [string, string]> =
@@ -346,14 +348,14 @@ export function getPropertyDetailCategoryRows(
 }
 
 export const RESIDENTIAL_AMENITY_PROPERTY_FIELDS = [
-  'hasHeating',
+  'hasSecurityGuard',
+  'hasElevator',
   'hasBalcony',
   'hasMaidRoom',
   'hasLaundryRoom',
-  'hasSolarHeater',
-  'hasElevator',
   'hasGarden',
-  'hasSecurityGuard',
+  'hasSolarHeater',
+  'hasHeating',
   'hasBBQArea',
 ] as const satisfies readonly PropertyDetailField[];
 

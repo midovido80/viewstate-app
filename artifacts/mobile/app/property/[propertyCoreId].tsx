@@ -1,3 +1,4 @@
+import { availableAmenityDetailGroups, orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, projectPropertyProfileDetails } from '@workspace/property-domain';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
@@ -1280,19 +1281,40 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     block: property.core.block,
     description: visibleContent.description,
   });
-  const availableFeatures = Array.from(new Set([
+  const featureValues: Record<string, unknown> = {
+    ...(!activeProfile && !commercialFloorSale && propertyFacts.templateFacts.parkingSpaceCount !== undefined
+      ? { parkingSpaceCount: propertyFacts.templateFacts.parkingSpaceCount } : {}),
+    ...detailValues,
+  };
+  const featureDetailGroups = [
+    ...availableAmenityDetailGroups(featureValues),
+    ...(property.core.propertyType === 'warehouse' ? [
+      ['hasCentralAC'], ['hasServiceElevator', 'serviceElevatorCapacityTons'],
+      ['hasFireSystem'], ['hasVehicleRamp', 'rampVehicleSize'], ['hasEscalator'], ['hasColdStorage'],
+    ].map(group => group.filter(field => featureValues[field] !== undefined && warehouseFieldVisible(field as PropertyDetailField, featureValues))).filter(group => group.length > 0) : []),
+  ];
+  const featuredDetailFields = new Set(featureDetailGroups.flat());
+  for (let index = numericSpecTiles.length - 1; index >= 0; index--) {
+    if (featuredDetailFields.has(numericSpecTiles[index].fieldId)) numericSpecTiles.splice(index, 1);
+  }
+  const availableFeatures = Array.from(new Set(orderPropertyAmenities([
     ...propertyDetailDisplayDefinitions
-      .filter(definition => (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (property.core.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, detailValues)) && property.core.propertyType !== 'warehouse' && definition.group === 'amenity' && detailValues[definition.field] === true)
-      .map(definition => commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0]),
+      .filter(definition => !featuredDetailFields.has(definition.field) && (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && property.core.propertyType !== 'warehouse' && definition.group === 'amenity' && detailValues[definition.field] === true)
+      .map(definition => ({ field: definition.field as string, label: commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0] })),
+    ...featureDetailGroups.map(group => ({
+      field: group[0],
+      label: group.map(field => `${propertyDetailLabels[field as PropertyDetailField][language === 'ar' ? 1 : 0]}: ${formatPropertyDetailValue(field as PropertyDetailField, featureValues[field], language, t)}`).join(' · '),
+    })),
     ...(property.core.propertyType === 'warehouse' || activeProfile ? [] : property.demoCapture?.selectedFeatures ?? [])
       .filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, detailValues, detailValues.floorUse as string | undefined))
-      .map(id => demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id),
-  ]));
+      .map(id => ({ field: id, label: demoCategory?.features.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id })),
+  ], item => item.field).map(item => item.label)));
   const supplementalDetails = propertyDetailDisplayDefinitions
     .filter(definition =>
       (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && (property.core.propertyType !== 'warehouse' || warehouseFieldVisible(definition.field, detailValues))
       && (!commercialFloorSale || definition.field !== 'privateParkingCount' || Array.isArray(detailValues.parkingTypes) && detailValues.parkingTypes.includes('private'))
       && (property.core.propertyType === 'warehouse' || definition.group !== 'amenity')
+      && !featuredDetailFields.has(definition.field)
       && !numericSpecTiles.some(tile => tile.fieldId === definition.field)
       && detailValues[definition.field] !== undefined
       && definition.field !== 'plotAreaSquareMeters'
@@ -1310,13 +1332,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       && !(offeredStudio && ['bedroomCount', 'floorCount', 'apartmentCount', 'shopCount', 'officeCount', 'unitCount', 'elevatorCount', 'roomsPerUnit', 'bathroomsPerUnit'].includes(item.field))
       && !(offeredStudio && item.field === 'builtUpAreaSquareMeters')
       && !numericSpecTiles.some(tile => tile.fieldId === item.field)
-      && !existingSupplementalFields.has(item.field))
+      && !existingSupplementalFields.has(item.field)
+      && !featuredDetailFields.has(item.field))
   const studioFacilityDetails = offeredStudio
     ? ([
       ['hasKitchen', language === 'ar' ? 'مطبخ' : 'Kitchen'],
       ['hasHall', language === 'ar' ? 'صالة' : 'Hall'],
       ['hasParking', language === 'ar' ? 'موقف' : 'Parking'],
-    ] as const).flatMap(([field, label]) => detailValues[field] === undefined ? [] : [{
+    ] as const).flatMap(([field, label]) => detailValues[field] === undefined || featuredDetailFields.has(field) ? [] : [{
       field,
       label,
       value: formatPropertyDetailValue('hasCentralAC', detailValues[field], language),

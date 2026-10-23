@@ -1,3 +1,4 @@
+import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { Text, TextInput, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
@@ -43,8 +44,14 @@ export function WarehouseFields({ recordScopeKey, values, onChange, onInvalidQui
         }} accessibilityLabel={label} testID={`warehouse-${field}`} keyboardType="decimal-pad" style={{ ...propertyFormInputStyle, minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }} />}
     </View>;
   };
+  const equipmentGroups: readonly (readonly PropertyDetailField[])[] = [
+    ['hasCentralAC'], ['hasServiceElevator', 'serviceElevatorCapacityTons'], ['parkingSpaceCount'],
+    ['hasFireSystem'], ['hasVehicleRamp', 'rampVehicleSize'], ['hasEscalator'], ['hasColdStorage'],
+  ];
+  const equipmentFields = new Set(equipmentGroups.flat());
   return <View style={{ gap: 16 }} testID="warehouse-specifications">
-    <PropertyFormCard title={language === 'ar' ? 'مواصفات المخزن وتجهيزاته' : 'Warehouse specifications and equipment'} icon="box">{WAREHOUSE_SPEC_FIELDS.map(renderField)}</PropertyFormCard>
-    <PropertyFormCard title={language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}>{WAREHOUSE_EXTRA_FIELDS.map(renderField)}</PropertyFormCard>
+    <PropertyFormCard title={language === 'ar' ? 'مواصفات المخزن وتجهيزاته' : 'Warehouse specifications and equipment'} icon="box">{WAREHOUSE_SPEC_FIELDS.filter(field => !equipmentFields.has(field)).map(renderField)}</PropertyFormCard>
+    <PropertyFormCard title={language === 'ar' ? 'المزايا والتجهيزات المتوفرة' : 'Available features and equipment'} icon="check-square"><OrderedPropertyAmenities entries={equipmentGroups.filter(group => warehouseFieldVisible(group[0], values)).map(group => ({ field: group[0], details: true, content: <>{group.map(renderField)}</> }))} /></PropertyFormCard>
+    <PropertyFormCard title={language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}>{WAREHOUSE_EXTRA_FIELDS.filter(field => !equipmentFields.has(field)).map(renderField)}</PropertyFormCard>
   </View>;
 }

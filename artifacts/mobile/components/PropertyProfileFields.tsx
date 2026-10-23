@@ -1,3 +1,5 @@
+import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
+import { AMENITY_DETAIL_GROUPS } from '@/services/propertyAmenityOrder';
 import { Text, TextInput, View } from 'react-native';
 import { FORM_MULTI_FIELDS, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, PROFILE_CHOICES } from '@/services/propertyProfileForm';
@@ -85,11 +87,17 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
       } else onChange(field, text);
     }} /></View>;
   }
+  const detailGroups = AMENITY_DETAIL_GROUPS.filter(group => profile.fields.includes(group[0]));
+  const groupedFields = new Set<string>(detailGroups.flat());
+  const amenityEntries = [
+    ...profile.amenities.filter(field => !groupedFields.has(field)).map(field => ({ field, content: <ChoiceTile key={field} optionId={field} label={fieldLabel(field)} role="checkbox" selected={values[field] === 'true'} onPress={() => onChange(field, values[field] === 'true' ? '' : 'true')} /> })),
+    ...detailGroups.map(group => ({ field: group[0], details: true, content: <>{group.filter(field => profile.fields.includes(field)).map(renderField)}</> })),
+  ];
   const yieldPercent = transaction === 'sale' && propertyType === 'whole_building' ? grossAnnualRentalYield(salePrice, values.monthlyIncome?.trim() ? Number(values.monthlyIncome) : undefined) : undefined;
   return <View style={{ gap: 12 }}>
-    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.map(renderField)}
+    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field)).map(renderField)}
       {yieldPercent !== undefined && <View><Text style={labelStyle}>{ar ? 'العائد السنوي الإجمالي قبل المصروفات' : 'Gross annual yield before expenses'}</Text><Text style={labelStyle}>{yieldPercent.toFixed(2)}%</Text></View>}
     </PropertyFormCard>
-    <PropertyFormCard title={ar ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square"><ChoiceGrid>{profile.amenities.map(field => <ChoiceTile key={field} optionId={field} label={fieldLabel(field)} role="checkbox" selected={values[field] === 'true'} onPress={() => onChange(field, values[field] === 'true' ? '' : 'true')} />)}</ChoiceGrid></PropertyFormCard>
+    <PropertyFormCard title={ar ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>
   </View>;
 }

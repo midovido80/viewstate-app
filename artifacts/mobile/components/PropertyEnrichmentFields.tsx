@@ -1,3 +1,4 @@
+import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
@@ -68,6 +69,7 @@ export function PropertyEnrichmentFields({
     definition.field !== 'floorUse'
     && (!hidePropertyUse || definition.field !== 'propertyUse')
     && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')
+    && definition.field !== 'parkingSpaceCount'
     && definition.group !== 'amenity'
     && definition.field !== 'plotAreaSquareMeters'
     && definition.field !== 'builtUpAreaSquareMeters'
@@ -186,22 +188,22 @@ export function PropertyEnrichmentFields({
           </View>
         );
       })}</PropertyFormCard>}
-      {(applicableDefinitions.some(definition => definition.group === 'amenity') || amenityRenderExtra) && (
+      {(applicableDefinitions.some(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount') || amenityRenderExtra) && (
         <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
-          <ChoiceGrid style={[styles.chipWrap, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            {applicableDefinitions.filter(definition => definition.group === 'amenity').map(({ field }) => {
+          <OrderedPropertyAmenities entries={applicableDefinitions.filter(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount').map(definition => {
+              const { field } = definition;
+              if (field === 'parkingSpaceCount') return { field, details: true, content: <View>{definition.control !== 'numeric_quick_pick' && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[field][language === 'ar' ? 1 : 0]}</Text>}{renderFieldContent(definition)}</View> };
               const value = values[field];
               const isTrue = value === 'true';
               const isFalse = value === 'false';
               const baseLabel = propertyDetailLabels[field][language === 'ar' ? 1 : 0];
               const label = isFalse ? (language === 'ar' ? 'بدون ' + baseLabel : 'No ' + baseLabel.toLowerCase()) : baseLabel;
-              return (
+              return { field, content: (
                 <ChoiceTile key={field} optionId={field} label={label} selected={isTrue || isFalse} role="checkbox"
                   onPress={() => onChange(field, isTrue || isFalse ? '' : 'true')} />
-              );
-            })}
-            {amenityRenderExtra}
-          </ChoiceGrid>
+              ) };
+            })} />
+          {amenityRenderExtra && <ChoiceGrid>{amenityRenderExtra}</ChoiceGrid>}
         </PropertyFormCard>
       )}
     </View>
