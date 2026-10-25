@@ -343,7 +343,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(i18n, /'matching\.runAll': 'Match all'/);
   assert.match(i18n, /'matching\.runAll': 'مطابقة الكل'/);
   assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(group\.person\.id\)\}`\)/);
-  assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(propertyId\)\}`/);
+  assert.match(screen, /router\.push\(\{ pathname: '\/property\/\[propertyCoreId\]', params: \{ propertyCoreId: propertyId, matchingReturn: token/);
 
   const explicitHandler = screen.indexOf('const runMatching = async (');
   const firstExecution = screen.indexOf('.runForRequirement(');
@@ -428,4 +428,39 @@ test('cards and refinements handle repeated taps in both languages without chang
     }
     assert.equal(JSON.stringify([r.value, p]), before);
   } finally { hooks.deregister(); }
+});
+
+test('Return session is bounded, cloned, scoped and never stores matching scores', async () => {
+  const { rememberMatchingReturn, readMatchingReturn, matchingBackRoute, withMatchingReturn } = await import('../services/matchingReturnSession.ts');
+  const input = { mode: 'saved' as const, scopeRequirementId: REQUIREMENT_ID, policies: { [REQUIREMENT_ID]: { strictFields: ['budget'] } }, excluded: { [REQUIREMENT_ID]: ['p'] }, scrollOffset: 700 };
+  const now = Date.now(); const token = rememberMatchingReturn(input, now);
+  input.excluded[REQUIREMENT_ID].push('later');
+  const read = readMatchingReturn(token, now)!;
+  assert.deepEqual(read.excluded[REQUIREMENT_ID], ['p']);
+  read.excluded[REQUIREMENT_ID].push('mutation');
+  assert.deepEqual(readMatchingReturn(token, now)!.excluded[REQUIREMENT_ID], ['p']);
+  assert.equal((read as any).matches, undefined);
+  assert.match(matchingBackRoute(token), /\/matching\?returnSession=.*&requirementId=/);
+  assert.match(withMatchingReturn('/property/p?edit=1', token), /edit=1&matchingReturn=/);
+  assert.equal(readMatchingReturn(token, now + 900001), undefined);
+  assert.equal(readMatchingReturn('forged', now), undefined);
+  assert.equal(matchingBackRoute('forged'), '/properties');
+  rememberMatchingReturn({ ...input, scopeRequirementId: undefined }, now);
+  assert.equal(readMatchingReturn(token, now), undefined);
+});
+
+test('Comparison shows actual client range, area names and unknown evidence in both languages', async () => {
+  const { matchingComparisonRows } = await import('../services/matchingPresentation.ts');
+  const r = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 's', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'], minimumBudget: 500, maximumBudget: 800, notes: '' });
+  assert.ok(r.ok); if (!r.ok) return;
+  const base = matchingProperty('p');
+  const p = { ...base, core: { ...base.core, locationArea: { id: 'salmiya' } }, activeOffer: { id: 'offer', propertyCoreId: 'p', transaction: 'rent' as const, rentalPrice: { amount: 150, currencyCode: 'KWD' as const }, rentalPeriodId: 'monthly' as const } };
+  const result = evaluateMatch(r.value, { property: p });
+  for (const language of ['en', 'ar'] as const) {
+    const rows = matchingComparisonRows(result, r.value, p, language);
+    assert.equal(rows.find(row => row.field === 'budget')!.requested, '500–800 KWD');
+    assert.equal(rows.find(row => row.field === 'budget')!.offered, '150 KWD');
+    assert.equal(rows.find(row => row.field === 'budget')!.statusLabel, language === 'ar' ? 'أقل من النطاق' : 'Below range');
+    assert.equal(rows.find(row => row.field === 'location')!.offered, language === 'ar' ? 'السالمية' : 'Salmiya');
+  }
 });

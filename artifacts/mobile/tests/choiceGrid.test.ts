@@ -183,3 +183,29 @@ test('Basic capture requires area and price, then reviews the same draft with Pe
     if (transaction === 'rent') assert.equal(draft.rentalPeriodId, 'monthly');
   }
 });
+
+test('Amenities stay contiguous in two columns before parking and conditional detail controls', async () => {
+  await loadComponents();
+  const { OrderedPropertyAmenities } = await import('../components/OrderedPropertyAmenities.tsx');
+  const mark = (name: string): any => ({ type: 'marker', props: { name } });
+  const entries = [
+    { field: 'hasBalcony', content: mark('balcony') },
+    { field: 'parkingSpaceCount', details: true, content: mark('parking-count') },
+    { field: 'hasElevator', content: mark('lift') },
+    { field: 'hasCentralAC', content: mark('ac') },
+    { field: 'hasSecurityGuard', content: mark('security') },
+    { field: 'serviceElevatorCapacityTons', details: true, content: mark('capacity') },
+  ];
+  const before = JSON.stringify(entries);
+  for (const rtl of [false, true]) {
+    state.rtl = rtl;
+    const all = elements(OrderedPropertyAmenities({ entries, extra: mark('legacy-extra') }));
+    const choices = all.find(item => item.props.testID === 'ordered-amenity-choices')!;
+    const details = all.find(item => item.props.testID === 'ordered-amenity-details')!;
+    assert.equal(choices.props.columns, 2);
+    assert.deepEqual(elements(choices.props.children).filter(item => item.type === 'marker').map(item => item.props.name), ['ac', 'security', 'lift', 'balcony', 'legacy-extra']);
+    assert.deepEqual(elements(details).filter(item => item.type === 'marker').map(item => item.props.name), ['parking-count', 'capacity']);
+    assert.ok(all.indexOf(choices) < all.indexOf(details));
+  }
+  assert.equal(JSON.stringify(entries), before);
+});

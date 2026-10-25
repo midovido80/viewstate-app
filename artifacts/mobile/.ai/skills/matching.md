@@ -1,4 +1,4 @@
-# ViewState Matching — shortlist-v1
+# ViewState Matching — shortlist-v2
 
 Founder approved a new matching policy on 2026-10-24. This replaces the old M2 70% policy and the older illustrative 60% algorithm. They must not be restored as fallbacks.
 
@@ -6,7 +6,7 @@ Founder approved a new matching policy on 2026-10-24. This replaces the old M2 7
 
 `MyPropertiesMatchingSource` -> `BrokerInitiatedMatching` -> domain `evaluateMatch` / `selectMatchShortlist` -> Matching screen.
 
-- Only `MATCH_ENGINE_VERSION = shortlist-v1` results are accepted.
+- Only `MATCH_ENGINE_VERSION = shortlist-v2` results are accepted.
 - Each ranking operation belongs to exactly one Requirement ID. Mixed IDs fail closed.
 - Saved-request entry scopes to that exact request; Match All remains a separate manual tab action.
 - One local Property snapshot per explicit run; a new source refreshes it for every run.
@@ -36,9 +36,9 @@ Founder approved a new matching policy on 2026-10-24. This replaces the old M2 7
 - Exact floor number remains exact.
 - At most two logical differences; nearby services form one logical group.
 - Internal minimum quality 75/100; this is a ranking rule, never closing probability.
-- Direct results precede discussion alternatives. Equal quality/difference/unknown counts prefer the lower comparable price, then stable chronology. Small diversity reranking only within the same category and three quality points of its best candidate.
-- Unknown requested facts go into a separate, bounded confirmation list and never occupy ready slots.
-- Session strict fields can prohibit price/count/feature relaxation. Explicit alternative areas are per-request. Closing/reopening the screen clears these refinements; the UI says so.
+- Direct results precede provisional suggestions, followed by discussion alternatives. Equal quality/difference/unknown counts prefer the lower comparable price, then stable chronology. Small diversity reranking only within the same category and three quality points of its best candidate.
+- Core missing facts and any session-strict missing fact go into a separate, bounded confirmation list. Secondary missing details may produce a clearly labelled provisional suggestion only when observed quality still reaches 75. Unknown facts earn zero points; they are never counted as met.
+- Session strict fields can prohibit price/count/feature relaxation. Explicit alternative areas are per-request. Opening a property retains an in-memory return context for 15 minutes; return reloads records and recalculates results, with the same request, refinements and scroll. No scores are cached. Closing the app clears this context.
 
 ## Not included
 
@@ -47,3 +47,7 @@ No commission, ML, vector dependencies, cross-broker discovery, notifications, p
 ## Acceptance
 
 Behavior tests cover subtype/sector isolation, budgets and boundaries, area units, Rent cadence, Buy specifications, true/false/unknown, hidden legacy fields, one/two/multiple differences, privacy, deterministic bounded selection, replacement, shared snapshots, stale versions and mixed-request rejection. Full existing domain/mobile/typecheck gates must pass before Founder review.
+
+## Presentation corrections
+
+Each result identifies the client and compares requested versus recorded facts. Below-minimum prices remain allowed but are explicitly labelled. Missing core evidence is collapsed separately. Property Back uses internal routing, never a full web anchor reload. Legacy Apartment category fallback is shared with saved display and never rewrites the source. Amenity choices remain contiguous in a two-column grid; numeric and conditional detail fields follow below.

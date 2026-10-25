@@ -378,7 +378,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(enrichmentSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
   assert.match(detailSource, /visible=\{saveCompletionVisible && completionOrigin === 'enrichment' && property\?\.core\.id === id\}/);
   assert.match(detailSource, /testID="property-enrichment-view-property"/);
-  assert.match(detailSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(property\.core\.id\)\}` as never\)/);
+  assert.match(detailSource, /router\.replace\(withMatchingReturn\(`\/property\/\$\{encodeURIComponent\(property\.core\.id\)\}`, matchingReturnToken\) as never\)/);
   assert.match(detailSource, /testID="property-enrichment-home"/);
   const enrichmentSave = detailSource.slice(
     detailSource.indexOf('const save = async () =>'),
@@ -391,7 +391,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
     'the success actions appear only after exact-ID save readback',
   );
   assert.match(detailEditorUxSource, /readback\?\.core\.id === candidate\.core\.id && exactPropertyEqual\(readback, candidate\)/);
-  assert.match(enrichmentSave, /if \(!readback \|\| readback\.core\.id !== id\) \{[\s\S]*setMode\('detail'\)[\s\S]*router\.replace\(`\/property\/\$\{encodeURIComponent\(id!\)\}` as never\)/);
+  assert.match(enrichmentSave, /if \(!readback \|\| readback\.core\.id !== id\) \{[\s\S]*setMode\('detail'\)[\s\S]*router\.replace\(withMatchingReturn\(`\/property\/\$\{encodeURIComponent\(id!\)\}`, matchingReturnToken\) as never\)/);
   assert.match(detailSource, /property-edit-action/);
   assert.match(detailSource, /getPropertyDetailVisibleContent/);
   assert.doesNotMatch(detailSource, /property-enrich-action|detail\.add_details/);

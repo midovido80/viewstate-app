@@ -155,3 +155,18 @@ test("whole-building projection suppresses stale bedrooms and duplicate Unit fac
   );
   assert.equal((candidate.property.typeDetails as any).apartmentCount, 20);
 });
+
+test('Explicit legacy Apartment category agrees with saved display without migration', async () => {
+  const { getSavedPropertyTypeLabel } = await import('../services/savedPropertyClassification.ts');
+  for (const [categoryId, expected] of [['family_apartment', 'standard_apartment'], ['bachelor_apartment', 'standard_apartment'], ['duplex', 'duplex']]) {
+    const p = { ...property(), demoCapture: { categoryId } as any };
+    delete (p.typeDetails as any).apartmentSubtype;
+    const before = JSON.stringify(p);
+    const normalized = normalizeMyPropertyCandidate(p)!;
+    assert.equal((normalized.property.typeDetails as any).apartmentSubtype, expected);
+    assert.notEqual(getSavedPropertyTypeLabel(p, 'en', 'Apartment'), 'Apartment');
+    assert.equal(JSON.stringify(p), before);
+  }
+  const p = { ...property(), demoCapture: { categoryId: 'duplex' as const } };
+  assert.equal((normalizeMyPropertyCandidate(p)!.property.typeDetails as any).apartmentSubtype, 'standard_apartment', 'canonical value wins over legacy category');
+});

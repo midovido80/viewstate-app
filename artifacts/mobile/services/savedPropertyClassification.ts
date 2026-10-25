@@ -24,6 +24,15 @@ function savedSubtype(property: Property): unknown {
         : undefined;
 }
 
+/** The same explicit legacy classification is used by display and matching; no write/migration. */
+export function getSavedPropertyClassificationFacts(property: Property): Record<string, string> {
+  const subtype = savedSubtype(property);
+  if (property.core.propertyType === 'apartment' && typeof subtype === 'string' && subtype in subtypeLabels) return { apartmentSubtype: subtype };
+  const use = detail(property, property.core.propertyType === 'floor' ? 'floorUse' : 'propertyUse');
+  if (use === 'residential' || use === 'commercial') return { [property.core.propertyType === 'floor' ? 'floorUse' : 'propertyUse']: use };
+  return {};
+}
+
 /** Presentation-only fallback for legacy categories; never rewrites a stored record. */
 export function getSavedPropertyTypeLabel(property: Property, language: 'en' | 'ar', baseTypeLabel: string): string {
   if (property.core.propertyType === 'apartment') {

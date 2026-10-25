@@ -367,9 +367,9 @@ test("nearby services and unsupported driver-room evidence cannot be invented", 
   );
   assert.equal(
     run(req({ preferredNearbyServices: ["mosque"] })).category,
-    "needs_confirmation",
+    "provisional",
   );
-  assert.equal(run(req({ driverRoom: true })).category, "needs_confirmation");
+  assert.equal(run(req({ driverRoom: true })).category, "provisional");
 });
 test("three separate differences are excluded even if their weighted score is high", () => {
   const x = run(
@@ -472,4 +472,16 @@ test("equally suitable properties prefer the lower price instead of the budget m
     ]).map((item) => item.propertyId),
     ["less", "expensive"],
   );
+});
+
+
+test("secondary unknowns remain unearned and strict fields still require confirmation", () => {
+  const r = req({ preferredNearbyServices: ["mosque"] });
+  const preliminary = run(r);
+  assert.equal(preliminary.category, "provisional");
+  assert.equal(preliminary.explanations.find(item => item.criterion === "nearby:mosque")?.status, "unknown");
+  assert.ok(preliminary.score < 100);
+  assert.equal(run(r, property(), { strictFields: ["nearby:mosque"] }).category, "needs_confirmation");
+  assert.equal(run(req({ centralAC: true })).category, "needs_confirmation");
+  assert.equal(selectMatchShortlist([preliminary], [{ property: property() }]).length, 1);
 });

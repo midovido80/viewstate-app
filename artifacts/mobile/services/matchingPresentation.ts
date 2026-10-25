@@ -1,3 +1,4 @@
+import { getAreaById } from '@/constants/kuwait-areas';
 import type {
   MatchExplanation,
   MatchCategory,
@@ -40,6 +41,7 @@ export function matchingCategoryLabel(
   language: Language,
 ): string {
   const labels = {
+    provisional: ["Preliminary fit — secondary information missing", "مناسب مبدئيًا — تفاصيل ثانوية ناقصة"],
     direct: ["Meets recorded requirements", "يحقق المتطلبات المسجلة"],
     negotiation: ["Alternative requiring discussion", "بديل يحتاج تفاوضًا"],
     needs_confirmation: ["Confirm missing information", "يحتاج تأكيد معلومات"],
@@ -92,4 +94,46 @@ export function matchingExplanationText(
   return ar
     ? `${label}: المطلوب ${format(item.expected)}؛ المسجل ${format(item.actual)}.`
     : `${label}: requested ${format(item.expected)}; recorded ${format(item.actual)}.`;
+}
+
+export interface MatchingComparisonRow {
+  field: string;
+  label: string;
+  requested: string;
+  offered: string;
+  status: MatchExplanation['status'];
+  statusLabel: string;
+}
+export function matchingComparisonRows(result: import('@workspace/property-domain').MatchResult, requirement: import('@workspace/property-domain').SeekerRequirement, property: import('@workspace/property-domain').Property | undefined, language: Language): MatchingComparisonRow[] {
+  const ar = language === 'ar';
+  const value = (field: string, raw: unknown): string => {
+    if (raw === undefined) return ar ? 'غير مسجل' : 'Not recorded';
+    const mapped = ({ bedrooms: 'bedroomCount', bathrooms: 'bathroomCount', masterBedrooms: 'masterBedroomCount' } as Record<string, string>)[field] ?? field;
+    if (mapped in propertyDetailLabels) return formatPropertyDetailValue(mapped as keyof typeof propertyDetailLabels, raw, language);
+    if (field === 'rentalPeriodId') return ({ monthly: ar ? 'شهري' : 'Monthly', yearly: ar ? 'سنوي' : 'Yearly', daily: ar ? 'يومي' : 'Daily' } as Record<string, string>)[String(raw)] ?? String(raw);
+    return typeof raw === 'boolean' ? raw ? ar ? 'يوجد' : 'Yes' : ar ? 'لا يوجد' : 'No' : String(raw);
+  };
+  const rows = result.explanations.map(item => ({
+    field: item.criterion, label: matchingCriterionLabel(item.criterion, language),
+    requested: item.criterion === 'budget' ? `${requirement.budget.minimum}–${requirement.budget.maximum} ${requirement.budget.currencyCode}` : value(item.criterion, item.expected),
+    offered: item.criterion === 'budget' ? `${result.priceAmount} ${requirement.budget.currencyCode}` : value(item.criterion, item.actual),
+    status: item.status,
+    statusLabel: item.status === 'matched' ? ar ? 'متوافق' : 'Meets' : item.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'اختلاف' : 'Differs',
+  }));
+  const location: MatchingComparisonRow = {
+    field: 'location', label: ar ? 'المنطقة' : 'Area',
+    requested: requirement.preferredAreaMode === 'all_kuwait' ? ar ? 'كل الكويت' : 'All Kuwait' : requirement.preferredAreaIds.map(id => getAreaById(id)?.[language] ?? (ar ? 'منطقة محددة' : 'Selected area')).join('، '),
+    offered: property ? getAreaById(property.core.locationArea.id)?.[language] ?? (ar ? 'غير مسجلة' : 'Not recorded') : ar ? 'غير مسجلة' : 'Not recorded',
+    status: rows.find(row => row.field === 'location')?.status ?? 'matched', statusLabel: ar ? 'متوافق' : 'Meets',
+  };
+  if (location.status !== 'matched') location.statusLabel = ar ? 'منطقة بديلة' : 'Alternative';
+  const withoutLocation = rows.filter(row => row.field !== 'location');
+  withoutLocation.push(location);
+  const budget = withoutLocation.find(row => row.field === 'budget');
+  if (budget && result.priceAmount < requirement.budget.minimum) budget.statusLabel = ar ? 'أقل من النطاق' : 'Below range';
+  const priority = ['budget', 'location', 'apartmentSubtype', 'bedrooms', 'bathrooms', 'builtUpAreaSquareMeters', 'hasCentralAC', 'hasElevator'];
+  return withoutLocation.sort((a, b) => {
+    const rank = (field: string) => priority.includes(field) ? priority.indexOf(field) : priority.length;
+    return rank(a.field) - rank(b.field);
+  });
 }

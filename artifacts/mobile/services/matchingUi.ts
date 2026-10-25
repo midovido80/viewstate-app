@@ -96,7 +96,7 @@ export function groupMatchAllResultsByPerson(
     const existing = groups.get(person.id);
     const requirementGroup = {
       requirement,
-      matches: run.matches.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id && item.qualifies && item.eligible && (item.category === 'direct' || item.category === 'negotiation')),
+      matches: run.matches.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id && item.qualifies && item.eligible && (item.category === 'direct' || item.category === 'provisional' || item.category === 'negotiation')),
       needsConfirmation: run.needsConfirmation.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id),
     };
     if (existing) {

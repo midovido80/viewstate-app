@@ -107,7 +107,7 @@ test('REGRESSION: header and Android Back return from Review without resetting t
   assert.match(header, /onPress=\{handleHeaderBack\}/);
   assert.match(studio, /const handleHeaderBack = \(\) => \{\s*if \(showingReview\) returnToForm\(\);\s*else leaveStudio\(\);/);
   assert.match(studio, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\);\s*return;\s*\}/);
-  assert.match(studio, /const target = getEditBackTarget\(\);\s*if \(target\) router\.replace\(target as never\);/);
+  assert.match(studio, /const target = getEditBackTarget\(\);\s*if \(target\) router\.replace\(\{ \.\.\.target, params: \{ \.\.\.target\.params, \.\.\.\(matchingReturn/);
   assert.match(hardwareBack, /if \(step === 'review'\) \{\s*returnToForm\(\);\s*return true;\s*\}\s*leaveStudio\(\)/);
   assert.match(studio, /title=\{t\('studio\.back'\)\} onPress=\{returnToForm\}/);
   assert.match(studio, /title=\{t\('studio\.next'\)\}[\s\S]*validate\(\)\) setStep\('review'\)/);

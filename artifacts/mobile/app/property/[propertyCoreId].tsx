@@ -1,3 +1,4 @@
+import { matchingBackRoute, withMatchingReturn } from '@/services/matchingReturnSession';
 import { availableAmenityDetailGroups, orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, projectPropertyProfileDetails } from '@workspace/property-domain';
@@ -111,13 +112,16 @@ function readNumericDetail(value: unknown): number | undefined {
 }
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
-  const { propertyCoreId, edit, completion } = useLocalSearchParams<{
+  const { propertyCoreId, edit, completion, matchingReturn } = useLocalSearchParams<{
     propertyCoreId?: string | string[];
     edit?: string | string[];
     completion?: string | string[];
+    matchingReturn?: string | string[];
   }>();
   const id = Array.isArray(propertyCoreId) ? propertyCoreId[0] : propertyCoreId;
   const completionOrigin = Array.isArray(completion) ? completion[0] : completion;
+  const matchingReturnToken = Array.isArray(matchingReturn) ? matchingReturn[0] : matchingReturn;
+  const detailBackRoute = matchingBackRoute(matchingReturnToken);
   const router = useRouter();
   const colors = useColors();
   const insets = useScreenInsets();
@@ -421,7 +425,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     if (editRequested && status === 'ready' && property && isOfferedStudio(property)) {
       if (studioEditForwardedId.current !== property.core.id) {
         studioEditForwardedId.current = property.core.id;
-        router.replace(getPropertyEditRouteHref(property.core.id, true) as never);
+        router.replace(withMatchingReturn(getPropertyEditRouteHref(property.core.id, true), matchingReturnToken) as never);
       }
       return;
     }
@@ -833,7 +837,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setEditDirty(false);
         setError('');
         setMode('detail');
-        router.replace(`/property/${encodeURIComponent(id!)}` as never);
+        router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
       } else {
         setRecoveryStatus(result.status);
         setError(
@@ -864,7 +868,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const leaveEditor = () => {
     if (!draft) {
       setMode('detail');
-      router.replace(`/property/${encodeURIComponent(id!)}` as never);
+      router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
       return;
     }
     if (!standardApartment || editDirty) {
@@ -914,7 +918,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       cleanChoicesRef.current = null;
       setEditDirty(false);
       setMode('detail');
-      router.replace(`/property/${encodeURIComponent(id!)}` as never);
+      router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
     })();
   };
 
@@ -949,7 +953,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       cleanChoicesRef.current = null;
       setEditDirty(false);
       setMode('detail');
-      router.replace(`/property/${encodeURIComponent(id!)}` as never);
+      router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
     } catch {
       setLeaveVisible(false);
       setError(t('edit.draft_unreadable'));
@@ -1013,7 +1017,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         cleanChoicesRef.current = null;
         setEditDirty(false);
         setMode('detail');
-        router.replace(`/property/${encodeURIComponent(id!)}` as never);
+        router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
         return;
       }
       await flushPropertyEditDraftWrites();
@@ -1076,7 +1080,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           setSaveCompletionVisible(false);
           setProperty(null);
           setStatus('loading');
-          router.replace(`/property/${encodeURIComponent(id!)}` as never);
+          router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
           return;
         }
         savedProperty = readback;
@@ -1092,7 +1096,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       if (completionOrigin === 'enrichment') {
         setSaveCompletionVisible(true);
       } else {
-        router.replace(`/property/${encodeURIComponent(id!)}` as never);
+        router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
       }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : '';
@@ -1114,7 +1118,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const viewSavedProperty = () => {
     if (!property || !id || property.core.id !== id) return;
     setSaveCompletionVisible(false);
-    router.replace(`/property/${encodeURIComponent(property.core.id)}` as never);
+    router.replace(withMatchingReturn(`/property/${encodeURIComponent(property.core.id)}`, matchingReturnToken) as never);
   };
 
   const confirmDelete = async () => {
@@ -1201,7 +1205,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const handleEdit = () => {
     if (actionFlight.current) return;
     actionFlight.current = true;
-    router.push(getPropertyEditRouteHref(property.core.id, offeredStudio) as never);
+    router.push(withMatchingReturn(getPropertyEditRouteHref(property.core.id, offeredStudio), matchingReturnToken) as never);
     setTimeout(() => { actionFlight.current = false; }, 1000);
   };
 
@@ -1297,13 +1301,17 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   for (let index = numericSpecTiles.length - 1; index >= 0; index--) {
     if (featuredDetailFields.has(numericSpecTiles[index].fieldId)) numericSpecTiles.splice(index, 1);
   }
+  const featureLabel = (fields: readonly string[]) => fields.map(field => `${propertyDetailLabels[field as PropertyDetailField][language === 'ar' ? 1 : 0]}: ${formatPropertyDetailValue(field as PropertyDetailField, featureValues[field], language, t)}`).join(' · ');
+  const featureSummaryDetails = featureDetailGroups.flatMap(group => {
+    const fields = typeof featureValues[group[0]] === 'boolean' ? group.slice(1) : group;
+    return fields.length ? [{ field: group[0], label: featureLabel(fields) }] : [];
+  });
   const availableFeatures = Array.from(new Set(orderPropertyAmenities([
     ...propertyDetailDisplayDefinitions
       .filter(definition => !featuredDetailFields.has(definition.field) && (!commercialFloorSale || isCommercialFloorSaleFieldVisible(definition.field)) && property.core.propertyType !== 'warehouse' && definition.group === 'amenity' && detailValues[definition.field] === true)
       .map(definition => ({ field: definition.field as string, label: commercialFloorSale ? commercialFloorSaleLabel(definition.field, language, definition.label[language === 'ar' ? 1 : 0]) : definition.label[language === 'ar' ? 1 : 0] })),
-    ...featureDetailGroups.map(group => ({
-      field: group[0],
-      label: group.map(field => `${propertyDetailLabels[field as PropertyDetailField][language === 'ar' ? 1 : 0]}: ${formatPropertyDetailValue(field as PropertyDetailField, featureValues[field], language, t)}`).join(' · '),
+    ...featureDetailGroups.filter(group => typeof featureValues[group[0]] === 'boolean').map(group => ({
+      field: group[0], label: featureLabel([group[0]]),
     })),
     ...(property.core.propertyType === 'warehouse' || activeProfile ? [] : property.demoCapture?.selectedFeatures ?? [])
       .filter(id => !isDemoFeatureSuppressed(id, property.core.propertyType, detailValues, detailValues.floorUse as string | undefined))
@@ -1373,17 +1381,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <Text style={{ color: '#FFFFFF', fontFamily: fonts.semiBold, fontSize: 13 }}>{language === 'ar' ? 'الرئيسية' : 'Home'}</Text>
           </TouchableOpacity>
           <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, fontFamily: fonts.bold, fontSize: 17, color: colors.foreground, textAlign: 'center' }}>{detailsTitle}</Text>
-          {Platform.OS === 'web' ? (
-            <a href={getPropertyDetailBackRoute()} aria-label={t('capture.back')} data-testid="property-detail-back" style={{ ...approvedNavigationStyle, display: 'flex', flexDirection: 'row', gap: 4, boxSizing: 'border-box', color: '#FFFFFF', textDecoration: 'none', fontFamily: fonts.semiBold }}>
-              <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
-              <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" />
-            </a>
-          ) : (
-            <TouchableOpacity onPress={() => router.replace(getPropertyDetailBackRoute() as never)} style={[approvedNavigationStyle, { flexDirection: 'row', gap: 4 }]} testID="property-detail-back" accessibilityRole="button">
-              <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
-              <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={() => router.replace(detailBackRoute as never)} style={[approvedNavigationStyle, { flexDirection: 'row', gap: 4 }]} testID="property-detail-back" accessibilityRole="button">
+            <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
+            <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.header}>
@@ -1439,11 +1440,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
               <CompactPropertySpecs specs={compactSpecs} />
 
-              {availableFeatures.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
+              {(availableFeatures.length > 0 || featureSummaryDetails.length > 0) && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
                 <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}</Text>
-                <ChoiceGrid gap={6}>
+                <ChoiceGrid columns={2} gap={6}>
                   {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} compact />)}
                 </ChoiceGrid>
+                {featureSummaryDetails.length > 0 && <View testID="property-feature-details" style={{ gap: 6 }}>
+                  {featureSummaryDetails.map(item => <Text key={item.field} style={{ color: '#334155', fontFamily: fonts.medium, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{item.label}</Text>)}
+                </View>}
               </View>}
 
               {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
@@ -2157,7 +2161,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               onPress={() => {
                 setLeaveVisible(false);
                 setMode('detail');
-                router.replace(`/property/${encodeURIComponent(id!)}` as never);
+                router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
               }}
               style={[styles.modalAction, { borderColor: colors.border }]}
               testID="property-edit-keep-draft-exit"
@@ -2207,7 +2211,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           )}
           {Platform.OS === 'web' ? (
             <Link
-              href={getPropertyEditRouteHref(property.core.id, offeredStudio) as never}
+              href={withMatchingReturn(getPropertyEditRouteHref(property.core.id, offeredStudio), matchingReturnToken) as never}
               testID="property-edit-action"
               accessibilityRole="link"
               style={{ ...approvedActionStyle, backgroundColor: colors.card, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.primary, textDecorationLine: 'none' }}

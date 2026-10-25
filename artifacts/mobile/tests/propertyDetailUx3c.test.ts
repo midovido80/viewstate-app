@@ -51,7 +51,7 @@ test('Saved Property Details exposes Home in detail and edit headers while retai
     'the third route action is the existing loading/missing-state Back fallback, not a duplicate Home',
   );
   assert.equal((source.match(/accessibilityLabel=\{language === 'ar' \? 'الرئيسية' : 'Home'\}/g) ?? []).length, homeActionCount);
-  assert.match(source, /onPress=\{\(\) => router\.replace\(getPropertyDetailBackRoute\(\) as never\)\}/);
+  assert.match(source, /onPress=\{\(\) => router\.replace\(detailBackRoute as never\)\}/);
   assert.match(source, /onPress=\{leaveEditor\}/);
 });
 
@@ -88,13 +88,13 @@ test('Enrichment save confirms exact readback before offering same-ID View Prope
   assert.match(enrichmentRoute, /\/edit\?completion=enrichment/);
   assert.ok(readbackIndex >= 0 && readbackIndex < completionIndex);
   assert.match(editorUx, /readback\?\.core\.id === candidate\.core\.id && exactPropertyEqual\(readback, candidate\)/);
-  assert.match(save, /if \(!readback \|\| readback\.core\.id !== id\) \{[\s\S]*setError\(t\('edit\.save_failed'\)\);[\s\S]*setDraft\(null\);[\s\S]*setMode\('detail'\);[\s\S]*router\.replace\(`\/property\/\$\{encodeURIComponent\(id!\)\}` as never\);[\s\S]*return;/);
+  assert.match(save, /if \(!readback \|\| readback\.core\.id !== id\) \{[\s\S]*setError\(t\('edit\.save_failed'\)\);[\s\S]*setDraft\(null\);[\s\S]*setMode\('detail'\);[\s\S]*router\.replace\(withMatchingReturn\(`\/property\/\$\{encodeURIComponent\(id!\)\}`, matchingReturnToken\) as never\);[\s\S]*return;/);
   assert.match(save, /if \(completionOrigin === 'enrichment'\) \{\s*setSaveCompletionVisible\(true\)/);
   assert.match(save, /if \(!draft \|\| saving \|\| saveFlight\.current\) return/);
   assert.match(source, /visible=\{saveCompletionVisible && completionOrigin === 'enrichment' && property\?\.core\.id === id\}/);
   assert.match(source, /testID="property-enrichment-save-completion"/);
   assert.match(source, /testID="property-enrichment-view-property"/);
-  assert.match(source, /router\.replace\(`\/property\/\$\{encodeURIComponent\(property\.core\.id\)\}` as never\)/);
+  assert.match(source, /router\.replace\(withMatchingReturn\(`\/property\/\$\{encodeURIComponent\(property\.core\.id\)\}`, matchingReturnToken\) as never\)/);
   assert.match(source, /testID="property-enrichment-home"/);
   assert.match(source, /router\.replace\('\/' as never\)/);
   assert.match(source, /summary\.view_property/);
@@ -140,7 +140,7 @@ test('A successful enrichment CAS with failed exact readback retries verificatio
   assert.equal(compareAndUpdateCalls, 1, 'verification failure must not retry the obsolete CAS');
   assert.equal(readbackCalls, 2, 'exact-ID verification gets one retry');
   assert.equal(readback, null, 'no success candidate exists without exact readback');
-  assert.match(save, /setMode\('detail'\)[\s\S]*router\.replace\(`\/property\/\$\{encodeURIComponent\(id!\)\}` as never\)/);
+  assert.match(save, /setMode\('detail'\)[\s\S]*router\.replace\(withMatchingReturn\(`\/property\/\$\{encodeURIComponent\(id!\)\}`, matchingReturnToken\) as never\)/);
 });
 
 test('Standard Apartment subtype survives enrichment edit reopen and uses the marked completion flow', async () => {

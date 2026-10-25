@@ -51,7 +51,16 @@ export function WarehouseFields({ recordScopeKey, values, onChange, onInvalidQui
   const equipmentFields = new Set(equipmentGroups.flat());
   return <View style={{ gap: 16 }} testID="warehouse-specifications">
     <PropertyFormCard title={language === 'ar' ? 'مواصفات المخزن وتجهيزاته' : 'Warehouse specifications and equipment'} icon="box">{WAREHOUSE_SPEC_FIELDS.filter(field => !equipmentFields.has(field)).map(renderField)}</PropertyFormCard>
-    <PropertyFormCard title={language === 'ar' ? 'المزايا والتجهيزات المتوفرة' : 'Available features and equipment'} icon="check-square"><OrderedPropertyAmenities entries={equipmentGroups.filter(group => warehouseFieldVisible(group[0], values)).map(group => ({ field: group[0], details: true, content: <>{group.map(renderField)}</> }))} /></PropertyFormCard>
+    <PropertyFormCard title={language === 'ar' ? 'المزايا والتجهيزات المتوفرة' : 'Available features and equipment'} icon="check-square"><OrderedPropertyAmenities entries={equipmentGroups.filter(group => warehouseFieldVisible(group[0], values)).flatMap(group => {
+      const field = group[0];
+      if (getPropertyFormField(field).control !== 'boolean') return [{ field, details: true, content: <>{group.map(renderField)}</> }];
+      const selected = values[field] === 'true' || values[field] === 'false';
+      const label = getPropertyFormField(field).label[language === 'ar' ? 1 : 0];
+      return [
+        { field, details: false, content: <ChoiceChip optionId={field} label={values[field] === 'false' ? (language === 'ar' ? 'بدون ' : 'No ') + label : label} selected={selected} onPress={() => change(field, selected ? '' : 'true')} testID={`warehouse-feature-${field}`} /> },
+        ...(group.length > 1 && values[field] === 'true' ? [{ field: field + '-details', details: true, content: <>{group.slice(1).map(renderField)}</> }] : []),
+      ];
+    })} /></PropertyFormCard>
     <PropertyFormCard title={language === 'ar' ? 'بيانات إضافية (اختياري)' : 'Additional details (optional)'}>{WAREHOUSE_EXTRA_FIELDS.filter(field => !equipmentFields.has(field)).map(renderField)}</PropertyFormCard>
   </View>;
 }

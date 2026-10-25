@@ -47,9 +47,9 @@ test('legacy and normal Property edit URLs forward Studio by same ID; other prop
 
   const screen = await source('../app/property/[propertyCoreId].tsx');
   assert.match(screen, /return getPropertyEditFormHref\(/);
-  assert.match(screen, /router\.replace\(getPropertyEditRouteHref\(property\.core\.id, true\)/);
+  assert.match(screen, /router\.replace\(withMatchingReturn\(getPropertyEditRouteHref\(property\.core\.id, true\)/);
   assert.match(screen, /const editRequested = .*forceEdit/);
-  assert.match(screen, /router\.push\(getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
+  assert.match(screen, /router\.push\(withMatchingReturn\(getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
 });
 
 test('Person-origin Offered Studio validates its exact source context before Property save', async () => {

@@ -1,6 +1,8 @@
+import { MatchingConfirmationList } from '@/components/MatchingConfirmationList';
+import { readMatchingReturn, rememberMatchingReturn } from '@/services/matchingReturnSession';
 import { MatchingResultCard as ResultCard } from '@/components/MatchingResultCard';
 import { MatchingRefinements } from '@/components/MatchingRefinements';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -8,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Crypto from 'expo-crypto';
@@ -159,7 +162,7 @@ function FormInput({
 }
 
 export default function MatchingScreen() {
-  const { requirementId: requestedRequirementId } = useLocalSearchParams<{ requirementId?: string }>();
+  const { requirementId: requestedRequirementId, returnSession } = useLocalSearchParams<{ requirementId?: string; returnSession?: string }>();
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
   const router = useRouter();
@@ -195,6 +198,12 @@ export default function MatchingScreen() {
   const [excluded, setExcluded] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
   const runGenerationRef = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+  const restoreOffsetRef = useRef<number | null>(null);
+  const openedReturnTokenRef = useRef<string | undefined>(undefined);
+  const dismissedReturnTokenRef = useRef<string | undefined>(undefined);
+  const [pendingRestore, setPendingRestore] = useState<string | null>(null);
 
   const seekerPeople = useMemo(
     () => people.filter(person => person.classifications.includes('seeker')),
@@ -216,8 +225,10 @@ export default function MatchingScreen() {
       setQuickRequirement(null);
       setMatchAllGroups(null);
       setError('');
-      setPolicies({});
-      setExcluded({});
+      const restore = readMatchingReturn(openedReturnTokenRef.current)
+        ?? (returnSession !== dismissedReturnTokenRef.current ? readMatchingReturn(returnSession) : undefined);
+      setPolicies(restore?.policies ?? {});
+      setExcluded(restore?.excluded ?? {});
       Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
         .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
           if (!active) return;
@@ -225,6 +236,22 @@ export default function MatchingScreen() {
           setPeople(loadedPeople);
           setProperties(loadedProperties);
           if (requestedRequirementId) setMode('saved');
+          if (restore) {
+            setMode(restore.mode);
+            restoreOffsetRef.current = restore.scrollOffset;
+            const quick = restore.quickRequirement;
+            if (quick) {
+              setQuickRequirement(quick); setPurpose(quick.purpose); setPropertyType(quick.propertyType);
+              setPreferredAreaIds([...quick.preferredAreaIds]); setMinimumBudget(String(quick.budget.minimum)); setMaximumBudget(String(quick.budget.maximum));
+              setBedroomsMinimum(quick.bedroomsMinimum === undefined ? '' : String(quick.bedroomsMinimum)); setBathroomsMinimum(quick.bathroomsMinimum === undefined ? '' : String(quick.bathroomsMinimum));
+              setCentralAC(quick.centralAC); setNotes(quick.notes); setFloorUse(quick.floorUse); setSelectedSeekerId(quick.seekerId ?? null);
+              const subtype = quick.catalogPreferences?.find(item => item.field === 'apartmentSubtype' && item.kind === 'choice');
+              setApartmentSubtype(subtype?.value as 'studio' | 'standard_apartment' | 'duplex' | undefined);
+              if (quick.purpose === 'rent') { setOccupancy(quick.occupancy); setSwimmingPool(quick.swimmingPool); setGym(quick.gym); setSeaView(quick.seaView); }
+            }
+            setPendingRestore(restore.token);
+          }
+
           const firstSeeker = loadedPeople.find(person =>
             person.classifications.includes('seeker'),
           );
@@ -237,10 +264,12 @@ export default function MatchingScreen() {
         active = false;
         runGenerationRef.current += 1;
       };
-    }, [requestedRequirementId, t]),
+    }, [requestedRequirementId, returnSession, t]),
   );
 
   const clearRun = () => {
+    openedReturnTokenRef.current = undefined;
+    dismissedReturnTokenRef.current = returnSession;
     runGenerationRef.current += 1;
     setLoading(false);
     setRunResult(null);
@@ -334,6 +363,12 @@ export default function MatchingScreen() {
     }
   };
 
+  useEffect(() => {
+    if (!pendingRestore) return;
+    setPendingRestore(null);
+    void runMatching();
+  }, [pendingRestore]);
+
   const replaceSuggestion = (requirementId: string, propertyId: string) => {
     if (loading) return;
     const next = { ...excluded, [requirementId]: [...(excluded[requirementId] ?? []), propertyId] };
@@ -354,7 +389,9 @@ export default function MatchingScreen() {
         setMatchAllGroups(null);
         return;
       }
-      router.push(`/property/${encodeURIComponent(propertyId)}` as never);
+      const token = rememberMatchingReturn({ scopeRequirementId: requestedRequirementId, mode, quickRequirement: quickRequirement ?? undefined, policies, excluded, scrollOffset: scrollOffsetRef.current });
+      openedReturnTokenRef.current = token;
+      router.push({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: propertyId, matchingReturn: token } } as never);
     } catch {
       setError(t('matching.load_failed'));
     }
@@ -369,6 +406,9 @@ export default function MatchingScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <PrimaryTabHeader title={t('matching.title')} />
       <KeyboardAwareScrollViewCompat
+        ref={scrollRef}
+        onScroll={event => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={32}
+        onContentSizeChange={() => { if (restoreOffsetRef.current !== null && (matchAllGroups || runResult)) { const y = restoreOffsetRef.current; restoreOffsetRef.current = null; requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false })); } }}
         style={styles.scroll}
         contentContainerStyle={{
           paddingTop: 16,
@@ -667,16 +707,7 @@ export default function MatchingScreen() {
                   {t('matching.results.groupedTitle')}
                 </Text>
                 <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.count').replace(
-                    '{count}',
-                    String(matchAllGroups.reduce(
-                      (count, group) => count + group.requirementGroups.reduce(
-                        (subtotal, item) => subtotal + item.matches.length,
-                        0,
-                      ),
-                      0,
-                    )),
-                  )}
+                  {language === 'ar' ? `جاهز للعرض: ${matchAllGroups.reduce((sum, group) => sum + group.requirementGroups.reduce((n, item) => n + item.matches.length, 0), 0)} · يحتاج تأكيد: ${matchAllGroups.reduce((sum, group) => sum + group.requirementGroups.reduce((n, item) => n + item.needsConfirmation.length, 0), 0)}` : `Ready: ${matchAllGroups.reduce((sum, group) => sum + group.requirementGroups.reduce((n, item) => n + item.matches.length, 0), 0)} · Needs confirmation: ${matchAllGroups.reduce((sum, group) => sum + group.requirementGroups.reduce((n, item) => n + item.needsConfirmation.length, 0), 0)}`}
                 </Text>
               </View>
               <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
@@ -691,9 +722,9 @@ export default function MatchingScreen() {
                   onPress={() => router.push(`/person/${encodeURIComponent(group.person.id)}`)}
                   accessibilityRole="button"
                   testID={`matching-person-${group.person.id}`}
-                  style={[styles.personHeader, { backgroundColor: colors.accent, borderRadius: colors.cardRadius }]}
+                  style={[styles.personHeader, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1, borderRadius: colors.cardRadius }]}
                 >
-                  <Text style={[styles.personName, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
+                  <Text style={[styles.personName, { color: '#173F78', fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
                     {group.person.name}
                   </Text>
                   <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
@@ -702,10 +733,11 @@ export default function MatchingScreen() {
                   <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t(`matching.purpose.${requirementGroup.requirement.purpose}`)} · {t(`propertyType.${requirementGroup.requirement.propertyType}`)} · {requirementGroup.requirement.budget.minimum}–{requirementGroup.requirement.budget.maximum} {requirementGroup.requirement.budget.currencyCode}</Text>
                   <Text style={{ color: colors.mutedForeground }}>{requirementGroup.requirement.preferredAreaMode === 'all_kuwait' ? (language === 'ar' ? 'كل الكويت' : 'All Kuwait') : requirementGroup.requirement.preferredAreaIds.map(id => getAreaById(id)?.[language] ?? (language === 'ar' ? 'منطقة غير معروفة' : 'Unknown area')).join(' · ')}</Text>
                   <MatchingRefinements requirement={requirementGroup.requirement} policy={policies[requirementGroup.requirement.id] ?? {}} busy={loading} onChange={policy => refine(requirementGroup.requirement.id, policy)} />
-                  {requirementGroup.matches.map((result, index) => <ResultCard key={result.propertyId} result={result} rank={index + 1} requirement={requirementGroup.requirement} property={properties.find(item => item.core.id === result.propertyId)} onPress={() => void openMatchedProperty(result.propertyId)} onReplace={() => replaceSuggestion(requirementGroup.requirement.id, result.propertyId)} busy={loading} />)}
+                  {requirementGroup.matches.map((result, index) => <ResultCard key={result.propertyId} result={result} rank={index + 1} requirement={requirementGroup.requirement} personName={group.person.name} onViewRequirement={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirementGroup.requirement.id } } as never)} property={properties.find(item => item.core.id === result.propertyId)} onPress={() => void openMatchedProperty(result.propertyId)} onReplace={() => replaceSuggestion(requirementGroup.requirement.id, result.propertyId)} busy={loading} />)}
                   {!requirementGroup.matches.length && <Text style={{ color: colors.mutedForeground }}>{language === 'ar' ? 'لا توجد ترشيحات جاهزة تستوفي شروط هذه المقارنة.' : 'No ready suggestions meet this comparison’s conditions.'}</Text>}
-                  {requirementGroup.needsConfirmation.length > 0 && <Text style={{ color: '#946200', fontFamily: fonts.semiBold }}>{language === 'ar' ? 'مرشحون يحتاجون تأكيد معلومات — خارج القائمة الجاهزة للعرض' : 'Candidates needing confirmation — separate from the ready shortlist'}</Text>}
-                  {requirementGroup.needsConfirmation.map((result, index) => <ResultCard key={result.propertyId} result={result} rank={index + 1} requirement={requirementGroup.requirement} property={properties.find(item => item.core.id === result.propertyId)} onPress={() => void openMatchedProperty(result.propertyId)} busy={loading} />)}
+                  <MatchingConfirmationList count={requirementGroup.needsConfirmation.length}>
+                    {requirementGroup.needsConfirmation.map((result, index) => <ResultCard key={result.propertyId} result={result} rank={index + 1} requirement={requirementGroup.requirement} personName={group.person.name} onViewRequirement={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirementGroup.requirement.id } } as never)} property={properties.find(item => item.core.id === result.propertyId)} onPress={() => void openMatchedProperty(result.propertyId)} busy={loading} />)}
+                  </MatchingConfirmationList>
                 </View>)}
               </View>
             )) : (
@@ -731,7 +763,7 @@ export default function MatchingScreen() {
                   {t('matching.results.title')}
                 </Text>
                 <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.count').replace('{count}', String(runResult.matches.length))}
+                  {language === 'ar' ? `جاهز للعرض: ${runResult.matches.length} · يحتاج تأكيد: ${runResult.needsConfirmation.length}` : `Ready: ${runResult.matches.length} · Needs confirmation: ${runResult.needsConfirmation.length}`}
                 </Text>
               </View>
               <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
@@ -747,7 +779,7 @@ export default function MatchingScreen() {
                   key={result.propertyId}
                   result={result}
                   rank={index + 1}
-                  requirement={quickRequirement}
+                  requirement={quickRequirement} personName={people.find(person => person.id === quickRequirement.seekerId)?.name}
                   property={properties.find(item => item.core.id === result.propertyId)}
                   onPress={() => void openMatchedProperty(result.propertyId)}
                   onReplace={() => replaceSuggestion(quickRequirement.id, result.propertyId)} busy={loading}
@@ -764,8 +796,9 @@ export default function MatchingScreen() {
                 </Text>
               </View>
             )}
-            {runResult.needsConfirmation.length > 0 && <Text style={{ color: '#946200', fontFamily: fonts.semiBold }}>{language === 'ar' ? 'مرشحون يحتاجون تأكيد معلومات' : 'Candidates needing confirmation'}</Text>}
-            {runResult.needsConfirmation.map((result, index) => <ResultCard key={result.propertyId} result={result} rank={index + 1} requirement={quickRequirement} property={properties.find(item => item.core.id === result.propertyId)} onPress={() => void openMatchedProperty(result.propertyId)} busy={loading} />)}
+            <MatchingConfirmationList count={runResult.needsConfirmation.length}>
+              {runResult.needsConfirmation.map((result, index) => <ResultCard key={result.propertyId} result={result} rank={index + 1} requirement={quickRequirement} personName={people.find(person => person.id === quickRequirement.seekerId)?.name} property={properties.find(item => item.core.id === result.propertyId)} onPress={() => void openMatchedProperty(result.propertyId)} busy={loading} />)}
+            </MatchingConfirmationList>
             <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.results.transient')}
             </Text>

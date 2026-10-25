@@ -190,7 +190,7 @@ export function PropertyEnrichmentFields({
       })}</PropertyFormCard>}
       {(applicableDefinitions.some(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount') || amenityRenderExtra) && (
         <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
-          <OrderedPropertyAmenities entries={applicableDefinitions.filter(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount').map(definition => {
+          <OrderedPropertyAmenities extra={amenityRenderExtra} entries={applicableDefinitions.filter(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount').map(definition => {
               const { field } = definition;
               if (field === 'parkingSpaceCount') return { field, details: true, content: <View>{definition.control !== 'numeric_quick_pick' && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[field][language === 'ar' ? 1 : 0]}</Text>}{renderFieldContent(definition)}</View> };
               const value = values[field];
@@ -203,7 +203,6 @@ export function PropertyEnrichmentFields({
                   onPress={() => onChange(field, isTrue || isFalse ? '' : 'true')} />
               ) };
             })} />
-          {amenityRenderExtra && <ChoiceGrid>{amenityRenderExtra}</ChoiceGrid>}
         </PropertyFormCard>
       )}
     </View>

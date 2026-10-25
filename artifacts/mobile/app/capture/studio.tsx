@@ -1,3 +1,4 @@
+import { readMatchingReturn } from '@/services/matchingReturnSession';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
@@ -107,6 +108,7 @@ type RouteParams = {
   seekerId?: string;
   linkPersonId?: string;
   sourceRole?: string;
+  matchingReturn?: string;
   editPropertyId?: string;
   editRequirementId?: string;
 };
@@ -164,6 +166,7 @@ const propertyAttachmentMetadata = (attachment: LocalAttachment): PropertyAttach
 export default function StudioCaptureRoute() {
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
+  const matchingReturn = readMatchingReturn(firstParam(params.matchingReturn))?.token;
   const colors = useColors();
   const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
@@ -426,7 +429,7 @@ export default function StudioCaptureRoute() {
       return;
     }
     const target = getEditBackTarget();
-    if (target) router.replace(target as never);
+    if (target) router.replace({ ...target, params: { ...target.params, ...(matchingReturn ? { matchingReturn } : {}) } } as never);
   };
   const handleHeaderBack = () => {
     if (showingReview) returnToForm();
@@ -715,7 +718,7 @@ export default function StudioCaptureRoute() {
 
   const navigateAfterPropertySave = async (property: Property) => {
     await linkPropertySourceIfNeeded(property);
-    router.replace({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: property.core.id } } as never);
+    router.replace({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: property.core.id, ...(matchingReturn ? { matchingReturn } : {}) } } as never);
   };
 
   const finishPropertySave = async (property: Property) => {

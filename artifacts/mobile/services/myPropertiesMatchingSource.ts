@@ -1,3 +1,4 @@
+import { getSavedPropertyClassificationFacts } from '@/services/savedPropertyClassification';
 import {
   matchingPropertyFacts,
   validateProperty,
@@ -49,6 +50,7 @@ export function normalizeMyPropertyCandidate(
     typeDetails: {
       ...projected.templateFacts,
       ...source.typeDetails,
+      ...getSavedPropertyClassificationFacts(source),
     } as Property["typeDetails"],
     ...(projected.areaSquareMeters === undefined
       ? {}

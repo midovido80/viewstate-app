@@ -4,7 +4,7 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v1" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v2" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -16,7 +16,7 @@ export type MatchCriterion = string;
 export type MatchExplanationStatus =
   "matched" | "not_met" | "unknown" | "ineligible";
 export type MatchCategory =
-  "direct" | "negotiation" | "needs_confirmation" | "excluded";
+  "direct" | "provisional" | "negotiation" | "needs_confirmation" | "excluded";
 export interface MatchingPolicy {
   /** Explicit refinements scoped to this Requirement/run, never inferred from browsing. */
   readonly strictFields?: readonly string[];
@@ -63,6 +63,11 @@ export interface MatchEligibilityResult {
   readonly locationRank: number | null;
   readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
 }
+const CORE_MATCH_FIELDS = new Set(['property_type', 'transaction', 'currency', 'floorUse', 'propertyUse', 'apartmentSubtype', 'rentalPeriodId', 'budget', 'location', 'bedrooms', 'bathrooms', 'builtUpAreaSquareMeters', 'plotAreaSquareMeters', 'parkingSpaceCount', 'hasCentralAC', 'hasElevator', 'occupancy', 'intendedUse', 'commercialActivity']);
+export function isBlockingMatchUnknown(item: MatchExplanation): boolean {
+  return item.status === 'unknown' && (item.hard || CORE_MATCH_FIELDS.has(item.criterion));
+}
+
 const finite = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 const unwrap = (value: unknown): unknown =>
@@ -568,11 +573,11 @@ export function evaluateMatch(
     tooMany ||
     potentialScore < MATCHING_DEFAULT_POLICY.minimumQuality
       ? "excluded"
-      : unknowns.length
+      : unknowns.some(isBlockingMatchUnknown) || score < MATCHING_DEFAULT_POLICY.minimumQuality
         ? "needs_confirmation"
         : differences.length
           ? "negotiation"
-          : "direct";
+          : unknowns.length ? "provisional" : "direct";
   return {
     engineVersion: MATCH_ENGINE_VERSION,
     requirementId: requirement.id,
@@ -582,7 +587,7 @@ export function evaluateMatch(
     priceAmount: price(property).amount,
     category,
     qualifies:
-      (category === "direct" || category === "negotiation") &&
+      (category === "direct" || category === "provisional" || category === "negotiation") &&
       score >= MATCHING_DEFAULT_POLICY.minimumQuality,
     differenceCount,
     unknownCount: unknowns.length,
@@ -599,9 +604,10 @@ export function evaluateMatch(
 
 const categoryRank: Readonly<Record<MatchCategory, number>> = {
   direct: 0,
-  negotiation: 1,
-  needs_confirmation: 2,
-  excluded: 3,
+  provisional: 1,
+  negotiation: 2,
+  needs_confirmation: 3,
+  excluded: 4,
 };
 export function rankMatchResults(
   results: readonly MatchResult[],
@@ -639,7 +645,7 @@ export function selectMatchShortlist(
     if (
       !result.eligible ||
       !result.qualifies ||
-      !["direct", "negotiation"].includes(result.category) ||
+      !["direct", "provisional", "negotiation"].includes(result.category) ||
       seen.has(result.propertyId)
     )
       return false;
