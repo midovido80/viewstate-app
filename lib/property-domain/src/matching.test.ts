@@ -1,638 +1,487 @@
+import test from "node:test";
+import assert from "node:assert/strict";
 import {
-  checkMatchEligibility,
   evaluateMatch,
-  MATCH_QUALIFICATION_THRESHOLD,
-  MATCH_SCORING_WEIGHTS,
+  checkMatchEligibility,
+  matchingPropertyFacts,
   rankMatchResults,
-  type MatchingPropertyCandidate,
-  type MatchingPropertyEvidence,
-  type MatchResult,
-  type Property,
-  type RentSeekerRequirement,
-  type BuySeekerRequirement,
-} from "./index.ts";
-
-type Test = {
-  readonly name: string;
-  readonly run: () => void;
-};
-
-const tests: Test[] = [];
-
-function test(name: string, run: () => void): void {
-  tests.push({ name, run });
-}
-
-const assert = {
-  equal<T>(actual: T, expected: T): void {
-    if (!Object.is(actual, expected)) {
-      throw new Error(`Expected ${String(expected)}, received ${String(actual)}`);
-    }
-  },
-  deepEqual(actual: unknown, expected: unknown): void {
-    const actualJson = JSON.stringify(actual);
-    const expectedJson = JSON.stringify(expected);
-    if (actualJson !== expectedJson) {
-      throw new Error(`Expected ${expectedJson}, received ${actualJson}`);
-    }
-  },
-};
-
-const rentRequirement = (
-  overrides: Partial<RentSeekerRequirement> = {},
-): RentSeekerRequirement => ({
-  id: "requirement-rent",
-  seekerId: "seeker-1",
-  purpose: "rent",
-  propertyType: "apartment",
-  preferredAreaIds: [
-    "area-1",
-    "area-2",
-    "area-3",
-    "area-4",
-    "area-5",
-    "area-6",
-    "area-7",
-  ],
-  budget: { minimum: 100, maximum: 200, currencyCode: "KWD" },
-  notes: "ignored by Matching",
-  ...overrides,
-});
-
-const buyRequirement = (
-  overrides: Partial<BuySeekerRequirement> = {},
-): BuySeekerRequirement => ({
-  id: "requirement-buy",
-  seekerId: "seeker-1",
-  purpose: "buy",
-  propertyType: "villa",
-  preferredAreaIds: ["area-1", "area-2"],
-  budget: { minimum: 100_000, maximum: 200_000, currencyCode: "KWD" },
-  notes: "ignored by Matching",
-  ...overrides,
-});
-
-function property(options: {
-  readonly id?: string;
-  readonly propertyType?: Property["core"]["propertyType"];
-  readonly area?: string;
-  readonly transaction?: "rent" | "sale";
-  readonly amount?: number;
-  readonly currencyCode?: string;
-  readonly rentalPeriodId?: string;
-  readonly typeDetails?: Property["typeDetails"];
-} = {}): Property {
-  const id = options.id ?? "property-1";
-  const propertyType = options.propertyType ?? "apartment";
-  const transaction = options.transaction ?? "rent";
-  const amount = options.amount ?? 150;
-  const currencyCode = options.currencyCode ?? "KWD";
-  const activeOffer = transaction === "rent"
-    ? {
-      id: `${id}-offer`,
+  selectMatchShortlist,
+  MATCH_ENGINE_VERSION,
+} from "./matching.ts";
+import type { Property } from "./types.ts";
+import type { SeekerRequirement } from "./requirements.ts";
+const req = (overrides: Partial<SeekerRequirement> = {}): SeekerRequirement =>
+  ({
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "client",
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["a", "b"],
+    preferredAreaMode: "specific_areas",
+    budget: { minimum: 450, maximum: 500, currencyCode: "KWD" },
+    rentalPeriodId: "monthly",
+    notes: "",
+    ...overrides,
+  }) as SeekerRequirement;
+const property = (
+  details: Record<string, unknown> = {},
+  amount = 490,
+  id = "p",
+): Property =>
+  ({
+    core: { id, propertyType: "apartment", locationArea: { id: "a" } },
+    activeOffer: {
+      id: id + "-offer",
       propertyCoreId: id,
-      transaction: "rent" as const,
-      rentalPrice: { amount, currencyCode },
-      rentalPeriodId: options.rentalPeriodId ?? "monthly",
-    }
-    : {
-      id: `${id}-offer`,
-      propertyCoreId: id,
-      transaction: "sale" as const,
-      salePrice: { amount, currencyCode },
-    };
-  return {
-    core: {
-      id,
-      propertyType,
-      locationArea: { id: options.area ?? "area-1" },
+      transaction: "rent",
+      rentalPrice: { amount, currencyCode: "KWD" },
+      rentalPeriodId: "monthly",
     },
-    activeOffer,
-    typeDetails: options.typeDetails,
-  };
-}
+    typeDetails: {
+      propertyType: "apartment",
+      apartmentSubtype: "standard_apartment",
+      bedroomCount: 3,
+      bathroomCount: 2,
+      ...details,
+    },
+  }) as Property;
+const run = (r = req(), p = property(), policy = {}) =>
+  evaluateMatch(r, { property: p }, policy);
 
-function candidate(
-  propertyValue: Property,
-  evidence?: MatchingPropertyEvidence,
-  propertyChronology?: number,
-): MatchingPropertyCandidate {
-  return { property: propertyValue, evidence, propertyChronology };
-}
-
-function explanation(
-  result: MatchResult,
-  criterion: string,
-) {
-  return result.explanations.find(item => item.criterion === criterion);
-}
-
-test("Eligibility-only and full evaluation share identical hard gates", () => {
-  for (const propertyValue of [
-    property(),
-    property({ amount: 201 }),
-    property({ area: "area-outside" }),
-    property({ currencyCode: "USD" }),
-    property({ transaction: "sale" }),
-  ]) {
-    const matchingCandidate = candidate(propertyValue);
-    const eligibility = checkMatchEligibility(
-      rentRequirement(),
-      matchingCandidate,
-    );
-    const fullResult = evaluateMatch(rentRequirement(), matchingCandidate);
-    assert.equal(eligibility.eligible, fullResult.eligible);
-    assert.equal(eligibility.locationRank, fullResult.locationRank);
-    assert.deepEqual(
-      eligibility.ineligibilityReasons,
-      fullResult.ineligibilityReasons,
-    );
-  }
-});
-
-test("Rent and Buy/Sale use separate transaction contracts and hard eligibility", () => {
-  const rent = rentRequirement();
-  const buy = buyRequirement();
-
-  assert.equal(evaluateMatch(rent, candidate(property())).eligible, true);
+test("identity and offers are mandatory; price alternatives survive the candidate gate", () => {
   assert.equal(
-    evaluateMatch(rent, candidate(property({ transaction: "sale" }))).eligible,
+    checkMatchEligibility(req(), { property: property({}, 520) }).eligible,
+    true,
+  );
+  assert.equal(run(req({ propertyType: "villa" })).eligible, false);
+  const p = property();
+  assert.equal(
+    run(req(), {
+      ...p,
+      activeOffer: {
+        id: "sale",
+        propertyCoreId: "p",
+        transaction: "sale",
+        salePrice: { amount: 490, currencyCode: "KWD" },
+      },
+    }).category,
+    "excluded",
+  );
+  assert.equal(
+    run(req(), {
+      ...p,
+      activeOffer: {
+        ...p.activeOffer,
+        rentalPrice: { amount: 490, currencyCode: "USD" },
+      },
+    } as Property).category,
+    "excluded",
+  );
+});
+test("Duplex, Studio and Standard cannot cross-match; unknown subtype needs confirmation", () => {
+  const r = req({
+    catalogPreferences: [
+      { field: "apartmentSubtype", kind: "choice", value: "duplex" },
+    ],
+  });
+  assert.equal(
+    run(r, property({ apartmentSubtype: "studio" })).category,
+    "excluded",
+  );
+  assert.equal(
+    run(r, property({ apartmentSubtype: "duplex" })).category,
+    "direct",
+  );
+  assert.equal(
+    run(r, property({ apartmentSubtype: undefined })).category,
+    "needs_confirmation",
+  );
+});
+test("Floor residential/commercial is mandatory and unknown use is not inferred", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, propertyType: "floor" },
+    typeDetails: { propertyType: "floor", floorUse: "commercial" },
+  } as Property;
+  const r = req({ propertyType: "floor", floorUse: "residential" });
+  assert.equal(run(r, p).category, "excluded");
+  assert.equal(
+    run(r, { ...p, typeDetails: { propertyType: "floor" } }).category,
+    "needs_confirmation",
+  );
+});
+test("all Kuwait and each selected area are unrestricted/equal, including purchase", () => {
+  assert.equal(
+    run(req({ preferredAreaMode: "all_kuwait", preferredAreaIds: [] })).score,
+    100,
+  );
+  assert.equal(
+    run(req(), {
+      ...property(),
+      core: { ...property().core, locationArea: { id: "b" } },
+    }).score,
+    100,
+  );
+  const p = {
+    ...property(),
+    activeOffer: {
+      id: "sale",
+      propertyCoreId: "p",
+      transaction: "sale",
+      salePrice: { amount: 490, currencyCode: "KWD" },
+    },
+  } as Property;
+  assert.equal(
+    run(
+      req({
+        purpose: "buy",
+        preferredAreaMode: "all_kuwait",
+        preferredAreaIds: [],
+      }),
+      p,
+    ).qualifies,
+    true,
+  );
+});
+test("unselected regions require explicit alternatives and never guess adjacent areas", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, locationArea: { id: "c" } },
+  };
+  assert.equal(run(req(), p).category, "excluded");
+  assert.equal(
+    run(req(), p, { alternativeAreaIds: ["c"] }).category,
+    "negotiation",
+  );
+  assert.equal(
+    run(req(), p, { alternativeAreaIds: ["c"], strictFields: ["location"] })
+      .category,
+    "excluded",
+  );
+});
+test("price alternatives have exact boundaries and explain the required amount without promising negotiation", () => {
+  const x = run(req(), property({}, 520));
+  assert.equal(x.category, "negotiation");
+  assert.equal(
+    x.explanations.find((item) => item.criterion === "budget")?.difference,
+    20,
+  );
+  assert.equal(
+    x.explanations.find((item) => item.criterion === "budget")
+      ?.percentDifference,
+    4,
+  );
+  assert.equal(run(req(), property({}, 550)).qualifies, true);
+  assert.equal(run(req(), property({}, 550.01)).category, "excluded");
+  assert.equal(
+    run(req(), property({}, 520), { strictFields: ["budget"] }).category,
+    "excluded",
+  );
+  assert.equal(run(req(), property({}, 400)).category, "direct");
+});
+test("daily and monthly prices are never compared as equal; absent cadence is unknown", () => {
+  assert.equal(run(req({ rentalPeriodId: "daily" })).category, "excluded");
+  assert.equal(
+    run(req({ rentalPeriodId: undefined })).category,
+    "needs_confirmation",
+  );
+});
+test("Purchase compares bedrooms and bathrooms as well as price and area", () => {
+  const p = {
+    ...property({ bedroomCount: 1, bathroomCount: 0 }),
+    activeOffer: {
+      id: "s",
+      propertyCoreId: "p",
+      transaction: "sale",
+      salePrice: { amount: 490, currencyCode: "KWD" },
+    },
+  } as Property;
+  assert.equal(
+    run(req({ purpose: "buy", bedroomsMinimum: 3, bathroomsMinimum: 2 }), p)
+      .category,
+    "excluded",
+  );
+});
+test("minimum counts accept surplus, permit one count shortfall, and respect explicit locks", () => {
+  const r = req({ bedroomsMinimum: 3, bathroomsMinimum: 2 });
+  assert.equal(run(r, property({ bedroomCount: 4 })).category, "direct");
+  assert.equal(run(r, property({ bedroomCount: 2 })).category, "negotiation");
+  assert.equal(run(r, property({ bedroomCount: 1 })).category, "excluded");
+  assert.equal(
+    run(r, property({ bedroomCount: 2 }), { strictFields: ["bedrooms"] })
+      .category,
+    "excluded",
+  );
+});
+test("unknown requested facts never occupy the ready shortlist, even at a high score", () => {
+  const r = req({ bedroomsMinimum: 3 });
+  const x = run(r, property({ bedroomCount: undefined }));
+  assert.equal(x.category, "needs_confirmation");
+  assert.equal(x.qualifies, false);
+  assert.equal(selectMatchShortlist([x], []).length, 0);
+});
+test("Central AC, elevator, guard, explicit false and forbidden features use actual structured facts", () => {
+  const r = req({
+    centralAC: true,
+    preferredAmenities: ["elevator", "security_guard"],
+  });
+  assert.equal(
+    run(
+      r,
+      property({
+        hasCentralAC: true,
+        hasElevator: true,
+        hasSecurityGuard: true,
+      }),
+    ).score,
+    100,
+  );
+  assert.equal(
+    run(req({ centralAC: false }), property({ hasCentralAC: true })).category,
+    "excluded",
+  );
+  assert.equal(
+    run(
+      req({ preferredAmenityExclusions: ["balcony"] }),
+      property({ hasBalcony: true }),
+    ).category,
+    "excluded",
+  );
+  assert.equal(
+    run(req({ centralAC: true }), property({ hasCentralAC: false })).category,
+    "negotiation",
+  );
+});
+test("area uses the correct area field and metric conversion, never inferring land as living area", () => {
+  const r = req({
+    catalogPreferences: [
+      {
+        field: "builtUpAreaSquareMeters",
+        kind: "number",
+        comparison: "minimum",
+        value: 100,
+      },
+    ],
+  });
+  assert.equal(
+    run(r, property({ builtUpAreaSquareMeters: 90 })).category,
+    "negotiation",
+  );
+  assert.equal(
+    run(r, property({ builtUpAreaSquareMeters: 89.99 })).category,
+    "excluded",
+  );
+  assert.equal(
+    run(r, property({ plotAreaSquareMeters: 200 })).category,
+    "needs_confirmation",
+  );
+  assert.equal(
+    run(r, { ...property(), areaSquareMeters: 1200, areaUnit: "square_foot" })
+      .category,
+    "direct",
+  );
+});
+test("partial commercial complex area refers to the offered portion", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, propertyType: "commercial_complex" },
+    areaSquareMeters: 2000,
+    typeDetails: {
+      propertyType: "commercial_complex",
+      rentalScope: "partial",
+      availableAreaSquareMeters: 50,
+    },
+  } as Property;
+  const r = req({
+    propertyType: "commercial_complex",
+    catalogPreferences: [
+      {
+        field: "builtUpAreaSquareMeters",
+        kind: "number",
+        comparison: "minimum",
+        value: 100,
+      },
+    ],
+  });
+  assert.equal(run(r, p).category, "excluded");
+});
+test("catalog choices, minimum parking and exact floor number affect results", () => {
+  const r = req({
+    catalogPreferences: [
+      {
+        field: "parkingSpaceCount",
+        kind: "number",
+        comparison: "minimum",
+        value: 2,
+      },
+      { field: "furnishing", kind: "choice", value: "furnished" },
+    ],
+  });
+  assert.equal(
+    run(r, property({ parkingSpaceCount: 2, furnishing: "furnished" }))
+      .category,
+    "direct",
+  );
+  assert.equal(
+    run(r, property({ parkingSpaceCount: 1, furnishing: "unfurnished" }))
+      .category,
+    "negotiation",
+  );
+  assert.equal(
+    run(
+      req({
+        catalogPreferences: [
+          {
+            field: "floorNumber",
+            kind: "number",
+            comparison: "exact",
+            value: 2,
+          },
+        ],
+      }),
+      property({ floorNumber: 3 }),
+    ).category,
+    "excluded",
+  );
+});
+test("hidden old building facts are excluded and elevators derive from recorded count only", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, propertyType: "whole_building" },
+    typeDetails: {
+      propertyType: "whole_building",
+      bedroomCount: 9,
+      elevatorCount: 0,
+    },
+  } as Property;
+  assert.equal(matchingPropertyFacts(p).bedroomCount, undefined);
+  assert.equal(matchingPropertyFacts(p).hasElevator, false);
+});
+test("nearby services and unsupported driver-room evidence cannot be invented", () => {
+  assert.equal(
+    run(req({ preferredNearbyServices: ["mosque"] }), {
+      ...property(),
+      nearbyServices: ["mosque"],
+    }).category,
+    "direct",
+  );
+  assert.equal(
+    run(req({ preferredNearbyServices: ["mosque"] })).category,
+    "provisional",
+  );
+  assert.equal(run(req({ driverRoom: true })).category, "provisional");
+});
+test("three separate differences are excluded even if their weighted score is high", () => {
+  const x = run(
+    req({ bedroomsMinimum: 3, centralAC: true }),
+    property({ bedroomCount: 2, hasCentralAC: false }, 520),
+  );
+  assert.equal(x.differenceCount, 3);
+  assert.equal(x.category, "excluded");
+});
+test("shortlists are bounded, non-mutating and do not fill missing slots or mix engine versions", () => {
+  const candidates = Array.from({ length: 10 }, (_, i) => ({
+    property: property({}, 490, "p" + i),
+  }));
+  const results = candidates.map((candidate) =>
+    evaluateMatch(req(), candidate),
+  );
+  const before = JSON.stringify(results);
+  assert.equal(selectMatchShortlist(results, candidates).length, 5);
+  assert.equal(selectMatchShortlist(results.slice(0, 2), candidates).length, 2);
+  assert.equal(JSON.stringify(results), before);
+  assert.equal(
+    rankMatchResults([{ ...results[0], engineVersion: "old" } as never]).length,
+    0,
+  );
+  assert.equal(
+    selectMatchShortlist([results[0], results[0]], candidates).length,
+    1,
+  );
+  assert.equal(
+    selectMatchShortlist(results, candidates, ["p0"]).some(
+      (item) => item.propertyId === "p0",
+    ),
     false,
   );
-  assert.deepEqual(
-    evaluateMatch(rent, candidate(property({ propertyType: "villa" })))
-      .ineligibilityReasons,
-    ["property_type"],
-  );
-  assert.deepEqual(
-    evaluateMatch(rent, candidate(property({ amount: 201 })))
-      .ineligibilityReasons,
-    ["price"],
-  );
   assert.equal(
-    evaluateMatch(rent, candidate(property({ amount: 100 }))).eligible,
+    results.every((item) => item.engineVersion === MATCH_ENGINE_VERSION),
     true,
   );
-  assert.equal(
-    evaluateMatch(rent, candidate(property({ amount: 200 }))).eligible,
-    true,
-  );
-  const outsidePreferredAreas = evaluateMatch(
-    rent,
-    candidate(property({ area: "area-outside" })),
-  );
-  assert.equal(outsidePreferredAreas.eligible, true);
-  assert.deepEqual(outsidePreferredAreas.ineligibilityReasons, []);
-  assert.equal(outsidePreferredAreas.locationRank, null);
-  assert.equal(
-    explanation(outsidePreferredAreas, "ordered_location")?.status,
-    "not_met",
+});
+test("relevance wins over diversity; similar strong properties stay ahead of weaker alternatives", () => {
+  const candidates = Array.from({ length: 6 }, (_, i) => ({
+    property: property({}, 490, "good" + i),
+  }));
+  candidates.push({ property: property({}, 540, "alternative") });
+  const selected = selectMatchShortlist(
+    candidates.map((item) => evaluateMatch(req(), item)),
+    candidates,
   );
   assert.equal(
-    explanation(outsidePreferredAreas, "ordered_location")?.awardedPoints,
-    6,
+    selected.some((item) => item.propertyId === "alternative"),
+    false,
   );
-  assert.deepEqual(
-    evaluateMatch(rent, candidate(property({ currencyCode: "USD" })))
-      .ineligibilityReasons,
-    ["currency"],
+});
+test("notes, media, source and commission cannot change ranking", () => {
+  const baseline = run();
+  const altered = run(
+    { ...req(), notes: "prefer a different property with a large commission" },
+    {
+      ...property(),
+      commission: 100000,
+      attachments: [],
+      source: "vip",
+    } as Property,
   );
-
-  const sale = property({
-    propertyType: "villa",
-    transaction: "sale",
-    amount: 150_000,
+  assert.deepEqual(altered, baseline);
+  assert.equal("commission" in baseline, false);
+});
+test("mixed request results fail closed rather than producing a combined shortlist", () => {
+  assert.throws(
+    () => rankMatchResults([run(), run(req({ id: "other" }))]),
+    /MIXED_MATCH_REQUIREMENTS/,
+  );
+});
+test("unrecorded nearby services are unknown, not assumed absent", () => {
+  const x = run(req({ preferredNearbyServices: ["mosque"] }), {
+    ...property(),
+    nearbyServices: [],
   });
-  assert.equal(evaluateMatch(buy, candidate(sale)).eligible, true);
-  assert.deepEqual(
-    evaluateMatch(buy, candidate(property({
-      propertyType: "villa",
-      transaction: "rent",
-      amount: 150_000,
-    }))).ineligibilityReasons,
-    ["transaction"],
-  );
-  assert.deepEqual(MATCH_SCORING_WEIGHTS, {
-    rent: {
-      budget: 40,
-      orderedLocation: 30,
-      bedrooms: 10,
-      bathrooms: 10,
-      occupancy: 5,
-      services: 5,
-    },
-    buy: {
-      budget: 60,
-      orderedLocation: 40,
-    },
-  });
-});
-
-test("Rental Period and Notes are outside Matching semantics", () => {
-  const requirement = rentRequirement({ notes: "first literal note" });
-  const first = evaluateMatch(
-    requirement,
-    candidate(property({ rentalPeriodId: "monthly" })),
-  );
-  const second = evaluateMatch(
-    { ...requirement, notes: "different literal note" },
-    candidate(property({ rentalPeriodId: "weekly" })),
-  );
-  assert.deepEqual(second, first);
-});
-
-test("Ordered Location scoring decays by rank and floors at 20 percent", () => {
-  const requirement = rentRequirement();
-  const rankOne = evaluateMatch(requirement, candidate(property({ area: "area-1" })));
-  const rankTwo = evaluateMatch(requirement, candidate(property({ area: "area-2" })));
-  const rankThree = evaluateMatch(requirement, candidate(property({ area: "area-3" })));
-  const rankFour = evaluateMatch(requirement, candidate(property({ area: "area-4" })));
-  const rankFive = evaluateMatch(requirement, candidate(property({ area: "area-5" })));
-  const rankSix = evaluateMatch(requirement, candidate(property({ area: "area-6" })));
-  const rankSeven = evaluateMatch(requirement, candidate(property({ area: "area-7" })));
-
-  assert.equal(rankOne.locationRank, 1);
-  assert.equal(explanation(rankOne, "ordered_location")?.awardedPoints, 30);
-  assert.equal(explanation(rankTwo, "ordered_location")?.awardedPoints, 24);
-  assert.equal(explanation(rankThree, "ordered_location")?.awardedPoints, 18);
-  assert.equal(explanation(rankFour, "ordered_location")?.awardedPoints, 12);
-  assert.equal(explanation(rankFive, "ordered_location")?.awardedPoints, 6);
-  assert.equal(explanation(rankSix, "ordered_location")?.awardedPoints, 6);
-  assert.equal(explanation(rankSeven, "ordered_location")?.awardedPoints, 6);
-  assert.equal(rankSix.locationRank, 6);
-  assert.equal(rankSeven.locationRank, 7);
-});
-
-test("Location mismatch is scored instead of hard-excluded", () => {
-  const requirement = rentRequirement({
-    propertyType: "chalet",
-    bedroomsMinimum: 3,
-    bathroomsMinimum: 2,
-    occupancy: "family",
-    swimmingPool: true,
-  });
-  const result = evaluateMatch(
-    requirement,
-    candidate(
-      property({
-        area: "area-outside",
-        propertyType: "chalet",
-        typeDetails: {
-          propertyType: "chalet",
-          bedroomCount: 4,
-          bathroomCount: 3,
-          hasPool: true,
-        },
-      }),
-      { occupancy: "family" },
-    ),
-  );
-
-  assert.equal(result.eligible, true);
-  assert.equal(result.locationRank, null);
-  assert.equal(result.score, 76);
-  assert.equal(result.qualifies, true);
-  assert.equal(explanation(result, "ordered_location")?.status, "not_met");
-  assert.equal(explanation(result, "ordered_location")?.possiblePoints, 30);
-});
-
-test("Identical evidence produces identical percentages after location scoring change", () => {
-  const requirement = rentRequirement({ bedroomsMinimum: 2 });
-  const first = evaluateMatch(
-    requirement,
-    candidate(property({ area: "area-outside" })),
-  );
-  const second = evaluateMatch(
-    requirement,
-    candidate(property({ area: "another-outside-area" })),
-  );
-
-  assert.equal(first.score, second.score);
-  assert.equal(first.score, 57.5);
-  assert.equal(first.qualifies, false);
-  assert.equal(second.qualifies, false);
-});
-
-test("Buy location mismatch remains eligible but cannot reach the unchanged threshold", () => {
-  const result = evaluateMatch(
-    buyRequirement(),
-    candidate(property({
-      area: "area-outside",
-      propertyType: "villa",
-      transaction: "sale",
-      amount: 150_000,
-    })),
-  );
-
-  assert.equal(result.eligible, true);
-  assert.equal(result.score, 68);
-  assert.equal(result.qualifies, false);
-  assert.equal(MATCH_QUALIFICATION_THRESHOLD, 70);
-});
-
-test("Missing optional Requirement criteria are excluded, while missing Property evidence stays in denominator", () => {
-  const withoutOptionalCriteria = evaluateMatch(
-    rentRequirement(),
-    candidate(property()),
-  );
-  assert.equal(withoutOptionalCriteria.includedWeight, 70);
-  assert.equal(withoutOptionalCriteria.score, 100);
-
-  const withUnknownCriteria = evaluateMatch(
-    rentRequirement({
-      bedroomsMinimum: 2,
-      bathroomsMinimum: 1,
-      occupancy: "family",
-      swimmingPool: true,
-    }),
-    candidate(property()),
-  );
-  assert.equal(withUnknownCriteria.includedWeight, 100);
-  assert.equal(withUnknownCriteria.score, 70);
-  assert.equal(withUnknownCriteria.qualifies, true);
-  assert.equal(explanation(withUnknownCriteria, "bedrooms")?.status, "unknown");
-  assert.equal(explanation(withUnknownCriteria, "bathrooms")?.status, "unknown");
-  assert.equal(explanation(withUnknownCriteria, "occupancy")?.status, "unknown");
-  assert.equal(explanation(withUnknownCriteria, "swimming_pool")?.status, "unknown");
-
-  const malformedSupplementalEvidence = evaluateMatch(
-    rentRequirement({ bedroomsMinimum: 2 }),
-    candidate(property(), {
-      bedrooms: Number.NaN,
-    }),
-  );
   assert.equal(
-    explanation(malformedSupplementalEvidence, "bedrooms")?.status,
+    x.explanations.find((item) => item.criterion === "nearby:mosque")?.status,
     "unknown",
   );
 });
-
-test("Qualification uses the normalized score threshold of exactly 70.00", () => {
-  const exactlySeventy = evaluateMatch(
-    rentRequirement({
-      bedroomsMinimum: 2,
-      bathroomsMinimum: 1,
-      occupancy: "family",
-      swimmingPool: true,
-    }),
-    candidate(property()),
+test("a missing Floor use on the request does not imply either residential or commercial", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, propertyType: "floor" },
+    typeDetails: { propertyType: "floor", floorUse: "commercial" },
+  } as Property;
+  assert.equal(
+    run(req({ propertyType: "floor" }), p).category,
+    "needs_confirmation",
   );
-  assert.equal(exactlySeventy.score, 70);
-  assert.equal(exactlySeventy.qualifies, true);
-
-  const belowSeventy = evaluateMatch(
-    rentRequirement({
-      bedroomsMinimum: 2,
-      bathroomsMinimum: 1,
-      occupancy: "family",
-      swimmingPool: true,
-    }),
-    candidate(property({ area: "area-2" })),
-  );
-  assert.equal(belowSeventy.score, 64);
-  assert.equal(belowSeventy.qualifies, false);
 });
-
-test("Bedrooms and Bathrooms award full points for surplus and zero below minimum", () => {
-  const requirement = rentRequirement({
-    bedroomsMinimum: 2,
-    bathroomsMinimum: 1,
-  });
-  const surplus = evaluateMatch(
-    requirement,
-    candidate(property({
-      typeDetails: {
-        propertyType: "apartment",
-        bedroomCount: 5,
-        bathroomCount: 3,
-      },
-    })),
-  );
-  assert.equal(surplus.score, 100);
-  assert.equal(explanation(surplus, "bedrooms")?.awardedPoints, 10);
-  assert.equal(explanation(surplus, "bathrooms")?.awardedPoints, 10);
-
-  const below = evaluateMatch(
-    requirement,
-    candidate(property({
-      typeDetails: {
-        propertyType: "apartment",
-        bedroomCount: 1,
-        bathroomCount: 0,
-      },
-    })),
-  );
-  assert.equal(explanation(below, "bedrooms")?.awardedPoints, 0);
-  assert.equal(explanation(below, "bathrooms")?.awardedPoints, 0);
-});
-
-test("Occupancy compatibility and requested services use approved evidence only", () => {
-  const requirement = rentRequirement({
-    propertyType: "chalet",
-    occupancy: "family",
-    swimmingPool: true,
-    gym: true,
-    seaView: true,
-    centralAC: true,
-  });
-  const result = evaluateMatch(
-    requirement,
-    candidate(
-      property({
-        propertyType: "chalet",
-        typeDetails: {
-          propertyType: "chalet",
-          hasWaterfront: true,
-          hasPool: true,
-        },
-      }),
-      {
-        occupancy: "family",
-        gym: false,
-        seaView: true,
-        // centralAC is intentionally Unknown.
-      },
-    ),
-  );
-
-  assert.equal(MATCH_SCORING_WEIGHTS.rent.services, 5);
-  assert.equal(explanation(result, "occupancy")?.status, "matched");
-  assert.equal(explanation(result, "swimming_pool")?.status, "matched");
-  assert.equal(explanation(result, "gym")?.status, "not_met");
-  assert.equal(explanation(result, "sea_view")?.status, "matched");
-  assert.equal(explanation(result, "central_ac")?.status, "unknown");
-  assert.equal(explanation(result, "sea_view")?.awardedPoints, 1.25);
-  assert.equal(explanation(result, "central_ac")?.awardedPoints, 0);
-
-  const waterfrontOnly = evaluateMatch(
-    rentRequirement({ propertyType: "chalet", seaView: true }),
-    candidate(property({
-      propertyType: "chalet",
-      typeDetails: { propertyType: "chalet", hasWaterfront: true },
-    })),
-  );
-  assert.equal(explanation(waterfrontOnly, "sea_view")?.status, "unknown");
-  assert.equal(explanation(waterfrontOnly, "sea_view")?.awardedPoints, 0);
-
-  const explicitAny = evaluateMatch(
-    rentRequirement({ occupancy: "any" }),
-    candidate(property(), { occupancy: "bachelor" }),
-  );
-  assert.equal(explanation(explicitAny, "occupancy")?.status, "matched");
-
-  const anyWithoutEvidence = evaluateMatch(
-    rentRequirement({ occupancy: "any" }),
-    candidate(property()),
-  );
-  assert.equal(explanation(anyWithoutEvidence, "occupancy")?.status, "unknown");
-
-  const onlyRequestedService = evaluateMatch(
-    rentRequirement({ swimmingPool: false, gym: true }),
-    candidate(property(), { swimmingPool: false, gym: true }),
-  );
-  assert.equal(onlyRequestedService.includedWeight, 75);
-  assert.equal(explanation(onlyRequestedService, "swimming_pool"), undefined);
-  assert.equal(explanation(onlyRequestedService, "gym")?.possiblePoints, 5);
-});
-
-test("Buy/Sale scoring uses only Budget and Ordered Location", () => {
-  const result = evaluateMatch(
-    buyRequirement(),
-    candidate(property({
-      propertyType: "villa",
-      transaction: "sale",
-      amount: 150_000,
-    })),
-  );
-  assert.equal(result.includedWeight, 100);
-  assert.equal(result.score, 100);
-  assert.equal(result.explanations.some(item =>
-    item.criterion === "bedrooms"
-      || item.criterion === "bathrooms"
-      || item.criterion === "occupancy"
-      || item.criterion === "swimming_pool"
-      || item.criterion === "gym"
-      || item.criterion === "sea_view"
-      || item.criterion === "central_ac"
-  ), false);
-  assert.equal(MATCH_SCORING_WEIGHTS.buy.budget, 60);
-  assert.equal(MATCH_SCORING_WEIGHTS.buy.orderedLocation, 40);
-});
-
-test("Ranking is deterministic by score, location, midpoint distance, chronology, then input order", () => {
-  const requirement = rentRequirement();
-  const higherScore = evaluateMatch(
-    requirement,
-    candidate(property({ id: "higher", area: "area-1" }), undefined, 100),
-  );
-  const lowerScore = evaluateMatch(
-    requirement,
-    candidate(property({ id: "lower", area: "area-2" }), undefined, 1),
-  );
+test("equally suitable properties prefer the lower price instead of the budget midpoint", () => {
   assert.deepEqual(
-    rankMatchResults([lowerScore, higherScore]).map(item => item.propertyId),
-    ["higher", "lower"],
-  );
-
-  const firstLocation = evaluateMatch(
-    requirement,
-    candidate(property({ id: "first-location", area: "area-1" }), undefined, 50),
-  );
-  const secondLocation = evaluateMatch(
-    requirement,
-    candidate(property({ id: "second-location", area: "area-2" }), undefined, 1),
-  );
-  const tiedFirstLocation = { ...firstLocation, score: 80 };
-  const tiedSecondLocation = { ...secondLocation, score: 80 };
-  assert.deepEqual(
-    rankMatchResults([tiedSecondLocation, tiedFirstLocation])
-      .map(item => item.propertyId),
-    ["first-location", "second-location"],
-  );
-
-  const midpointRequirement = rentRequirement({
-    budget: { minimum: 100, maximum: 200, currencyCode: "KWD" },
-  });
-  const older = evaluateMatch(
-    midpointRequirement,
-    candidate(property({ id: "older", amount: 130 }), undefined, 10),
-  );
-  const newer = evaluateMatch(
-    midpointRequirement,
-    candidate(property({ id: "newer", amount: 170 }), undefined, 20),
-  );
-  assert.equal(older.priceDistanceFromBudgetMidpoint, newer.priceDistanceFromBudgetMidpoint);
-  assert.deepEqual(
-    rankMatchResults([newer, older]).map(item => item.propertyId),
-    ["older", "newer"],
-  );
-
-  const closerToMidpoint = evaluateMatch(
-    midpointRequirement,
-    candidate(property({ id: "closer", amount: 145 }), undefined, 100),
-  );
-  const fartherFromMidpoint = evaluateMatch(
-    midpointRequirement,
-    candidate(property({ id: "farther", amount: 110 }), undefined, 1),
-  );
-  assert.deepEqual(
-    rankMatchResults([fartherFromMidpoint, closerToMidpoint])
-      .map(item => item.propertyId),
-    ["closer", "farther"],
-  );
-
-  const sameChronologyFirst = evaluateMatch(
-    midpointRequirement,
-    candidate(property({ id: "stable-first", amount: 130 })),
-  );
-  const sameChronologySecond = evaluateMatch(
-    midpointRequirement,
-    candidate(property({ id: "stable-second", amount: 170 })),
-  );
-  const nonFiniteChronologyFirst = {
-    ...sameChronologyFirst,
-    propertyChronology: Number.NaN,
-  };
-  const nonFiniteChronologySecond = {
-    ...sameChronologySecond,
-    propertyChronology: Number.POSITIVE_INFINITY,
-  };
-  assert.deepEqual(
-    rankMatchResults([nonFiniteChronologySecond, nonFiniteChronologyFirst])
-      .map(item => item.propertyId),
-    ["stable-second", "stable-first"],
+    rankMatchResults([
+      run(req(), property({}, 490, "expensive")),
+      run(req(), property({}, 460, "less")),
+    ]).map((item) => item.propertyId),
+    ["less", "expensive"],
   );
 });
 
-test("Matching Core is transient and source-neutral", () => {
-  const result = evaluateMatch(
-    rentRequirement(),
-    candidate(property(), {
-      bedrooms: 2,
-      bathrooms: 1,
-    }),
-  );
-  assert.equal(result.requirementId, "requirement-rent");
-  assert.equal(result.propertyId, "property-1");
-  assert.equal("source" in result, false);
-  assert.equal("persist" in result, false);
-  assert.equal("notes" in result, false);
-  assert.equal("rentalPeriodId" in result, false);
+
+test("secondary unknowns remain unearned and strict fields still require confirmation", () => {
+  const r = req({ preferredNearbyServices: ["mosque"] });
+  const preliminary = run(r);
+  assert.equal(preliminary.category, "provisional");
+  assert.equal(preliminary.explanations.find(item => item.criterion === "nearby:mosque")?.status, "unknown");
+  assert.ok(preliminary.score < 100);
+  assert.equal(run(r, property(), { strictFields: ["nearby:mosque"] }).category, "needs_confirmation");
+  assert.equal(run(req({ centralAC: true })).category, "needs_confirmation");
+  assert.equal(selectMatchShortlist([preliminary], [{ property: property() }]).length, 1);
 });
-
-const failures: string[] = [];
-for (const current of tests) {
-  try {
-    current.run();
-  } catch (error) {
-    failures.push(
-      `${current.name}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-if (failures.length > 0) {
-  throw new Error(
-    `${failures.length} of ${tests.length} tests failed:\n${failures.join("\n")}`,
-  );
-}
