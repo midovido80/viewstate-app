@@ -99,6 +99,7 @@ export function groupMatchAllResultsByPerson(
       matches: run.matches.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id && item.qualifies && item.eligible && (item.category === 'direct' || item.category === 'provisional' || item.category === 'negotiation')),
       needsConfirmation: run.needsConfirmation.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id),
     };
+    if (!requirementGroup.matches.length && !requirementGroup.needsConfirmation.length) continue;
     if (existing) {
       existing.requirementGroups.push(requirementGroup);
     } else {

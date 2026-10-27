@@ -190,7 +190,10 @@ test('SOURCE ASSERTION: Contact review and results use bounded lists without cha
 
 test('SOURCE ASSERTION: Matching UI delegates to one versioned engine without data writes', async () => {
   const source = await readFile('app/(tabs)/matching.tsx', 'utf8');
-  assert.match(source, /MatchingResultCard/);
+  assert.match(source, /MatchingResultsGroups/);
+  const grouped = await readFile('components/MatchingResultsGroups.tsx', 'utf8');
+  assert.match(grouped, /MatchingResultCard/);
+  assert.doesNotMatch(grouped, /saveRequirement|updateRequirement|saveProperty|setItem|evaluateMatch|BrokerInitiatedMatching/);
   assert.match(source, /matching\.saved\.matchAllDescription/);
   assert.match(source, /new BrokerInitiatedMatching\(store, candidateSource\)/);
   assert.match(source, /MATCH_ENGINE_VERSION/);

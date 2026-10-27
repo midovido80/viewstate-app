@@ -51,3 +51,12 @@ Behavior tests cover subtype/sector isolation, budgets and boundaries, area unit
 ## Presentation corrections
 
 Each result identifies the client and compares requested versus recorded facts. Below-minimum prices remain allowed but are explicitly labelled. Missing core evidence is collapsed separately. Property Back uses internal routing, never a full web anchor reload. Legacy Apartment category fallback is shared with saved display and never rewrites the source. Amenity choices remain contiguous in a two-column grid; numeric and conditional detail fields follow below.
+
+## Founder-approved matching cards (2026-10-27)
+
+- Default grouping is By people; By properties reverses only the same bounded results, without rerunning another engine or broadening candidates.
+- Count distinct Property IDs per person and distinct Person IDs per Property; preserve separate Requirement IDs. Never describe three properties for one person as three people.
+- Person headings are dark orange on pale peach. Property cards have navy titles and blue prices. Comparison rows alternate white and pale blue with readable RTL order.
+- A white check inside a green circle means a recorded condition is met. A white X inside a red circle means it differs/is not met. Unknown evidence stays amber and is never marked as a negative fact.
+- Missing-information results stay separately labelled as properties or people and collapsed. At most one outer group and one comparison card are expanded; five rows initially, with full comparison on demand.
+- Return context also retains grouping and expanded IDs in RAM, while results are always recalculated from current saved records. No new stored data, dependencies or scoring rules.

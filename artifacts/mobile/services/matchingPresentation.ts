@@ -118,20 +118,25 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
     requested: item.criterion === 'budget' ? `${requirement.budget.minimum}–${requirement.budget.maximum} ${requirement.budget.currencyCode}` : value(item.criterion, item.expected),
     offered: item.criterion === 'budget' ? `${result.priceAmount} ${requirement.budget.currencyCode}` : value(item.criterion, item.actual),
     status: item.status,
-    statusLabel: item.status === 'matched' ? ar ? 'متوافق' : 'Meets' : item.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'اختلاف' : 'Differs',
+    statusLabel: item.status === 'matched' ? ar ? 'متوافق' : 'Meets' : item.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'غير متوافق' : 'Differs',
   }));
   const location: MatchingComparisonRow = {
     field: 'location', label: ar ? 'المنطقة' : 'Area',
     requested: requirement.preferredAreaMode === 'all_kuwait' ? ar ? 'كل الكويت' : 'All Kuwait' : requirement.preferredAreaIds.map(id => getAreaById(id)?.[language] ?? (ar ? 'منطقة محددة' : 'Selected area')).join('، '),
     offered: property ? getAreaById(property.core.locationArea.id)?.[language] ?? (ar ? 'غير مسجلة' : 'Not recorded') : ar ? 'غير مسجلة' : 'Not recorded',
-    status: rows.find(row => row.field === 'location')?.status ?? 'matched', statusLabel: ar ? 'متوافق' : 'Meets',
+    status: !property ? 'unknown' : rows.find(row => row.field === 'location')?.status ?? 'matched', statusLabel: ar ? 'متوافق' : 'Meets',
   };
-  if (location.status !== 'matched') location.statusLabel = ar ? 'منطقة بديلة' : 'Alternative';
+  if (location.status !== 'matched') location.statusLabel = location.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'منطقة بديلة' : 'Alternative';
   const withoutLocation = rows.filter(row => row.field !== 'location');
   withoutLocation.push(location);
   const budget = withoutLocation.find(row => row.field === 'budget');
   if (budget && result.priceAmount < requirement.budget.minimum) budget.statusLabel = ar ? 'أقل من النطاق' : 'Below range';
-  const priority = ['budget', 'location', 'apartmentSubtype', 'bedrooms', 'bathrooms', 'builtUpAreaSquareMeters', 'hasCentralAC', 'hasElevator'];
+  for (const row of withoutLocation) {
+    const nativeMinimum = row.field === 'bedrooms' && requirement.bedroomsMinimum !== undefined || row.field === 'bathrooms' && requirement.bathroomsMinimum !== undefined || row.field === 'masterBedrooms' && requirement.masterBedroomsMinimum !== undefined;
+    const catalogMinimum = requirement.catalogPreferences?.some(item => item.field === row.field && item.kind === 'number' && item.comparison === 'minimum');
+    if (nativeMinimum || catalogMinimum) row.requested += ar ? ' فأكثر' : '+';
+  }
+  const priority = ['budget', 'location', 'bedrooms', 'bathrooms', 'hasCentralAC', 'builtUpAreaSquareMeters', 'hasElevator', 'apartmentSubtype'];
   return withoutLocation.sort((a, b) => {
     const rank = (field: string) => priority.includes(field) ? priority.indexOf(field) : priority.length;
     return rank(a.field) - rank(b.field);
