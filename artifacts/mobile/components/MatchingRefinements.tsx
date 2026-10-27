@@ -29,15 +29,18 @@ export function MatchingRefinements({
   const ar = language === "ar";
   const fields = matchingRefinementFields(requirement);
   return (
-    <View
-      style={{ gap: 10, marginVertical: 8 }}
-      testID={`matching-refinements-${requirement.id}`}
-    >
+    <View style={{ gap: 8 }} testID={`matching-refinements-${requirement.id}`}>
       <Button
         variant="outline"
         title={ar ? "ضبط شروط هذه النتائج" : "Refine these results"}
         onPress={() => setOpen(!open)}
         disabled={busy}
+        style={{
+          minHeight: 44,
+          borderColor: "#D5DFED",
+          backgroundColor: "#F8FAFC",
+        }}
+        textStyle={{ fontSize: 12 }}
       />
       {open && (
         <>

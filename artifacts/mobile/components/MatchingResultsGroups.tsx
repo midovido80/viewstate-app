@@ -11,6 +11,7 @@ import { MatchingRefinements } from "@/components/MatchingRefinements";
 import { MatchingConfirmationList } from "@/components/MatchingConfirmationList";
 import { Button } from "@/components/Button";
 import { getSavedPropertyTypeLabel } from "@/services/savedPropertyClassification";
+import { formatPropertyDetailValue } from "@/services/propertyDetailPresentation";
 import { getAreaById } from "@/constants/kuwait-areas";
 import { formatPrice, formatRentalPrice } from "@/constants/market";
 import {
@@ -76,15 +77,11 @@ export function MatchingResultsGroups({
     pair: MatchingPair,
     personName: string,
     personId: string,
-    firstCard: string | undefined,
     pending = false,
     personRequestIndex?: number,
   ) => {
     const key = cardKey(pair);
-    const expanded =
-      layout.card === undefined
-        ? !pending && key === firstCard
-        : layout.card === key;
+    const expanded = layout.card === key;
     return (
       <MatchingResultCard
         key={key}
@@ -115,29 +112,61 @@ export function MatchingResultsGroups({
       />
     );
   };
-  const summary = (requirement: SeekerRequirement) => (
-    <View style={{ gap: 4 }}>
-      <Text style={{ ...text, fontFamily: fonts.medium, fontSize: 13 }}>
-        {t(`matching.purpose.${requirement.purpose}`)} ·{" "}
-        {t(`propertyType.${requirement.propertyType}`)} ·{" "}
-        {requirement.budget.minimum}–{requirement.budget.maximum}{" "}
-        {requirement.budget.currencyCode}
-      </Text>
-      <Text style={{ ...text, fontSize: 12 }}>
-        {requirement.preferredAreaMode === "all_kuwait"
-          ? ar
-            ? "كل الكويت"
-            : "All Kuwait"
-          : requirement.preferredAreaIds
-              .map(
-                (id) =>
-                  getAreaById(id)?.[language] ??
-                  (ar ? "منطقة محددة" : "Selected area"),
-              )
-              .join(" · ")}
-      </Text>
-    </View>
-  );
+  const summary = (requirement: SeekerRequirement) => {
+    const areas =
+      requirement.preferredAreaMode === "all_kuwait"
+        ? ar
+          ? "كل الكويت"
+          : "All Kuwait"
+        : requirement.preferredAreaIds
+            .map(
+              (id) =>
+                getAreaById(id)?.[language] ??
+                (ar ? "منطقة محددة" : "Selected area"),
+            )
+            .join("، ");
+    const subtype = requirement.catalogPreferences?.find(
+      (item) => item.field === "apartmentSubtype",
+    );
+    const typeLabel =
+      subtype && subtype.kind === "choice" && typeof subtype.value === "string"
+        ? formatPropertyDetailValue("apartmentSubtype", subtype.value, language)
+        : requirement.propertyType === "floor" && requirement.floorUse
+          ? formatPropertyDetailValue(
+              "floorUse",
+              requirement.floorUse,
+              language,
+            ) + (ar ? " · دور" : " · Floor")
+          : t(`propertyType.${requirement.propertyType}`);
+    const details = [
+      areas,
+      typeLabel,
+      `${requirement.budget.minimum}–${requirement.budget.maximum} ${requirement.budget.currencyCode}`,
+      requirement.bedroomsMinimum !== undefined
+        ? `${requirement.bedroomsMinimum}${ar ? " غرف فأكثر" : "+ beds"}`
+        : "",
+      requirement.bathroomsMinimum !== undefined
+        ? `${requirement.bathroomsMinimum}${ar ? " حمامات فأكثر" : "+ baths"}`
+        : "",
+    ].filter(Boolean);
+    return (
+      <View
+        testID={`matching-request-summary-${requirement.id}`}
+        style={{ backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10 }}
+      >
+        <Text
+          style={{
+            ...text,
+            fontFamily: fonts.medium,
+            fontSize: 12,
+            lineHeight: 20,
+          }}
+        >
+          {t(`matching.purpose.${requirement.purpose}`)} · {details.join(" · ")}
+        </Text>
+      </View>
+    );
+  };
   const counts = (
     ready: number,
     pending: number,
@@ -234,11 +263,6 @@ export function MatchingResultsGroups({
             const key = `person:${group.person.id}`;
             const open = openGroup === key;
             const count = personPropertyCounts(group);
-            const firstCard = group.requirementGroups.flatMap((item) =>
-              item.matches.map((result) =>
-                cardKey({ requirement: item.requirement, result }),
-              ),
-            )[0];
             return (
               <View
                 key={key}
@@ -260,6 +284,23 @@ export function MatchingResultsGroups({
                     padding: 12,
                   }}
                 >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#B45309",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Feather
+                      name="user"
+                      size={19}
+                      color="#FFFFFF"
+                      accessible={false}
+                    />
+                  </View>
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text
                       style={{
@@ -321,7 +362,6 @@ export function MatchingResultsGroups({
                           { requirement: item.requirement, result },
                           group.person.name,
                           group.person.id,
-                          firstCard,
                         ),
                       )}
                       <MatchingConfirmationList
@@ -333,7 +373,6 @@ export function MatchingResultsGroups({
                             { requirement: item.requirement, result },
                             group.person.name,
                             group.person.id,
-                            undefined,
                             true,
                           ),
                         )}
@@ -350,9 +389,6 @@ export function MatchingResultsGroups({
             const property = properties.find(
               (item) => item.core.id === group.propertyId,
             );
-            const firstCard = group.people.flatMap((person) =>
-              person.ready.map(cardKey),
-            )[0];
             return (
               <View
                 key={key}
@@ -460,7 +496,6 @@ export function MatchingResultsGroups({
                               pair,
                               person.person.name,
                               person.person.id,
-                              firstCard,
                               false,
                               person.ready.length > 1 ? index + 1 : undefined,
                             ),
@@ -480,7 +515,6 @@ export function MatchingResultsGroups({
                                 pair,
                                 person.person.name,
                                 person.person.id,
-                                undefined,
                                 true,
                               ),
                             )}

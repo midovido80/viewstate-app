@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   errorBox: { alignItems: 'center', borderWidth: 1, borderRadius: 12, flexDirection: 'row', gap: 9, marginTop: 18, padding: 12 },
   errorText: { flex: 1, fontSize: 13, lineHeight: 18 },
   runButton: { marginTop: 22 },
-  resultsSection: { marginTop: 28 },
+  resultsSection: { marginTop: 24, width: '100%', maxWidth: 840, alignSelf: 'center' },
   resultsHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
   resultsCopy: { flex: 1 },
   clearText: { fontSize: 13, paddingTop: 4 },

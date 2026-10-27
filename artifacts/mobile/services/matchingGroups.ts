@@ -9,7 +9,7 @@ import type { MatchAllPersonGroup } from "@/services/matchingUi";
 export type MatchingResultsView = "people" | "properties";
 export interface MatchingResultsLayout {
   view: MatchingResultsView;
-  /** undefined opens the first group/card; null explicitly closes all. */
+  /** undefined opens the first group; comparisons open only on request. null closes all. */
   group?: string | null;
   card?: string | null;
 }

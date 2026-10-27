@@ -435,6 +435,11 @@ test('cards and refinements handle repeated taps in both languages without chang
       renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.onPress();
       assert.equal(renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.accessibilityState.expanded, true);
       const pairCard = renderGroups().find(item => item.type === MatchingResultCard)!;
+      assert.equal(pairCard.props.expanded, false, 'comparison is opt-in, even for the first result');
+      pairCard.props.onToggle();
+      assert.equal(renderGroups().find(item => item.type === MatchingResultCard)!.props.expanded, true);
+      renderGroups().find(item => item.type === MatchingResultCard)!.props.onToggle();
+      assert.equal(renderGroups().find(item => item.type === MatchingResultCard)!.props.expanded, false);
       pairCard.props.onPress(); assert.equal(propertyOpens, 1);
       const card = elements(MatchingResultCard({ ...pairCard.props, expanded: true }));
       const rows = card.filter(item => String(item.props.testID ?? '').startsWith('matching-compare-'));
@@ -448,6 +453,25 @@ test('cards and refinements handle repeated taps in both languages without chang
       buttons[0].props.onPress(); buttons[0].props.onPress(); buttons[1].props.onPress(); buttons[1].props.onPress();
       assert.equal(opens, 2); assert.equal(replacements, 2);
       assert.equal(buttons[0].props.title, ar ? 'عرض العقار' : 'View property');
+      assert.equal(buttons[1].props.title, ar ? 'اقتراح عقار آخر' : 'Suggest another property');
+      // The collapsed overview must expose a real difference or missing information,
+      // without accidentally turning unknown evidence into a green success.
+      const stricter = { ...r.value, bedroomsMinimum: 3 };
+      const differing = evaluateMatch(stricter, { property: p });
+      const compact = elements(MatchingResultCard({ result: differing, rank: 1, property: p, requirement: stricter, onPress: () => {}, expanded: false }));
+      assert.equal(compact.some(item => item.props.testID === 'matching-comparison-table'), false);
+      const compactSummary = compact.find(item => item.props.testID === 'matching-card-summary')!;
+      assert.equal(elements(compactSummary).find(item => item.type === MatchingStatusBadge)!.props.status, 'not_met');
+      assert.ok(JSON.stringify(compactSummary).includes(ar ? 'المطلوب' : 'Requested'));
+      const incompleteRequest = { ...r.value, centralAC: true };
+      const unknown = evaluateMatch(incompleteRequest, { property: p });
+      const incomplete = elements(MatchingResultCard({ result: unknown, rank: 1, property: p, requirement: incompleteRequest, onPress: () => {}, expanded: false }));
+      assert.equal(elements(incomplete.find(item => item.props.testID === 'matching-card-summary')).find(item => item.type === MatchingStatusBadge)!.props.status, 'unknown');
+      const attention = elements(MatchingResultCard({ result: differing, rank: 1, property: p, requirement: stricter, onPress: () => {}, expanded: true }));
+      assert.ok(attention.findIndex(item => item.props.testID === 'matching-attention') < attention.findIndex(item => item.props.testID === 'matching-comparison-table'));
+      const minimalBadge = elements(MatchingStatusBadge({ status: 'matched', label: 'Meets', compact: true }));
+      assert.equal(minimalBadge.some(item => item.type === 'Text'), false);
+      assert.equal(minimalBadge[0].props.accessibilityLabel, 'Meets');
       let policy: import('@workspace/property-domain').MatchingPolicy = {};
       const render = () => elements(MatchingRefinements({ requirement: r.value, policy, busy: false, onChange: next => { policy = next; } }));
       render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, ['budget']);

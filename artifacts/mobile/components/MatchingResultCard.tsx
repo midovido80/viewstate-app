@@ -13,18 +13,18 @@ import { getAreaById } from "@/constants/kuwait-areas";
 import { getSavedPropertyTypeLabel } from "@/services/savedPropertyClassification";
 import {
   matchingCategoryLabel,
-  matchingCriterionLabel,
   matchingComparisonRows,
-  matchingExplanationText,
 } from "@/services/matchingPresentation";
 import { formatPrice, formatRentalPrice } from "@/constants/market";
 
 export function MatchingStatusBadge({
   status,
   label,
+  compact = false,
 }: {
   status: MatchExplanation["status"];
   label: string;
+  compact?: boolean;
 }) {
   const { isRTL, fonts } = useI18n();
   const matched = status === "matched";
@@ -61,18 +61,20 @@ export function MatchingStatusBadge({
           accessible={false}
         />
       </View>
-      <Text
-        style={{
-          flexShrink: 1,
-          color: "#334155",
-          fontFamily: fonts.medium,
-          fontSize: 11,
-          lineHeight: 17,
-          textAlign: isRTL ? "right" : "left",
-        }}
-      >
-        {label}
-      </Text>
+      {!compact && (
+        <Text
+          style={{
+            flexShrink: 1,
+            color,
+            fontFamily: fonts.semiBold,
+            fontSize: 12,
+            lineHeight: 17,
+            textAlign: isRTL ? "right" : "left",
+          }}
+        >
+          {label}
+        </Text>
+      )}
     </View>
   );
 }
@@ -111,13 +113,25 @@ export function MatchingResultCard({
   const [fullComparison, setFullComparison] = useState(false);
   const { language, isRTL, fonts, t } = useI18n();
   const ar = language === "ar";
-  const issues = result.explanations.filter(
-    (item) => item.status === "not_met",
-  );
-  const unknowns = result.explanations.filter(
-    (item) => item.status === "unknown",
-  );
   const rows = matchingComparisonRows(result, requirement, property, language);
+  const issues = rows.filter(
+    (row) => row.status === "not_met" || row.status === "ineligible",
+  );
+  const unknowns = rows.filter((row) => row.status === "unknown");
+  const summaryStatus = issues.length
+    ? "not_met"
+    : unknowns.length
+      ? "unknown"
+      : "matched";
+  const summaryLabel = issues.length
+    ? ar
+      ? `${issues.length === 1 ? "اختلاف واحد" : `${issues.length} اختلافات`} للمناقشة`
+      : `${issues.length} ${issues.length === 1 ? "difference" : "differences"} to discuss`
+    : unknowns.length
+      ? ar
+        ? `${unknowns.length} بنود تحتاج تأكيدًا`
+        : `${unknowns.length} ${unknowns.length === 1 ? "field needs" : "fields need"} confirmation`
+      : matchingCategoryLabel(result.category, language);
   const visibleRows = fullComparison ? rows : rows.slice(0, 5);
   const area = property
     ? getAreaById(property.core.locationArea.id)
@@ -130,7 +144,7 @@ export function MatchingResultCard({
   const personHeading =
     perspective === "properties" && personRequestIndex === undefined;
   const rowDirection = isRTL ? ("row-reverse" as const) : ("row" as const);
-  const widths = [1, 1.15, 1, 1.05];
+  const widths = [1.1, 1.15, 1, 0.5];
   return (
     <View
       testID={`matching-result-${result.propertyId}`}
@@ -151,12 +165,12 @@ export function MatchingResultCard({
         accessibilityLabel={
           perspective === "properties"
             ? personName
-            : `${rank}. ${ar ? "تفاصيل العقار" : "Property comparison"}`
+            : `${rank}. ${ar ? "عرض المقارنة" : "View comparison"}`
         }
         testID={`matching-card-toggle-${requirement.id}-${result.propertyId}`}
         style={{
           padding: 12,
-          gap: 5,
+          gap: 8,
           backgroundColor: personHeading ? "#FFF4E8" : "#FFFFFF",
         }}
       >
@@ -191,12 +205,27 @@ export function MatchingResultCard({
               : `${property ? getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}`)) : ar ? "عقار مرشح" : "Suggested property"} · ${area?.[language] ?? (ar ? "منطقة غير مسجلة" : "Unknown area")}`}
           </Text>
           {onToggle && (
-            <Feather
-              name={expanded ? "chevron-up" : "chevron-down"}
-              size={20}
-              color="#173F78"
-              accessible={false}
-            />
+            <Text
+              style={{
+                color: "#2563EB",
+                fontFamily: fonts.semiBold,
+                fontSize: 12,
+                textAlign: "center",
+                maxWidth: "32%",
+                paddingHorizontal: 8,
+                paddingVertical: 10,
+                borderRadius: 8,
+                backgroundColor: "#EFF6FF",
+              }}
+            >
+              {expanded
+                ? ar
+                  ? "إخفاء المقارنة"
+                  : "Hide comparison"
+                : ar
+                  ? "عرض المقارنة"
+                  : "View comparison"}
+            </Text>
           )}
         </View>
         {perspective === "people" && property && (
@@ -236,13 +265,70 @@ export function MatchingResultCard({
             {requirement.budget.currencyCode}
           </Text>
         )}
+        {!expanded && (
+          <View testID="matching-card-summary" style={{ gap: 3 }}>
+            <MatchingStatusBadge status={summaryStatus} label={summaryLabel} />
+            {issues.slice(0, 2).map((row) => (
+              <Text
+                key={row.field}
+                style={{ ...text, fontSize: 12, lineHeight: 18 }}
+              >
+                {row.label}: {row.offered} · {ar ? "المطلوب" : "Requested"}{" "}
+                {row.requested}
+              </Text>
+            ))}
+            {issues.length > 0 && unknowns.length > 0 && (
+              <Text style={{ ...text, color: "#946200", fontSize: 12 }}>
+                {ar
+                  ? `${unknowns.length} بنود أخرى تحتاج تأكيدًا`
+                  : `${unknowns.length} other fields need confirmation`}
+              </Text>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
       {expanded && (
         <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 10 }}>
-          {result.category !== "direct" && (
-            <Text style={{ ...text, color: "#946200", fontSize: 12 }}>
-              {matchingCategoryLabel(result.category, language)}
-            </Text>
+          {(issues.length > 0 || unknowns.length > 0) && (
+            <View
+              testID="matching-attention"
+              style={{
+                borderWidth: 1,
+                borderColor: issues.length ? "#FECACA" : "#FDE68A",
+                backgroundColor: issues.length ? "#FFF5F5" : "#FFFBEB",
+                padding: 10,
+                borderRadius: 10,
+                gap: 5,
+              }}
+            >
+              <Text
+                style={{
+                  ...text,
+                  color: issues.length ? "#B91C1C" : "#946200",
+                  fontFamily: fonts.semiBold,
+                  fontSize: 13,
+                }}
+              >
+                {issues.length
+                  ? ar
+                    ? "اختلاف يحتاج مناقشة"
+                    : "Difference to discuss"
+                  : ar
+                    ? "معلومات تحتاج تأكيدًا"
+                    : "Information to confirm"}
+              </Text>
+              {[...issues, ...unknowns].map((row) => (
+                <MatchingStatusBadge
+                  key={row.field}
+                  status={row.status}
+                  label={
+                    row.status === "unknown"
+                      ? `${row.label}: ${ar ? "غير مسجل" : "Not recorded"}`
+                      : `${row.label}: ${row.offered} · ${ar ? "المطلوب" : "Requested"} ${row.requested}`
+                  }
+                />
+              ))}
+            </View>
           )}
           <View
             testID="matching-comparison-table"
@@ -261,8 +347,8 @@ export function MatchingResultCard({
               }}
             >
               {(ar
-                ? ["البند", "طلب العميل", "العقار", "الحالة"]
-                : ["Field", "Client request", "Property", "Status"]
+                ? ["البند", "المطلوب", "العقار", "الحالة"]
+                : ["Field", "Request", "Property", "Status"]
               ).map((label, index) => (
                 <Text
                   key={label}
@@ -292,24 +378,38 @@ export function MatchingResultCard({
                   minHeight: 38,
                 }}
               >
-                {[row.label, row.requested, row.offered].map(
-                  (value, column) => (
-                    <Text
-                      key={column}
-                      style={{
-                        ...text,
-                        flex: widths[column],
-                        minWidth: 0,
-                        fontSize: 11,
-                        lineHeight: 18,
-                        paddingHorizontal: 4,
-                        paddingVertical: 8,
-                      }}
-                    >
-                      {value}
-                    </Text>
-                  ),
-                )}
+                {[
+                  row.field === "budget"
+                    ? `${row.label} (${requirement.budget.currencyCode})`
+                    : row.label,
+                  row.field === "budget"
+                    ? row.requested.replace(
+                        new RegExp(` ${requirement.budget.currencyCode}$`),
+                        "",
+                      )
+                    : row.requested,
+                  row.field === "budget"
+                    ? row.offered.replace(
+                        new RegExp(` ${requirement.budget.currencyCode}$`),
+                        "",
+                      )
+                    : row.offered,
+                ].map((value, column) => (
+                  <Text
+                    key={column}
+                    style={{
+                      ...text,
+                      flex: widths[column],
+                      minWidth: 0,
+                      fontSize: 12,
+                      lineHeight: 18,
+                      paddingHorizontal: 4,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    {value}
+                  </Text>
+                ))}
                 <View
                   style={{
                     flex: widths[3],
@@ -321,16 +421,12 @@ export function MatchingResultCard({
                   <MatchingStatusBadge
                     status={row.status}
                     label={row.statusLabel}
+                    compact
                   />
                 </View>
               </View>
             ))}
           </View>
-          {issues.slice(0, 2).map((item) => (
-            <Text key={item.criterion} style={{ ...text, fontSize: 12 }}>
-              {matchingExplanationText(item, language)}
-            </Text>
-          ))}
           {result.priceAmount < requirement.budget.minimum && (
             <Text
               testID="matching-below-budget"
@@ -345,23 +441,6 @@ export function MatchingResultCard({
                 language,
               )}
               .
-            </Text>
-          )}
-          {unknowns.length > 0 && (
-            <Text
-              testID="matching-missing-summary"
-              style={{ ...text, color: "#946200", fontSize: 12 }}
-            >
-              {ar ? "غير مسجل: " : "Not recorded: "}
-              {unknowns
-                .slice(0, 2)
-                .map((item) => matchingCriterionLabel(item.criterion, language))
-                .join("، ")}
-              {unknowns.length > 2
-                ? ar
-                  ? `، و${unknowns.length - 2} بنود أخرى`
-                  : `, and ${unknowns.length - 2} more`
-                : ""}
             </Text>
           )}
           {rows.length > 5 && (
@@ -401,6 +480,7 @@ export function MatchingResultCard({
               }
               disabled={busy}
               style={{ flex: 1, minHeight: 48, paddingHorizontal: 8 }}
+              textStyle={{ fontSize: 14 }}
               testID={`matching-open-${result.propertyId}`}
             />
             {onViewRequirement && (
@@ -410,21 +490,19 @@ export function MatchingResultCard({
                 disabled={busy}
                 variant="outline"
                 style={{ flex: 1, minHeight: 48, paddingHorizontal: 8 }}
+                textStyle={{ fontSize: 14 }}
                 testID={`matching-request-${requirement.id}`}
               />
             )}
           </View>
           {onReplace && (
             <Button
-              title={
-                ar
-                  ? "استبدال العقار لهذا الطلب"
-                  : "Replace property for this request"
-              }
+              title={ar ? "اقتراح عقار آخر" : "Suggest another property"}
               onPress={onReplace}
               disabled={busy}
               variant="outline"
               style={{ minHeight: 44 }}
+              textStyle={{ fontSize: 14 }}
               testID={`matching-replace-${result.propertyId}`}
             />
           )}
