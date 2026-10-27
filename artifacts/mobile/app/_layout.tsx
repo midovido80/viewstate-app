@@ -29,6 +29,7 @@ import {
   type LocalStoreIntegrityStatus,
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
+import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
 import { StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
@@ -80,6 +81,7 @@ function RootLayoutNav({
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="account" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
         <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />
@@ -185,10 +187,12 @@ export default function RootLayout() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <I18nProvider>
+                <AccountFoundationProvider>
                 <CaptureProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
                 </CaptureProvider>
+                </AccountFoundationProvider>
                 </I18nProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>

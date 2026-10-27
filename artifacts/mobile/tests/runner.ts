@@ -1,4 +1,5 @@
 import './commercialFloorSale.test';
+import './accountFoundation.test';
 import './commercialComplexSale.test';
 import test from 'node:test';
 import assert from 'node:assert/strict';
