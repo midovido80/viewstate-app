@@ -388,12 +388,13 @@ test('result grouping rejects stale engine versions and filters cross-request re
 
 test('cards and refinements handle repeated taps in both languages without changing records', async () => {
   const { registerHooks } = await import('node:module');
-  const state = { ar: false, open: true };
+  const state = { ar: false, open: true, taste: true };
   (globalThis as any).__matchingInteraction = state;
   (globalThis as any).React = { createElement: (type: unknown, props: any, ...children: unknown[]) => ({ type, props: { ...props, children: children.length > 1 ? children : children[0] ?? props?.children } }) };
   const stubs = new Map<string, string>([
     ['react', `export const useState = () => [globalThis.__matchingInteraction.open, value => { globalThis.__matchingInteraction.open = value; }];`],
-    ['react-native', `export const Text = 'Text'; export const View = 'View'; export const TouchableOpacity = 'TouchableOpacity';`],
+    ['react-native', `export const Text = 'Text'; export const View = 'View'; export const TouchableOpacity = 'TouchableOpacity'; export const useWindowDimensions = () => ({ width: 390, fontScale: 1 });`],
+    ['@/components/MatchingUiTasteTrial', `export const useMatchingUiTasteTrial = () => globalThis.__matchingInteraction.taste;`],
     ['@expo/vector-icons', `export const Feather = 'Feather';`],
     ['@/components/Button', `export const Button = 'Button';`],
     ['@/components/PropertyFormCard', `export const PropertyFormCard = 'PropertyFormCard';`],
@@ -441,6 +442,16 @@ test('cards and refinements handle repeated taps in both languages without chang
       assert.equal(rows[0].props.style.backgroundColor, '#FFFFFF');
       assert.equal(rows[1].props.style.backgroundColor, '#EFF6FF');
       assert.equal(rows[0].props.style.flexDirection, ar ? 'row-reverse' : 'row');
+      assert.equal(rows[0].props.style.minHeight, 44);
+      assert.equal(elements(rows[0]).find(item => item.type === 'Text')!.props.style.fontSize, 13);
+      state.taste = false;
+      const originalCard = elements(MatchingResultCard({ ...pairCard.props, expanded: true }));
+      const originalRows = originalCard.filter(item => String(item.props.testID ?? '').startsWith('matching-compare-'));
+      assert.equal(originalRows[0].props.style.minHeight, 38);
+      assert.equal(elements(originalRows[0]).find(item => item.type === 'Text')!.props.style.fontSize, 11);
+      assert.deepEqual(originalRows.map(item => item.props.testID), rows.map(item => item.props.testID));
+      state.taste = true;
+
       assert.equal(elements(MatchingResultCard({ ...pairCard.props, expanded: false })).some(item => item.props.testID === 'matching-comparison-table'), false);
 
       const buttons: any[] = elements(MatchingResultCard({ result, rank: 1, property: p, requirement: r.value, onPress: () => opens++, onReplace: () => replacements++ })).filter(item => item.type === 'Button');
@@ -528,4 +539,26 @@ test('Reverse grouping counts distinct people and properties, preserving separat
   assert.equal(matchingCountLabel(3, 'properties', false, 'en'), '3 properties suggested');
   const invalidGroups = [{ person, requirementGroups: [{ requirement: r1, matches: [{ ...m1, engineVersion: 'old' }, { ...m1, requirementId: 'wrong' }, { ...m1, eligible: false }, { ...pending, qualifies: false }], needsConfirmation: [{ ...m1 }] }] }];
   assert.deepEqual(groupMatchingByProperty(invalidGroups as never), []);
+});
+
+test('Taste trial fixtures are isolated, use the canonical engine and retain distinct counts', async () => {
+  const { matchingUiTrialFixture } = await import('../services/matchingUiTrialFixture.ts');
+  const { groupMatchingByProperty, propertyPeopleCounts } = await import('../services/matchingGroups.ts');
+  const fixture = matchingUiTrialFixture();
+  assert.equal(fixture.groups.length, 4);
+  assert.equal(fixture.properties.length, 3);
+  assert.equal(fixture.groups[0].requirementGroups[0].matches.length, 3);
+  const byProperty = groupMatchingByProperty(fixture.groups);
+  assert.equal(propertyPeopleCounts(byProperty[0]).ready, 4);
+  const request = fixture.groups[0].requirementGroups[0].requirement;
+  const alternate = fixture.groups[0].requirementGroups[0].matches.find(item => item.propertyId === 'ui-trial-property-1')!;
+  assert.equal(alternate.explanations.find(item => item.criterion === 'bedrooms')!.status, 'not_met');
+  const original = JSON.stringify(fixture);
+  const changed = matchingUiTrialFixture({}, { [request.id]: [alternate.propertyId] });
+  assert.equal(changed.groups[0].requirementGroups[0].matches.length, 2);
+  assert.equal(JSON.stringify(fixture), original);
+  const route = await readFile('app/dev/matching-ui-trial.tsx', 'utf8');
+  const data = await readFile('services/matchingUiTrialFixture.ts', 'utf8');
+  assert.match(route, /if \(!__DEV__\)/);
+  assert.doesNotMatch(route + data, /\bstore\s*\.\s*(?:get|save|update)|AsyncStorage|localStorage|saveProperty|saveRequirement|savePerson/);
 });

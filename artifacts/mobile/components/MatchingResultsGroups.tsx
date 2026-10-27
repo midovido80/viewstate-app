@@ -1,3 +1,4 @@
+import { useMatchingUiTasteTrial } from "@/components/MatchingUiTasteTrial";
 import { Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type {
@@ -52,6 +53,7 @@ export function MatchingResultsGroups({
 }) {
   const { language, isRTL, fonts, t } = useI18n();
   const ar = language === "ar";
+  const taste = useMatchingUiTasteTrial();
   const direction = isRTL ? ("row-reverse" as const) : ("row" as const);
   const text = {
     color: "#334155",
@@ -123,7 +125,7 @@ export function MatchingResultsGroups({
         {requirement.budget.minimum}–{requirement.budget.maximum}{" "}
         {requirement.budget.currencyCode}
       </Text>
-      <Text style={{ ...text, fontSize: 12 }}>
+      <Text style={{ ...text, fontSize: taste ? 13 : 12 }}>
         {requirement.preferredAreaMode === "all_kuwait"
           ? ar
             ? "كل الكويت"
@@ -145,12 +147,12 @@ export function MatchingResultsGroups({
   ) => (
     <View style={{ gap: 3 }}>
       {ready > 0 && (
-        <Text style={{ ...text, fontSize: 12 }}>
+        <Text style={{ ...text, fontSize: taste ? 13 : 12 }}>
           {matchingCountLabel(ready, unit, false, language)}
         </Text>
       )}
       {pending > 0 && (
-        <Text style={{ ...text, color: "#946200", fontSize: 12 }}>
+        <Text style={{ ...text, color: "#946200", fontSize: taste ? 13 : 12 }}>
           {matchingCountLabel(pending, unit, true, language)}
         </Text>
       )}
@@ -209,7 +211,10 @@ export function MatchingResultsGroups({
           </TouchableOpacity>
         ))}
       </View>
-      <Text testID="matching-distinct-counts" style={{ ...text, fontSize: 12 }}>
+      <Text
+        testID="matching-distinct-counts"
+        style={{ ...text, fontSize: taste ? 13 : 12 }}
+      >
         {propertyReadyCount > 0
           ? quick
             ? matchingCountLabel(
@@ -266,7 +271,7 @@ export function MatchingResultsGroups({
                         ...text,
                         color: "#B45309",
                         fontFamily: fonts.bold,
-                        fontSize: 19,
+                        fontSize: taste ? 20 : 19,
                       }}
                     >
                       {group.person.name}
@@ -274,7 +279,7 @@ export function MatchingResultsGroups({
                     {group.requirementGroups.length === 1 ? (
                       counts(count.ready, count.pending, "properties")
                     ) : (
-                      <Text style={{ ...text, fontSize: 12 }}>
+                      <Text style={{ ...text, fontSize: taste ? 13 : 12 }}>
                         {ar
                           ? `${group.requirementGroups.length} طلبات · ${count.ready} عقارات مرشحة`
                           : `${group.requirementGroups.length} requests · ${count.ready} suggested properties`}
@@ -360,8 +365,8 @@ export function MatchingResultsGroups({
                 style={{
                   gap: 10,
                   borderWidth: 1,
-                  borderColor: "#D5DFED",
-                  borderRadius: 14,
+                  borderColor: taste ? "#E2E8F0" : "#D5DFED",
+                  borderRadius: taste ? 16 : 14,
                   padding: 10,
                   backgroundColor: "#FFFFFF",
                 }}

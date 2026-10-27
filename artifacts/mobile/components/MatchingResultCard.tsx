@@ -1,5 +1,11 @@
+import { useMatchingUiTasteTrial } from "@/components/MatchingUiTasteTrial";
 import { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import {
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type {
   MatchExplanation,
@@ -27,6 +33,7 @@ export function MatchingStatusBadge({
   label: string;
 }) {
   const { isRTL, fonts } = useI18n();
+  const taste = useMatchingUiTasteTrial();
   const matched = status === "matched";
   const unknown = status === "unknown";
   const color = matched ? "#16A34A" : unknown ? "#B45309" : "#DC2626";
@@ -66,8 +73,8 @@ export function MatchingStatusBadge({
           flexShrink: 1,
           color: "#334155",
           fontFamily: fonts.medium,
-          fontSize: 11,
-          lineHeight: 17,
+          fontSize: taste ? 12 : 11,
+          lineHeight: taste ? 18 : 17,
           textAlign: isRTL ? "right" : "left",
         }}
       >
@@ -111,6 +118,9 @@ export function MatchingResultCard({
   const [fullComparison, setFullComparison] = useState(false);
   const { language, isRTL, fonts, t } = useI18n();
   const ar = language === "ar";
+  const taste = useMatchingUiTasteTrial();
+  const { width, fontScale } = useWindowDimensions();
+  const roomyText = width >= 700 || fontScale > 1.25;
   const issues = result.explanations.filter(
     (item) => item.status === "not_met",
   );
@@ -131,13 +141,41 @@ export function MatchingResultCard({
     perspective === "properties" && personRequestIndex === undefined;
   const rowDirection = isRTL ? ("row-reverse" as const) : ("row" as const);
   const widths = [1, 1.15, 1, 1.05];
+  const propertyPrice = perspective === "people" && property && (
+    <Text
+      style={{
+        ...text,
+        color: "#2563EB",
+        fontFamily: fonts.bold,
+        fontSize: taste ? 16 : 14,
+        lineHeight: taste ? 23 : undefined,
+        maxWidth: taste ? "44%" : undefined,
+        flexShrink: taste ? 1 : undefined,
+        fontVariant: taste ? ["tabular-nums"] : undefined,
+      }}
+    >
+      {property.activeOffer.transaction === "rent"
+        ? formatRentalPrice(
+            property.activeOffer.rentalPrice.amount,
+            property.activeOffer.rentalPrice.currencyCode,
+            property.activeOffer.rentalPeriodId,
+            language,
+            t,
+          )
+        : formatPrice(
+            property.activeOffer.salePrice.amount,
+            property.activeOffer.salePrice.currencyCode,
+            language,
+          )}
+    </Text>
+  );
   return (
     <View
       testID={`matching-result-${result.propertyId}`}
       style={{
         borderWidth: 1,
-        borderColor: "#D5DFED",
-        borderRadius: 14,
+        borderColor: taste ? "#E2E8F0" : "#D5DFED",
+        borderRadius: taste ? 16 : 14,
         backgroundColor: "#FFFFFF",
         overflow: "hidden",
         minWidth: 0,
@@ -155,8 +193,8 @@ export function MatchingResultCard({
         }
         testID={`matching-card-toggle-${requirement.id}-${result.propertyId}`}
         style={{
-          padding: 12,
-          gap: 5,
+          padding: taste ? 14 : 12,
+          gap: taste ? 6 : 5,
           backgroundColor: personHeading ? "#FFF4E8" : "#FFFFFF",
         }}
       >
@@ -179,8 +217,8 @@ export function MatchingResultCard({
               flex: 1,
               color: personHeading ? "#B45309" : "#173F78",
               fontFamily: fonts.bold,
-              fontSize: 15,
-              lineHeight: 23,
+              fontSize: taste ? 16 : 15,
+              lineHeight: taste ? 24 : 23,
             }}
           >
             {perspective === "properties"
@@ -190,6 +228,7 @@ export function MatchingResultCard({
                 : `${ar ? "الطلب" : "Request"} ${personRequestIndex}`
               : `${property ? getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}`)) : ar ? "عقار مرشح" : "Suggested property"} · ${area?.[language] ?? (ar ? "منطقة غير مسجلة" : "Unknown area")}`}
           </Text>
+          {taste && propertyPrice}
           {onToggle && (
             <Feather
               name={expanded ? "chevron-up" : "chevron-down"}
@@ -199,30 +238,7 @@ export function MatchingResultCard({
             />
           )}
         </View>
-        {perspective === "people" && property && (
-          <Text
-            style={{
-              ...text,
-              color: "#2563EB",
-              fontFamily: fonts.bold,
-              fontSize: 14,
-            }}
-          >
-            {property.activeOffer.transaction === "rent"
-              ? formatRentalPrice(
-                  property.activeOffer.rentalPrice.amount,
-                  property.activeOffer.rentalPrice.currencyCode,
-                  property.activeOffer.rentalPeriodId,
-                  language,
-                  t,
-                )
-              : formatPrice(
-                  property.activeOffer.salePrice.amount,
-                  property.activeOffer.salePrice.currencyCode,
-                  language,
-                )}
-          </Text>
-        )}
+        {!taste && propertyPrice}
         {perspective === "properties" && (
           <Text style={{ ...text, fontSize: 12 }}>
             {requirement.purpose === "rent"
@@ -238,7 +254,13 @@ export function MatchingResultCard({
         )}
       </TouchableOpacity>
       {expanded && (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 10 }}>
+        <View
+          style={{
+            paddingHorizontal: taste ? 14 : 12,
+            paddingBottom: taste ? 14 : 12,
+            gap: taste ? 12 : 10,
+          }}
+        >
           {result.category !== "direct" && (
             <Text style={{ ...text, color: "#946200", fontSize: 12 }}>
               {matchingCategoryLabel(result.category, language)}
@@ -257,7 +279,7 @@ export function MatchingResultCard({
               style={{
                 direction: "ltr",
                 flexDirection: rowDirection,
-                backgroundColor: "#DBEAFE",
+                backgroundColor: taste ? "#E5EFFF" : "#DBEAFE",
               }}
             >
               {(ar
@@ -273,7 +295,7 @@ export function MatchingResultCard({
                     paddingHorizontal: 4,
                     paddingVertical: 9,
                     fontFamily: fonts.semiBold,
-                    fontSize: 11,
+                    fontSize: taste ? 12 : 11,
                   }}
                 >
                   {label}
@@ -289,7 +311,7 @@ export function MatchingResultCard({
                   flexDirection: rowDirection,
                   backgroundColor: index % 2 ? "#EFF6FF" : "#FFFFFF",
                   alignItems: "center",
-                  minHeight: 38,
+                  minHeight: taste ? 44 : 38,
                 }}
               >
                 {[row.label, row.requested, row.offered].map(
@@ -300,8 +322,16 @@ export function MatchingResultCard({
                         ...text,
                         flex: widths[column],
                         minWidth: 0,
-                        fontSize: 11,
-                        lineHeight: 18,
+                        fontSize: taste ? (roomyText ? 14 : 13) : 11,
+                        lineHeight: taste ? 20 : 18,
+                        color: taste
+                          ? column === 2
+                            ? "#173F78"
+                            : "#475569"
+                          : "#334155",
+                        fontFamily:
+                          taste && column === 2 ? fonts.semiBold : fonts.regular,
+                        fontVariant: taste ? ["tabular-nums"] : undefined,
                         paddingHorizontal: 4,
                         paddingVertical: 8,
                       }}
@@ -377,7 +407,13 @@ export function MatchingResultCard({
               }
               variant="outline"
               onPress={() => setFullComparison(!fullComparison)}
-              style={{ minHeight: 44 }}
+              style={{
+                minHeight: 44,
+                ...(taste
+                  ? { borderColor: "transparent", backgroundColor: "#F8FAFC" }
+                  : {}),
+              }}
+              textStyle={taste ? { fontSize: 13 } : undefined}
               testID="matching-expand-comparison"
             />
           )}
@@ -401,6 +437,7 @@ export function MatchingResultCard({
               }
               disabled={busy}
               style={{ flex: 1, minHeight: 48, paddingHorizontal: 8 }}
+              textStyle={taste ? { fontSize: 15 } : undefined}
               testID={`matching-open-${result.propertyId}`}
             />
             {onViewRequirement && (
@@ -410,6 +447,7 @@ export function MatchingResultCard({
                 disabled={busy}
                 variant="outline"
                 style={{ flex: 1, minHeight: 48, paddingHorizontal: 8 }}
+                textStyle={taste ? { fontSize: 15 } : undefined}
                 testID={`matching-request-${requirement.id}`}
               />
             )}
@@ -424,7 +462,13 @@ export function MatchingResultCard({
               onPress={onReplace}
               disabled={busy}
               variant="outline"
-              style={{ minHeight: 44 }}
+              style={{
+                minHeight: 44,
+                ...(taste
+                  ? { borderColor: "transparent", backgroundColor: "#F8FAFC" }
+                  : {}),
+              }}
+              textStyle={taste ? { fontSize: 13 } : undefined}
               testID={`matching-replace-${result.propertyId}`}
             />
           )}
