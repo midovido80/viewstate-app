@@ -444,9 +444,13 @@ test('cards and refinements handle repeated taps in both languages without chang
       assert.equal(rows[0].props.style.flexDirection, ar ? 'row-reverse' : 'row');
       assert.equal(rows[0].props.style.minHeight, 44);
       assert.equal(elements(rows[0]).find(item => item.type === 'Text')!.props.style.fontSize, 13);
+      const content = (value: any): string => Array.isArray(value) ? value.map(content).join(' ') : value?.props ? content(value.props.children) : typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+      const trialBudget = card.find(item => item.props.testID === 'matching-compare-budget')!;
+      assert.equal((content(trialBudget).match(/KWD/g) ?? []).length, 1, 'unit appears once in the row label, with unchanged amounts');
       state.taste = false;
       const originalCard = elements(MatchingResultCard({ ...pairCard.props, expanded: true }));
       const originalRows = originalCard.filter(item => String(item.props.testID ?? '').startsWith('matching-compare-'));
+      assert.equal((content(originalRows[0]).match(/KWD/g) ?? []).length, 2, 'baseline retains its original repeated units');
       assert.equal(originalRows[0].props.style.minHeight, 38);
       assert.equal(elements(originalRows[0]).find(item => item.type === 'Text')!.props.style.fontSize, 11);
       assert.deepEqual(originalRows.map(item => item.props.testID), rows.map(item => item.props.testID));

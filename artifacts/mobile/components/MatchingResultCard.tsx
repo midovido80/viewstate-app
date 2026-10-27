@@ -141,6 +141,24 @@ export function MatchingResultCard({
     perspective === "properties" && personRequestIndex === undefined;
   const rowDirection = isRTL ? ("row-reverse" as const) : ("row" as const);
   const widths = [1, 1.15, 1, 1.05];
+  const comparisonCells = (row: (typeof rows)[number]) => {
+    if (!taste) return [row.label, row.requested, row.offered];
+    if (row.field === "budget") {
+      const currency = requirement.budget.currencyCode;
+      const withoutRepeatedUnit = (value: string) =>
+        value.endsWith(currency)
+          ? value.slice(0, -currency.length).trim()
+          : value;
+      return [
+        `${row.label} (${currency})`,
+        withoutRepeatedUnit(row.requested),
+        withoutRepeatedUnit(row.offered),
+      ];
+    }
+    const label =
+      row.field === "hasCentralAC" && !ar ? "Central AC" : row.label;
+    return [label, row.requested, row.offered];
+  };
   const propertyPrice = perspective === "people" && property && (
     <Text
       style={{
@@ -314,32 +332,30 @@ export function MatchingResultCard({
                   minHeight: taste ? 44 : 38,
                 }}
               >
-                {[row.label, row.requested, row.offered].map(
-                  (value, column) => (
-                    <Text
-                      key={column}
-                      style={{
-                        ...text,
-                        flex: widths[column],
-                        minWidth: 0,
-                        fontSize: taste ? (roomyText ? 14 : 13) : 11,
-                        lineHeight: taste ? 20 : 18,
-                        color: taste
-                          ? column === 2
-                            ? "#173F78"
-                            : "#475569"
-                          : "#334155",
-                        fontFamily:
-                          taste && column === 2 ? fonts.semiBold : fonts.regular,
-                        fontVariant: taste ? ["tabular-nums"] : undefined,
-                        paddingHorizontal: 4,
-                        paddingVertical: 8,
-                      }}
-                    >
-                      {value}
-                    </Text>
-                  ),
-                )}
+                {comparisonCells(row).map((value, column) => (
+                  <Text
+                    key={column}
+                    style={{
+                      ...text,
+                      flex: widths[column],
+                      minWidth: 0,
+                      fontSize: taste ? (roomyText ? 14 : 13) : 11,
+                      lineHeight: taste ? 20 : 18,
+                      color: taste
+                        ? column === 2
+                          ? "#173F78"
+                          : "#475569"
+                        : "#334155",
+                      fontFamily:
+                        taste && column === 2 ? fonts.semiBold : fonts.regular,
+                      fontVariant: taste ? ["tabular-nums"] : undefined,
+                      paddingHorizontal: 4,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    {value}
+                  </Text>
+                ))}
                 <View
                   style={{
                     flex: widths[3],
