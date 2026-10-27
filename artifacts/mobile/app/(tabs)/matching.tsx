@@ -392,8 +392,8 @@ export default function MatchingScreen() {
     router.push(`/person/${encodeURIComponent(personId)}`);
   };
   const openMatchedRequest = (requirementId: string) => {
-    rememberResultLocation();
-    router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId } } as never);
+    const token = rememberResultLocation();
+    router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId, matchingReturn: token } } as never);
   };
 
   const openMatchedProperty = async (propertyId: string) => {

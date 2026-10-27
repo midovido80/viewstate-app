@@ -553,3 +553,31 @@ test('Reverse grouping counts distinct people and properties, preserving separat
   const invalidGroups = [{ person, requirementGroups: [{ requirement: r1, matches: [{ ...m1, engineVersion: 'old' }, { ...m1, requirementId: 'wrong' }, { ...m1, eligible: false }, { ...pending, qualifies: false }], needsConfirmation: [{ ...m1 }] }] }];
   assert.deepEqual(groupMatchingByProperty(invalidGroups as never), []);
 });
+
+
+test('Apartment subtype comparison localizes both requested and actual values', async () => {
+  const { formatPropertyDetailValue } = await import('../services/propertyDetailPresentation.ts');
+  for (const [value, en, ar] of [['standard_apartment', 'Standard Apartment', 'شقة عادية'], ['studio', 'Studio', 'استوديو'], ['duplex', 'Duplex', 'دوبلكس']]) {
+    assert.equal(formatPropertyDetailValue('apartmentSubtype', value, 'en'), en);
+    assert.equal(formatPropertyDetailValue('apartmentSubtype', value, 'ar'), ar);
+  }
+  const r = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 's', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '' });
+  assert.ok(r.ok); if (!r.ok) return;
+  const req = { ...r.value, catalogPreferences: [{ field: 'apartmentSubtype', kind: 'choice', value: 'standard_apartment' }] } as SeekerRequirement;
+  const property = { ...matchingProperty('p'), typeDetails: { propertyType: 'apartment', apartmentSubtype: 'standard_apartment' } } as Property;
+  const { matchingComparisonRows } = await import('../services/matchingPresentation.ts');
+  for (const language of ['en', 'ar'] as const) {
+    const row = matchingComparisonRows(evaluateMatch(req, { property }), req, property, language).find(row => row.field === 'apartmentSubtype')!;
+    assert.equal(row.requested, language === 'ar' ? 'شقة عادية' : 'Standard Apartment');
+    assert.equal(row.offered, row.requested);
+  }
+});
+
+test('View request carries matching return token and Back validates it before owner fallback', async () => {
+  const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
+  const details = await readFile('app/requirement/view/[requirementId].tsx', 'utf8');
+  assert.ok(screen.includes('params: { requirementId, matchingReturn: token }'));
+  assert.ok(details.includes('const back = () => readMatchingReturn(matchingReturnToken)'));
+  assert.ok(details.includes('router.replace(matchingBackRoute(matchingReturnToken) as never)'));
+  assert.ok(details.includes(': record?.seekerId'));
+});

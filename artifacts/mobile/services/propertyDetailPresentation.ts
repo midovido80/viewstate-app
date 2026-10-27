@@ -74,6 +74,8 @@ export function formatPropertyDetailValue(
     const key = `enrich.apartment_subtype.${value}`;
     const localized = translate?.(key);
     if (localized && localized !== key) return localized;
+    const labels = { studio: ['Studio', 'استوديو'], standard_apartment: ['Standard Apartment', 'شقة عادية'], duplex: ['Duplex', 'دوبلكس'] };
+    return labels[value as keyof typeof labels][language === 'ar' ? 1 : 0];
   }
   return toEnglishDigits(String(value));
 }

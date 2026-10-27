@@ -1,3 +1,4 @@
+import { matchingBackRoute, readMatchingReturn } from '@/services/matchingReturnSession';
 import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
@@ -22,6 +23,7 @@ const sections = ['overview', 'location', 'specifications', 'preferences', 'budg
 export default function RequirementDetailsScreen() {
   const params = useLocalSearchParams<{
     requirementId?: string | string[];
+    matchingReturn?: string | string[];
     link?: string | string[];
     postSave?: string | string[];
   }>();
@@ -80,7 +82,10 @@ export default function RequirementDetailsScreen() {
     return () => { active = false; };
   }, [id, attempt]));
 
-  const back = () => record?.seekerId
+  const matchingReturnToken = Array.isArray(params.matchingReturn) ? params.matchingReturn[0] : params.matchingReturn;
+  const back = () => readMatchingReturn(matchingReturnToken)
+    ? router.replace(matchingBackRoute(matchingReturnToken) as never)
+    : record?.seekerId
     ? router.replace(`/person/${encodeURIComponent(record.seekerId)}` as never)
     : router.replace('/properties' as never);
   const home = () => router.replace('/' as never);
