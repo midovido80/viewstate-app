@@ -5,14 +5,13 @@ import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useI18n } from '@/contexts/I18nContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 
 function ClassicTabLayout() {
   const colors = useColors();
   const { t } = useI18n();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
 
   return (
     <Tabs
@@ -31,11 +30,12 @@ function ClassicTabLayout() {
           position: 'relative',
           overflow: 'hidden',
           zIndex: 100,
-          ...(isWeb ? { height: 84 } : { paddingBottom: insets.bottom }),
+          height: 64 + insets.bottom,
+          paddingBottom: insets.bottom,
         },
         tabBarItemStyle: {
           paddingTop: 6,
-          paddingBottom: isWeb ? 6 : 4,
+          paddingBottom: 4,
         },
       }}
     >
@@ -52,6 +52,27 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="properties"
+        options={{
+          title: t('properties.title'),
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="building.2" tintColor={color} size={24} />
+            ) : (
+              <Feather name="list" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="matching"
+        options={{
+          title: t('matching.title'),
+          tabBarIcon: ({ color }) => (
+            <Feather name="target" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="people"
         options={{
           title: t('people.title'),
@@ -64,12 +85,15 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="matching"
+        name="more"
         options={{
-          title: t('matching.title'),
-          tabBarIcon: ({ color }) => (
-            <Feather name="target" size={22} color={color} />
-          ),
+          title: t('more.title'),
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="ellipsis" tintColor={color} size={24} />
+            ) : (
+              <Feather name="more-horizontal" size={22} color={color} />
+            ),
         }}
       />
     </Tabs>

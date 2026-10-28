@@ -1,4 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { MatchingResultsGroups } from '@/components/MatchingResultsGroups';
+import type { MatchingResultsLayout } from '@/services/matchingGroups';
+import { readMatchingReturn, rememberMatchingReturn } from '@/services/matchingReturnSession';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -6,17 +9,16 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import {
-  MATCH_QUALIFICATION_THRESHOLD,
+  MATCH_ENGINE_VERSION,
+  type MatchingPolicy,
   PROPERTY_TYPES,
-  type MatchExplanation,
-  type MatchResult,
-  type MatchCriterion,
   type Property,
   type PropertyType,
   type RequirementOccupancy,
@@ -26,6 +28,7 @@ import {
 import { Button } from '@/components/Button';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { SelectCard } from '@/components/SelectCard';
+import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { KUWAIT_AREAS, getAreaById, searchAreas } from '@/constants/kuwait-areas';
@@ -46,38 +49,10 @@ import type { Person } from '@/services/people';
 
 type MatchingMode = 'saved' | 'quick';
 
-const CRITERION_KEYS: Record<MatchCriterion, string> = {
-  eligibility: 'matching.criteria.eligibility',
-  budget: 'matching.criteria.budget',
-  ordered_location: 'matching.criteria.ordered_location',
-  bedrooms: 'matching.criteria.bedrooms',
-  bathrooms: 'matching.criteria.bathrooms',
-  occupancy: 'matching.criteria.occupancy',
-  swimming_pool: 'matching.criteria.swimming_pool',
-  gym: 'matching.criteria.gym',
-  sea_view: 'matching.criteria.sea_view',
-  central_ac: 'matching.criteria.central_ac',
-};
-
 function numberFromInput(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed || !/^\d+$/.test(trimmed)) return undefined;
+  const trimmed = value.trim().replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+  if (!trimmed || !/^\d+(?:\.\d+)?$/.test(trimmed)) return undefined;
   return Number(trimmed);
-}
-
-function scoreLabel(score: number, language: 'en' | 'ar'): string {
-  return `${score.toLocaleString(language === 'ar' ? 'ar-KW' : 'en-US', {
-    maximumFractionDigits: 2,
-  })}%`;
-}
-
-function explanationStatusLabel(
-  status: MatchExplanation['status'],
-  t: (key: string) => string,
-): string {
-  if (status === 'unknown') return t('matching.results.unknown');
-  if (status === 'matched') return t('matching.results.matched');
-  return t('matching.results.notMet');
 }
 
 function ChoiceChip({
@@ -104,8 +79,8 @@ function ChoiceChip({
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.accent : colors.card,
-          borderColor: selected ? colors.turquoise : colors.border,
+          backgroundColor: selected ? colors.primary : colors.card,
+          borderColor: selected ? colors.primary : colors.border,
         },
       ]}
     >
@@ -113,7 +88,7 @@ function ChoiceChip({
         style={[
           styles.chipText,
           {
-            color: selected ? colors.primary : colors.foreground,
+            color: selected ? colors.primaryForeground : colors.foreground,
             fontFamily: fonts.medium,
           },
         ]}
@@ -185,128 +160,13 @@ function FormInput({
   );
 }
 
-function ResultCard({
-  result,
-  rank,
-  property,
-  requirement,
-  onPress,
-}: {
-  result: MatchResult;
-  rank: number;
-  property: Property | undefined;
-  requirement: SeekerRequirement;
-  onPress: () => void;
-}) {
-  const colors = useColors();
-  const { t, isRTL, language, fonts } = useI18n();
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.75}
-      accessibilityRole="button"
-      style={[
-        styles.resultCard,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          borderRadius: colors.cardRadius,
-        },
-      ]}
-      testID={`matching-result-${result.propertyId}`}
-    >
-      <View style={[styles.resultTop, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <View style={[styles.rankBadge, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.rankNumber, { color: colors.primary, fontFamily: fonts.bold }]}>
-            {rank}
-          </Text>
-        </View>
-        <View style={styles.resultIdentity}>
-          <Text style={[styles.resultLabel, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
-            {t('matching.results.property')}
-          </Text>
-          <Text style={[styles.propertyId, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-            {property
-              ? `${t(`propertyType.${property.core.propertyType}`)} · ${
-                getAreaById(property.core.locationArea.id)?.[language]
-                  ?? property.core.locationArea.id
-              }`
-              : t(`propertyType.${requirement.propertyType}`)}
-          </Text>
-          {property ? (
-            <Text style={[styles.propertySummary, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-              {`${property.activeOffer.transaction === 'sale'
-                ? property.activeOffer.salePrice.amount
-                : property.activeOffer.rentalPrice.amount} ${
-                property.activeOffer.transaction === 'sale'
-                  ? property.activeOffer.salePrice.currencyCode
-                  : property.activeOffer.rentalPrice.currencyCode
-              }${
-                property.typeDetails && 'bedroomCount' in property.typeDetails
-                  && typeof property.typeDetails.bedroomCount === 'number'
-                  ? ` · ${property.typeDetails.bedroomCount} ${t('matching.results.bedrooms')}`
-                  : ''
-              }`}
-            </Text>
-          ) : null}
-          <Text style={[styles.requirementContext, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-            {t('matching.results.requirementContext')
-              .replace('{purpose}', t(`matching.purpose.${requirement.purpose}`))
-              .replace('{type}', t(`propertyType.${requirement.propertyType}`))}
-          </Text>
-        </View>
-        <View style={styles.scoreBlock}>
-          <Text style={[styles.score, { color: colors.primary, fontFamily: fonts.bold }]}>
-            {scoreLabel(result.score, language)}
-          </Text>
-          <Text style={[styles.resultLabel, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>
-            {t('matching.results.score')}
-          </Text>
-        </View>
-      </View>
-
-      <View style={[styles.explanationHeader, { borderTopColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Feather name="list" size={16} color={colors.turquoise} />
-        <Text style={[styles.explanationTitle, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
-          {t('matching.results.explanation')}
-        </Text>
-      </View>
-      <View style={styles.explanations}>
-        {result.explanations.map((explanation, index) => {
-          const statusColor = explanation.status === 'unknown'
-            ? colors.warning
-            : explanation.status === 'matched'
-              ? colors.turquoise
-              : colors.mutedForeground;
-          const criterion = t(CRITERION_KEYS[explanation.criterion]);
-          const status = explanationStatusLabel(explanation.status, t);
-          return (
-            <View
-              key={`${explanation.criterion}-${index}`}
-              style={[styles.explanationRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
-            >
-              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-              <Text style={[styles.explanationText, { color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                {criterion}: {status}
-              </Text>
-              <Text style={[styles.points, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
-                {explanation.awardedPoints}/{explanation.possiblePoints}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 export default function MatchingScreen() {
-  const { requirementId: requestedRequirementId } = useLocalSearchParams<{ requirementId?: string }>();
+  const { requirementId: requestedRequirementId, returnSession } = useLocalSearchParams<{ requirementId?: string; returnSession?: string }>();
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
+  const insets = useScreenInsets();
+  const topInset = insets.top;
 
   const [mode, setMode] = useState<MatchingMode>('saved');
   const [requirements, setRequirements] = useState<SeekerRequirement[]>([]);
@@ -315,6 +175,8 @@ export default function MatchingScreen() {
   const [selectedSeekerId, setSelectedSeekerId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<RequirementPurpose>('rent');
   const [propertyType, setPropertyType] = useState<PropertyType>('apartment');
+  const [floorUse, setFloorUse] = useState<'residential' | 'commercial'>();
+  const [apartmentSubtype, setApartmentSubtype] = useState<'studio' | 'standard_apartment' | 'duplex'>();
   const [preferredAreaIds, setPreferredAreaIds] = useState<string[]>([]);
   const [areaSearch, setAreaSearch] = useState('');
   const [minimumBudget, setMinimumBudget] = useState('500');
@@ -331,7 +193,17 @@ export default function MatchingScreen() {
   const [quickRequirement, setQuickRequirement] = useState<SeekerRequirement | null>(null);
   const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
   const [error, setError] = useState('');
+  const [policies, setPolicies] = useState<Record<string, MatchingPolicy>>({});
+  const [excluded, setExcluded] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
+  const runGenerationRef = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+  const restoreOffsetRef = useRef<number | null>(null);
+  const openedReturnTokenRef = useRef<string | undefined>(undefined);
+  const dismissedReturnTokenRef = useRef<string | undefined>(undefined);
+  const [resultsLayout, setResultsLayout] = useState<MatchingResultsLayout>({ view: 'people' });
+  const [pendingRestore, setPendingRestore] = useState<string | null>(null);
 
   const seekerPeople = useMemo(
     () => people.filter(person => person.classifications.includes('seeker')),
@@ -347,6 +219,16 @@ export default function MatchingScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      runGenerationRef.current += 1;
+      setLoading(false);
+      setRunResult(null);
+      setQuickRequirement(null);
+      setMatchAllGroups(null);
+      setError('');
+      const restore = readMatchingReturn(openedReturnTokenRef.current)
+        ?? (returnSession !== dismissedReturnTokenRef.current ? readMatchingReturn(returnSession) : undefined);
+      setPolicies(restore?.policies ?? {});
+      setExcluded(restore?.excluded ?? {});
       Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
         .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
           if (!active) return;
@@ -354,6 +236,23 @@ export default function MatchingScreen() {
           setPeople(loadedPeople);
           setProperties(loadedProperties);
           if (requestedRequirementId) setMode('saved');
+          if (restore) {
+            setMode(restore.mode);
+            setResultsLayout(restore.layout ?? { view: 'people' });
+            restoreOffsetRef.current = restore.scrollOffset;
+            const quick = restore.quickRequirement;
+            if (quick) {
+              setQuickRequirement(quick); setPurpose(quick.purpose); setPropertyType(quick.propertyType);
+              setPreferredAreaIds([...quick.preferredAreaIds]); setMinimumBudget(String(quick.budget.minimum)); setMaximumBudget(String(quick.budget.maximum));
+              setBedroomsMinimum(quick.bedroomsMinimum === undefined ? '' : String(quick.bedroomsMinimum)); setBathroomsMinimum(quick.bathroomsMinimum === undefined ? '' : String(quick.bathroomsMinimum));
+              setCentralAC(quick.centralAC); setNotes(quick.notes); setFloorUse(quick.floorUse); setSelectedSeekerId(quick.seekerId ?? null);
+              const subtype = quick.catalogPreferences?.find(item => item.field === 'apartmentSubtype' && item.kind === 'choice');
+              setApartmentSubtype(subtype?.value as 'studio' | 'standard_apartment' | 'duplex' | undefined);
+              if (quick.purpose === 'rent') { setOccupancy(quick.occupancy); setSwimmingPool(quick.swimmingPool); setGym(quick.gym); setSeaView(quick.seaView); }
+            }
+            setPendingRestore(restore.token);
+          }
+
           const firstSeeker = loadedPeople.find(person =>
             person.classifications.includes('seeker'),
           );
@@ -364,11 +263,17 @@ export default function MatchingScreen() {
         });
       return () => {
         active = false;
+        runGenerationRef.current += 1;
       };
-    }, [requestedRequirementId, t]),
+    }, [requestedRequirementId, returnSession, t]),
   );
 
   const clearRun = () => {
+    openedReturnTokenRef.current = undefined;
+    dismissedReturnTokenRef.current = returnSession;
+    setResultsLayout({ view: 'people' });
+    runGenerationRef.current += 1;
+    setLoading(false);
     setRunResult(null);
     setQuickRequirement(null);
     setMatchAllGroups(null);
@@ -391,9 +296,11 @@ export default function MatchingScreen() {
     setPreferredAreaIds(current => current.filter(id => id !== areaId));
   };
 
-  const runMatching = async () => {
+  const runMatching = async (exclusions = excluded, refinements = policies) => {
+    const generation = ++runGenerationRef.current;
     setError('');
     setRunResult(null);
+    setMatchAllGroups(null);
     setLoading(true);
     try {
       const candidateSource = new MyPropertiesMatchingSource(store);
@@ -401,25 +308,33 @@ export default function MatchingScreen() {
 
       if (mode === 'saved') {
         matching = new BrokerInitiatedMatching(store, candidateSource);
+        const selected = requestedRequirementId ? requirements.filter(item => item.id === requestedRequirementId) : requirements;
+        if (requestedRequirementId && selected.length !== 1) throw new Error('MATCHING_REQUIREMENT_NOT_FOUND');
         const runs = await runMatchingForAllRequirements(
-          requirements,
-          requirementId => matching.runForRequirement(requirementId),
+          selected,
+          requirementId => matching.runForRequirement(requirementId, refinements[requirementId], exclusions[requirementId]),
         );
-        setMatchAllGroups(groupMatchAllResultsByPerson(requirements, people, runs));
+        if (runs.some(run => run.engineVersion !== MATCH_ENGINE_VERSION)) throw new Error('STALE_MATCH_ENGINE');
+        if (runGenerationRef.current === generation) {
+          setMatchAllGroups(groupMatchAllResultsByPerson(selected, people, runs));
+        }
         return;
       }
 
+      if (propertyType === 'floor' && !floorUse || propertyType === 'apartment' && !apartmentSubtype) { setError(language === 'ar' ? 'حدد نوع الشقة أو استخدام الدور أولًا.' : 'Choose the apartment subtype or floor use first.'); return; }
       const transient = buildTransientRequirement({
-        id: Crypto.randomUUID(),
+        id: quickRequirement?.id ?? Crypto.randomUUID(),
         seekerId: selectedSeekerId ?? 'manual-seeker',
         purpose,
         propertyType,
+        ...(propertyType === 'floor' ? { floorUse } : {}),
+        ...(propertyType === 'apartment' ? { apartmentSubtype } : {}),
         preferredAreaIds,
         minimumBudget: numberFromInput(minimumBudget),
         maximumBudget: numberFromInput(maximumBudget),
         notes,
-        bedroomsMinimum: numberFromInput(bedroomsMinimum),
-        bathroomsMinimum: numberFromInput(bathroomsMinimum),
+        bedroomsMinimum: (['apartment', 'house', 'villa', 'chalet'].includes(propertyType) || propertyType === 'floor' && floorUse === 'residential') && apartmentSubtype !== 'studio' ? numberFromInput(bedroomsMinimum) : undefined,
+        bathroomsMinimum: (['apartment', 'house', 'villa', 'chalet'].includes(propertyType) || propertyType === 'floor' && floorUse === 'residential') ? numberFromInput(bathroomsMinimum) : undefined,
         occupancy,
         swimmingPool,
         gym,
@@ -436,15 +351,74 @@ export default function MatchingScreen() {
           id === transient.value.id ? transient.value : null,
       };
       matching = new BrokerInitiatedMatching(transientStore, candidateSource);
-      setQuickRequirement(transient.value);
-      setRunResult(await matching.runForRequirement(transient.value.id));
+      const result = await matching.runForRequirement(transient.value.id, refinements[transient.value.id], exclusions[transient.value.id]);
+      if (result.engineVersion !== MATCH_ENGINE_VERSION) throw new Error('STALE_MATCH_ENGINE');
+      if (runGenerationRef.current === generation) {
+        setQuickRequirement(transient.value);
+        setRunResult(result);
+      }
     } catch (runError) {
       console.error(runError);
-      setError(t('matching.run_failed'));
+      if (runGenerationRef.current === generation) setError(t('matching.run_failed'));
     } finally {
-      setLoading(false);
+      if (runGenerationRef.current === generation) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!pendingRestore) return;
+    setPendingRestore(null);
+    void runMatching();
+  }, [pendingRestore]);
+
+  const replaceSuggestion = (requirementId: string, propertyId: string) => {
+    if (loading) return;
+    const next = { ...excluded, [requirementId]: [...(excluded[requirementId] ?? []), propertyId] };
+    setExcluded(next); void runMatching(next);
+  };
+  const refine = (requirementId: string, policy: MatchingPolicy) => {
+    if (loading) return;
+    const next = { ...policies, [requirementId]: policy };
+    setPolicies(next); void runMatching(excluded, next);
+  };
+
+  const rememberResultLocation = () => {
+    const token = rememberMatchingReturn({ scopeRequirementId: requestedRequirementId, mode, quickRequirement: quickRequirement ?? undefined, policies, excluded, layout: resultsLayout, scrollOffset: scrollOffsetRef.current });
+    openedReturnTokenRef.current = token;
+    return token;
+  };
+  const openMatchedPerson = (personId: string) => {
+    rememberResultLocation();
+    router.push(`/person/${encodeURIComponent(personId)}`);
+  };
+  const openMatchedRequest = (requirementId: string) => {
+    const token = rememberResultLocation();
+    router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId, matchingReturn: token } } as never);
+  };
+
+  const openMatchedProperty = async (propertyId: string) => {
+    try {
+      if (!await store.getProperty(propertyId)) {
+        setError(t('matching.property_missing'));
+        setRunResult(null);
+        setQuickRequirement(null);
+        setMatchAllGroups(null);
+        return;
+      }
+      const token = rememberResultLocation();
+      router.push({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: propertyId, matchingReturn: token } } as never);
+    } catch {
+      setError(t('matching.load_failed'));
+    }
+  };
+
+  const resultGroups: MatchAllPersonGroup[] | null = matchAllGroups ?? (runResult && quickRequirement ? [{
+    person: people.find(person => person.id === quickRequirement.seekerId) ?? {
+      id: quickRequirement.seekerId ?? 'manual-seeker', name: language === 'ar' ? 'طلب مطابقة سريع' : 'Quick matching request',
+      classifications: ['seeker'], displayPhone: '', normalizedPhone: '', notes: '',
+    },
+    requirementGroups: [{ requirement: quickRequirement, matches: runResult.matches, needsConfirmation: runResult.needsConfirmation }],
+  }] : null);
 
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
   const selectedAreas = preferredAreaIds
@@ -453,10 +427,14 @@ export default function MatchingScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <PrimaryTabHeader title={t('matching.title')} />
       <KeyboardAwareScrollViewCompat
+        ref={scrollRef}
+        onScroll={event => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={32}
+        onContentSizeChange={() => { if (restoreOffsetRef.current !== null && (matchAllGroups || runResult)) { const y = restoreOffsetRef.current; restoreOffsetRef.current = null; requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false })); } }}
         style={styles.scroll}
         contentContainerStyle={{
-          paddingTop: topInset + 16,
+          paddingTop: 16,
           paddingBottom: insets.bottom + 112,
           paddingHorizontal: 20,
         }}
@@ -466,24 +444,10 @@ export default function MatchingScreen() {
       >
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={styles.headerCopy}>
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.title')}
-            </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.subtitle')}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={toggleLanguage}
-            style={[styles.langButton, { borderColor: colors.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={language === 'en' ? 'عربي' : 'EN'}
-            testID="matching-language-toggle"
-          >
-            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>
-              {language === 'en' ? 'عربي' : 'EN'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>
@@ -514,7 +478,7 @@ export default function MatchingScreen() {
         {mode === 'saved' ? (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.saved.matchAllTitle')}
+              {requestedRequirementId ? (language === 'ar' ? 'أفضل ترشيحات هذا الطلب' : 'Best suggestions for this request') : t('matching.saved.matchAllTitle')}
             </Text>
             <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {requirements.length
@@ -581,7 +545,7 @@ export default function MatchingScreen() {
                   selected={propertyType === value}
                   onPress={() => {
                     clearRun();
-                    setPropertyType(value);
+                    setPropertyType(value); setFloorUse(undefined); setApartmentSubtype(undefined); setBedroomsMinimum(''); setBathroomsMinimum(''); setOccupancy(undefined); setSwimmingPool(undefined); setGym(undefined); setSeaView(undefined); setCentralAC(undefined);
                   }}
                   testID={`matching-property-type-${value}`}
                 />
@@ -591,6 +555,8 @@ export default function MatchingScreen() {
             <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.areas')}
             </Text>
+            {propertyType === 'apartment' && <View style={[styles.chipRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>{(['studio', 'standard_apartment', 'duplex'] as const).map(value => <ChoiceChip key={value} label={t(`enrich.apartment_subtype.${value}`)} selected={apartmentSubtype === value} onPress={() => { clearRun(); setApartmentSubtype(value); setBedroomsMinimum(''); }} testID={`matching-subtype-${value}`} />)}</View>}
+            {propertyType === 'floor' && <View style={[styles.chipRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={t(`enrich.${value}`)} selected={floorUse === value} onPress={() => { clearRun(); setFloorUse(value); setBedroomsMinimum(''); setBathroomsMinimum(''); setOccupancy(undefined); setSwimmingPool(undefined); setGym(undefined); setSeaView(undefined); setCentralAC(undefined); }} testID={`matching-floor-use-${value}`} />)}</View>}
             {selectedAreas.length ? (
               <View style={[styles.selectedAreaRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                 {selectedAreas.map((area, index) => (
@@ -603,7 +569,7 @@ export default function MatchingScreen() {
                     accessibilityLabel={`${index + 1}. ${language === 'ar' ? area.ar : area.en}`}
                   >
                     <Text style={[styles.selectedAreaText, { color: colors.primary, fontFamily: fonts.medium }]}>
-                      {index + 1}. {language === 'ar' ? area.ar : area.en}
+                      {language === 'ar' ? area.ar : area.en}
                     </Text>
                     <Feather name="x" size={14} color={colors.primary} />
                   </TouchableOpacity>
@@ -654,14 +620,14 @@ export default function MatchingScreen() {
               </View>
             </View>
 
-            {purpose === 'rent' ? (
+            {(['apartment', 'house', 'villa', 'chalet'].includes(propertyType) || propertyType === 'floor' && floorUse === 'residential') ? (
               <View>
                 <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.rentDetails')}
+                  {language === 'ar' ? 'المواصفات' : 'Specifications'}
                 </Text>
                 <View style={[styles.inputRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                   <View style={styles.halfField}>
-                    <FormInput label={t('matching.bedrooms')} value={bedroomsMinimum} onChangeText={value => { clearRun(); setBedroomsMinimum(value); }} testID="matching-input-bedrooms" keyboardType="numeric" />
+                    {apartmentSubtype !== 'studio' && <FormInput label={t('matching.bedrooms')} value={bedroomsMinimum} onChangeText={value => { clearRun(); setBedroomsMinimum(value); }} testID="matching-input-bedrooms" keyboardType="numeric" />}
                   </View>
                   <View style={styles.halfField}>
                     <FormInput label={t('matching.bathrooms')} value={bathroomsMinimum} onChangeText={value => { clearRun(); setBathroomsMinimum(value); }} testID="matching-input-bathrooms" keyboardType="numeric" />
@@ -671,7 +637,7 @@ export default function MatchingScreen() {
                   {t('matching.occupancy')}
                 </Text>
                 <View style={[styles.chipRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                  {(['family', 'bachelor', 'any'] as const).map(value => (
+                  {(purpose === 'rent' ? ['family', 'bachelor', 'any'] as const : []).map(value => (
                     <ChoiceChip
                       key={value}
                       label={t(`matching.occupancy.${value}`)}
@@ -693,7 +659,7 @@ export default function MatchingScreen() {
                     ['gym', gym, setGym],
                     ['seaView', seaView, setSeaView],
                     ['centralAC', centralAC, setCentralAC],
-                  ] as const).map(([key, value, setter]) => (
+                  ] as const).filter(([key]) => purpose === 'rent' || key === 'centralAC').map(([key, value, setter]) => (
                     <View key={key} style={[styles.serviceRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                       <Text style={[styles.serviceLabel, { color: colors.foreground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
                         {t(`matching.service.${key}`)}
@@ -748,126 +714,27 @@ export default function MatchingScreen() {
         <Button
           title={loading
             ? t('matching.running')
-            : mode === 'saved' ? t('matching.runAll') : t('matching.run')}
-          onPress={runMatching}
+            : mode === 'saved' && !requestedRequirementId ? t('matching.runAll') : t('matching.run')}
+          onPress={() => void runMatching()}
           loading={loading}
           disabled={loading}
           style={styles.runButton}
           testID="matching-run"
         />
 
-        {matchAllGroups ? (
-          <View style={styles.resultsSection} testID="matching-results">
-            <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <View style={styles.resultsCopy}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.groupedTitle')}
-                </Text>
-                <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.count').replace(
-                    '{count}',
-                    String(matchAllGroups.reduce(
-                      (count, group) => count + group.requirementGroups.reduce(
-                        (subtotal, item) => subtotal + item.matches.length,
-                        0,
-                      ),
-                      0,
-                    )),
-                  )}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
-                <Text style={[styles.clearText, { color: colors.primary, fontFamily: fonts.semiBold }]}>
-                  {t('matching.clear')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {matchAllGroups.length ? matchAllGroups.map(group => (
-              <View key={group.person.id} style={styles.personGroup} testID={`matching-person-group-${group.person.id}`}>
-                <TouchableOpacity
-                  onPress={() => router.push(`/person/${encodeURIComponent(group.person.id)}`)}
-                  accessibilityRole="button"
-                  testID={`matching-person-${group.person.id}`}
-                  style={[styles.personHeader, { backgroundColor: colors.accent, borderRadius: colors.cardRadius }]}
-                >
-                  <Text style={[styles.personName, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-                    {group.person.name}
-                  </Text>
-                  <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={20} color={colors.primary} />
-                </TouchableOpacity>
-                {group.requirementGroups.flatMap(requirementGroup =>
-                  requirementGroup.matches.map((result, index) => (
-                    <ResultCard
-                      key={`${requirementGroup.requirement.id}-${result.propertyId}`}
-                      result={result}
-                      rank={index + 1}
-                      requirement={requirementGroup.requirement}
-                      property={properties.find(item => item.core.id === result.propertyId)}
-                      onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
-                    />
-                  )))}
-              </View>
-            )) : (
-              <View style={[styles.zeroState, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-zero-results">
-                <Feather name="search" size={38} color={colors.mutedForeground} />
-                <Text style={[styles.zeroTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: 'center' }]}>
-                  {t('matching.results.emptyTitle')}
-                </Text>
-                <Text style={[styles.zeroBody, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }]}>
-                  {t('matching.results.emptyAllBody')}
-                </Text>
-              </View>
-            )}
-            <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.results.transient')}
-            </Text>
+        {resultGroups && <View style={styles.resultsSection} testID="matching-results">
+          <View style={[styles.resultsHeader, { direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 19 }}>{t('matching.results.title')}</Text>
+            <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button"><Text style={{ color: '#2563EB', fontFamily: fonts.semiBold }}>{t('matching.clear')}</Text></TouchableOpacity>
           </View>
-        ) : runResult && quickRequirement ? (
-          <View style={styles.resultsSection} testID="matching-results">
-            <View style={[styles.resultsHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <View style={styles.resultsCopy}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.title')}
-                </Text>
-                <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('matching.results.count').replace('{count}', String(runResult.matches.length))}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button">
-                <Text style={[styles.clearText, { color: colors.primary, fontFamily: fonts.semiBold }]}>
-                  {t('matching.clear')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {runResult.matches.length ? (
-              runResult.matches.map((result, index) => (
-                <ResultCard
-                  key={result.propertyId}
-                  result={result}
-                  rank={index + 1}
-                  requirement={quickRequirement}
-                  property={properties.find(item => item.core.id === result.propertyId)}
-                  onPress={() => router.push(`/property/${encodeURIComponent(result.propertyId)}`)}
-                />
-              ))
-            ) : (
-              <View style={[styles.zeroState, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-zero-results">
-                <Feather name="search" size={38} color={colors.mutedForeground} />
-                <Text style={[styles.zeroTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: 'center' }]}>
-                  {t('matching.results.emptyTitle')}
-                </Text>
-                <Text style={[styles.zeroBody, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }]}>
-                  {t('matching.results.emptyBody')}
-                </Text>
-              </View>
-            )}
-            <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('matching.results.transient')}
-            </Text>
-          </View>
-        ) : null}
+          <MatchingResultsGroups groups={resultGroups} properties={properties} layout={resultsLayout} onLayoutChange={setResultsLayout} policies={policies} busy={loading}
+            onRefine={refine} onReplace={replaceSuggestion} onOpenProperty={id => void openMatchedProperty(id)}
+            onOpenPerson={mode === 'saved' || people.some(person => person.id === quickRequirement?.seekerId) ? openMatchedPerson : undefined}
+            onOpenRequest={mode === 'saved' ? openMatchedRequest : undefined} quick={mode === 'quick'} />
+          <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('matching.results.transient')}</Text>
+        </View>}
         <Text style={[styles.thresholdNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-          {t('matching.results.score')}: ≥ {MATCH_QUALIFICATION_THRESHOLD}%
+          {language === 'ar' ? 'حتى ٥ ترشيحات لكل طلب؛ لا نملأ القائمة بنتائج ضعيفة. النتائج مؤقتة وتُعاد قراءتها عند التشغيل.' : 'Up to 5 suggestions per request; weak results do not fill empty places. Re-run to refresh recorded facts.'}
         </Text>
       </KeyboardAwareScrollViewCompat>
     </View>
@@ -906,7 +773,7 @@ const styles = StyleSheet.create({
   errorBox: { alignItems: 'center', borderWidth: 1, borderRadius: 12, flexDirection: 'row', gap: 9, marginTop: 18, padding: 12 },
   errorText: { flex: 1, fontSize: 13, lineHeight: 18 },
   runButton: { marginTop: 22 },
-  resultsSection: { marginTop: 28 },
+  resultsSection: { marginTop: 24, width: '100%', maxWidth: 840, alignSelf: 'center' },
   resultsHeader: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
   resultsCopy: { flex: 1 },
   clearText: { fontSize: 13, paddingTop: 4 },
