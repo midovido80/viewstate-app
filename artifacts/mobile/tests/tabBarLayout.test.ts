@@ -54,11 +54,12 @@ test('headers and fixed actions consume the shared safe spacing and tab height r
 });
 
 test('keeps the tab bar in layout and isolates it from dynamic screen content', async () => {
-  const [layout, properties, people, home] = await Promise.all([
+  const [layout, properties, people, home, assistant] = await Promise.all([
     readFile('app/(tabs)/_layout.tsx', 'utf8'),
     readFile('app/(tabs)/properties.tsx', 'utf8'),
     readFile('app/(tabs)/people.tsx', 'utf8'),
     readFile('app/(tabs)/index.tsx', 'utf8'),
+    readFile('components/assistant/DailyAssistantScreen.tsx', 'utf8'),
   ]);
 
   assert.match(layout, /sceneStyle:\s*\{\s*overflow:\s*['"]hidden['"]/);
@@ -78,7 +79,9 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
     .map(name => layout.indexOf(name));
   assert.ok(tabOrder.every(index => index >= 0));
   assert.deepEqual(tabOrder, [...tabOrder].sort((left, right) => left - right));
-  assert.match(home, /home\.importComingLater/);
+  assert.match(home, /export default DailyAssistantScreen/);
+  assert.match(assistant, /h\.notify\(C\('importLater'\)\)/);
+  assert.doesNotMatch(assistant, /requestPermissionsAsync|expo-contacts/);
   assert.doesNotMatch(home, /contacts|phone/i);
   assert.doesNotMatch(layout, /propertyType|rental|price|areaName/);
 
