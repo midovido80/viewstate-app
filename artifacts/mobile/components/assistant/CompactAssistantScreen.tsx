@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { useI18n } from '@/contexts/I18nContext';
 import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
@@ -16,11 +17,17 @@ import {
   shiftMonth, sortFollowups, suggestFollowups, taskPersonName, validateDraft, type AssistantSuggestion,
   type Followup, type FollowupDraft, type Outcome, type TaskFilter, type TaskKind,
 } from '@/services/dailyAssistant';
+import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
+import { MatchingResultCard } from '@/components/MatchingResultCard';
+import { useAssistantHomeMatches } from '@/hooks/useAssistantHomeMatches';
+import { HomeQuickAdd } from './HomeQuickAdd';
+import { homeQuickRoute, homeGreetingPeriod, searchAssistantFollowups, type HomeQuickAction } from '@/services/assistantHome';
+import { getRequirementCardSummary } from '@/services/cardSummaryPresentation';
 import type { AssistantCopyKey } from '@/services/dailyAssistantCopy';
 import { Action, AlertNote, AssistantField, AssistantSheet, AssistantText as Txt, CountBadge, useAssistantUI } from './ui';
 import { assistantTone as c, s } from './styles';
 
-type Mode = 'editor' | 'detail' | 'outcome' | 'reschedule' | 'calendar' | 'people' | 'properties' | 'person' | 'property' | 'settings' | 'cancel' | null;
+type Mode = 'editor' | 'detail' | 'outcome' | 'reschedule' | 'calendar' | 'people' | 'properties' | 'person' | 'property' | 'settings' | 'cancel' | 'actions' | 'matches' | 'allTasks' | 'notifications' | 'requirements' | 'share' | null;
 type CalendarTarget = 'page' | 'editor' | 'reschedule' | 'next';
 const filters: TaskFilter[] = ['all', 'viewing', 'client', 'available', 'done', 'cancelled'];
 function blankDraft(date: string, kind: TaskKind = 'call'): FollowupDraft {
@@ -29,14 +36,22 @@ function blankDraft(date: string, kind: TaskKind = 'call'): FollowupDraft {
 function id() { return Crypto.randomUUID(); }
 /** Only web scroll containment is CSS. Native scroll containers use bounded layouts + nested scrolling. */
 const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'contain', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
-export default function DailyAssistantScreen() {
+export default function CompactAssistantScreen() {
   const h = useDailyAssistant(), { language, setLanguage, t, isRTL } = useI18n();
   const { state: account } = useAccountFoundation(), { row, align, fonts } = useAssistantUI();
-  const insets = useScreenInsets(), { width, height, fontScale } = useWindowDimensions(), router = useRouter();
-  const C = h.copy, today = kuwaitDay(h.now), wide = width >= 940;
-  const listRef = useRef<ScrollView>(null);
-  const [filter, setFilter] = useState<TaskFilter>('all'), [overdue, setOverdue] = useState(false);
-  const [query, setQuery] = useState(''), [searchOpen, setSearchOpen] = useState(false);
+  const insets = useScreenInsets(), actualInsets = useSafeAreaInsets(), { width, height, fontScale } = useWindowDimensions(), router = useRouter();
+  const C = h.copy, today = kuwaitDay(h.now);
+  const matches = useAssistantHomeMatches(h.ready, h.catalog);
+  const [allStatus, setAllStatus] = useState<'pending' | 'done' | 'cancelled' | 'all'>('pending');
+  const [matchView, setMatchView] = useState<'people' | 'properties'>('people'), [expandedMatch, setExpandedMatch] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ followupId?: string }>(), openedFollowup = useRef<string | null>(null);
+  useEffect(() => { const taskId = params.followupId; if (!taskId) { openedFollowup.current = null; return; } if (!h.ready || taskId === openedFollowup.current) return;
+    openedFollowup.current = taskId; const task = h.state.tasks.find(t => t.id === taskId); if (task) { setExpected(task); setMode('detail'); } else h.notify(C('noSearch'));
+    router.setParams({ followupId: undefined });
+  }, [params.followupId, h.ready, h.state.tasks, C, router]);
+  const listRef = useRef<React.ElementRef<typeof GestureScrollView>>(null);
+  const [overdue, setOverdue] = useState(false);
+  const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>(null), [expected, setExpected] = useState<Followup | null>(null);
   const [draft, setDraft] = useState<FollowupDraft>(() => blankDraft(today));
   const [formError, setFormError] = useState(''), [fieldError, setFieldError] = useState('');
@@ -48,21 +63,17 @@ export default function DailyAssistantScreen() {
   const pickerBack = useRef<Mode>(null);
   const [pickerQuery, setPickerQuery] = useState(''), [recordId, setRecordId] = useState('');
   const [preferences, setPreferences] = useState(h.state.settings);
-  const rows = useMemo(() => selectFollowups(h.state, h.inventory, h.selectedDay, filter, query, overdue, today), [h.state, h.inventory, h.selectedDay, filter, query, overdue, today]);
-  const summary = daySummary(h.state, h.inventory, h.selectedDay);
+  const rows = selectFollowups(h.state, h.inventory, h.selectedDay, 'all', '', overdue, today);
   const overdueTasks = sortFollowups(h.state.tasks.filter(v => v.status === 'pending' && v.date < today));
-  const open = sortFollowups(h.state.tasks.filter(v => v.status === 'pending'));
-  const due = open.find(v => v.date < today) ?? open.find(v => v.date === today) ?? open.find(v => v.date > today);
-  const suggestions = suggestFollowups(h.state, h.inventory, today);
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
-  const listHeight = Math.max(230, Math.min(height * .52, 520));
-  useEffect(() => { listRef.current?.scrollTo({ y: 0, animated: false }); }, [filter, query, h.selectedDay, overdue]);
+  const listHeight = Math.max(180, Math.min(height * .4, 224));
+  useEffect(() => { listRef.current?.scrollTo({ y: 0, animated: false }); }, [h.selectedDay, overdue]);
   const dateLabel = (day: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) =>
     new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-ca-gregory-nu-latn' : 'en-GB', { ...options, timeZone: ASSISTANT_TIME_ZONE }).format(new Date(day + 'T12:00:00Z'));
   const timeLabel = (time: string) => time ? new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-nu-latn' : 'en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date('2026-01-01T' + time + ':00+03:00')) : C('allDay');
   const propertyTitle = (propertyId: string) => h.inventory.properties.find(p => p.id === propertyId)?.title ?? C('missingProperty');
   const personName = (task: Followup) => taskPersonName(task, h.inventory) || (task.personId ? C('missingPerson') : '');
-  function chooseDay(day: string) { h.setSelectedDay(day); setFilter('all'); setOverdue(false); setQuery(''); }
+  function chooseDay(day: string) { h.setSelectedDay(day); setOverdue(false); setQuery(''); }
   function close() { if (h.busy) return; setMode(null); setFormError(''); setFieldError(''); }
   function openEditor(kind: TaskKind = 'call', task?: Followup, extra: Partial<FollowupDraft> = {}) {
     if (!h.ready || h.busy) return;
@@ -134,11 +145,6 @@ export default function DailyAssistantScreen() {
       } else await Linking.openURL(`tel:${p.normalizedPhone}`);
     } catch { h.notify(C('contactError')); }
   }
-  async function accept(suggestion: AssistantSuggestion) {
-    const title = C(suggestion.kind === 'available' ? 'confirmProperty' : 'customerWaiting');
-    const linked = suggestion.propertyId ? propertyTitle(suggestion.propertyId) : h.inventory.people.find(p => p.id === suggestion.personId)?.name ?? '';
-    if (await h.mutate((value, inventory) => acceptSuggestion(value, inventory, today, suggestion.key, title + ' · ' + linked, id(), new Date().toISOString()), C('suggestAdded'), suggestion.propertyId || undefined)) chooseDay(today);
-  }
   function linkedPreview(which: 'person' | 'property', targetId: string) { setRecordId(targetId); setMode(which); }
   function IconButton({ label, name, onPress }: { label: string; name: React.ComponentProps<typeof Feather>['name']; onPress: () => void }) {
     return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={s.iconButton}><Feather name={name} size={21} color={c.blue} /></Pressable>;
@@ -154,54 +160,22 @@ export default function DailyAssistantScreen() {
     return <AssistantField label={C('time') + (required ? '' : ' · ' + C('optional'))} value={value} onChangeText={onChange} placeholder="09:30" maxLength={5}
       keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'} autoCorrect={false} autoCapitalize="none" error={fieldError === 'time' || fieldError === 'conflict' ? formError : undefined} style={{ textAlign: 'left', writingDirection: 'ltr' }} />;
   }
-  function taskRow(task: Followup) {
-    const pName = personName(task), selectedProperty = h.inventory.properties.find(p => p.id === task.propertyId);
-    return <View key={task.id} style={s.task} testID={`assistant-task-${task.id}`}><View style={[s.taskCore, { flexDirection: row }]}>
-      <View style={s.timeBox}><Text style={[s.time, { fontFamily: fonts.semiBold }]}>{task.time ? timeLabel(task.time).replace(/\s*(ص|م|am|pm)$/i, '') : '—'}</Text><Txt muted size={12}>{task.time ? timeLabel(task.time).replace(/[\d:٫\s]/g, '') : C('allDay')}</Txt></View>
-      <View style={s.grow}><View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><View style={[s.chip, task.kind === 'viewing' && { backgroundColor: c.pale }]}><Text style={[s.chipText, { fontFamily: fonts.medium }]}>{C(task.kind)}</Text></View>
-        {task.status === 'done' ? <Txt color={c.green} size={12}>{C('done')}</Txt> : task.status === 'cancelled' || task.date < today ? <Txt color={c.red} size={12}>{C(task.status === 'cancelled' ? 'cancelledFilter' : 'overdue')}</Txt> : null}
-        {(query || overdue) && <Txt muted size={12}>{dateLabel(task.date, { day: 'numeric', month: 'short' })}</Txt>}</View>
-        <Text style={[s.taskTitle, { fontFamily: fonts.semiBold, textAlign: align }]}>{task.title}</Text>
-        <View style={[s.taskMeta, { flexDirection: row }]}>{pName ? <Pressable style={s.link} disabled={!task.personId} onPress={() => linkedPreview('person', task.personId)}><Text style={[s.person, { fontFamily: fonts.semiBold, textAlign: align }]}>{pName}</Text></Pressable> : null}
-          {pName && task.propertyId ? <Txt muted>·</Txt> : null}{task.propertyId ? <Pressable style={s.link} disabled={!selectedProperty} onPress={() => linkedPreview('property', task.propertyId)}><Text style={[s.property, { fontFamily: fonts.regular, textAlign: align }]}>{selectedProperty?.title ?? C('missingProperty')}</Text></Pressable> : null}</View>
-        {task.notes ? <Txt muted size={13}>{task.notes}</Txt> : null}
-        <View style={[s.taskActions, { flexDirection: row }]}>{task.status === 'pending' && <><Action label={C('recordOutcome')} icon="check" onPress={() => openOutcome(task)} disabled={!h.ready || h.busy} /><Action label={C('reschedule')} onPress={() => openReschedule(task)} tone="quiet" disabled={!h.ready || h.busy} /></>}
-          <IconButton label={C('details') + ' · ' + task.title} name="more-horizontal" onPress={() => openDetail(task)} /></View>
-      </View></View></View>;
+  function quickAction(action: HomeQuickAction) {
+    const href = homeQuickRoute(action);
+    if (href) { setMode(null); router.push(href as never); }
+    else if (action === 'share') { if (!h.ready) { h.notify(C(h.error ? 'loadError' : 'loading')); return; } setPickerQuery(''); setMode('share'); }
+    else h.notify(C('importLater'));
   }
-  const calendarPanel = <View style={s.panel}><View style={[s.calendarBar, { flexDirection: row }]}>
-    <Pressable style={[s.calendarCaption, { flexDirection: row }]} onPress={() => openCalendar()} accessibilityRole="button" accessibilityLabel={C('calendar')}><Txt bold>{dateLabel(h.selectedDay, { month: 'long', year: 'numeric' })}</Txt><Feather name="chevron-down" size={16} color={c.ink} /></Pressable>
-    <Action label={C('today')} onPress={() => chooseDay(today)} tone="quiet" /><IconButton label={C('previousDay')} name={isRTL ? 'chevron-right' : 'chevron-left'} onPress={() => chooseDay(addDays(h.selectedDay, -1))} /><IconButton label={C('nextDay')} name={isRTL ? 'chevron-left' : 'chevron-right'} onPress={() => chooseDay(addDays(h.selectedDay, 1))} />
-  </View>{wide && <View style={[s.dayGrid, { flexDirection: row, paddingHorizontal: 12, paddingBottom: 10 }]}>{monthGrid(h.selectedDay).filter(d => {
-    const dow = new Date(h.selectedDay + 'T12:00:00Z').getUTCDay(), first = addDays(h.selectedDay, -dow); return d >= first && d < addDays(first, 7);
-  }).map(d => <Pressable key={d} style={[s.dayCell, d === h.selectedDay && { backgroundColor: c.blue }]} onPress={() => chooseDay(d)}><Txt size={12} color={d === h.selectedDay ? 'white' : c.muted}>{dateLabel(d, { weekday: 'short' })}</Txt><Txt bold color={d === h.selectedDay ? 'white' : c.ink}>{Number(d.slice(-2))}</Txt></Pressable>)}</View>}</View>;
-  const agendaPanel = <View style={s.panel} testID="assistant-agenda"><View style={s.agendaHead}><View style={[s.row, { flexDirection: row }]}><View style={s.grow}><Text style={[s.sectionTitle, { fontFamily: fonts.bold, textAlign: align }]}>{query ? C('searchResults') : overdue ? C('overdueTitle') : C('agenda') + ' · ' + dateLabel(h.selectedDay, { weekday: 'long', day: 'numeric', month: 'short' })}</Text></View><CountBadge count={rows.length} label={rows.length + ' ' + C('result')} /><IconButton label={C('searchTasks')} name="search" onPress={() => setSearchOpen(v => !v)} /></View>
-    {searchOpen && <TextInput accessibilityLabel={C('searchTasks')} value={query} onChangeText={setQuery} placeholder={C('searchTasks')} placeholderTextColor={c.muted} style={[s.input, { fontFamily: fonts.regular, textAlign: align }]} />}
-    {query ? <Txt muted size={12}>{C('searchScope')}</Txt> : null}</View>
-    <View style={s.divider}><ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[s.filters, { flexDirection: row }]}>{filters.map(key => {
-      const count = selectFollowups(h.state, h.inventory, h.selectedDay, key, query, overdue, today).length;
-      return <Pressable accessibilityRole="button" accessibilityState={{ selected: filter === key }} key={key} onPress={() => setFilter(key)} style={[s.filter, { flexDirection: row, backgroundColor: filter === key ? c.pale : c.paper }]}>
-        <Txt size={13} bold={filter === key}>{C(key === 'client' ? 'clientTasks' : key === 'cancelled' ? 'cancelledFilter' : key)}</Txt><CountBadge count={count} /></Pressable>;
-    })}</ScrollView></View>
-    <ScrollView ref={listRef} testID="assistant-task-list" accessibilityLabel={C('agendaDay')} nestedScrollEnabled bounces={false} overScrollMode="never" directionalLockEnabled
-      scrollsToTop={false} persistentScrollbar removeClippedSubviews={false} keyboardShouldPersistTaps="handled" style={[s.taskList, { height: rows.length ? Math.min(listHeight, rows.length * 210 * Math.max(1, fontScale)) : 175 }, containedWebScroll]}>
-      {!h.ready && !h.error ? <View style={s.empty}><ActivityIndicator color={c.blue} /><Txt muted>{C('loading')}</Txt></View> : !h.ready ? <View style={s.empty}><Txt color={c.red}>{C('loadError')}</Txt></View> : rows.length ? rows.map(taskRow) : <View style={s.empty}><Feather name="check-circle" color={c.blue} size={30} /><Txt bold>{C(query ? 'noSearch' : 'noTasks')}</Txt><Txt muted center>{C(query ? 'noSearchNote' : 'noTasksNote')}</Txt><Action label={C(query ? 'clearSearch' : 'addFollowup')} onPress={() => query ? setQuery('') : openEditor()} /></View>}
-    </ScrollView></View>;
-  const sidePanels = <>
-    <View style={[s.panel, s.focus]}><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><Txt muted size={13}>{C('priority')}</Txt><Txt muted size={12}>{new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-nu-latn' : 'en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(h.now)}</Txt></View>
-      <Txt bold size={17}>{due?.title ?? C('freeDay')}</Txt><Txt muted>{due ? (due.date < today ? C('overdue') : C('nextAction')) + ' · ' + dateLabel(due.date, { day: 'numeric', month: 'short' }) + ' · ' + timeLabel(due.time) : C('createFirst')}</Txt>
-      <View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><Txt muted size={12}>{C('kuwaitTime')}</Txt><Action label={C(due ? 'openTask' : 'addFollowup')} onPress={() => due ? openDetail(due) : openEditor()} tone="primary" disabled={!h.ready} /></View></View>
-    <View style={[s.panel, s.panelPad]}><Txt bold size={18}>{C('suggestions')}</Txt>{suggestions.length ? suggestions.map(suggestion => <View key={suggestion.key} style={s.suggestion}>
-      <Txt bold>{C(suggestion.kind === 'available' ? 'suggestProperty' : 'suggestPerson')}</Txt><Txt color={suggestion.kind === 'available' ? c.blue : c.person}>{suggestion.propertyId ? propertyTitle(suggestion.propertyId) : h.inventory.people.find(p => p.id === suggestion.personId)?.name}</Txt>
-      <Txt muted size={13}>{C(suggestion.reason === 'unconfirmed' ? 'unconfirmedReason' : suggestion.reason === 'staleAvailability' ? 'staleAvailabilityReason' : 'staleContactReason').replace('{days}', String(suggestion.days ?? 0))}</Txt>
-      <View style={[s.row, { flexDirection: row, flexWrap: 'wrap', justifyContent: 'space-between' }]}><Action label={C('scheduleIt')} icon="plus" onPress={() => void accept(suggestion)} disabled={h.busy || !h.ready} /><Action label={C('dismiss')} tone="quiet" disabled={h.busy} onPress={() => void h.mutate(value => ({ ...value, dismissed: [...value.dismissed, suggestion.key] }), C('suggestDismissed'))} /></View>
-    </View>) : <Txt muted>{C(h.state.settings.showSuggestions ? 'noSuggestions' : 'suggestionsOff')}</Txt>}<Txt muted size={12}>{C('scopeNote')}</Txt></View>
-    <View style={[s.panel, s.panelPad]}><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><Txt bold size={18}>{C('dayProgress')}</Txt><Txt bold>{summary.done + ' / ' + summary.total}</Txt></View><View style={s.progress}><View style={[s.progressFill, { width: `${summary.total ? summary.done / summary.total * 100 : 0}%` }]} /></View><Txt muted>{C(!summary.total ? 'noDayWork' : summary.done === summary.total ? 'allComplete' : !summary.done ? 'zeroProgress' : 'dayWork')}</Txt></View>
-    <View style={[s.panel, s.panelPad]}><Txt bold size={18}>{C('quickAdd')}</Txt><View style={[s.quickGrid, { flexDirection: row }]}>{(['call', 'viewing', 'available', 'note'] as const).map(kind => <View style={s.quickButton} key={kind}><Action label={C(kind === 'call' ? 'addCall' : kind === 'viewing' ? 'addViewing' : kind === 'available' ? 'addCheck' : 'addNote')} onPress={() => openEditor(kind)} disabled={!h.ready} icon={kind === 'call' ? 'phone' : kind === 'viewing' ? 'calendar' : kind === 'available' ? 'home' : 'edit-3'} tone="quiet" /></View>)}</View></View>
-    <View style={[s.panel, s.panelPad]}><Txt bold size={18}>{C('shortcut')}</Txt><View style={[s.quickGrid, { flexDirection: row }]}>{[
-      ['addProperty', 'home', '/capture/transaction'], ['addPerson', 'user-plus', '/person/new'], ['matches', 'target', '/matching'], ['import', 'download', ''],
-    ].map(([label, ico, href]) => <View key={label} style={s.quickButton}><Action label={C(label as AssistantCopyKey)} icon={ico as 'home'} tone="quiet" onPress={() => href ? router.push(href as never) : h.notify(C('importLater'))} /></View>)}</View></View><Txt muted size={12}>{C('localNote')}</Txt>
-  </>;
+  function taskRow(task: Followup) {
+    return <View key={task.id} style={[s.compactTask, { flexDirection: row }]} testID={`assistant-task-${task.id}`}>
+      <Feather name={task.kind === 'call' ? 'phone' : task.kind === 'viewing' ? 'calendar' : task.kind === 'available' ? 'home' : 'edit-3'} color={c.blue} size={20} />
+      <Pressable style={s.compactTaskOpen} accessibilityRole="button" accessibilityLabel={task.title} onPress={() => openDetail(task)}>
+        <Text style={[s.compactTaskTitle, { fontFamily: fonts.semiBold, textAlign: align }]} numberOfLines={2}>{task.title}</Text>
+        {!!personName(task) && <Txt muted size={12}>{personName(task)}</Txt>}
+      </Pressable>
+      <View style={s.compactTime}>{task.status === 'done' ? <Feather name="check-circle" size={18} color={c.green} /> : <Txt size={12} color={task.date < today ? c.red : c.muted}>{timeLabel(task.time)}</Txt>}{overdue && <Txt muted size={11}>{dateLabel(task.date, { day: 'numeric', month: 'short' })}</Txt>}</View>
+    </View>;
+  }
   let modalTitle: string = '', modalBody: React.ReactNode = null, modalFooter: React.ReactNode = null;
   if (mode === 'editor') {
     modalTitle = C(expected ? 'edit' : 'addFollowup');
@@ -261,25 +235,59 @@ export default function DailyAssistantScreen() {
       {sortFollowups(h.state.tasks.filter(v => v.propertyId === recordId && v.status === 'pending')).map(task => <Pressable key={task.id} style={s.pickerRow} onPress={() => openDetail(task)}><Txt>{task.title}</Txt><Txt muted size={12}>{dateLabel(task.date) + ' · ' + timeLabel(task.time)}</Txt></Pressable>)}</> : <AlertNote>{C('missingProperty')}</AlertNote>;
     modalFooter = <View style={s.grow}><Action label={C('addForProperty')} tone="primary" disabled={!p} onPress={() => openEditor('available', undefined, { propertyId: recordId, title: C('confirmProperty') })} /></View>;
   } else if (mode === 'settings') {
-    modalTitle = C('settings'); modalBody = <><Txt muted>{C('settingsDescription')}</Txt>{(['showSuggestions', 'showOverdue'] as const).map(key => <View key={key} style={[s.toggle, { flexDirection: row }]}><View style={s.grow}><Txt>{C(key)}</Txt></View><Switch accessibilityLabel={C(key)} value={preferences[key]} onValueChange={value => setPreferences(p => ({ ...p, [key]: value }))} /></View>)}<Txt bold>{C('checkDays')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{[3, 7, 14].map(days => <Pressable key={days} accessibilityRole="button" accessibilityState={{ selected: preferences.checkAfterDays === days }} onPress={() => setPreferences(p => ({ ...p, checkAfterDays: days }))} style={[s.choice, preferences.checkAfterDays === days && { backgroundColor: c.pale }]}><Txt>{days + ' ' + C('days')}</Txt></Pressable>)}</View><Txt muted>{C('localNote')}</Txt></>;
-    modalFooter = <Footer save="save" onPress={() => void h.mutate(value => ({ ...value, settings: preferences }), C('settingsSaved')).then(ok => { if (ok) close(); })} />;
+    modalTitle = C('settings'); modalBody = <><Txt muted>{C('settingsDescription')}</Txt><View style={[s.toggle, { flexDirection: row }]}><View style={s.grow}><Txt>{C('showOverdue')}</Txt></View><Switch accessibilityLabel={C('showOverdue')} value={preferences.showOverdue} onValueChange={showOverdue => setPreferences(p => ({ ...p, showOverdue }))} /></View><Txt muted>{C('localNote')}</Txt></>;
+    modalFooter = <Footer save="save" onPress={() => void h.mutate(value => ({ ...value, settings: { ...value.settings, showOverdue: preferences.showOverdue } }), C('settingsSaved')).then(ok => { if (ok) close(); })} />;
   } else if (mode === 'cancel' && expected) {
     modalTitle = C('cancelTask'); modalBody = <Txt>{C('cancelQuestion')}</Txt>;
     modalFooter = <><View style={s.grow}><Action label={C('confirmCancel')} tone="danger" disabled={h.busy || !h.ready} onPress={() => void h.mutate((value, inventory) => changeTaskStatus(value, expected, 'cancelled', inventory, new Date().toISOString()), C('cancelledNotice')).then(ok => { if (ok) close(); })} /></View><Action label={C('back')} onPress={() => setMode('detail')} tone="quiet" /></>;
+  } else if (mode === 'actions') {
+    modalTitle = C('homeActions'); modalBody = <>{([
+      ['call', 'phone', 'addCall'], ['viewing', 'calendar', 'addViewing'], ['meeting', 'users', 'clientMeeting'], ['available', 'home', 'addCheck'], ['note', 'edit-3', 'addNote'],
+    ] as const).map(([kind, icon, label]) => <Action key={kind} label={C(label)} icon={icon} tone="quiet" disabled={!h.ready} onPress={() => openEditor(kind === 'meeting' ? 'note' : kind, undefined, kind === 'meeting' ? { title: C('clientMeeting') } : {})} />)}<Action label={C('settings')} icon="sliders" tone="quiet" disabled={!h.ready} onPress={() => { setPreferences(h.state.settings); setMode('settings'); }} /></>;
+  } else if (mode === 'notifications') {
+    modalTitle = C('notifications'); modalBody = overdueTasks.length ? <>{overdueTasks.map(taskRow)}</> : <Txt muted>{C('noNotifications')}</Txt>;
+  } else if (mode === 'allTasks') {
+    const tasks = sortFollowups(h.state.tasks.filter(task => allStatus === 'all' || task.status === allStatus));
+    const shown = query.trim() ? searchAssistantFollowups(tasks, h.inventory, query) : tasks;
+    modalTitle = C('allFollowups'); modalBody = <><AssistantField label={C('searchTasks')} value={query} onChangeText={setQuery} /><View style={[s.choiceRow, { flexDirection: row }]}>{(['pending', 'done', 'cancelled', 'all'] as const).map(status => <Action key={status} label={C(status === 'pending' ? 'homePending' : status === 'all' ? 'homeAll' : status === 'cancelled' ? 'cancelledFilter' : 'done')} tone={allStatus === status ? 'primary' : 'quiet'} onPress={() => setAllStatus(status)} />)}</View>{shown.slice(0, 50).map(task => <View key={task.id}>{taskRow(task)}<Txt muted size={12}>{dateLabel(task.date)}</Txt></View>)}{!shown.length && <Txt muted>{C('noSearch')}</Txt>}{shown.length > 50 && <Txt muted>{C('homeShowingFirst')}</Txt>}</>;
+  } else if (mode === 'share') {
+    const found = h.inventory.properties.filter(p => p.title.toLocaleLowerCase().includes(pickerQuery.trim().toLocaleLowerCase()));
+    modalTitle = C('homeChooseProperty'); modalBody = <><AssistantField label={C('pickerSearch')} value={pickerQuery} onChangeText={setPickerQuery} />{found.slice(0, 50).map(p => <Action key={p.id} label={p.title} tone="quiet" icon="share-2" onPress={() => { close(); router.push(`/property/${encodeURIComponent(p.id)}/share` as never); }} />)}{!found.length && <Txt muted>{C('noRecords')}</Txt>}{found.length > 50 && <Txt muted>{C('homeShowingFirst')}</Txt>}</>;
+  } else if (mode === 'requirements') {
+    modalTitle = C('homeRequirements'); modalBody = h.catalog.requirements.length ? <>{h.catalog.requirements.map(req => {
+      const summary = getRequirementCardSummary(req, { language, translate: t, formatPrice: (amount, currency) => formatPrice(amount, currency, language), formatRentalPrice: (amount, currency, period) => formatRentalPrice(amount, currency, period, language, t) });
+      const person = h.catalog.people.find(p => p.id === req.seekerId);
+      return <Pressable key={req.id} accessibilityRole="button" onPress={() => { close(); router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: req.id } } as never); }} style={s.pickerRow}><Txt color={c.person} bold>{person?.name ?? C('missingPerson')}</Txt><Txt color={c.blue}>{[summary.subtypeLabel || summary.typeLabel, summary.areaLabel].filter(Boolean).join(' · ')}</Txt><Txt muted>{summary.valueLabel}</Txt></Pressable>;
+    })}</> : <Txt muted>{C('homeEmptyRequirements')}</Txt>;
+  } else if (mode === 'matches') {
+    const groupIds = [...new Set(matches.items.map(item => matchView === 'people' ? item.person.id : item.result.propertyId))];
+    modalTitle = C('bestHomeMatches'); modalBody = <><View style={[s.row, { flexDirection: row }]}><Action label={C('byPeople')} tone={matchView === 'people' ? 'primary' : 'quiet'} onPress={() => setMatchView('people')} /><Action label={C('byProperties')} tone={matchView === 'properties' ? 'primary' : 'quiet'} onPress={() => setMatchView('properties')} /></View><Txt muted size={12}>{C('homeMatchScope')}</Txt>{groupIds.map(groupId => <View key={groupId} style={s.homeMatchGroup}><Txt bold color={matchView === 'people' ? c.person : c.blue}>{matchView === 'people' ? matches.items.find(item => item.person.id === groupId)?.person.name : propertyTitle(groupId)}</Txt>{matches.items.filter(item => (matchView === 'people' ? item.person.id : item.result.propertyId) === groupId).map(item => {
+      const key = JSON.stringify([item.person.id, item.result.propertyId]);
+      return <MatchingResultCard key={key} rank={matches.items.indexOf(item) + 1} result={item.result} requirement={item.requirement} property={h.catalog.properties.find(p => p.core.id === item.result.propertyId)} personName={item.person.name} perspective={matchView} expanded={expandedMatch === key} onToggle={() => setExpandedMatch(expandedMatch === key ? null : key)} onPress={() => linkedPreview('property', item.result.propertyId)} onViewPerson={() => linkedPreview('person', item.person.id)} />;
+    })}</View>)}{h.error && !h.ready ? <Txt color={c.red}>{C('loadError')}</Txt> : matches.status === 'loading' ? <ActivityIndicator color={c.blue} /> : matches.status === 'error' ? <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote> : !matches.items.length ? <Txt muted>{C('homeNoMatches')}</Txt> : null}</>;
+    modalFooter = <View style={s.grow}><Action label={C('allMatches')} tone="primary" onPress={() => { close(); router.push('/matching' as never); }} /></View>;
+
   }
-  return <View style={s.root}><ScrollView testID="assistant-page-scroll" style={s.outer} nestedScrollEnabled keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
-    <View testID="assistant-header" style={[s.header, { paddingTop: insets.top + 5 }]}><View style={[s.headerRow, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><Feather name="home" color="white" size={25} /><Text style={[s.logo, { fontFamily: fonts.bold }]}>ViewState</Text></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.avatar} accessibilityRole="button" accessibilityLabel={t('more.title')} onPress={() => router.push('/more' as never)}><Txt bold color={c.navy}>{account.profile.name.trim().slice(0, 1) || 'V'}</Txt></Pressable></View></View>
-      <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={t('search.open')} style={[s.search, { flexDirection: row }]} onPress={() => router.push('/search' as never)}><Feather name="search" color={c.muted} size={18} /><View style={s.grow}><Txt muted>{t('common.search')}</Txt></View></Pressable></View>
-    <View style={s.content}><View style={[s.headingRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.title, { fontFamily: fonts.bold, textAlign: align }]}>{C('greeting')}</Text><Text style={[s.date, { fontFamily: fonts.regular, textAlign: align }]}>{dateLabel(today, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</Text></View><Action label={C('addFollowup')} onPress={() => openEditor()} icon="plus" tone="primary" disabled={!h.ready || h.busy} /></View>
+  const best = matches.items[0], profileName = account.profile.name.trim(), greeting = profileName ? C(homeGreetingPeriod(h.now)) + ' ' + profileName : C('defaultName');
+  return <View style={s.root}><ScrollView testID="assistant-page-scroll" style={s.outer} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 14 }}>
+    <View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><Feather name="home" size={25} color="white" /><Text style={[s.logo, { fontFamily: fonts.bold }]}>ViewState</Text></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (h.ready ? overdueTasks.length : '—')} onPress={() => setMode('notifications')} disabled={!h.ready}><Feather name="bell" size={21} color="white" />{h.ready && overdueTasks.length > 0 && <View style={s.homeBellBadge}><CountBadge count={overdueTasks.length} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={t('more.title')} onPress={() => router.push('/more' as never)}><Feather name="settings" size={21} color="white" /></Pressable></View></View></View>
+    <View style={s.homeContent}>
+      <View style={[s.helloRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.helloTitle, { fontFamily: fonts.bold, textAlign: align }]}>{greeting}</Text><Txt muted size={13}>{C('homeQuestion')}</Txt></View><View style={s.homeDateTools}><Txt bold size={13}>{dateLabel(today, { weekday: 'long' })}</Txt><Txt muted size={11}>{dateLabel(today, { day: 'numeric', month: 'short', year: 'numeric' })}</Txt><View style={[s.row, { flexDirection: row, gap: 0 }]}><IconButton label={C('calendar')} name="calendar" onPress={() => openCalendar()} /><IconButton label={C('homeActions')} name="more-vertical" onPress={() => setMode('actions')} /></View></View></View>
+      <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={C('homeSearch')} style={[s.homeSearch, { flexDirection: row }]} onPress={() => router.push('/search' as never)}><Feather name="search" size={19} color={c.blue} /><View style={s.grow}><Txt muted size={14}>{C('homeSearch')}</Txt></View></Pressable>
       {h.error && !mode ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}
       {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><View style={s.grow}><Txt color={c.red}>{h.notice}</Txt></View>{h.canUndo && <Action label={C('undo')} onPress={() => void h.undo()} tone="danger" disabled={h.busy} />}</View> : null}
-      <View style={[s.panel, s.summary, { flexDirection: row }]}>{[
-        ['client', C(wide ? 'clients' : 'clientsShort'), summary.clients, C('distinctPeople')], ['viewing', C('viewings'), summary.viewings, C('appointments')],
-        ['available', C(wide ? 'availability' : 'availabilityShort'), summary.availability, C('properties')], ['done', C(wide ? 'completed' : 'completedShort'), summary.done, C('tasks')],
-      ].map(([key, label, count, hint], index) => <Pressable key={key} style={[s.stat, index < 3 && { borderEndWidth: 1, borderColor: c.line }]} accessibilityRole="button" accessibilityLabel={`${label}: ${h.ready ? count : '—'}`} onPress={() => { setFilter(key as TaskFilter); setOverdue(false); setQuery(''); }}><Text style={[s.statLabel, { fontFamily: fonts.regular }]}>{label}</Text>{h.ready ? <CountBadge count={count as number} /> : <Txt>—</Txt>}<Text style={[s.statHint, { fontFamily: fonts.regular }]}>{hint}</Text></Pressable>)}</View>
-      <View style={wide ? [s.twoColumns, { flexDirection: row }] : { gap: 14 }}><View style={wide ? s.mainColumn : { gap: 14 }}>{calendarPanel}
-        {h.ready && h.state.settings.showOverdue && overdueTasks.length ? <View style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><Feather name="alert-triangle" color={c.red} size={20} /><CountBadge count={overdueTasks.length} /><View style={s.grow}><Txt color={c.red} bold>{C('overdueNoun')}</Txt></View><Action label={C('review')} tone="danger" onPress={() => { setOverdue(true); setFilter('all'); setQuery(''); }} /></View> : null}
-        {agendaPanel}</View><View style={wide ? s.sideColumn : { gap: 14 }}>{h.ready ? sidePanels : <View style={[s.panel, s.panelPad]}><Txt muted>{C(h.error ? 'loadError' : 'loading')}</Txt></View>}<Action label={C('settings')} icon="sliders" tone="quiet" disabled={!h.ready} onPress={() => { setPreferences(h.state.settings); setMode('settings'); }} /></View></View>
+      <HomeQuickAdd label={C('quickHomeAdd')} closeLabel={C('homeCloseMenu')} labels={{ person: C('homePerson'), property: C('homeProperty'), import: C('homeImport'), share: C('homeShare'), matching: C('homeMatching') }} onAction={quickAction} />
+      <View style={s.homeMatchPanel} testID="home-best-matches"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><View style={s.grow}><View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><Txt bold size={16}>{C('bestHomeMatches')}</Txt>{matches.status === 'ready' && <CountBadge count={matches.items.length} />}</View>{matches.status === 'ready' && matches.items.length > 0 && <Txt muted size={12}>{matches.items.filter(item => item.result.score > 90).length + ' ' + C('aboveNinety')}</Txt>}</View><Action label={C('viewBestMatches')} onPress={() => setMode('matches')} tone="secondary" disabled={matches.status !== 'ready' || !matches.items.length} /></View>
+        {h.error && !h.ready ? <Txt color={c.red}>{C('loadError')}</Txt> : matches.status === 'loading' ? <ActivityIndicator color={c.blue} /> : matches.status === 'error' ? <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote> : best ? <View style={[s.row, { flexDirection: row, justifyContent: 'space-between', marginTop: 10 }]}><View style={s.grow}><Pressable accessibilityRole="button" onPress={() => linkedPreview('person', best.person.id)}><Txt color={c.person} bold>{best.person.name}</Txt></Pressable><Pressable accessibilityRole="button" onPress={() => linkedPreview('property', best.result.propertyId)}><Txt color={c.blue} size={13}>{propertyTitle(best.result.propertyId)}</Txt></Pressable></View><Text style={[s.homeScore, { fontFamily: fonts.bold }]}>{best.result.score}%</Text></View> : <Txt muted>{C('homeNoMatches')}</Txt>}
+      </View>
+      <View style={[s.homeSectionBar, { flexDirection: row }]}><View style={[s.row, s.grow, { flexDirection: row }]}><Txt bold size={18}>{overdue ? C('overdueTitle') : h.selectedDay === today ? C('today') : dateLabel(h.selectedDay, { weekday: 'short', day: 'numeric', month: 'short' })}</Txt>{h.ready && <CountBadge count={rows.length} />}</View><Action label={C('allFollowups')} tone="quiet" onPress={() => { setQuery(''); setMode('allTasks'); }} disabled={!h.ready} /></View>
+      {h.ready && h.state.settings.showOverdue && overdueTasks.length > 0 ? <View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><Feather name="alert-triangle" color={c.red} size={17} /><View style={s.grow}><Txt color={c.red} size={12}>{overdueTasks.length + ' ' + C('overdueNoun')}</Txt></View><Action label={C(overdue ? 'today' : 'review')} tone="danger" onPress={() => overdue ? chooseDay(today) : setOverdue(true)} /></View> : null}
+      <View style={s.homeAgenda}><GestureScrollView ref={listRef} testID="assistant-task-list" accessibilityLabel={C('agendaDay')} disallowInterruption shouldActivateOnStart={Platform.OS === 'android'} bounces={false} overScrollMode="never" scrollsToTop={false} persistentScrollbar removeClippedSubviews={false} keyboardShouldPersistTaps="handled" style={[{ height: listHeight, flexGrow: 0 }, containedWebScroll]}>
+        {!h.ready ? <View style={s.empty}>{h.error ? <Txt color={c.red}>{C('loadError')}</Txt> : <ActivityIndicator color={c.blue} />}</View> : rows.length ? rows.map(taskRow) : <View style={s.empty}><Feather name="check-circle" color={c.blue} size={26} /><Txt bold>{C('noTasks')}</Txt><Action label={C('addFollowup')} onPress={() => openEditor()} /></View>}
+      </GestureScrollView></View>
+      <Txt bold size={18}>{C('homeOverview')}</Txt><View style={[s.homeOverview, { flexDirection: row }]}>{[
+        ['properties', h.catalog.properties.length, C('properties')], ['people', h.catalog.people.length, t('people.title')], ['requirements', h.catalog.requirements.length, C('homeRequirements')],
+      ].map(([key, count, label]) => <Pressable key={key} style={s.homeStat} accessibilityRole="button" disabled={!h.ready} onPress={() => key === 'requirements' ? setMode('requirements') : router.push(('/' + key) as never)}><Text style={[s.homeStatValue, { fontFamily: fonts.medium }]}>{h.ready ? count : '—'}</Text><Txt muted size={13}>{label}</Txt></Pressable>)}</View>
     </View></ScrollView>
     {mode && <AssistantSheet title={modalTitle} onClose={close} busy={h.busy} footer={modalFooter}>{modalBody}{formError ? <AlertNote>{formError}</AlertNote> : null}{h.error ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}</AssistantSheet>}
   </View>;

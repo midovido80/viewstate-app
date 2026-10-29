@@ -59,7 +59,7 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
     readFile('app/(tabs)/properties.tsx', 'utf8'),
     readFile('app/(tabs)/people.tsx', 'utf8'),
     readFile('app/(tabs)/index.tsx', 'utf8'),
-    readFile('components/assistant/DailyAssistantScreen.tsx', 'utf8'),
+    readFile('components/assistant/CompactAssistantScreen.tsx', 'utf8'),
   ]);
 
   assert.match(layout, /sceneStyle:\s*\{\s*overflow:\s*['"]hidden['"]/);
@@ -79,7 +79,7 @@ test('keeps the tab bar in layout and isolates it from dynamic screen content', 
     .map(name => layout.indexOf(name));
   assert.ok(tabOrder.every(index => index >= 0));
   assert.deepEqual(tabOrder, [...tabOrder].sort((left, right) => left - right));
-  assert.match(home, /export default DailyAssistantScreen/);
+  assert.match(home, /export default CompactAssistantScreen/);
   assert.match(assistant, /h\.notify\(C\('importLater'\)\)/);
   assert.doesNotMatch(assistant, /requestPermissionsAsync|expo-contacts/);
   assert.doesNotMatch(home, /contacts|phone/i);

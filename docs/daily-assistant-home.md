@@ -1,31 +1,21 @@
-# Daily assistant Home
+# Compact assistant Home
 
-Base: `bff056b156f94d347b48dbc0f1db59ec16d86494`.
-Approved reference: `design/daily-assistant-approved-demo.html` (the independent-scroll revision).
+Approved reference: `design/daily-assistant-approved-demo.html`, compact demo version 2. The prior dense Home component is removed. The tabs index renders only `CompactAssistantScreen`; there is one assistant repository and one versioned local log, with no duplicate task engine or migration.
 
-Home now presents the Kuwait date, daily counts, calendar, scheduled follow-ups, overdue work, evidence-based suggestions, progress and quick actions. Existing property/person/matching/import shortcuts remain available. Arabic RTL and English use existing application fonts. Warnings, notices and numeric badges use the requested red treatment. Presentation tokens live only in `components/assistant/styles.ts`; they can be replaced without replacing the follow-up log.
+The screen contains greeting and current Kuwait date, calendar and action tools, global search, a five-action radial quick-add menu, one best-match summary, a compact independently scrolling agenda, and three real overview counts. Existing property/person capture routes are used directly. Sharing selects a saved property and opens its existing sharing screen. Home import remains explicitly unavailable; it never requests permissions or pretends to import.
 
-The agenda heading and horizontal filters sit outside its bounded vertical ScrollView. Both page and agenda enable native nested scrolling; the web agenda contains wheel overscroll. No handler disables the outer page. Dialog action footers remain outside dialog scrolling, with safe-area and keyboard accommodation. Targets are at least 44px for primary controls.
+The radial menu uses existing Animated APIs, labelled 76×72px actions, reduced-motion support, outside dismissal, a close button and native Back dismissal. The app's real tab bar remains unchanged. The agenda uses the already-installed gesture-handler ScrollView with interruption protection on native, plus web overscroll containment; the heading stays outside. Main-page scrolling is never disabled through a persistent scroll-lock state.
 
-Follow-ups start empty. They link to canonical saved people/properties, or optionally use an explicitly reminder-only person label. Nothing seeds fictional records or invents contact dates. Outcomes, rescheduling, cancellation/recovery, history, next follow-up, reload and latest-action undo operate on a separate versioned AsyncStorage record. Writes are serialized and read back; damaged/future schemas are preserved. Web writers additionally require Web Locks in a secure browser. Uncertain writes require reload. Call/WhatsApp buttons open the external app only on explicit action; opening one never records a successful contact or sends a message automatically.
+Match recommendations use the existing BrokerInitiatedMatching and MyPropertiesMatchingSource against one saved catalog snapshot. No scoring rules or commission logic are introduced. Only eligible qualified results of the current engine version are shown, highest score first across its shortlists, capped at five distinct person/property pairs. Multiple requests for the same person/property keep the strongest result. Unknown-only results do not pad the list. Counts and scores are actual; zero, loading, unavailable and error states remain distinct. Matching work yields between requirements and is cancelled when Home loses focus.
 
-Availability confirmations are assistant log entries only: they do not change Property fields or the matching engine. Suggestions use explicit logged contact/availability and upcoming viewing evidence; accepting one is an explicit action. There are no background/device push notifications, cloud synchronization, SMS, paid services, dependencies, migrations, or schema changes in this package.
+The existing global search also searches saved follow-ups by title, notes, linked names/areas, and normalized dates including Arabic/Persian digits. All task statuses are searchable. Selecting a task returns to the single Home detail sheet, including repeated opens of the same task. Catalog search remains independent if task storage is unavailable. User names are preserved.
 
-## Verification
+Follow-up creation, rescheduling, outcomes, history, cancellation/recovery, latest-action undo, storage safeguards and explicit contact actions reuse the existing implementation. No sample records or percentages are imported from the reference HTML into app data. Background/device notifications, cloud services, dependencies and property/person form changes are outside this package.
 
-- Mobile suite: 788 passing, including 15 new domain/repository scenarios. Locally the exact test file list was run with `node --import tsx --test` because the tsx CLI's IPC socket is prohibited in this execution environment.
-- Property domain script passed, including its 25 matching tests.
-- Full workspace and mobile typechecks passed.
-- Android JavaScript export passed; this is not a signed APK or device test.
-- Browser app mounted and rendered. Its HTTP-only local preview correctly refuses storage access because Web Locks/secure crypto are unavailable. This prevents claiming successful interactive save/reload or gesture acceptance in that browser. No application security fallback was added for the local preview.
+## Verification and acceptance
 
-## Founder acceptance on secure Preview / device
-
-1. Confirm the served commit and clean checkout; install the unchanged lockfile with the project's Node 24 / pnpm 10.26.1 setup. Start the existing Expo workflow. Do not seed, clear or migrate business records.
-2. At 360px, 390px and 430px, check Arabic/English, large system text, safe areas, buttons, calendar and modal keyboard/footer access.
-3. Add enough real test follow-ups to overflow the agenda. Drag/wheel inside it: only tasks move, heading/filters remain. At both list boundaries, verify the page stays still. Drag outside it: the page/header move normally. Repeat twice, including returning from other tabs and opening/closing dialogs. Confirm native Android boundary behavior separately; browser wheel behavior is not proof of touch behavior.
-4. Create a viewing with time/duration and linked person/property. Reject overlap, allow adjacent times, save/reload, reschedule, search and filter. Counts distinguish people, properties and tasks.
-5. Record no answer: no successful contact/availability is inferred. Record outcome plus next follow-up, reload, undo once, cancel and recover. Verify a second open web tab cannot overwrite a stale edit.
-6. Check explicit availability results and suggestions, contact actions, existing shortcuts, tab navigation and untouched property/person forms. No device notifications should be promised while the app is closed.
-
-The package is ready for secure Preview review after CI, not final Founder/device acceptance. Replit and protected branches are not advanced by this package. Revert the package commit or select the base SHA to return to the previous Home; the separate assistant storage key is left intact and ignored by that version.
+- 793 mobile tests pass, including five new quick-route, current-engine selection, deduplication, search/date and Kuwait greeting scenarios.
+- Property Domain and 25 matching tests, full-workspace/mobile TypeScript, and Android JavaScript export pass locally. JavaScript export is not an APK or device test.
+- The app renders at 390px in Arabic. The radial menu opens with labelled actions; choosing Person reaches the existing NewPersonScreen. HTTP-only local QA cannot complete secure crypto/Web Locks operations: that existing screen fails its secure randomUUID call and the assistant refuses storage. No insecure workaround was added. A secure Replit Preview is required for complete route/save/reload acceptance.
+- Still required: secure Preview Arabic/English, profile greeting, property/person navigation, share/import states, top-five comparison grouping, empty/error inventories, repeated task search opens, save/reload and outcome/undo. Check actual Android/iOS inner-scroll boundary behaviour, keyboard and safe areas separately.
+- Main/Pilot and EAS are not changed. The old Home PR is closed and its local branch deleted. Remote old-branch deletion requires successful GitHub authentication and must be verified separately; a remaining Git reference does not create a second page in the running app.

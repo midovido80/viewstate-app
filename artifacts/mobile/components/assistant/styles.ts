@@ -7,6 +7,17 @@ export const assistantTone = {
 };
 const c = assistantTone;
 export const s = StyleSheet.create({
+  homeHeader: { backgroundColor: c.navy, paddingBottom: 8 }, homeHeaderInner: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: 16, alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  homeContent: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: 16, gap: 12 },
+  helloRow: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }, helloTitle: { fontSize: 21, lineHeight: 30, color: c.ink, marginBottom: 3 },
+  homeDateTools: { alignItems: 'center', maxWidth: 112 }, homeSearch: { backgroundColor: c.paper, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, minHeight: 48, alignItems: 'center', gap: 10 },
+  homeBellBadge: { position: 'absolute', top: -3, end: -2, transform: [{ scale: .7 }] },
+  homeMatchPanel: { backgroundColor: c.pale, borderRadius: 16, padding: 14, gap: 6 }, homeScore: { color: c.blue, fontSize: 25, lineHeight: 34 },
+  homeSectionBar: { minHeight: 44, alignItems: 'center', gap: 8 }, homeAgenda: { backgroundColor: c.paper, borderRadius: 16, overflow: 'hidden' },
+  compactTask: { minHeight: 74, paddingVertical: 9, marginHorizontal: 14, alignItems: 'center', gap: 9, borderBottomWidth: 1, borderColor: c.line },
+  compactTaskOpen: { flex: 1, minWidth: 0, minHeight: 52, justifyContent: 'center', gap: 2 }, compactTaskTitle: { fontSize: 14, lineHeight: 22, color: c.ink },
+  compactTime: { maxWidth: 74, alignItems: 'center' }, homeOverview: { alignItems: 'stretch' }, homeStat: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 64 },
+  homeStatValue: { fontSize: 24, lineHeight: 31, color: c.ink }, homeMatchGroup: { padding: 12, gap: 8, borderRadius: 12, backgroundColor: c.background },
   root: { flex: 1, backgroundColor: c.background }, outer: { flex: 1 },
   content: { width: '100%', maxWidth: 1140, alignSelf: 'center', padding: 16, gap: 14 },
   header: { backgroundColor: c.navy, paddingHorizontal: 18, paddingBottom: 14, gap: 12 },

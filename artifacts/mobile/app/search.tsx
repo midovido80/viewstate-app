@@ -29,6 +29,13 @@ import { getWantedApartmentSubtypeLabel, isOfferedStudio } from '@/services/prop
 import { flexibleSearchTerms } from '@/services/flexibleSearch';
 import { projectPropertyIntent, projectRequirementIntent } from '@/services/recordIntentPresentation';
 
+import { assistantRepository } from '@/services/dailyAssistantDevice';
+import { searchAssistantFollowups } from '@/services/assistantHome';
+import { ASSISTANT_COPY } from '@/services/dailyAssistantCopy';
+import type { Followup } from '@/services/dailyAssistant';
+import { getPropertyCardSummary } from '@/services/cardSummaryPresentation';
+import { formatPrice, formatRentalPrice } from '@/constants/market';
+
 type SearchState =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly data: GlobalSearchData }
@@ -152,6 +159,8 @@ export default function GlobalSearchScreen() {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>({ status: 'loading' });
   const [notice, setNotice] = useState('');
+  const [followups, setFollowups] = useState<Followup[]>([]);
+  const [followupsUnavailable, setFollowupsUnavailable] = useState(false);
   const loadGenerationRef = useRef(0);
 
   const loadRecords = useCallback(async () => {
@@ -219,8 +228,12 @@ export default function GlobalSearchScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
+    let active = true;
+    setFollowups([]); setFollowupsUnavailable(false);
+    void assistantRepository.load().then(value => { if (active) setFollowups(value.tasks); }).catch(() => { if (active) setFollowupsUnavailable(true); });
     void loadRecords();
     return () => {
+      active = false;
       loadGenerationRef.current += 1;
     };
   }, [loadRecords]));
@@ -229,11 +242,18 @@ export default function GlobalSearchScreen() {
     () => state.status === 'ready' ? searchGlobalDataWithMatchReasons(state.data, query) : null,
     [query, state],
   );
+  const taskResults = useMemo(() => searchAssistantFollowups(followups, {
+    people: state.status === 'ready' ? state.data.people.map(p => ({ id: p.id, name: p.name, client: false })) : [],
+    properties: state.status === 'ready' ? state.data.properties.map(p => {
+      const summary = getPropertyCardSummary(p, { language, translate: t, formatPrice: (amount, currency) => formatPrice(amount, currency, language), formatRentalPrice: (amount, currency, period) => formatRentalPrice(amount, currency, period, language, t) });
+      return { id: p.core.id, title: [summary.subtypeLabel || summary.typeLabel, summary.areaLabel].filter(Boolean).join(' · ') };
+    }) : [],
+  }, query), [followups, state, query, language, t]);
   const hasQuery = flexibleSearchTerms(query).length > 0;
   const hasRecords = !!state.status && state.status === 'ready'
-    && (state.data.people.length + state.data.properties.length + state.data.requirements.length > 0);
+    && (state.data.people.length + state.data.properties.length + state.data.requirements.length + followups.length > 0);
   const hasResults = !!results && (
-    results.people.length + results.properties.length + results.requirements.length > 0
+    results.people.length + results.properties.length + results.requirements.length + taskResults.length > 0
   );
 
   const recordMissing = () => {
@@ -350,6 +370,8 @@ export default function GlobalSearchScreen() {
           </View>
         ) : null}
 
+        {followupsUnavailable && <Text accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: fonts.regular }}>{ASSISTANT_COPY[language].loadError}</Text>}
+        {taskResults.length > 0 && <View style={styles.section} testID="search-section-followups"><Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{ASSISTANT_COPY[language].allFollowups} · {taskResults.length}</Text>{taskResults.slice(0, 50).map(task => <ResultCard key={task.id} icon="calendar" title={task.title} subtitle={[task.date, task.time, task.status === 'pending' ? ASSISTANT_COPY[language].homePending : task.status === 'done' ? ASSISTANT_COPY[language].done : ASSISTANT_COPY[language].cancelledFilter].filter(Boolean).join(' · ')} testID={`search-followup-${task.id}`} onPress={() => router.push({ pathname: '/', params: { followupId: task.id } } as never)} />)}{taskResults.length > 50 && <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{ASSISTANT_COPY[language].homeShowingFirst}</Text>}</View>}
         {state.status === 'ready' && hasQuery && hasResults && state.data.linkedPeopleUnavailable ? (
           <View
             style={[styles.notice, { backgroundColor: colors.card, borderColor: colors.warning }]}

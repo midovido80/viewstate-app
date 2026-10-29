@@ -1,4 +1,5 @@
 import './dailyAssistant.test';
+import './assistantHome.test';
 import './commercialFloorSale.test';
 import './accountFoundation.test';
 import './commercialComplexSale.test';

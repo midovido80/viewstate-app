@@ -1,3 +1,3 @@
-import DailyAssistantScreen from '@/components/assistant/DailyAssistantScreen';
+import CompactAssistantScreen from '@/components/assistant/CompactAssistantScreen';
 
-export default DailyAssistantScreen;
+export default CompactAssistantScreen;
