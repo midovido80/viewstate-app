@@ -6,7 +6,8 @@ import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { s, assistantTone as c } from './styles';
 export function useAssistantUI() {
   const { isRTL, fonts } = useI18n();
-  return { fonts, row: isRTL ? 'row-reverse' as const : 'row' as const, align: isRTL ? 'right' as const : 'left' as const };
+  // The app root already sets layout direction. Reversing the row again mirrors RTL twice.
+  return { fonts, row: 'row' as const, align: isRTL ? 'right' as const : 'left' as const };
 }
 export function CountBadge({ count, label }: { count: number; label?: string }) {
   const { fonts } = useAssistantUI();
@@ -40,7 +41,7 @@ export function AssistantSheet({ title, onClose, children, footer, busy }: { tit
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
       style={[s.backdrop, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Pressable accessibilityLabel={title} accessibilityRole="button" disabled={busy} onPress={onClose} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }} />
-      <View accessibilityViewIsModal style={s.sheet}>
+      <View accessibilityViewIsModal style={[s.sheet, { direction: align === 'right' ? 'rtl' : 'ltr' }]}>
         <View style={[s.sheetHeader, { flexDirection: row }]}><Text accessibilityRole="header" style={[s.sectionTitle, s.grow, { fontFamily: fonts.bold, textAlign: align }]}>{title}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={align === 'right' ? 'إغلاق' : 'Close'} disabled={busy} style={s.iconButton} onPress={onClose}><Feather name="x" color={c.ink} size={23} /></Pressable></View>
         <ScrollView style={s.sheetBody} keyboardShouldPersistTaps="handled" contentContainerStyle={s.sheetContent} bounces={false}>{children}</ScrollView>
