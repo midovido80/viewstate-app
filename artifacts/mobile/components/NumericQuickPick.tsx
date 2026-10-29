@@ -1,3 +1,4 @@
+import { RequiredLabelText } from '@/components/RequiredForm';
 import { propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
@@ -69,9 +70,9 @@ export function NumericQuickPick({
 
   return (
     <View style={styles.container} testID={testID}>
-      <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+      <RequiredLabelText style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
         {label}
-      </Text>
+      </RequiredLabelText>
       <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         {quickPickValues.map(option => (
           <ChoiceChip

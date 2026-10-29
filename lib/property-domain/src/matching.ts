@@ -4,7 +4,7 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v2" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v3" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -190,7 +190,7 @@ export function matchingRefinementFields(
 ): string[] {
   return [
     ...new Set([
-      "budget",
+      ...(requirement.budget.maximum !== undefined || requirement.budget.minimum !== undefined ? ["budget"] : []),
       ...(requirement.preferredAreaMode === "all_kuwait" ? [] : ["location"]),
       ...(requirement.bedroomsMinimum === undefined ? [] : ["bedrooms"]),
       ...(requirement.bathroomsMinimum === undefined ? [] : ["bathrooms"]),
@@ -322,7 +322,7 @@ export function evaluateMatch(
       true,
     );
   if (property.core.propertyType === "other_built_property")
-    add("propertyUse", "residential / commercial", undefined, 0, "exact", true);
+    add("propertyUse", requirement.propertyUse ?? "residential / commercial", requirement.propertyUse === undefined ? undefined : facts.propertyUse, 0, "exact", true);
   const subtype = requirement.catalogPreferences?.find(
     (item) => item.field === "apartmentSubtype" && item.kind === "choice",
   );
@@ -359,14 +359,12 @@ export function evaluateMatch(
         true,
       );
   }
-  add(
-    "budget",
-    requirement.budget.maximum,
-    price(property).amount,
-    35,
-    "maximum",
-    false,
+  if (requirement.budget.maximum !== undefined) add(
+    'budget', requirement.budget.maximum, price(property).amount, 35, 'maximum', false,
     MATCHING_DEFAULT_POLICY.maximumPriceIncrease,
+  );
+  else if (requirement.budget.minimum !== undefined) add(
+    'budget', requirement.budget.minimum, price(property).amount, 35, 'minimum', false,
   );
   // All Kuwait is unrestricted. Area selections are a set, not an inferred priority list.
   if (

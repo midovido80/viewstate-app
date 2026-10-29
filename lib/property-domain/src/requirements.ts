@@ -24,8 +24,8 @@ export const REQUIREMENT_AREA_MODES = ["specific_areas", "all_kuwait"] as const;
 export type RequirementAreaMode = typeof REQUIREMENT_AREA_MODES[number];
 
 export interface SeekerRequirementBudget {
-  readonly minimum: number;
-  readonly maximum: number;
+  readonly minimum?: number;
+  readonly maximum?: number;
   readonly currencyCode: string;
 }
 
@@ -56,11 +56,14 @@ export interface SeekerRequirementBase {
   readonly preferredAreaMode?: RequirementAreaMode;
   readonly budget: SeekerRequirementBudget;
   readonly notes: string;
+  /** Explicitly unconstrained inputs; no additional scoring or hard-filter meaning. */
+  readonly unspecifiedFields?: readonly ('budget' | 'bedrooms' | 'bathrooms' | 'area')[];
   readonly preferredNearbyServices?: readonly string[];
   readonly preferredAmenities?: readonly ResidentialAmenity[];
   readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
   readonly catalogPreferences?: readonly CatalogPreference[];
   readonly floorUse?: FloorUse;
+  readonly propertyUse?: FloorUse;
   readonly masterBedroomsMinimum?: number;
   readonly driverRoom?: boolean;
   readonly bedroomsMinimum?: number;
@@ -146,10 +149,12 @@ const REQUIREMENT_FIELDS = new Set([
   "budget",
   "notes",
   "preferredNearbyServices",
+  "unspecifiedFields",
   "preferredAmenities",
   "preferredAmenityExclusions",
   "catalogPreferences",
   "floorUse",
+  "propertyUse",
   ...REQUIREMENT_TYPED_FIELDS,
   ...RENT_FIELDS,
   ...COMMON_SPEC_FIELDS,
@@ -310,6 +315,22 @@ export function validateSeekerRequirement(
     issues.push(issue("required", ["notes"], "Broker-readable Notes must be a string."));
   }
 
+  if (value.unspecifiedFields !== undefined) {
+    const allowed = ['budget', 'bedrooms', 'bathrooms', 'area'];
+    if (!Array.isArray(value.unspecifiedFields) || value.unspecifiedFields.some(item => !allowed.includes(item)) || new Set(value.unspecifiedFields).size !== value.unspecifiedFields.length) {
+      issues.push(issue('invalid_requirement', ['unspecifiedFields'], 'Unspecified inputs must be unique approved field names.'));
+    } else {
+      const budget = isRecord(value.budget) ? value.budget : {};
+      const conflicts: Record<string, boolean> = {
+        budget: budget.minimum !== undefined || budget.maximum !== undefined,
+        bedrooms: value.bedroomsMinimum !== undefined,
+        bathrooms: value.bathroomsMinimum !== undefined,
+        area: Array.isArray(value.catalogPreferences) && value.catalogPreferences.some(p => isRecord(p) && p.field === 'builtUpAreaSquareMeters'),
+      };
+      for (const field of value.unspecifiedFields) if (conflicts[field]) issues.push(issue('invalid_requirement', ['unspecifiedFields'], 'An unconstrained input cannot also contain a constraint.'));
+    }
+  }
+
   const areaMode = value.preferredAreaMode;
   if (areaMode !== undefined && !REQUIREMENT_AREA_MODES.includes(areaMode as RequirementAreaMode)) {
     issues.push(issue(
@@ -369,7 +390,7 @@ export function validateSeekerRequirement(
       });
       const residentialAmenityScope = isPropertyType(value.propertyType)
         && (["apartment", "house", "villa", "chalet"].includes(value.propertyType)
-          || value.propertyType === "floor" && value.floorUse === "residential");
+          || (value.propertyType === "floor" && value.floorUse === "residential" || value.propertyType === "other_built_property" && value.propertyUse === "residential"));
       if (isPropertyType(value.propertyType) && !residentialAmenityScope) {
         issues.push(issue(
           "amenities_not_allowed",
@@ -398,13 +419,16 @@ export function validateSeekerRequirement(
       });
       const residentialAmenityScope = isPropertyType(value.propertyType)
         && (["apartment", "house", "villa", "chalet"].includes(value.propertyType)
-          || value.propertyType === "floor" && value.floorUse === "residential");
+          || (value.propertyType === "floor" && value.floorUse === "residential" || value.propertyType === "other_built_property" && value.propertyUse === "residential"));
       if (isPropertyType(value.propertyType) && !residentialAmenityScope) {
         issues.push(issue("amenities_not_allowed", ["preferredAmenityExclusions"], "Excluded amenities are supported only for residential Requirements."));
       }
     }
   }
 
+  if (value.propertyUse !== undefined && (value.propertyType !== 'other_built_property' || !isFloorUse(value.propertyUse))) {
+    issues.push(issue('invalid_requirement', ['propertyUse'], 'Property use is only supported on Other requirements.'));
+  }
   if (value.floorUse !== undefined) {
     if (value.propertyType !== "floor" || !isFloorUse(value.floorUse)) {
       issues.push(issue(
@@ -555,6 +579,9 @@ export function validateSeekerRequirement(
   if (!isRecord(budget)) {
     issues.push(issue("invalid_budget", ["budget"], "Budget is required."));
   } else {
+    if (budget.minimum === undefined && budget.maximum === undefined && !(Array.isArray(value.unspecifiedFields) && value.unspecifiedFields.includes('budget'))) {
+      issues.push(issue('invalid_budget', ['budget'], 'Enter a budget or explicitly choose Open budget.'));
+    }
     for (const key of Object.keys(budget)) {
       if (!BUDGET_FIELDS.has(key)) {
         issues.push(issue(
@@ -565,9 +592,9 @@ export function validateSeekerRequirement(
       }
     }
     if (
-      typeof budget.minimum !== "number"
+      budget.minimum !== undefined && (typeof budget.minimum !== "number"
       || !Number.isFinite(budget.minimum)
-      || budget.minimum < 0
+      || budget.minimum < 0)
     ) {
       issues.push(issue(
         "invalid_budget",
@@ -576,9 +603,9 @@ export function validateSeekerRequirement(
       ));
     }
     if (
-      typeof budget.maximum !== "number"
+      budget.maximum !== undefined && (typeof budget.maximum !== "number"
       || !Number.isFinite(budget.maximum)
-      || budget.maximum < 0
+      || budget.maximum < 0)
     ) {
       issues.push(issue(
         "invalid_budget",
@@ -609,7 +636,7 @@ export function validateSeekerRequirement(
   }
 
   const residentialType = ["apartment", "house", "villa", "chalet"].includes(String(value.propertyType))
-    || (value.propertyType === "floor" && value.floorUse === "residential");
+    || ((value.propertyType === "floor" && value.floorUse === "residential" || value.propertyType === "other_built_property" && value.propertyUse === "residential"));
   if (value.bedroomsMinimum !== undefined
     && (!residentialType || !isNonNegativeInteger(value.bedroomsMinimum))) {
     issues.push(issue("invalid_requirement", ["bedroomsMinimum"], "Bedrooms must be a non-negative whole number for residential Requirements."));
@@ -739,6 +766,7 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(validation.value.unspecifiedFields !== undefined ? { unspecifiedFields: [...validation.value.unspecifiedFields] } : {}),
     ...(validation.value.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...validation.value.preferredNearbyServices] } : {}),
     ...(source.bedroomsMinimum !== undefined
       ? { bedroomsMinimum: validation.value.bedroomsMinimum }
@@ -754,6 +782,7 @@ export function normalizeSeekerRequirement(
       : (legacyAmenities.length ? { preferredAmenities: legacyAmenities } : {})),
     ...(excludedAmenities.length ? { preferredAmenityExclusions: excludedAmenities } : {}),
     ...(remainingCatalogPreferences.length ? { catalogPreferences: remainingCatalogPreferences } : {}),
+    ...(source.propertyUse !== undefined ? { propertyUse: validation.value.propertyUse } : {}),
     ...(source.floorUse !== undefined
       ? { floorUse: validation.value.floorUse }
       : {}),

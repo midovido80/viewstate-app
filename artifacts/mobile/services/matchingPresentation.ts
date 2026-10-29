@@ -115,7 +115,7 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
   };
   const rows = result.explanations.map(item => ({
     field: item.criterion, label: matchingCriterionLabel(item.criterion, language),
-    requested: item.criterion === 'budget' ? `${requirement.budget.minimum}–${requirement.budget.maximum} ${requirement.budget.currencyCode}` : value(item.criterion, item.expected),
+    requested: item.criterion === 'budget' ? `${requirement.budget.minimum ?? '—'}–${requirement.budget.maximum ?? '—'} ${requirement.budget.currencyCode}` : value(item.criterion, item.expected),
     offered: item.criterion === 'budget' ? `${result.priceAmount} ${requirement.budget.currencyCode}` : value(item.criterion, item.actual),
     status: item.status,
     statusLabel: item.status === 'matched' ? ar ? 'متوافق' : 'Meets' : item.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'غير متوافق' : 'Differs',
@@ -130,7 +130,7 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
   const withoutLocation = rows.filter(row => row.field !== 'location');
   withoutLocation.push(location);
   const budget = withoutLocation.find(row => row.field === 'budget');
-  if (budget && result.priceAmount < requirement.budget.minimum) budget.statusLabel = ar ? 'أقل من النطاق' : 'Below range';
+  if (budget && requirement.budget.minimum !== undefined && result.priceAmount < requirement.budget.minimum) budget.statusLabel = ar ? 'أقل من النطاق' : 'Below range';
   for (const row of withoutLocation) {
     const nativeMinimum = row.field === 'bedrooms' && requirement.bedroomsMinimum !== undefined || row.field === 'bathrooms' && requirement.bathroomsMinimum !== undefined || row.field === 'masterBedrooms' && requirement.masterBedroomsMinimum !== undefined;
     const catalogMinimum = requirement.catalogPreferences?.some(item => item.field === row.field && item.kind === 'number' && item.comparison === 'minimum');

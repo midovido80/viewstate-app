@@ -1,3 +1,4 @@
+import { RequiredStar, RequiredFormHint } from '@/components/RequiredForm';
 import { readMatchingReturn } from '@/services/matchingReturnSession';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
@@ -961,11 +962,11 @@ export default function StudioCaptureRoute() {
     options: { keyboardType?: 'numeric' | 'decimal-pad'; multiline?: boolean; placeholder?: string } = {},
   ) => (
     <View style={styles.field} key={key}>
-      <Text style={[styles.label, labelStyle]}>{label}</Text>
+      <Text style={[styles.label, labelStyle]}>{label}{key === 'price' && <RequiredStar />}</Text>
       <TextInput
         ref={setFieldRef(key)}
         value={String(values[key] ?? '')}
-        onChangeText={text => update(key, text as StudioFormValues[typeof key])}
+        onChangeText={text => { if ((key === 'budgetMinimum' || key === 'budgetMaximum') && text.trim()) update('budgetOpen', false); update(key, text as StudioFormValues[typeof key]); }}
         keyboardType={options.keyboardType}
         multiline={options.multiline}
         placeholder={options.placeholder}
@@ -1051,7 +1052,7 @@ export default function StudioCaptureRoute() {
       : String(legacyValue);
     return (
       <View ref={setFocusTarget('bathrooms')} style={styles.field} testID="studio-bathrooms-field">
-        <Text style={[styles.label, labelStyle]}>{catalogLabel('bathrooms')}</Text>
+        <Text style={[styles.label, labelStyle]}>{catalogLabel('bathrooms')}<RequiredStar /></Text>
         <View style={[styles.staticValue, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
           <Text style={{ color: colors.foreground, fontFamily: fonts.medium }}>
             {getStudioCatalogField('bathrooms').fixedValue}
@@ -1126,7 +1127,7 @@ export default function StudioCaptureRoute() {
         if (mode === 'wanted') return null;
         return (
           <View key={fieldId} style={styles.field} testID="studio-transaction-field">
-            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}<RequiredStar /></Text>
             <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {getStudioCatalogField(fieldId).quickPicks?.map(choice => {
                 const transaction = choice.modeValues[mode];
@@ -1148,8 +1149,8 @@ export default function StudioCaptureRoute() {
         );
       case 'locationAreaId':
         return mode === 'offered' ? (
-          <View key={fieldId} ref={setFocusTarget('locationAreaId')} style={styles.field}>
-            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+          <View key={fieldId} ref={setFocusTarget('locationAreaId')} style={[styles.field, getError('locationAreaId') ? { borderColor: colors.destructive, borderWidth: 1, borderRadius: 10, padding: 8, backgroundColor: '#FFF7F7' } : {}]}>
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}<RequiredStar /></Text>
             <KuwaitAreaSelector
               selectedIds={values.locationAreaId ? [values.locationAreaId] : []}
               multiSelect={false}
@@ -1159,8 +1160,8 @@ export default function StudioCaptureRoute() {
             {getError('locationAreaId') ? <FieldError message={localizedFieldError('locationAreaId')!} /> : null}
           </View>
         ) : (
-          <View key={fieldId} ref={setFocusTarget('preferredAreaIds')} style={styles.field} testID="studio-preferred-area-field">
-            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}</Text>
+          <View key={fieldId} ref={setFocusTarget('preferredAreaIds')} style={[styles.field, getError('preferredAreaIds') || getError('preferredAreaMode') ? { borderColor: colors.destructive, borderWidth: 1, borderRadius: 10, padding: 8, backgroundColor: '#FFF7F7' } : {}]} testID="studio-preferred-area-field">
+            <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}<RequiredStar /></Text>
             <ChoiceGrid style={[styles.chips, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {(['specific_areas', 'all_kuwait'] as const).map(scope => (
                 <ChoiceChip
@@ -1191,12 +1192,14 @@ export default function StudioCaptureRoute() {
       case 'price':
         return <View key={fieldId}>{textInput('price', catalogLabel(fieldId), { keyboardType: 'decimal-pad' })}</View>;
       case 'budgetMinimum':
-        return (
-          <View key={fieldId} style={styles.row}>
+        return (<View key={fieldId} style={{ gap: 8 }}>
+          <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'الميزانية' : 'Budget'}<RequiredStar /></Text>
+          <View style={styles.row}>
             <View style={styles.half}>{textInput('budgetMinimum', catalogLabel('budgetMinimum'), { keyboardType: 'decimal-pad' })}</View>
             <View style={styles.half}>{textInput('budgetMaximum', catalogLabel('budgetMaximum'), { keyboardType: 'decimal-pad' })}</View>
           </View>
-        );
+          <ChoiceChip label={language === 'ar' ? 'ميزانية مفتوحة' : 'Open budget'} selected={values.budgetOpen === true} role="checkbox" testID="studio-open-budget" onPress={() => { update('budgetMinimum', ''); update('budgetMaximum', ''); update('budgetOpen', !values.budgetOpen); }} />
+        </View>);
       case 'budgetMaximum':
         return null;
       case 'rentalPeriodId':
@@ -1266,7 +1269,7 @@ export default function StudioCaptureRoute() {
           {mode === 'offered' ? <>
             <PropertyFormCard title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} icon="map-pin" testID="studio-basic-card">
               {renderCatalogField('locationAreaId')}
-              {renderCatalogField('price')}
+              <RequiredFormHint />{renderCatalogField('price')}
               {renderCatalogField('rentalPeriodId')}
               {renderCatalogField('transaction')}
             </PropertyFormCard>
@@ -1441,7 +1444,7 @@ export default function StudioCaptureRoute() {
       case 'budgetMinimum':
         return reviewItem(
           `${catalogLabel('budgetMinimum')} – ${catalogLabel('budgetMaximum')}`,
-          `${values.budgetMinimum} – ${values.budgetMaximum} KWD${values.transaction === 'rent' ? ` / ${t(`studio.${values.rentalPeriodId}`)}` : ''}`,
+          `${values.budgetOpen ? (language === 'ar' ? 'ميزانية مفتوحة' : 'Open budget') : `${values.budgetMinimum || '—'} – ${values.budgetMaximum || '—'} KWD`}${values.transaction === 'rent' ? ` / ${t(`studio.${values.rentalPeriodId}`)}` : ''}`,
         );
       case 'budgetMaximum':
       case 'rentalPeriodId':

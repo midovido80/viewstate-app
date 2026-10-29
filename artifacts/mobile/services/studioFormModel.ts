@@ -37,6 +37,7 @@ export interface StudioFormValues {
   readonly privateNotes: string;
   readonly occupancy?: PropertyOccupancy;
   readonly price: string;
+  readonly budgetOpen?: boolean;
   readonly budgetMinimum: string;
   readonly budgetMaximum: string;
   readonly rentalPeriodId: RequirementRentalPeriodId;
@@ -229,14 +230,14 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
 
     const minimum = parseNumericInput(values.budgetMinimum);
     const maximum = parseNumericInput(values.budgetMaximum);
-    if (minimum === null || minimum < 0) {
-      errors.push(formError('budgetMinimum', values.budgetMinimum === '' ? 'required' : 'invalid_budget', 'Enter a non-negative minimum budget.'));
-    }
-    if (maximum === null || maximum < 0) {
-      errors.push(formError('budgetMaximum', values.budgetMaximum === '' ? 'required' : 'invalid_budget', 'Enter a non-negative maximum budget.'));
-    }
-    if (minimum !== null && maximum !== null && minimum > maximum) {
-      errors.push(formError('budgetMinimum', 'invalid_budget', 'Minimum budget must not exceed maximum budget.'));
+    if (values.budgetOpen) {
+      if (values.budgetMinimum.trim() || values.budgetMaximum.trim()) errors.push(formError('budgetMinimum', 'invalid_budget', 'Open budget cannot contain a constraint.'));
+    } else {
+      if (!values.budgetMinimum.trim() && !values.budgetMaximum.trim()) errors.push(formError('budgetMinimum', 'required', 'Enter a budget or select Open budget.'));
+      if (values.budgetMinimum.trim() && (minimum === null || minimum < 0)) errors.push(formError('budgetMinimum', 'invalid_budget', 'Enter a non-negative minimum budget.'));
+      if (values.budgetMaximum.trim() && (maximum === null || maximum <= 0)) errors.push(formError('budgetMaximum', 'invalid_budget', 'Enter a positive maximum budget.'));
+      if (minimum === 0 && maximum === null) errors.push(formError('budgetMinimum', 'invalid_budget', 'Enter a positive budget.'));
+      if (minimum !== null && maximum !== null && minimum > maximum) errors.push(formError('budgetMinimum', 'invalid_budget', 'Minimum budget must not exceed maximum budget.'));
     }
   }
 
@@ -391,8 +392,8 @@ export function buildStudioRequirement(
 ): SeekerRequirement {
   assertValidForm(values);
   if (values.mode !== 'wanted') throw new Error('STUDIO_REQUIREMENT_REQUIRES_WANTED_MODE');
-  const minimum = parseNumericInput(values.budgetMinimum)!;
-  const maximum = parseNumericInput(values.budgetMaximum)!;
+  const minimum = values.budgetOpen ? undefined : parseNumericInput(values.budgetMinimum) ?? undefined;
+  const maximum = values.budgetOpen ? undefined : parseNumericInput(values.budgetMaximum) ?? undefined;
   const preferences: CatalogPreference[] = [
     { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
     ...(numberValue(values.areaSquareMeters) !== undefined
@@ -420,6 +421,7 @@ export function buildStudioRequirement(
     preferredAreaIds: values.preferredAreaMode === 'all_kuwait' ? [] : [...values.preferredAreaIds],
     preferredAreaMode: values.preferredAreaMode,
     budget: { minimum, maximum, currencyCode: 'KWD' },
+    ...(values.budgetOpen ? { unspecifiedFields: ['budget' as const] } : {}),
     notes: values.description,
     preferredNearbyServices: [...(values.nearbyServices ?? [])],
     ...(values.amenitySelections?.hasCentralAC === 'required' ? { centralAC: true } : values.amenitySelections?.hasCentralAC === 'must_not_have' ? { centralAC: false } : {}),
@@ -582,8 +584,9 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
     ...createStudioFormValues('wanted', transaction),
     preferredAreaMode: requirement.preferredAreaMode ?? (requirement.preferredAreaIds.length ? 'specific_areas' : 'all_kuwait'),
     preferredAreaIds: [...requirement.preferredAreaIds],
-    budgetMinimum: String(requirement.budget.minimum),
-    budgetMaximum: String(requirement.budget.maximum),
+    ...(requirement.unspecifiedFields?.includes('budget') ? { budgetOpen: true } : {}),
+    budgetMinimum: requirement.budget.minimum === undefined ? '' : String(requirement.budget.minimum),
+    budgetMaximum: requirement.budget.maximum === undefined ? '' : String(requirement.budget.maximum),
     rentalPeriodId: requirement.purpose === 'rent'
       ? requirement.rentalPeriodId ?? 'monthly'
       : 'monthly',

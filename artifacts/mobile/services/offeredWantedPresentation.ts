@@ -363,7 +363,7 @@ export function filterOfferedWantedRows(
         : undefined;
       const use = row.kind === 'offered'
         ? propertyType === 'floor' ? details?.floorUse : details?.propertyUse
-        : propertyType === 'floor' ? row.requirement.floorUse : undefined;
+        : propertyType === 'floor' ? row.requirement.floorUse : row.requirement.propertyUse;
       if (getBuiltPropertySector(propertyType, use) !== sector) return false;
     }
     const intent = row.kind === 'offered'

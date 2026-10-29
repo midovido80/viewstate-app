@@ -1,3 +1,5 @@
+import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
+import { commercialProperty, residentialUnit, requirementCompletionFields } from '@/services/requiredMatchingFields';
 import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
 import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
@@ -106,7 +108,7 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
-  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam, floorUse: floorUseParam } = useLocalSearchParams<{
+  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam, floorUse: floorUseParam, propertyUse: propertyUseParam } = useLocalSearchParams<{
     requirementId: string | string[];
     seekerId?: string | string[];
     edit?: string | string[];
@@ -114,6 +116,7 @@ export default function RequirementEditor() {
     propertyType?: string | string[];
     apartmentSubtype?: string | string[];
     floorUse?: string | string[];
+    propertyUse?: string | string[];
   }>();
   const routeRequirementId = Array.isArray(requirementId) ? requirementId[0] : requirementId;
   const editing = routeRequirementId !== 'new';
@@ -147,6 +150,8 @@ export default function RequirementEditor() {
   const [propertyType, setPropertyType] = useState<PropertyType>(initialPropertyType);
   const [apartmentSubtype, setApartmentSubtype] = useState<GenericRequirementApartmentSubtype | undefined>(initialApartmentSubtype);
   const [floorUse, setFloorUse] = useState<FloorUse | undefined>(initialPropertyType === 'floor' ? initialFloorUse : undefined);
+  const initialPropertyUse = parseFloorUse(Array.isArray(propertyUseParam) ? propertyUseParam[0] : propertyUseParam);
+  const [propertyUse, setPropertyUse] = useState<FloorUse | undefined>(initialPropertyUse);
   const [areaMode, setAreaMode] = useState<AreaMode | undefined>();
   const [areas, setAreas] = useState<string[]>([]);
   const [bedrooms, setBedrooms] = useState('');
@@ -164,6 +169,7 @@ export default function RequirementEditor() {
   const [excludedAmenities, setExcludedAmenities] = useState<readonly ResidentialAmenity[]>([]);
   const [services, setServices] = useState<string[]>([]);
   const [centralACPreference, setCentralACPreference] = useState<boolean | undefined>();
+  const [unspecified, setUnspecified] = useState<NonNullable<SeekerRequirement['unspecifiedFields']>>([]);
   const [minimum, setMinimum] = useState('');
   const [maximum, setMaximum] = useState('');
   const [cadence, setCadence] = useState<RequirementRentalPeriodId>('monthly');
@@ -196,6 +202,7 @@ export default function RequirementEditor() {
     draftId.current = editing ? routeRequirementId : generateDomainId();
     setPurpose(initialPurpose); setPropertyType(initialPropertyType); setApartmentSubtype(initialApartmentSubtype); setFloorUse(initialPropertyType === 'floor' ? initialFloorUse : undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
+    setUnspecified([]); setPropertyUse(initialPropertyUse);
     setDriverRoom(false); setCatalog([...getGenericRequirementApartmentSubtypePreference(initialApartmentSubtype)]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
     if (!editing) return;
     let cancelled = false;
@@ -206,6 +213,7 @@ export default function RequirementEditor() {
         return;
       }
       setBaseline(record);
+      setUnspecified(record.unspecifiedFields ?? []);
       setRecordLoaded(true);
       const form = formValuesFromRequirement(record) as RequirementFormValues & Extension;
       const savedApartmentSubtype = getGenericRequirementApartmentSubtype(form.catalogPreferences);
@@ -214,6 +222,7 @@ export default function RequirementEditor() {
         const item = form.catalogPreferences?.find(value => value.field === field && value.kind === 'number');
         return item?.kind === 'number' ? String(item.value) : '';
       };
+      setPropertyUse(form.propertyUse);
       setPurpose(form.purpose); setPropertyType(form.propertyType); setFloorUse(form.floorUse);
       setAreas([...form.preferredAreaIds]);
       setAreaMode((record as SeekerRequirement & Extension).preferredAreaMode ?? (record.preferredAreaIds.length ? 'specific_areas' : undefined));
@@ -274,8 +283,8 @@ export default function RequirementEditor() {
       const parsed = parseOptionalRequirementNumber(value, { integer: comparison !== 'minimum' || field !== 'builtUpAreaSquareMeters' });
       return parsed.ok && parsed.value !== undefined ? [{ field, kind: 'number' as const, comparison, value: parsed.value }] : [];
     };
-    return [...values, ...(applicable.has('livingRoomCount') ? numeric('livingRoomCount', livingRooms, 'minimum') : []), ...(applicable.has('parkingSpaceCount') ? numeric('parkingSpaceCount', parking, 'minimum') : []), ...(applicable.has('floorNumber') ? numeric('floorNumber', floorNumber, 'exact') : []), ...(applicable.has('builtUpAreaSquareMeters') ? numeric('builtUpAreaSquareMeters', requiredArea, 'minimum') : [])];
-  }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse, apartmentSubtype]);
+    return [...values, ...(applicable.has('livingRoomCount') ? numeric('livingRoomCount', livingRooms, 'minimum') : []), ...(applicable.has('parkingSpaceCount') ? numeric('parkingSpaceCount', parking, 'minimum') : []), ...(applicable.has('floorNumber') ? numeric('floorNumber', floorNumber, 'exact') : []), ...((applicable.has('builtUpAreaSquareMeters') || commercialProperty(propertyType, { floorUse, propertyUse })) ? numeric('builtUpAreaSquareMeters', requiredArea, 'minimum') : [])];
+  }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse, propertyUse, apartmentSubtype]);
 
   const candidate = () => {
     if (editing && (!recordLoaded || !baseline || baseline.id !== routeRequirementId)) return { ok: false as const, message: language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.' };
@@ -289,7 +298,7 @@ export default function RequirementEditor() {
     if (areaMode === 'specific_areas' && !areas.length) return { ok: false as const, message: language === 'ar' ? 'اختر منطقة واحدة على الأقل.' : 'Select at least one area.' };
     if (!min.ok || !max.ok || !beds.ok || !baths.ok || !masters.ok || !builtArea.ok || invalidCatalogFields.size > 0) return { ok: false as const, message: language === 'ar' ? 'أدخل أرقاماً صالحة.' : 'Enter valid numbers.' };
     const values = {
-      purpose, propertyType, preferredAreaIds: areaMode === 'all_kuwait' ? [] : areas, preferredAreaMode: areaMode,
+      unspecifiedFields: unspecified, purpose, propertyType, preferredAreaIds: areaMode === 'all_kuwait' ? [] : areas, preferredAreaMode: areaMode,
       minimumBudget: min.value, maximumBudget: max.value, currencyCode: MARKET_CONFIG.currencyCode, notes, preferredNearbyServices: nearbyServices,
       ...(beds.value !== undefined ? { bedroomsMinimum: beds.value } : {}),
       ...(baths.value !== undefined ? { bathroomsMinimum: baths.value } : {}),
@@ -302,7 +311,7 @@ export default function RequirementEditor() {
       ...(amenities.length ? { preferredAmenities: amenities } : {}),
       ...(excludedAmenities.length ? { preferredAmenityExclusions: excludedAmenities } : {}),
       ...(catalogWithCore.length ? { catalogPreferences: catalogWithCore } : {}),
-      ...(floorUse ? { floorUse } : {}), ...(driverRoom ? { driverRoom: true } : {}),
+      ...(floorUse ? { floorUse } : {}), ...(propertyType === 'other_built_property' && propertyUse ? { propertyUse } : {}), ...(driverRoom ? { driverRoom: true } : {}),
     } as RequirementFormValues & Extension;
     const result = buildPersonRequirement(baseline?.id ?? draftId.current, ownerId, values);
     return result.ok ? result : { ok: false as const, message: localizedRequirementIssue(result.issues[0], language) };
@@ -348,7 +357,31 @@ export default function RequirementEditor() {
     setPurpose(next);
   };
 
+  const needsSize = commercialProperty(propertyType, { floorUse, propertyUse });
+  const requiredForm = useRequiredForm(requirementCompletionFields({ type: propertyType, floorUse, propertyUse, areaMode, areas, bedrooms, bathrooms, size: requiredArea, minimum, maximum, unspecified }));
+  const validateRequired = () => {
+    const missing = requiredForm.validate();
+    if (!missing.length) return true;
+    const id = missing[0];
+    setStep(id === 'budget' ? 4 : id === 'areas' && !startsAtSpecifications ? 2 : 3);
+    return false;
+  };
+  const unspecifiedChoice = (field: NonNullable<SeekerRequirement['unspecifiedFields']>[number]) => <ChoiceChip
+    label={language === 'ar' ? field === 'budget' ? 'ميزانية مفتوحة' : 'غير محدد' : field === 'budget' ? 'Open budget' : 'Unspecified'}
+    selected={unspecified.includes(field)} role="checkbox" testID={`requirement-unspecified-${field}`} onPress={() => {
+      setUnspecified(current => current.includes(field) ? current.filter(id => id !== field) : [...current, field]);
+      if (field === 'budget') { setMinimum(''); setMaximum(''); }
+      if (field === 'bedrooms') setBedrooms('');
+      if (field === 'bathrooms') setBathrooms('');
+      if (field === 'area') setRequiredArea('');
+    }} />;
+  const constrain = (field: NonNullable<SeekerRequirement['unspecifiedFields']>[number], setter: (value: string) => void) => (value: string) => {
+    if (value.trim()) setUnspecified(current => current.filter(id => id !== field));
+    setter(value);
+  };
+
   const review = () => {
+    if (!validateRequired()) return;
     if (!areaMode || (areaMode === 'specific_areas' && !areas.length)) { setStep(startsAtSpecifications ? 3 : 2); setError(language === 'ar' ? 'اختر نطاق المناطق ومنطقة.' : 'Choose an area scope and area.'); return; }
     if (propertyType === 'floor' && !floorUse) { setStep(1); setError(language === 'ar' ? 'اختر استخدام الدور.' : 'Choose the floor use.'); return; }
     if ((coreApplicable && [bedrooms, bathrooms, masterBedrooms, livingRooms].some(value => !parseOptionalRequirementNumber(value).ok)) || (applicableCoreFields.has('parkingSpaceCount') && !parseOptionalRequirementNumber(parking).ok) || (applicableCoreFields.has('floorNumber') && !parseOptionalRequirementNumber(floorNumber).ok) || (applicableCoreFields.has('builtUpAreaSquareMeters') && !parseOptionalRequirementNumber(requiredArea, { integer: false }).ok)) { setStep(3); setError(language === 'ar' ? 'صحح المواصفات الأساسية.' : 'Correct the core specifications.'); return; }
@@ -362,6 +395,8 @@ export default function RequirementEditor() {
       setError(language === 'ar' ? 'اختر استخدام الدور: سكني أو تجاري.' : 'Choose Floor use: Residential or Commercial.');
       return;
     }
+    const fieldsForStep = step === 2 ? ['areas'] : step === 3 ? ['propertyUse', 'areas', 'bedrooms', 'bathrooms', 'area'] : [];
+    if (requiredForm.fields.some(field => fieldsForStep.includes(field.id) && !field.valid)) { requiredForm.validate(); return; }
     setError('');
     if (startsAtSpecifications && step === 1) setShowCatalogBackControls(false);
     setStep(value => startsAtSpecifications && value === 1 ? 3 : value + 1);
@@ -396,6 +431,7 @@ export default function RequirementEditor() {
     catalogPreferences: [{ field: 'apartmentSubtype', kind: 'choice', value }],
   }, language) ?? value;
   const save = async () => {
+    if (!validateRequired()) return;
     if (!tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)) return;
     const generation = routeGeneration.current.capture();
     const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
@@ -553,6 +589,7 @@ export default function RequirementEditor() {
   };
 
   const coreApplicable = isResidential(propertyType, floorUse);
+  const unitApplicable = residentialUnit(propertyType, { floorUse, propertyUse });
   const label = (english: string, arabic: string) => english === 'Amenities' ? '' : language === 'ar' ? arabic : english;
   const applicableCoreFields = new Set(getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype).map(field => field.field));
   const catalogDefinitions = getRequirementCatalogFields(propertyType, floorUse, apartmentSubtype);
@@ -681,7 +718,7 @@ export default function RequirementEditor() {
         const area = getAreaById(id);
         return area ? (language === 'ar' ? area.ar : area.en) : id;
       }).join(', ');
-    const budgetText = `${baseline.budget.minimum}–${baseline.budget.maximum} ${baseline.budget.currencyCode}`;
+    const budgetText = `${baseline.budget.minimum ?? '—'}–${baseline.budget.maximum ?? '—'} ${baseline.budget.currencyCode}`;
     const editStudio = () => router.push(studioTarget.href as never);
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -736,7 +773,7 @@ export default function RequirementEditor() {
     );
   }
 
-  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => step > (startsAtSpecifications ? 3 : 0) ? previousStep() : router.canGoBack() ? router.back() : router.replace('/people' as never)} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('capture.back')}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><KeyboardAwareScrollViewCompat contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled">
+  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => step > (startsAtSpecifications ? 3 : 0) ? previousStep() : router.canGoBack() ? router.back() : router.replace('/people' as never)} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('capture.back')}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><KeyboardAwareScrollViewCompat ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16} contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled"><RequiredFormHint />
      {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
        {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
        {recoveryAction && recoveryAction !== 'edit_conflict' && <View style={styles.recoveryActions}>
@@ -755,20 +792,20 @@ export default function RequirementEditor() {
      </View> : null}
      {step === 0 && <><Text style={styles.heading}>{t('requirements.purpose')}</Text><ChoiceGrid style={styles.wrap}>{(['rent', 'buy'] as const).map(value => <ChoiceChip key={value} label={t(`requirements.purpose.${value}`)} selected={purpose === value} onPress={() => changePurpose(value)} testID={`requirement-purpose-${value}`} role="radio" />)}</ChoiceGrid></>}
    {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><ChoiceGrid style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={value === 'floor' ? getFloorTypeLabel(floorUse, language, t('propertyType.floor')) : t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</ChoiceGrid>{showCatalogBackControls && propertyType === 'apartment' && <><Text style={styles.heading}>{label('Apartment subtype', 'نوع الشقة')}</Text><ChoiceGrid style={styles.wrap}>{(['standard_apartment', 'duplex'] as const).map(value => <ChoiceChip key={value} label={apartmentSubtypeLabel(value)} selected={apartmentSubtype === value} onPress={() => changeApartmentSubtype(value)} testID={`requirement-apartment-subtype-${value}`} role="radio" />)}</ChoiceGrid></>}{propertyType === 'floor' && !initialFloorUse && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><ChoiceGrid style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</ChoiceGrid></>}</>}
-    {step === 2 && <><Text style={styles.heading}>{t('requirements.areas')}</Text><ChoiceGrid style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></ChoiceGrid>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
+    {step === 2 && <RequiredField id="areas"><Text style={styles.heading}>{t('requirements.areas')}</Text><ChoiceGrid style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></ChoiceGrid>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</RequiredField>}
      {step === 3 && <View testID="requirement-core-step">
-       <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>
-       {startsAtSpecifications && <><Text style={styles.heading}>{t('requirements.areas')}</Text><ChoiceGrid style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode === 'specific_areas'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></ChoiceGrid>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</>}
+       <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>{propertyType === 'other_built_property' && <RequiredField id="propertyUse" label={label('Property use', 'تصنيف العقار')}><ChoiceGrid>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={value === 'residential' ? label('Residential', 'سكني') : label('Commercial', 'تجاري')} selected={propertyUse === value} role="radio" onPress={() => { setPropertyUse(value); setBedrooms(''); setBathrooms(''); setRequiredArea(''); setUnspecified(current => current.filter(field => field === 'budget')); }} />)}</ChoiceGrid></RequiredField>}
+       {startsAtSpecifications && <RequiredField id="areas"><Text style={styles.heading}>{t('requirements.areas')}</Text><ChoiceGrid style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode === 'specific_areas'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></ChoiceGrid>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</RequiredField>}
        {editableLeadingFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:leading`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={editableLeadingFields} />}
-       {coreApplicable && <>
-         <NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={setBedrooms} testID="requirement-bedrooms-quick-pick" />
+       {unitApplicable && <>
+         <RequiredField id="bedrooms"><NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={constrain('bedrooms', setBedrooms)} testID="requirement-bedrooms-quick-pick" />{unspecifiedChoice('bedrooms')}</RequiredField>
          <NumericQuickPick scopeKey={scopeKey} label={label('Master bedrooms', 'غرف النوم الرئيسية')} value={masterBedrooms} onChangeText={setMasterBedrooms} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-master-bedrooms" />
-         <NumericQuickPick scopeKey={scopeKey} label={label('Bathrooms', 'الحمامات')} value={bathrooms} onChangeText={setBathrooms} testID="requirement-bathrooms-quick-pick" />
+         <RequiredField id="bathrooms"><NumericQuickPick scopeKey={scopeKey} label={label('Bathrooms', 'الحمامات')} value={bathrooms} onChangeText={constrain('bathrooms', setBathrooms)} testID="requirement-bathrooms-quick-pick" />{unspecifiedChoice('bathrooms')}</RequiredField>
           <NumericQuickPick scopeKey={scopeKey} label={label('Hall', 'صالة')} value={livingRooms} onChangeText={setLivingRooms} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-living-rooms" />
        </>}
         {applicableCoreFields.has('parkingSpaceCount') && <NumericQuickPick scopeKey={scopeKey} label={label('Parking', 'موقف')} value={parking} onChangeText={setParking} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-parking" />}
         {applicableCoreFields.has('floorNumber') && <NumericQuickPick scopeKey={scopeKey} label={label('Floor', 'الطابق')} value={floorNumber} onChangeText={setFloorNumber} testID="requirement-floor-number" />}
-        {applicableCoreFields.has('builtUpAreaSquareMeters') && <TextInput value={requiredArea} onChangeText={setRequiredArea} placeholder={label('Required area (m²)', 'المساحة المطلوبة (م²)')} style={styles.input} testID="requirement-required-area" />}
+        {(needsSize || applicableCoreFields.has('builtUpAreaSquareMeters')) && <RequiredField id="area" label={label('Required area (m²)', 'المساحة المطلوبة (م²)')}><TextInput value={requiredArea} onChangeText={constrain('area', setRequiredArea)} placeholder={label('Required area (m²)', 'المساحة المطلوبة (م²)')} keyboardType="decimal-pad" style={styles.input} testID="requirement-required-area" />{needsSize && unspecifiedChoice('area')}</RequiredField>}
         {otherSpecificationFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:specifications`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={otherSpecificationFields} />}
         {purpose === 'rent' && coreApplicable && <><Text style={styles.heading}>{label('Occupancy', 'الإشغال')}</Text><ChoiceGrid style={styles.wrap}>{(['family', 'bachelor', 'any'] as const).map(value => <ChoiceChip key={value} label={value === 'family' ? label('Family', 'عائلي') : value === 'bachelor' ? label('Bachelor', 'عزاب') : label('Any', 'أي')} selected={occupancy === value} onPress={() => setOccupancy(current => current === value ? undefined : value)} role="radio" />)}</ChoiceGrid></>}
         {showPreferredAmenities && <><Text style={styles.heading}>{label('Preferred amenities', 'المزايا المفضلة')}</Text><ChoiceGrid style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]} testID="requirement-amenities-flow">
@@ -779,9 +816,9 @@ export default function RequirementEditor() {
         <RequirementCatalogPreferencesProxy propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} amenities={amenities} onAmenitiesChange={setAmenities} excluded={excludedAmenities} onExcludedChange={setExcludedAmenities} showAmenities={coreApplicable} amenityFields={purpose === 'rent' ? amenityCatalogFields.filter(field => field !== 'hasPool') : amenityCatalogFields} /></ChoiceGrid></>}
        <NearbyServicesSelector values={nearbyServices} onChange={setNearbyServices} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />
      </View>}
-    {step === 4 && <><Text style={styles.heading}>{t('requirements.budget')}</Text><TextInput value={minimum} onChangeText={setMinimum} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={setMaximum} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{purpose === 'rent' && <ChoiceGrid style={styles.wrap}>{(['daily', 'monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'daily' ? label('Daily', 'يومياً') : value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</ChoiceGrid>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
+    {step === 4 && <><RequiredField id="budget" label={t('requirements.budget')}><TextInput value={minimum} onChangeText={constrain('budget', setMinimum)} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={constrain('budget', setMaximum)} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{unspecifiedChoice('budget')}</RequiredField>{purpose === 'rent' && <ChoiceGrid style={styles.wrap}>{(['daily', 'monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'daily' ? label('Daily', 'يومياً') : value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</ChoiceGrid>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{projectRequirementIntent({ purpose }, language).label} · {(propertyType === 'floor' ? getFloorTypeLabel(floorUse, language, t('propertyType.floor')) : t(`propertyType.${propertyType}`))}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}
-   </KeyboardAwareScrollViewCompat><View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={previousStep} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={saving || !!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
+   </KeyboardAwareScrollViewCompat></View></RequiredFormProvider><View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}><View style={styles.actions}>{step > 0 && <Button title={t('capture.back')} onPress={previousStep} variant="outline" style={styles.flex} />}{step === 4 ? <Button title={t('capture.next')} onPress={review} style={styles.flex} testID="requirement-next" /> : step === 5 ? <Button title={t('requirements.save')} onPress={() => void save()} disabled={saving || !!confirmedRequirement.current || !!uncertainRequirement.current || !!editConflictRequirement.current} loading={saving} style={styles.flex} testID="requirement-save" /> : <Button title={t('capture.next')} onPress={nextStep} style={styles.flex} testID="requirement-next" />}</View></View></KeyboardAvoidingView></View>;
 }
 
 function RequirementCatalogPreferencesProxy({ propertyType, floorUse, values, onChange, amenities, onAmenitiesChange, excluded, onExcludedChange, showAmenities, amenityFields }: { propertyType: PropertyType; floorUse?: FloorUse; values: readonly CatalogPreference[]; onChange: (values: readonly CatalogPreference[]) => void; amenities: readonly ResidentialAmenity[]; onAmenitiesChange: (values: readonly ResidentialAmenity[]) => void; excluded: readonly ResidentialAmenity[]; onExcludedChange: (values: readonly ResidentialAmenity[]) => void; showAmenities: boolean; amenityFields: readonly CatalogPreference['field'][] }) {

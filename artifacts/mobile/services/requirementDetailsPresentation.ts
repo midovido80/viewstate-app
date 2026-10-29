@@ -153,10 +153,13 @@ export function getRequirementDetailsRows(
         requirement[field] === undefined ? unspecified(language) : yesNo(requirement[field], language));
     }
   }
+  if (requirement.unspecifiedFields?.includes('budget')) add('budget', 'budget', label('Budget', 'الميزانية'), label('Open budget', 'ميزانية مفتوحة'));
+  else {
   add('budget', 'budget.minimum', label('Minimum budget', 'الحد الأدنى للميزانية'),
-    formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language));
+    requirement.budget.minimum === undefined ? unspecified(language) : formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language));
   add('budget', 'budget.maximum', label('Maximum budget', 'الحد الأقصى للميزانية'),
-    formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language));
+    requirement.budget.maximum === undefined ? unspecified(language) : formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language));
+  }
   if (requirement.preferredNearbyServices?.length) {
     add('preferences', 'preferredNearbyServices', label('Nearby services', 'الخدمات القريبة'), requirement.preferredNearbyServices.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · '));
   }

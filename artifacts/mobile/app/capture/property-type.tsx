@@ -99,7 +99,7 @@ export default function PropertyTypeScreen() {
       ...(sourceRole ? { sourceRole } : {}),
     });
     if (target.kind === 'apartment-subtype' || target.kind === 'studio' || target.kind === 'wanted') {
-      router.push({ pathname: target.pathname, params: target.params } as never);
+      router.push({ pathname: target.pathname, params: { ...target.params, ...(propertyType === 'other_built_property' && propertyUse ? { propertyUse } : {}) } } as never);
       return;
     }
 

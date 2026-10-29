@@ -1,3 +1,4 @@
+import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { AMENITY_DETAIL_GROUPS } from '@/services/propertyAmenityOrder';
 import { Text, TextInput, View } from 'react-native';
@@ -44,13 +45,13 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
       <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{ar ? 'يجب أن يساوي مجموع الشقق العدد الإجمالي المسجل.' : 'Apartment counts must add up to the recorded total.'}</Text>
       {rows.map((row, index) => <View key={index} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 10, gap: 8 }}>
         <Text style={labelStyle}>{ar ? `مجموعة ${index + 1}` : `Group ${index + 1}`}</Text>
-        {keys.map(key => <View key={key}><Text style={labelStyle}>{labels[key]}</Text><TextInput accessibilityLabel={`${labels[key]} ${index + 1}`} value={row[key] === undefined ? '' : String(row[key])} keyboardType="number-pad" style={inputStyle} onChangeText={raw => {
+        {keys.map(key => <RequiredField key={key} id={`${field}.${index}.${key}`}><Text style={labelStyle}>{labels[key]}</Text><TextInput accessibilityLabel={`${labels[key]} ${index + 1}`} value={row[key] === undefined ? '' : String(row[key])} keyboardType="number-pad" style={inputStyle} onChangeText={raw => {
           const text = raw.replace(/[٠-٩]/g, n => String('٠١٢٣٤٥٦٧٨٩'.indexOf(n))).replace(/[۰-۹]/g, n => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(n)));
           if (!/^\d*$/.test(text)) return;
           const next = rows.map(item => ({ ...item }));
           if (text === '') delete next[index][key]; else next[index][key] = Number(text);
           publish(next);
-        }} /></View>)}
+        }} /></RequiredField>)}
         <ChoiceTile label={ar ? 'إزالة المجموعة' : 'Remove group'} role="button" selected={false} onPress={() => publish(rows.filter((_, i) => i !== index))} />
       </View>)}
       <ChoiceTile label={ar ? 'إضافة مجموعة' : 'Add group'} role="button" selected={false} onPress={() => publish([...rows, {}])} />
@@ -95,7 +96,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
   ];
   const yieldPercent = transaction === 'sale' && propertyType === 'whole_building' ? grossAnnualRentalYield(salePrice, values.monthlyIncome?.trim() ? Number(values.monthlyIncome) : undefined) : undefined;
   return <View style={{ gap: 12 }}>
-    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field)).map(renderField)}
+    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field)).map(field => <RequiredField key={field} id={field}>{renderField(field)}</RequiredField>)}
       {yieldPercent !== undefined && <View><Text style={labelStyle}>{ar ? 'العائد السنوي الإجمالي قبل المصروفات' : 'Gross annual yield before expenses'}</Text><Text style={labelStyle}>{yieldPercent.toFixed(2)}%</Text></View>}
     </PropertyFormCard>
     <PropertyFormCard title={ar ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>

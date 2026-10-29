@@ -1,3 +1,5 @@
+import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
+import { propertyCompletionFields } from '@/services/requiredMatchingFields';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible } from '@workspace/property-domain';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
@@ -206,6 +208,7 @@ export default function CaptureWorkflow() {
     draft.description?.value || description,
     isBasicApartmentFollowUp,
   );
+  const requiredForm = useRequiredForm(propertyCompletionFields({ type: draft.propertyType ?? '', area: draft.locationAreaId, price: draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount, size: captureDetails.areaSquareMeters, values: { ...captureDetails, apartmentSubtype: draft.apartmentSubtype ?? captureDetails.apartmentSubtype }, basic: isBasicApartmentFollowUp }));
   const [block, setBlock] = useState(draft.block ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -645,6 +648,7 @@ export default function CaptureWorkflow() {
   };
 
   const openPreview = () => {
+    if (requiredForm.validate().length) return;
     if (isStudioCaptureBlocked) return;
     setPriceAttempted(true);
     if (!draft.locationAreaId) {
@@ -709,6 +713,7 @@ export default function CaptureWorkflow() {
   };
 
   const save = async () => {
+    if (requiredForm.validate().length) { setStage(2); return; }
     if (isStudioCaptureBlocked) return;
     if (saveFlight.current) return;
     saveFlight.current = true;
@@ -897,7 +902,7 @@ export default function CaptureWorkflow() {
 
       </View>
 
-      <ScrollView
+      <RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><ScrollView ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: stage === 3 ? 24 : Math.max(insets.bottom, 20) + 96 }]}
       >
@@ -958,7 +963,7 @@ export default function CaptureWorkflow() {
           <>
             <Section title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} colors={colors} fonts={fonts}>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''}</Text>
-              <PropertyAreaBlockRow area={<>               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
+              <RequiredFormHint /><PropertyAreaBlockRow area={<RequiredField id="locationAreaId">               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
                <KuwaitAreaSelector
                  selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []}
                   onCancel={() => setAreaValidation(current => transitionCaptureAreaValidation(current, { type: 'cancel' }))}
@@ -980,10 +985,10 @@ export default function CaptureWorkflow() {
                     {language === 'ar' ? 'اختر المنطقة للمتابعة.' : 'Select an area to continue.'}
                   </Text>
                 ) : null}
-</>} block={<>              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
+</RequiredField>} block={<>              <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
               <TextInput value={block} onChangeText={value => { setBlock(value); updateDraft({ block: value || undefined }); }} keyboardType="number-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
 </>} />
-              <Text style={[styles.label, { color: priceError ? colors.destructive : colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
+<RequiredField id="price">              <Text style={[styles.label, { color: priceError ? colors.destructive : colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction === 'rent' ? t('summary.rent_price') : t('summary.sale_price')}</Text>
               <TextInput testID="capture-price" onBlur={() => setPriceAttempted(true)} value={draft.transaction === 'rent' ? (draft.rentalPrice?.amount ? String(draft.rentalPrice.amount) : '') : (draft.salePrice?.amount ? String(draft.salePrice.amount) : '')} onChangeText={value => {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
                 const amount = Number(normalized);
@@ -991,6 +996,7 @@ export default function CaptureWorkflow() {
                 updateDraft(draft.transaction === 'rent' ? { rentalPrice: { amount, currencyCode: 'KWD' } } : { salePrice: { amount, currencyCode: 'KWD' } });
               }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'السعر' : 'Price'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: priceError ? colors.destructive : colors.border, backgroundColor: colors.card }]} />
               {priceError ? <Text accessibilityRole="alert" testID="capture-price-error" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('errors.invalid_price')}</Text> : null}
+</RequiredField>
               {draft.transaction === 'rent' && (
                 <ChoiceGrid style={styles.chips}>
                   <Choice selected={draft.rentalPeriodId === 'monthly'} label={language === 'ar' ? 'شهرياً' : 'Monthly'} onPress={() => updateDraft({ rentalPeriodId: 'monthly' })} colors={colors} fonts={fonts} />
@@ -999,12 +1005,13 @@ export default function CaptureWorkflow() {
               )}
               {!isBasicApartmentFollowUp && (
                 <>
-               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
+<RequiredField id="areaSquareMeters">               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
               <TextInput value={metadataValue(captureDetails.areaSquareMeters)} onChangeText={value => {
                 const normalized = value.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٫,]/g, '.');
                 const number = Number(normalized);
                  if (normalized === '' || Number.isFinite(number)) updateCaptureDetails({ areaSquareMeters: normalized === '' ? undefined : number, areaUnit: 'square_meter' });
-              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'اختياري' : 'Optional'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+              }} keyboardType="decimal-pad" placeholder={language === 'ar' ? 'المساحة بالمتر المربع' : 'Area in square metres'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
+</RequiredField>
               {!commercialFloorSale && draft.propertyType !== 'warehouse' && <>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
@@ -1162,7 +1169,7 @@ export default function CaptureWorkflow() {
             )}
           </PropertyReview>
         )}
-      </ScrollView>
+      </ScrollView></View></RequiredFormProvider>
       {stage === 2 && draftSaveStatus !== 'idle' && (
         <View
           testID={draftSaveStatus === 'saved' ? 'capture-draft-saved' : undefined}

@@ -15,6 +15,7 @@ import {
 import { getAreaById } from '@/constants/kuwait-areas';
 
 export interface RequirementFormValues {
+  readonly unspecifiedFields?: SeekerRequirement['unspecifiedFields'];
   readonly purpose: RequirementPurpose;
   readonly propertyType: PropertyType;
   readonly preferredAreaIds: readonly string[];
@@ -36,6 +37,7 @@ export interface RequirementFormValues {
   readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
   readonly catalogPreferences?: readonly CatalogPreference[];
   readonly floorUse?: FloorUse;
+  readonly propertyUse?: FloorUse;
   readonly masterBedroomsMinimum?: number;
   readonly driverRoom?: boolean;
 }
@@ -84,7 +86,7 @@ export function parseOptionalRequirementNumber(
   input: string,
   options: { readonly integer?: boolean } = {},
 ): OptionalRequirementNumberResult {
-  const trimmed = input.trim();
+  const trimmed = input.trim().replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٫,]/g, '.');
   if (!trimmed) return { ok: true, value: undefined };
   if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return { ok: false };
   const value = Number(trimmed);
@@ -115,6 +117,7 @@ export function buildPersonRequirement(
       currencyCode: values.currencyCode,
     },
     notes: values.notes,
+    ...(values.unspecifiedFields !== undefined ? { unspecifiedFields: [...values.unspecifiedFields] } : {}),
     ...(values.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...values.preferredNearbyServices] } : {}),
     ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
     ...(values.bathroomsMinimum !== undefined ? { bathroomsMinimum: values.bathroomsMinimum } : {}),
@@ -128,6 +131,7 @@ export function buildPersonRequirement(
     ...(values.catalogPreferences !== undefined
       ? { catalogPreferences: [...values.catalogPreferences] }
       : {}),
+    ...(values.propertyUse !== undefined ? { propertyUse: values.propertyUse } : {}),
     ...(values.floorUse !== undefined ? { floorUse: values.floorUse } : {}),
     ...(values.masterBedroomsMinimum !== undefined ? { masterBedroomsMinimum: values.masterBedroomsMinimum } : {}),
     ...(values.driverRoom !== undefined ? { driverRoom: values.driverRoom } : {}),
@@ -162,6 +166,7 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     maximumBudget: requirement.budget.maximum,
     currencyCode: requirement.budget.currencyCode,
     notes: requirement.notes,
+    ...(requirement.unspecifiedFields !== undefined ? { unspecifiedFields: [...requirement.unspecifiedFields] } : {}),
     ...(requirement.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...requirement.preferredNearbyServices] } : {}),
     ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
     ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),
@@ -175,6 +180,7 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     ...(requirement.catalogPreferences !== undefined
       ? { catalogPreferences: [...requirement.catalogPreferences] }
       : {}),
+    ...(requirement.propertyUse !== undefined ? { propertyUse: requirement.propertyUse } : {}),
     ...(requirement.floorUse !== undefined ? { floorUse: requirement.floorUse } : {}),
     ...(requirement.masterBedroomsMinimum !== undefined ? { masterBedroomsMinimum: requirement.masterBedroomsMinimum } : {}),
     ...(requirement.driverRoom !== undefined ? { driverRoom: requirement.driverRoom } : {}),

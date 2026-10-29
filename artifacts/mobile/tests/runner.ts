@@ -1,3 +1,4 @@
+import './requiredMatchingFields.test';
 import './dailyAssistant.test';
 import './assistantHome.test';
 import './commercialFloorSale.test';

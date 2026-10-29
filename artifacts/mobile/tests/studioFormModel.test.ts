@@ -297,7 +297,7 @@ test('BEHAVIOR: Wanted Studio buy and rent combinations round-trip both area sco
           preferredAreaMode,
           preferredAreaIds: preferredAreaMode === 'specific_areas' ? ['salmiya'] : [],
           budgetMinimum: '0',
-          budgetMaximum: '0',
+          budgetMaximum: '500',
           rentalPeriodId,
           areaSquareMeters: '',
           bathrooms: '1',
@@ -428,9 +428,10 @@ test('BEHAVIOR: wanted budgets and blank optional criteria distinguish valid zer
     budgetMinimum: '0',
     budgetMaximum: '0',
   };
-  assert.equal(validateStudioForm(base).ok, true, 'A zero-to-zero budget range is valid');
-  const zeroBudget = buildStudioRequirement(base, '33333333-3333-4333-8333-333333333333', 'seeker-zero-budget');
-  assert.deepEqual(zeroBudget.budget, { minimum: 0, maximum: 0, currencyCode: 'KWD' });
+  assert.equal(validateStudioForm(base).ok, false, 'Zero is not a completed budget; choose Open budget explicitly');
+  const usable = { ...base, budgetMaximum: '500' };
+  const zeroBudget = buildStudioRequirement(usable, '33333333-3333-4333-8333-333333333333', 'seeker-zero-budget');
+  assert.deepEqual(zeroBudget.budget, { minimum: 0, maximum: 500, currencyCode: 'KWD' });
   assert.equal(readStudioRequirement(zeroBudget).areaSquareMeters, '');
   assert.equal(readStudioRequirement(zeroBudget).bathrooms, '1');
   assert.equal(readStudioRequirement(zeroBudget).floorNumber, '');

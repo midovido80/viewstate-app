@@ -1,3 +1,4 @@
+import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
@@ -178,14 +179,14 @@ export function PropertyEnrichmentFields({
       {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">{ordered.map(definition => {
         const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
         return (
-          <View key={definition.field}>
+          <RequiredField key={definition.field} id={definition.field}>
             {!usesResidentialQuickPick && (
               <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
                 {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
               </Text>
             )}
             {renderFieldContent(definition)}
-          </View>
+          </RequiredField>
         );
       })}</PropertyFormCard>}
       {(applicableDefinitions.some(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount') || amenityRenderExtra) && (

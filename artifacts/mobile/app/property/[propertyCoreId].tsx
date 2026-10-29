@@ -1,3 +1,5 @@
+import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
+import { propertyCompletionFields } from '@/services/requiredMatchingFields';
 import { matchingBackRoute, withMatchingReturn } from '@/services/matchingReturnSession';
 import { availableAmenityDetailGroups, orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
@@ -962,9 +964,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
+  const requiredForm = useRequiredForm(propertyCompletionFields({ type: draft?.baseline.core.propertyType ?? '', area: draft?.choices.locationAreaId, price: draft?.choices.priceAmount, size: draft?.choices.areaSquareMeters, values: draft?.choices.canonicalDetails ?? {} }));
+
   const save = async () => {
     setPriceAttempted(true);
     if (!draft || saving || saveFlight.current) return;
+    if (requiredForm.validate().length) return;
     saveFlight.current = true;
     setSaving(true);
     setError('');
@@ -979,6 +984,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setError(t('edit.draft_conflict'));
         return;
       }
+      if (requiredForm.validate(propertyCompletionFields({ type: currentDraft.baseline.core.propertyType, area: currentDraft.choices.locationAreaId, price: currentDraft.choices.priceAmount, size: currentDraft.choices.areaSquareMeters, values: currentDraft.choices.canonicalDetails ?? {} })).length) return;
       const mapsValidation = getPropertyEditMapsFieldError(currentDraft.choices.mapsLink ?? '', language);
       setMapsFieldError(mapsValidation);
       if (mapsValidation) return;
@@ -1409,7 +1415,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       )}
 
-      <ScrollView removeClippedSubviews={false} style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
+      <RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><ScrollView ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16} removeClippedSubviews={false} style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
         {error ? <Text testID="property-edit-error" style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}>{error}</Text> : null}
         {pendingOperation && (recoveryStatus === 'retry_required' || recoveryStatus === 'update_failed') ? (
           <Button title={t('edit.retry_update')} onPress={() => void retryRecovery(true)} loading={saving} testID="property-update-retry" />
@@ -1665,7 +1671,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Choice key={transaction} selected={shownTransaction === transaction} onPress={() => selectTransaction(transaction)} title={t(`transaction.${transaction}` as keyof Translations)} testID={`edit-transaction-${transaction}`} />
               ))}
             </View>
-<PropertyAreaBlockRow area={<>            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
+<RequiredFormHint /><PropertyAreaBlockRow area={<RequiredField id="locationAreaId">            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
             <TouchableOpacity
               onPress={() => setAreaOpen(true)}
               style={[styles.input, propertyFormInputStyle, { borderColor: colors.border, backgroundColor: colors.card }]}
@@ -1674,7 +1680,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             >
               <Text style={{ color: colors.foreground, fontFamily: fonts.regular }}>{areaName(choices.locationAreaId)}</Text>
             </TouchableOpacity>
-</>} block={<>            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
+</RequiredField>} block={<>            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
             <TextInput
               value={choices.block ?? ''}
               onChangeText={value => updateChoices({ block: value || undefined })}
@@ -1683,7 +1689,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
             />
 </>} />
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
+<RequiredField id="price">            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>
               {shownTransaction === 'rent'
                 ? `${t('price.amount')} · ${formatRentalCadence(shownRentalPeriodId, t)}`
                 : t('price.amount')}
@@ -1700,7 +1706,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               testID="edit-price"
             />
             {priceAttempted && isMissingPositiveAmount(shownPrice) ? <Text accessibilityRole="alert" testID="edit-price-error" style={{ color: colors.destructive, fontFamily: fonts.medium }}>{t('errors.invalid_price')}</Text> : null}
-            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
+</RequiredField>
+<RequiredField id="areaSquareMeters">            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المساحة (م²)' : 'Area (m²)'}</Text>
             <TextInput
               value={choices.areaSquareMeters === undefined ? '' : String(choices.areaSquareMeters)}
               onChangeText={value => {
@@ -1711,6 +1718,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               testID="edit-area-square-meters"
               style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
             />
+</RequiredField>
 </PropertyFormCard>
             <ModernPropertyForm
               transaction={shownTransaction}
@@ -1846,7 +1854,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" />
           </>
         ) : null}
-      </ScrollView>
+      </ScrollView></View></RequiredFormProvider>
 
       <Modal visible={areaOpen} animationType="slide" onRequestClose={() => setAreaOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>

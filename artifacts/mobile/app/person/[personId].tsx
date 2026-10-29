@@ -568,7 +568,7 @@ export default function PersonDetailScreen() {
                     return area ? (language === 'ar' ? area.ar : area.en) : (language === 'ar' ? 'منطقة غير معروفة' : 'Unknown area');
                   }).join(' → ')}
               </Text>
-              <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
+              <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.budget.minimum === undefined ? (language === 'ar' ? 'غير محدد' : 'Unspecified') : formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{requirement.budget.maximum === undefined ? (language === 'ar' ? 'غير محدد' : 'Unspecified') : formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>

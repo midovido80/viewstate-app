@@ -427,7 +427,7 @@ export function MatchingResultCard({
               </View>
             ))}
           </View>
-          {result.priceAmount < requirement.budget.minimum && (
+          {requirement.budget.minimum !== undefined && result.priceAmount < requirement.budget.minimum && (
             <Text
               testID="matching-below-budget"
               style={{ ...text, fontSize: 12 }}

@@ -243,7 +243,7 @@ export default function MatchingScreen() {
             const quick = restore.quickRequirement;
             if (quick) {
               setQuickRequirement(quick); setPurpose(quick.purpose); setPropertyType(quick.propertyType);
-              setPreferredAreaIds([...quick.preferredAreaIds]); setMinimumBudget(String(quick.budget.minimum)); setMaximumBudget(String(quick.budget.maximum));
+              setPreferredAreaIds([...quick.preferredAreaIds]); setMinimumBudget(quick.budget.minimum === undefined ? '' : String(quick.budget.minimum)); setMaximumBudget(quick.budget.maximum === undefined ? '' : String(quick.budget.maximum));
               setBedroomsMinimum(quick.bedroomsMinimum === undefined ? '' : String(quick.bedroomsMinimum)); setBathroomsMinimum(quick.bathroomsMinimum === undefined ? '' : String(quick.bathroomsMinimum));
               setCentralAC(quick.centralAC); setNotes(quick.notes); setFloorUse(quick.floorUse); setSelectedSeekerId(quick.seekerId ?? null);
               const subtype = quick.catalogPreferences?.find(item => item.field === 'apartmentSubtype' && item.kind === 'choice');
