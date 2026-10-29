@@ -332,3 +332,57 @@ Scope: The frozen source revision changes only `artifacts/mobile/app/person/[per
 Review: The read-only “FW01.1 — Post-Push CTO Verification, Android/iOS Compatibility Impact & Source Freeze Readiness” report concluded “FW01.1 SOURCE FREEZE READY — FOUNDER DECISION REQUIRED.”
 Boundaries: This governance documentation does not merge FW01.1 source code into `main`, does not modify the frozen branch or commit, and authorizes no product-source change. Android/iOS native runtime acceptance, physical-device acceptance, and full FW01 acceptance remain open and are not completed. No product-code merge, release, tag, native execution, or FW02 work is authorized. Any change to the frozen revision or scope requires new explicit Founder approval.
 State: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.
+
+### Session: 2026-10-01 (Property sector selection)
+Authorization: Founder approved implementation and work-branch publication after the bounded impact review in conversation.
+Baseline: Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`; branch `work/property-sector-selection`.
+Scope: Equal-width All/Residential/Commercial filters above property types, All by default, selected sector toggles back to All. Floor use is selected before its form and passed to existing Offered/Wanted contracts. Direct residential Duplex uses the existing Apartment/duplex storage and generic form. Commercial Duplex and new form fields remain deferred.
+Compatibility: No schema, migration, hydration rewrite, dependency, matching or media-storage changes. Existing floor transition confirmation remains required before removing incompatible draft values.
+Verification: Domain tests, focused sector tests and whitespace checks run locally; complete Mobile/TypeScript gates and visual/device acceptance remain subject to their recorded results. No acceptance or deployment is implied by this entry.
+State: Work-branch implementation; Pilot promotion requires Founder acceptance.
+
+### Session: 2026-10-07 (Residential actual facts)
+Authorization: Founder explicitly requested screenshot Occupancy (Family/Bachelor/Any) on every residential Offered Property form and Master bedrooms immediately below Bedrooms on every residential type except Studio.
+Baseline: Work branch `work/property-sector-selection` at `93e66b82314d5f7c43b18d0f73178a0ab3301183`; live Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`.
+Implementation: Optional canonical occupancy and masterBedroomCount facts across residential forms, including whole buildings and residential Other; Studio occupancy uses its dedicated form. Counts are nonnegative integers and cannot exceed known total bedrooms. Other retains an optional propertyUse discriminator because its canonical type is shared by both sectors; new capture chooses use before the form, known saved use stays locked, and legacy unclassified records remain readable. Legacy Villa demo master counts hydrate for explicit editing without a storage migration or duplicate control.
+Verification: Domain tests passed locally; nine added behavioral Mobile tests and both TypeScript gates passed in the first CI run. Existing field-matrix/source assertions are being aligned with the approved amendment; final full CI results are reported separately.
+Boundaries: No new dependencies, migrations, hydration writes, matching changes, APK, deployment, or Pilot promotion. Preview and physical-device Founder acceptance remain pending.
+
+### Session: 2026-10-15 (Property inventory sector filters)
+Authorization: Founder requested Residential and Commercial filters below the existing All/Offered/Wanted/Sale/Rent row in the Properties tab.
+Baseline: `work/property-sector-selection` at `359e2cf58d269e83e9331911af061b1f100ade7a`; live Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`.
+Scope: Two equal-width sector controls with exclusive, reversible selection. Sector intersects the existing direction, transaction and text filters for Offered Properties and Wanted Requirements; All clears both filter groups. Floor uses its stored floorUse; Other uses its stored propertyUse where supported. Unclassified shared types remain visible unfiltered and are excluded from both specific sectors without guessing or rewriting records.
+Verification: Focused sector/composable-filter tests passed locally (15/15), including cross-sector exclusion, Floor/Other, apartment subtypes, Wanted records, search intersections and clear behavior. Full CI and visual/device acceptance are recorded separately.
+Boundaries: No persisted-data changes, migration, dependency, People filter change, APK, deployment or Pilot promotion.
+
+### Session: 2026-10-15 (Explicit Residential/Commercial Floor choices)
+Authorization: Founder approved direct Residential floor and Commercial floor choices for Offered/Wanted, with the selected use stored canonically and shown consistently in inventory, details and review.
+Baseline: Work branch `work/property-sector-selection` at `f952ef0beb7084a5caff6be524df57e30e034bf3`; live Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`.
+Implementation: All shows both Floor choices; each sector shows its own choice. Both retain propertyType=floor plus the corresponding floorUse. Canonical route restoration retains the selected choice on Back; the separate Floor-use chooser is removed from the main selector. Existing Floor draft transition confirmation remains in place before incompatible values are removed. Cards, Property/Requirement details and reviews use localized specific Floor names; search recognizes them in both languages. Unknown legacy Floor use remains unclassified without hydration rewrites.
+Verification: Focused sector/composable-filter suite 20/20 passed locally, including all route combinations, labels, restoration, save/read-back and sector exclusion. Full GitHub CI and visual/device acceptance are reported separately.
+Boundaries: No persisted schema change, migration, new dependency, APK, deployment or Pilot promotion.
+
+### Session: 2026-10-15 (People sector filters)
+Authorization: Founder requested the same Residential/Commercial filters in People, combined with every existing Offered/Wanted and Sale/Rent selection.
+Baseline: Work branch `work/property-sector-selection` at `61e0758e1ac224662f796850b845dede2372e7b3`; live Pilot `4d124b7e59816decc8a6b98ddc78290127486c99`.
+Implementation: Two equal-width bilingual sector controls below the People intent filters; mutually exclusive, reversible, with All clearing both groups. Derive each activity's sector from its canonical linked Property or owned Requirement. All selected facets must match one activity; separate activities cannot combine into a false match. Person cards show only matching activities and the matching overflow count. Unfiltered People still includes persons without activity; unknown Floor/Other use is excluded only from a specific sector. Existing Person search remains combined with these filters.
+Verification: Focused composable, sector and presentation regression tests passed locally, 43/43, covering all direction/transaction/sector combinations, ownership, cross-record false positives, shared-type use and read-only deduplication. Full CI and Preview/device acceptance are recorded separately.
+Boundaries: No database writes/migrations, dependencies, APK, deployment or Pilot promotion.
+
+### Session: 2026-10-16 (Transaction selector wording)
+Authorization: Founder requested independent wording for the two selection groups: Offered/Wanted above and For rent/For sale below, without repeating direction in the transaction choices.
+Baseline: `work/property-sector-selection` at `c249c724aa5e00b6e0a4778936582dcb8f69f995`.
+Change: Short bilingual transaction-choice labels only; direction, transaction identifiers, routing and the combined intent labels used in cards/review remain unchanged.
+Verification: Existing selector wording assertions updated for the requested copy; full CI results are reported separately. No dependency, persistence, Preview or Pilot changes.
+
+### Session: 2026-10-16 (Contextual transaction filter labels)
+Authorization: Founder requested that People change the Sale filter wording to Purchase when Wanted is selected, matching the requested Properties behavior.
+Baseline: Work branch `work/property-sector-selection` at `9e47c86d45ccf4cb8c790dd486cb1ded14781408`.
+Change: Shared bilingual transaction-filter label in People and Properties: Wanted only uses To buy/للشراء, Offered or no direction uses For sale/للبيع, both directions use For sale / To buy; Rent remains For rent/للإيجار. Existing canonical sale-to-wanted-buy mapping, selected filters, sector intersections and saved records remain unchanged.
+Verification: Existing filter suite extended with direction transitions, canonical result matching and both-tab label consumers; full CI results are reported separately. No dependency, migration, Preview or Pilot change.
+
+### Session: 2026-10-16 (Wanted transaction-entry purchase wording correction)
+Authorization: Founder reported that simplifying the Add Property transaction choices left Sale visible after choosing Wanted, and explicitly requested Purchase for Wanted while retaining Sale for Offered.
+Baseline: Work branch `work/property-sector-selection` at `d8f26d0e4ba8e70e3c608cf914d3e5c33d7fe788`.
+Correction: The entry screen now shows To buy/للشراء and Purchase or Rent/شراء أم إيجار under Wanted, and For sale/للبيع and Sale or Rent under Offered. Rent remains For rent/للإيجار; direction is not repeated inside either option. Canonical transaction values, existing filter behavior and Wanted sale-to-buy routing remain unchanged.
+Verification: Existing production route regression extended to English and Arabic, including toggling Offered/Wanted without losing the selected transaction and exact Seeker ownership; full CI results are reported separately. No dependencies, persistence migration, Preview or Pilot changes.
