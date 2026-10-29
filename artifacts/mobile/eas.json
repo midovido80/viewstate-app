@@ -7,8 +7,11 @@
     "internal": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
-      }
+        "buildType": "apk",
+        "image": "sdk-54"
+      },
+      "pnpm": "10.26.1",
+      "node": "20.19.4"
     }
   }
 }

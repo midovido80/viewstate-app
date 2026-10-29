@@ -1,5 +1,6 @@
 import {
   validateSeekerRequirement,
+  MATCH_ENGINE_VERSION,
   type MatchResult,
   type RequirementOccupancy,
   type RequirementPurpose,
@@ -27,6 +28,8 @@ export interface TransientRequirementInput {
   readonly gym?: boolean;
   readonly seaView?: boolean;
   readonly centralAC?: boolean;
+  readonly floorUse?: 'residential' | 'commercial';
+  readonly apartmentSubtype?: 'studio' | 'standard_apartment' | 'duplex';
 }
 
 export type TransientRequirementResult =
@@ -42,6 +45,7 @@ export type TransientRequirementResult =
 export interface MatchAllRequirementGroup {
   readonly requirement: SeekerRequirement;
   readonly matches: readonly MatchResult[];
+  readonly needsConfirmation: readonly MatchResult[];
 }
 
 export interface MatchAllPersonGroup {
@@ -53,6 +57,7 @@ export function validMatchingRequirements(
   requirements: readonly SeekerRequirement[],
 ): SeekerRequirement[] {
   return requirements.flatMap(requirement => {
+    if (!requirement.seekerId) return [];
     const validation = validateSeekerRequirement(requirement, {
       isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
     });
@@ -85,13 +90,16 @@ export function groupMatchAllResultsByPerson(
 
   for (const requirement of requirements) {
     const run = runsByRequirementId.get(requirement.id);
+    if (!requirement.seekerId) continue;
     const person = peopleById.get(requirement.seekerId);
-    if (!run?.matches.length || !person) continue;
+    if (!run || run.engineVersion !== MATCH_ENGINE_VERSION || (!run.matches.length && !run.needsConfirmation.length) || !person) continue;
     const existing = groups.get(person.id);
     const requirementGroup = {
       requirement,
-      matches: run.matches,
+      matches: run.matches.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id && item.qualifies && item.eligible && (item.category === 'direct' || item.category === 'provisional' || item.category === 'negotiation')),
+      needsConfirmation: run.needsConfirmation.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id),
     };
+    if (!requirementGroup.matches.length && !requirementGroup.needsConfirmation.length) continue;
     if (existing) {
       existing.requirementGroups.push(requirementGroup);
     } else {
@@ -125,11 +133,17 @@ export function buildTransientRequirement(
       currencyCode: 'KWD',
     },
     notes: input.notes,
+    ...(input.floorUse !== undefined ? { floorUse: input.floorUse } : {}),
+    ...(input.apartmentSubtype !== undefined ? { catalogPreferences: [{ field: 'apartmentSubtype' as const, kind: 'choice' as const, value: input.apartmentSubtype }] } : {}),
+    ...(input.bedroomsMinimum !== undefined ? { bedroomsMinimum: input.bedroomsMinimum } : {}),
+    ...(input.bathroomsMinimum !== undefined ? { bathroomsMinimum: input.bathroomsMinimum } : {}),
+    ...(input.centralAC !== undefined ? { centralAC: input.centralAC } : {}),
   };
 
   const candidate = input.purpose === 'rent'
     ? {
         ...base,
+        rentalPeriodId: 'monthly' as const,
         ...(input.bedroomsMinimum !== undefined
           ? { bedroomsMinimum: input.bedroomsMinimum }
           : {}),
