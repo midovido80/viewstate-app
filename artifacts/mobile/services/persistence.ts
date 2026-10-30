@@ -24,7 +24,6 @@ import {
   assertValidPerson,
   enrichPersonIdentity,
   getPersonSearchText,
-  personCanBePropertySource,
   personMatchesSearch,
 } from '@/services/people';
 import {
@@ -40,6 +39,7 @@ import {
   SQLiteRequirementStore,
   WEB_REQUIREMENTS_KEY,
   WebRequirementStore,
+  type RequirementRecoveryReport,
   type RequirementPersistenceOptions,
   type RequirementStore,
 } from '@/services/requirementPersistence';
@@ -452,7 +452,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
   }
 
   private parseRequirementForConsolidation(row: { id: string; data: string }): {
-    id: string; seekerId: string; literal: Record<string, unknown>;
+    id: string; seekerId?: string; literal: Record<string, unknown>;
   } | null {
     try {
       const literal = JSON.parse(row.data) as unknown;
@@ -461,7 +461,11 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
       });
       return value.ok && value.value.id === row.id
         && typeof literal === 'object' && literal !== null && !Array.isArray(literal)
-        ? { id: value.value.id, seekerId: value.value.seekerId, literal: literal as Record<string, unknown> }
+        ? {
+          id: value.value.id,
+          ...(value.value.seekerId ? { seekerId: value.value.seekerId } : {}),
+          literal: literal as Record<string, unknown>,
+        }
         : null;
     } catch {
       return null;
@@ -504,8 +508,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         if (!source || !validatePropertySource(source).ok) return true;
         const person = readablePeople.get(source.personId);
         return !person
-          || !readablePropertyIds.has(source.propertyCoreId)
-          || !personCanBePropertySource(person, source.role);
+          || !readablePropertyIds.has(source.propertyCoreId);
       } catch {
         return true;
       }
@@ -566,7 +569,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         await this.db!.runAsync('UPDATE property_sources SET person_id = ? WHERE person_id = ?', [survivor.id, loser.id]);
       }
       for (const item of parsedRequirements) {
-        if (item.requirement && loserIds.has(item.requirement.seekerId)) {
+        if (item.requirement?.seekerId && loserIds.has(item.requirement.seekerId)) {
           const replacement = { ...item.requirement.literal, seekerId: survivor.id };
           await this.db!.runAsync(
             'UPDATE seeker_requirements SET data = ? WHERE id = ? AND data = ?',
@@ -698,9 +701,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         ]);
         if (!person || !property) throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
         const sourcePerson = this.parsePersonRow(person);
-        if (!sourcePerson || !personCanBePropertySource(sourcePerson, source.role)) {
-          throw new Error('PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED');
-        }
+        if (!sourcePerson) throw new Error('UNREADABLE_PERSON_STORAGE');
         await this.db!.runAsync(
           `INSERT INTO property_sources (property_core_id, person_id, role) VALUES (?, ?, ?)
            ON CONFLICT(property_core_id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role`,
@@ -1114,7 +1115,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
 
   private async getRawRequirementsForConsolidation(): Promise<{
     raw: string | null;
-    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId: string } }>;
+    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId?: string } }>;
     unreadableSeekerIds: Array<string | null>;
     rawValues: unknown[];
   }> {
@@ -1193,8 +1194,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     if (sources.some(source => {
       const sourcePerson = people.find(person => person.id === source.personId);
       return !propertyIds.has(source.propertyCoreId)
-        || !sourcePerson
-        || !personCanBePropertySource(sourcePerson, source.role);
+        || !sourcePerson;
     })) {
       throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
     }
@@ -1211,7 +1211,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       ? { ...source, personId: survivor.id } : source);
     const nextRequirements = requirements.rawValues.map(value => {
       const item = requirements.values.find(candidate => candidate.value === value);
-      return item && losers.has(item.requirement.seekerId)
+      return item?.requirement.seekerId && losers.has(item.requirement.seekerId)
         ? { ...item.value, seekerId: survivor.id } : value;
     });
     // Dependents first leaves the old person available if a later write fails.
@@ -1342,9 +1342,6 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       if (!sourcePerson || !property) {
         throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
       }
-      if (!personCanBePropertySource(sourcePerson, source.role)) {
-        throw new Error('PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED');
-      }
       const next = [
         ...sources.filter(item => item.propertyCoreId !== source.propertyCoreId),
         source,
@@ -1384,6 +1381,10 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   getRequirementsForSeeker = (seekerId: string) =>
     this.requirements.getRequirementsForSeeker(seekerId);
 
+  getRequirementRecoveryReport(): RequirementRecoveryReport {
+    return this.requirements.getRecoveryReport();
+  }
+
   updateRequirement = (
     expected: Parameters<RequirementStore['updateRequirement']>[0],
     replacement: Parameters<RequirementStore['updateRequirement']>[1],
@@ -1394,3 +1395,7 @@ export const store: PropertyStore & PersonStore & RequirementStore & {
   getIntegrityStatus(): LocalStoreIntegrityStatus;
 } =
   Platform.OS === 'web' ? new WebStore() : new SQLiteStore();
+
+export function getRequirementRecoveryReport(): RequirementRecoveryReport | null {
+  return store instanceof WebStore ? store.getRequirementRecoveryReport() : null;
+}

@@ -6,6 +6,7 @@ import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import {
   persistAttachmentsThenDeleteRemoved,
+  persistNewAttachmentsOrDeleteOnFailure,
   reorderAttachments,
   setAttachmentCover,
   type AttachmentFileStore,
@@ -15,7 +16,7 @@ import {
 import { generateDomainId } from '@/services/identity';
 
 export type { AttachmentFileStore, AttachmentKind, LocalAttachment } from './attachmentOperations';
-export { persistAttachmentsThenDeleteRemoved, reorderAttachments, setAttachmentCover } from './attachmentOperations';
+export { persistAttachmentsThenDeleteRemoved, persistNewAttachmentsOrDeleteOnFailure, reorderAttachments, setAttachmentCover } from './attachmentOperations';
 
 export interface AttachmentSource {
   readonly uri: string;
@@ -90,6 +91,82 @@ function assertNative(platform: string = Platform.OS) {
   if (platform === 'web') throw new Error('LOCAL_ATTACHMENTS_UNSUPPORTED_ON_WEB');
 }
 
+export const WEB_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
+
+export interface WebAttachmentBlobStore {
+  put(reference: string, blob: Blob): Promise<void>;
+  get(reference: string): Promise<Blob | null>;
+  delete(reference: string): Promise<void>;
+}
+
+export function createIndexedDbWebAttachmentBlobStore(
+  databaseName = 'viewstate-web-attachments',
+): WebAttachmentBlobStore {
+  const database = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('blobs');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('WEB_ATTACHMENT_INDEXEDDB_OPEN_FAILED'));
+  });
+  const transaction = (mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest) =>
+    database.then(db => new Promise<any>((resolve, reject) => {
+      const request = operation(db.transaction('blobs', mode).objectStore('blobs'));
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error ?? new Error('WEB_ATTACHMENT_INDEXEDDB_FAILED'));
+    }));
+  return {
+    put: (reference, blob) => transaction('readwrite', store => store.put(blob, reference)).then(() => undefined),
+    get: reference => transaction('readonly', store => store.get(reference)),
+    delete: reference => transaction('readwrite', store => store.delete(reference)).then(() => undefined),
+  };
+}
+
+export function createWebAttachmentFileStore(blobStore: WebAttachmentBlobStore): AttachmentFileStore {
+  return {
+    copyToProperty: async () => { throw new Error('WEB_ATTACHMENT_COPY_REQUIRES_FILE_PICKER'); },
+    copyToRequirement: async () => { throw new Error('WEB_ATTACHMENT_COPY_REQUIRES_FILE_PICKER'); },
+    delete: uri => uri.startsWith('viewstate-web-attachment:') ? blobStore.delete(uri) : Promise.resolve(),
+  };
+}
+
+export async function createWebFileAttachments(
+  propertyId: string,
+  existing: readonly LocalAttachment[],
+  files: readonly { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> }[],
+  createId: () => string = defaultId,
+  blobStore: WebAttachmentBlobStore = createIndexedDbWebAttachmentBlobStore(),
+): Promise<LocalAttachment[]> {
+  return createWebAttachmentsForOwner(propertyId, existing, files, createId, blobStore);
+}
+
+async function createWebAttachmentsForOwner(
+  ownerScope: string,
+  existing: readonly LocalAttachment[],
+  files: readonly { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> }[],
+  createId: () => string,
+  blobStore: WebAttachmentBlobStore,
+): Promise<LocalAttachment[]> {
+  const result: LocalAttachment[] = [];
+  const written: string[] = [];
+  try {
+    for (const file of files) {
+      if (!['image/', 'video/'].some(prefix => file.type.startsWith(prefix)) && file.type !== 'application/pdf') {
+        throw new Error('UNSUPPORTED_ATTACHMENT_TYPE');
+      }
+      if (file.size > WEB_ATTACHMENT_MAX_BYTES) throw new Error('ATTACHMENT_TOO_LARGE');
+      const id = createId();
+      const uri = `viewstate-web-attachment:${encodeURIComponent(ownerScope)}:${encodeURIComponent(id)}`;
+      await blobStore.put(uri, new Blob([await file.arrayBuffer()], { type: file.type }));
+      written.push(uri);
+      result.push({ id, kind: attachmentKind(file.type), originalName: file.name, mimeType: file.type, uri, order: existing.length + result.length });
+    }
+    return result;
+  } catch (error) {
+    await Promise.all(written.map(uri => blobStore.delete(uri).catch(() => undefined)));
+    throw error;
+  }
+}
+
 function defaultId(): string {
   return generateDomainId();
 }
@@ -108,24 +185,33 @@ function extensionFor(source: AttachmentSource): string {
 }
 
 export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFileStore {
+  const copyToManagedScope = async (
+    scope: 'properties' | 'requirements',
+    recordId: string,
+    attachmentId: string,
+    source: AttachmentSource,
+  ) => {
+    assertNative();
+    const directory = new module.Directory(
+      module.Paths.document,
+      scope,
+      encodeURIComponent(recordId),
+      'attachments',
+    );
+    await directory.create({ intermediates: true, idempotent: true });
+    const destination = new module.File(
+      directory,
+      `${encodeURIComponent(attachmentId)}${extensionFor(source)}`,
+    );
+    const input = new module.File(source.uri);
+    await input.copy(destination);
+    return destination.uri;
+  };
   return {
-    async copyToProperty(propertyId, attachmentId, source) {
-      assertNative();
-      const directory = new module.Directory(
-        module.Paths.document,
-        'properties',
-        encodeURIComponent(propertyId),
-        'attachments',
-      );
-      await directory.create({ intermediates: true, idempotent: true });
-      const destination = new module.File(
-        directory,
-        `${encodeURIComponent(attachmentId)}${extensionFor(source)}`,
-      );
-      const input = new module.File(source.uri);
-      await input.copy(destination);
-      return destination.uri;
-    },
+    copyToProperty: (propertyId, attachmentId, source) =>
+      copyToManagedScope('properties', propertyId, attachmentId, source),
+    copyToRequirement: (requirementId, attachmentId, source) =>
+      copyToManagedScope('requirements', requirementId, attachmentId, source),
     async delete(uri) {
       assertNative();
       await new module.File(uri).delete();
@@ -134,34 +220,39 @@ export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFil
 }
 
 async function storeSources(
-  propertyId: string,
+  recordId: string,
   existing: readonly LocalAttachment[],
   sources: readonly AttachmentSource[],
   dependencies: AttachmentDependencies,
 ): Promise<LocalAttachment[]> {
   assertNative(dependencies.platform);
   const result: LocalAttachment[] = [];
-  for (const source of sources) {
-    if (
-      !source.mimeType.startsWith('image/')
-      && !source.mimeType.startsWith('video/')
-      && source.mimeType !== 'application/pdf'
-    ) {
-      throw new Error('UNSUPPORTED_ATTACHMENT_TYPE');
+  try {
+    for (const source of sources) {
+      if (
+        !source.mimeType.startsWith('image/')
+        && !source.mimeType.startsWith('video/')
+        && source.mimeType !== 'application/pdf'
+      ) {
+        throw new Error('UNSUPPORTED_ATTACHMENT_TYPE');
+      }
+      const id = (dependencies.createId ?? defaultId)();
+      if (existing.some(item => item.id === id) || result.some(item => item.id === id)) {
+        throw new Error('DUPLICATE_ATTACHMENT_ID');
+      }
+      const uri = await dependencies.fileStore.copyToProperty(recordId, id, source);
+      result.push({
+        id,
+        kind: attachmentKind(source.mimeType),
+        originalName: source.name,
+        mimeType: source.mimeType,
+        uri,
+        order: existing.length + result.length,
+      });
     }
-    const id = (dependencies.createId ?? defaultId)();
-    if (existing.some(item => item.id === id) || result.some(item => item.id === id)) {
-      throw new Error('DUPLICATE_ATTACHMENT_ID');
-    }
-    const uri = await dependencies.fileStore.copyToProperty(propertyId, id, source);
-    result.push({
-      id,
-      kind: attachmentKind(source.mimeType),
-      originalName: source.name,
-      mimeType: source.mimeType,
-      uri,
-      order: existing.length + result.length,
-    });
+  } catch (error) {
+    await Promise.all(result.map(item => dependencies.fileStore.delete(item.uri).catch(() => undefined)));
+    throw error;
   }
   return result;
 }
@@ -171,12 +262,13 @@ export async function pickAndStoreMedia(
   existing: readonly LocalAttachment[],
   dependencies: AttachmentDependencies,
   imagePicker: ImagePickerModule = ImagePicker,
+  mediaTypes: ('images' | 'videos')[] = ['images', 'videos'],
 ): Promise<LocalAttachment[]> {
   assertNative(dependencies.platform);
   const permission = await imagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) throw new Error('MEDIA_LIBRARY_PERMISSION_DENIED');
   const picked = await imagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images', 'videos'],
+    mediaTypes,
     allowsMultipleSelection: true,
     quality: 1,
   });
@@ -224,7 +316,23 @@ export async function openAttachment(
     getContentUriAsync: uri => LegacyFileSystem.getContentUriAsync(uri),
   },
   intentLauncher: AndroidIntentLauncher = IntentLauncher,
+  webBlobStore?: WebAttachmentBlobStore,
 ): Promise<void> {
+  if (platform === 'web') {
+    if (attachment.uri.startsWith('viewstate-web-attachment:')) {
+      const blob = await (webBlobStore ?? createIndexedDbWebAttachmentBlobStore()).get(attachment.uri);
+      if (!blob) throw new Error('ATTACHMENT_FILE_MISSING');
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      return;
+    }
+    if (attachment.uri.startsWith('data:')) {
+      window.open(attachment.uri, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    throw new Error('LOCAL_ATTACHMENTS_UNSUPPORTED_ON_WEB');
+  }
   assertNative(platform);
   let exists = false;
   try {
