@@ -1,13 +1,17 @@
-# Raised list filters
+# Compact raised list filters
 
-Base `83e6d3368f7c66841764878d5c9c5fab78f0a027`; independent branch `work/raised-filter-buttons`.
+Package base `83e6d3368f7c66841764878d5c9c5fab78f0a027`; branch `work/raised-filter-buttons`.
 
-Properties and People list filters use a shared presentation-only Pressable: 14px corners, thin border with a 3px raised lower edge, small shadow, 44px minimum touch height and 1px press depression. Selected filters retain the existing primary-blue/white colors. The intent row keeps one horizontal scrollable line; its 60px reservation and 4px top padding leave room for the button and shadow. Residential/Commercial keep equal widths below it. Existing 8px gaps are preserved.
+Properties and People filters use one presentation-only Pressable with a 34px visible height, 9px corners, a 2px lower edge, 1px shadow offset and a light shadow. Vertical hit slop adds 5px above/below inside the rows' 5px padding; the first row reserves 44px while reducing the visible button height. No timers or animation loops.
 
-No filter functions, option values, state transitions, data access, labels or result projection changed. A second tap still deselects direction/transaction/sector filters. All still resets both dimensions and the sector. Wanted sale labels still change to To buy/للشراء. Form choices and bottom navigation are untouched. No dependencies, data migration, native permissions or app-version changes.
+The five direction/transaction buttons have equal widths computed from the viewport, 20px outer gutters and four 6px gaps. The minimum width grows with supported text scaling; narrow screens retain the existing horizontal scroll. At 390px, each is approximately 65.2px wide. Residential/Commercial retain half of the available second row each with an 8px gap: 171px each at 390px. Both rows use the same 34px visible height. Existing selected blue/white colors are preserved.
 
-Browser checks: Properties and People in Arabic, second-tap cancellation, combined intent/transaction/sector selections, All reset, English Wanted/To buy labels and cancellation, and 320/390px display. The last English transaction filter was reached through horizontal scrolling and successfully selected; its measured touch height was 48px. Local HTTP secure-storage restrictions prevent acceptance with persisted user records; unchanged filter/domain behavior remains covered by the existing suite. Physical devices remain unverified.
+No filter functions, option values, state transitions, data access, label wording or result projection changed. Second-tap cancellation, All reset, combined filters and Wanted/To buy translations remain intact. Form choices, bottom navigation and unrelated screens are untouched. No dependencies, data migration, native permissions or app-version changes.
 
-Required validation: existing mobile suite, workspace TypeScript, Android/iOS JavaScript exports, diff whitespace and GitHub CI. One existing layout assertion changes from a 52px to a 60px filter-row reservation; no behavioral test expectations are relaxed. This package does not refresh Replit, build an APK, merge, or move main/Pilot.
+## Validation
 
-Rollback: the preserved base commit, without migration or dependency rollback.
+Existing mobile suite, workspace TypeScript, Android/iOS JavaScript export and whitespace checks. One existing filter-row reservation assertion changes to 44px; no behavioral expectations are relaxed.
+
+Browser checks exercised Arabic Properties at 390px and English People at 320px, measured equal first-row widths and equal half-row sector widths, and verified selection/cancellation and stable widths when Sale changes to To buy. Measured visible heights: 34px for every filter; English 320px first-row widths: 56px each, sector widths: 136px each. No records were created or cleared.
+
+Local HTTP secure-storage restrictions prevent persisted-record acceptance in this QA environment. Physical-device behavior, large OS text settings and native hit-slop acceptance remain unverified. No Replit refresh, APK, deployment or main/Pilot movement is included. Rollback is the preserved package base without migration or dependency rollback.

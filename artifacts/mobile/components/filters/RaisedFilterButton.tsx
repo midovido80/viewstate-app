@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 type Props = Omit<ComponentProps<typeof Pressable>, 'children' | 'style'> & {
@@ -7,10 +7,16 @@ type Props = Omit<ComponentProps<typeof Pressable>, 'children' | 'style'> & {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
 };
+/** Equal first-row widths; larger text can still use the existing horizontal scroll. */
+export function useIntentFilterWidth() {
+  const { width, fontScale } = useWindowDimensions();
+  return Math.max(56 * Math.min(fontScale, 1.3), (width - 40 - 4 * 6) / 5);
+}
+
 /** Presentation only: the owning screen retains its existing toggle/reset/filter rules. */
 export function RaisedFilterButton({ selected, children, style, ...props }: Props) {
   const colors = useColors();
-  return <Pressable {...props} style={({ pressed }) => [
+  return <Pressable hitSlop={{ top: 5, bottom: 5 }} {...props} style={({ pressed }) => [
     styles.button,
     { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : '#D8E1EF' },
     style,
@@ -19,11 +25,11 @@ export function RaisedFilterButton({ selected, children, style, ...props }: Prop
 }
 const styles = StyleSheet.create({
   button: {
-    minHeight: 44, paddingHorizontal: 12, paddingVertical: 8,
-    alignItems: 'center', justifyContent: 'center', borderRadius: 14,
-    borderWidth: 1, borderBottomWidth: 3,
-    shadowColor: '#173F78', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 3, elevation: 3,
+    height: 34, minHeight: 34, paddingHorizontal: 4, paddingVertical: 0,
+    alignItems: 'center', justifyContent: 'center', borderRadius: 9,
+    borderWidth: 1, borderBottomWidth: 2,
+    shadowColor: '#173F78', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 1.5, elevation: 1,
   },
   pressed: { transform: [{ translateY: 1 }], shadowOpacity: 0, elevation: 0, opacity: 0.9 },
 });

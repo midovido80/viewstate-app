@@ -1,4 +1,4 @@
-import { RaisedFilterButton } from '@/components/filters/RaisedFilterButton';
+import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -40,6 +40,7 @@ export default function PeopleScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useScreenInsets();
+  const intentFilterWidth = useIntentFilterWidth();
   const { t, language, isRTL, fonts } = useI18n();
   const [people, setPeople] = useState<Person[]>([]);
   const [activityByPerson, setActivityByPerson] = useState<Map<string, PersonActivityLine[]>>(new Map());
@@ -115,7 +116,7 @@ export default function PeopleScreen() {
           accessibilityLabel={t('people.search')}
         />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, minHeight: 60, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-composable-filters">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, minHeight: 44, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-composable-filters">
         {PEOPLE_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
             ? !hasActivePeopleFilters
@@ -134,11 +135,12 @@ export default function PeopleScreen() {
                 }
               }}
               selected={selected}
+              style={{ width: intentFilterWidth }}
               testID={`people-filter-${option.key}`}
               accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
               aria-checked={option.key === 'all' ? undefined : selected}
             >
-              <Text numberOfLines={1} style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.9} maxFontSizeMultiplier={1.3} style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 12, lineHeight: 18 }}>
                 {option.key === 'sale' || option.key === 'rent'
                   ? getRecordTransactionFilterLabel(option.key, filter, language)
                   : t(`properties.filter.${option.key}` as keyof Translations)}
@@ -161,7 +163,7 @@ export default function PeopleScreen() {
               accessibilityState={{ checked: selected }}
               aria-checked={selected}
             >
-              <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
+              <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 }}>
                 {value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}
               </Text>
             </RaisedFilterButton>
@@ -245,9 +247,9 @@ const styles = StyleSheet.create({
   name: { fontSize: 18 },
   classes: { marginTop: 4, fontSize: 13 },
   empty: { textAlign: 'center', paddingTop: 60 },
-  filters: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'nowrap' },
-  sectorFilters: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
-  sectorChip: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  filters: { paddingTop: 5, paddingHorizontal: 20, paddingBottom: 5, gap: 6, flexWrap: 'nowrap' },
+  sectorFilters: { paddingTop: 5, paddingHorizontal: 20, paddingBottom: 5, gap: 8 },
+  sectorChip: { flex: 1, minHeight: 34, alignItems: 'center', justifyContent: 'center' },
   error: { paddingHorizontal: 20 },
   add: { position: 'absolute', left: 20, right: 20 },
 });
