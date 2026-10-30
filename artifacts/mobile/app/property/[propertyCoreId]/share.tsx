@@ -35,6 +35,7 @@ function CheckRow({
   colors,
   fonts,
   forceLTR = false,
+  disabled = false,
 }: {
   checked: boolean;
   title: string;
@@ -45,13 +46,15 @@ function CheckRow({
   colors: ReturnType<typeof useColors>;
   fonts: ReturnType<typeof useI18n>['fonts'];
   forceLTR?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <TouchableOpacity
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="checkbox"
       accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
-      accessibilityState={{ checked }}
+      accessibilityState={{ checked, disabled }}
       testID={testID}
       style={[styles.row, { borderColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
     >
@@ -206,10 +209,10 @@ export default function PropertyShareScreen() {
       shareFlight.current = false; setSharing(false);
     }
   };
-  const toggleAttachment = (attachmentId: string) => setSelection(current => current && ({ ...current, attachmentIds: current.attachmentIds.includes(attachmentId) ? current.attachmentIds.filter(id => id !== attachmentId) : [...current.attachmentIds, attachmentId] }));
-  const toggleNormal = (field: PropertyShareSelection['normalFields'][number]) => setSelection(current => current && ({ ...current, normalFields: current.normalFields.includes(field) ? current.normalFields.filter(item => item !== field) : [...current.normalFields, field] }));
-  const toggleSensitive = (name: 'discloseOwnerSource' | 'discloseExactLocation' | 'disclosePaci' | 'discloseMapsLink') => setSelection(current => current && ({ ...current, [name]: !current[name] }));
-  const toggleContact = (contactId: string) => setSelection(current => current && ({ ...current, personContactIds: current.personContactIds.includes(contactId) ? current.personContactIds.filter(id => id !== contactId) : [...current.personContactIds, contactId] }));
+  const toggleAttachment = (attachmentId: string) => { if (shareFlight.current) return; setSelection(current => current && ({ ...current, attachmentIds: current.attachmentIds.includes(attachmentId) ? current.attachmentIds.filter(id => id !== attachmentId) : [...current.attachmentIds, attachmentId] })); };
+  const toggleNormal = (field: PropertyShareSelection['normalFields'][number]) => { if (shareFlight.current) return; setSelection(current => current && ({ ...current, normalFields: current.normalFields.includes(field) ? current.normalFields.filter(item => item !== field) : [...current.normalFields, field] })); };
+  const toggleSensitive = (name: 'discloseOwnerSource' | 'discloseExactLocation' | 'disclosePaci' | 'discloseMapsLink') => { if (shareFlight.current) return; setSelection(current => current && ({ ...current, [name]: !current[name] })); };
+  const toggleContact = (contactId: string) => { if (shareFlight.current) return; setSelection(current => current && ({ ...current, personContactIds: current.personContactIds.includes(contactId) ? current.personContactIds.filter(id => id !== contactId) : [...current.personContactIds, contactId] })); };
   const normalLabel = (field: PropertyShareSelection['normalFields'][number]) => ({
     property_type: t('detail.type'),
     transaction: t('detail.transaction'),
@@ -236,12 +239,12 @@ export default function PropertyShareScreen() {
 
       <Text style={[styles.note, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive_off')}</Text>
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.normal_fields')}</Text>
-      {PROPERTY_SHARE_NORMAL_FIELDS.map(field => <CheckRow key={field} checked={selection.normalFields.includes(field)} title={normalLabel(field)} onPress={() => toggleNormal(field)} testID={`share-normal-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
+      {PROPERTY_SHARE_NORMAL_FIELDS.map(field => <CheckRow disabled={sharing} key={field} checked={selection.normalFields.includes(field)} title={normalLabel(field)} onPress={() => toggleNormal(field)} testID={`share-normal-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.attachments')}</Text>
-      {(property.attachments ?? []).map(item => <CheckRow key={item.id} checked={selection.attachmentIds.includes(item.id)} title={toEnglishDigits(item.originalName)} onPress={() => toggleAttachment(item.id)} testID={`share-attachment-${item.id}`} isRTL={isRTL} colors={colors} fonts={fonts} forceLTR />)}
+      {(property.attachments ?? []).map(item => <CheckRow disabled={sharing} key={item.id} checked={selection.attachmentIds.includes(item.id)} title={toEnglishDigits(item.originalName)} onPress={() => toggleAttachment(item.id)} testID={`share-attachment-${item.id}`} isRTL={isRTL} colors={colors} fonts={fonts} forceLTR />)}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive')}</Text>
-      {sensitive.filter(([, , exists]) => exists).map(([name, label]) => <CheckRow key={name} checked={selection[name]} title={label} onPress={() => toggleSensitive(name)} testID={`share-${name}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
-       {contacts.length ? <><Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{shareT('share.contacts')}</Text>{contacts.map(contact => <CheckRow key={contact.id} checked={selection.personContactIds.includes(contact.id)} title={contact.name} subtitle={toEnglishDigits(contact.displayPhone)} onPress={() => toggleContact(contact.id)} testID={`share-contact-${contact.id}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}</> : null}
+      {sensitive.filter(([, , exists]) => exists).map(([name, label]) => <CheckRow disabled={sharing} key={name} checked={selection[name]} title={label} onPress={() => toggleSensitive(name)} testID={`share-${name}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
+       {contacts.length ? <><Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{shareT('share.contacts')}</Text>{contacts.map(contact => <CheckRow disabled={sharing} key={contact.id} checked={selection.personContactIds.includes(contact.id)} title={contact.name} subtitle={toEnglishDigits(contact.displayPhone)} onPress={() => toggleContact(contact.id)} testID={`share-contact-${contact.id}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}</> : null}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.preview')}</Text>
       <Text selectable testID="share-preview" style={[styles.preview, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{preview?.text || (previewResult.failed ? t('share.preview_unavailable') : t('share.select_content'))}</Text>
         {selectedAttachments.length ? <View testID="share-preview-attachments" style={styles.selectedAttachments}>

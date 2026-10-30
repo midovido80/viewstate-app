@@ -115,6 +115,8 @@ test('Notification actions retain canonical sharing, explicit sent confirmation 
   const [share, home, tabs, oldMore, hub, provider] = await Promise.all(['app/property/[propertyCoreId]/share.tsx', 'components/assistant/CompactAssistantScreen.tsx', 'app/(tabs)/_layout.tsx', 'app/(tabs)/more.tsx', 'components/account/AccountHub.tsx', 'contexts/MatchNotificationsContext.tsx'].map(path => readFile(path, 'utf8')));
   assert.match(share, /notificationsRef.current.resolve\(noticeId\)/);
   assert.match(share, /sharePropertyPreview\(preview/);
+  assert.match(share, /<CheckRow disabled=\{sharing\}/);
+  assert.match(share, /if \(shareFlight.current\) return; setSelection/);
   assert.match(share, /setFollowupPrompt\(true\)/);
   assert.match(share, /followupPersonId: recipient.id, followupPropertyId: id/);
   assert.match(home, /blankDraft\(kuwaitDay\(new Date\(\)\), 'call'\)/);
