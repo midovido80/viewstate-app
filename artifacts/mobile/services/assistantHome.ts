@@ -11,7 +11,7 @@ export function homeQuickRoute(action: HomeQuickAction): string | null {
 }
 export interface HomeMatch { person: Person; requirement: SeekerRequirement; result: MatchResult }
 /** Read-only projection of the existing engine's shortlists. Never rescoring or accepting another engine. */
-export function selectHomeMatches(requirements: readonly SeekerRequirement[], people: readonly Person[], runs: readonly BrokerMatchingRunResult[]): HomeMatch[] {
+export function selectHomeMatches(requirements: readonly SeekerRequirement[], people: readonly Person[], runs: readonly BrokerMatchingRunResult[], maximum = 5): HomeMatch[] {
   const peopleById = new Map(people.map(p => [p.id, p]));
   const requests = new Map(requirements.map(r => [r.id, r]));
   const pairs = new Map<string, HomeMatch>();
@@ -26,7 +26,7 @@ export function selectHomeMatches(requirements: readonly SeekerRequirement[], pe
       if (!old || compareHomeMatch(entry, old) < 0) pairs.set(key, entry);
     }
   }
-  return [...pairs.values()].sort(compareHomeMatch).slice(0, 5);
+  return [...pairs.values()].sort(compareHomeMatch).slice(0, maximum);
 }
 function compareHomeMatch(a: HomeMatch, b: HomeMatch): number {
   return b.result.score - a.result.score || a.result.differenceCount - b.result.differenceCount

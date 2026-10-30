@@ -1,3 +1,4 @@
+import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,10 +42,11 @@ export default function CompactAssistantScreen() {
   const { state: account } = useAccountFoundation(), { row, align, fonts } = useAssistantUI();
   const insets = useScreenInsets(), actualInsets = useSafeAreaInsets(), { width, height, fontScale } = useWindowDimensions(), router = useRouter();
   const C = h.copy, today = kuwaitDay(h.now);
+  const notifications = useMatchNotifications();
   const matches = useAssistantHomeMatches(h.ready, h.catalog);
   const [allStatus, setAllStatus] = useState<'pending' | 'done' | 'cancelled' | 'all'>('pending');
   const [matchView, setMatchView] = useState<'people' | 'properties'>('people'), [expandedMatch, setExpandedMatch] = useState<string | null>(null);
-  const params = useLocalSearchParams<{ followupId?: string }>(), openedFollowup = useRef<string | null>(null);
+  const params = useLocalSearchParams<{ followupId?: string; followupPersonId?: string; followupPropertyId?: string }>(), openedFollowup = useRef<string | null>(null);
   useEffect(() => { const taskId = params.followupId; if (!taskId) { openedFollowup.current = null; return; } if (!h.ready || taskId === openedFollowup.current) return;
     openedFollowup.current = taskId; const task = h.state.tasks.find(t => t.id === taskId); if (task) { setExpected(task); setMode('detail'); } else h.notify(C('noSearch'));
     router.setParams({ followupId: undefined });
@@ -54,6 +56,18 @@ export default function CompactAssistantScreen() {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>(null), [expected, setExpected] = useState<Followup | null>(null);
   const [draft, setDraft] = useState<FollowupDraft>(() => blankDraft(today));
+  const handoff = useRef('');
+  useEffect(() => {
+    const personId = params.followupPersonId, propertyId = params.followupPropertyId;
+    if (!personId || !propertyId || !h.ready) { if (!personId && !propertyId) handoff.current = ''; return; }
+    const key = JSON.stringify([personId, propertyId]); if (handoff.current === key) return;
+    handoff.current = key;
+    const person = h.catalog.people.find(p => p.id === personId), property = h.catalog.properties.find(p => p.core.id === propertyId);
+    router.setParams({ followupPersonId: undefined, followupPropertyId: undefined });
+    if (!person || !property) { h.notify(language === 'ar' ? 'الشخص أو العقار غير متاح.' : 'Person or property unavailable.'); return; }
+    setExpected(null); setDraft({ ...blankDraft(kuwaitDay(new Date()), 'call'), personId, propertyId, title: language === 'ar' ? `متابعة العقار مع ${person.name}` : `Follow up on property with ${person.name}` });
+    setFormError(''); setFieldError(''); setMode('editor');
+  }, [params.followupPersonId, params.followupPropertyId, h.ready, h.catalog, language, router]);
   const [formError, setFormError] = useState(''), [fieldError, setFieldError] = useState('');
   const [outcome, setOutcome] = useState<Outcome>('contacted'), [outcomeNotes, setOutcomeNotes] = useState('');
   const [nextEnabled, setNextEnabled] = useState(false), [nextDate, setNextDate] = useState(addDays(today, 1)), [nextTime, setNextTime] = useState(''), [nextTitle, setNextTitle] = useState('');
@@ -270,7 +284,7 @@ export default function CompactAssistantScreen() {
   }
   const best = matches.items[0], profileName = account.profile.name.trim(), greeting = profileName ? C(homeGreetingPeriod(h.now)) + ' ' + profileName : C('defaultName');
   return <View style={s.root}><ScrollView testID="assistant-page-scroll" style={s.outer} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 14 }}>
-    <View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><Feather name="home" size={25} color="white" /><Text style={[s.logo, { fontFamily: fonts.bold }]}>ViewState</Text></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (h.ready ? overdueTasks.length : '—')} onPress={() => setMode('notifications')} disabled={!h.ready}><Feather name="bell" size={21} color="white" />{h.ready && overdueTasks.length > 0 && <View style={s.homeBellBadge}><CountBadge count={overdueTasks.length} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={t('more.title')} onPress={() => router.push('/more' as never)}><Feather name="settings" size={21} color="white" /></Pressable></View></View></View>
+    <View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><Feather name="home" size={25} color="white" /><Text style={[s.logo, { fontFamily: fonts.bold }]}>ViewState</Text></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (notifications.historyReady ? notifications.unread : '—')} onPress={() => router.push('/notifications' as never)}><Feather name="bell" size={21} color="white" />{notifications.historyReady && notifications.unread > 0 && <View style={s.homeBellBadge}><CountBadge count={notifications.unread} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)}><Feather name="settings" size={21} color="white" /></Pressable></View></View></View>
     <View style={s.homeContent}>
       <View style={[s.helloRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.helloTitle, { fontFamily: fonts.bold, textAlign: align }]}>{greeting}</Text><Txt muted size={13}>{C('homeQuestion')}</Txt></View><View style={s.homeDateTools}><Txt bold size={13}>{dateLabel(today, { weekday: 'long' })}</Txt><Txt muted size={11}>{dateLabel(today, { day: 'numeric', month: 'short', year: 'numeric' })}</Txt><View style={[s.row, { flexDirection: row, gap: 0 }]}><IconButton label={C('calendar')} name="calendar" onPress={() => openCalendar()} /><IconButton label={C('homeActions')} name="more-vertical" onPress={() => setMode('actions')} /></View></View></View>
       <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={C('homeSearch')} style={[s.homeSearch, { flexDirection: row }]} onPress={() => router.push('/search' as never)}><Feather name="search" size={19} color={c.blue} /><View style={s.grow}><Txt muted size={14}>{C('homeSearch')}</Txt></View></Pressable>

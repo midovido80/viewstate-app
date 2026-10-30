@@ -1,3 +1,4 @@
+import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -81,6 +82,7 @@ function RootLayoutNav({
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="account" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
@@ -188,10 +190,10 @@ export default function RootLayout() {
               <KeyboardProvider>
                 <I18nProvider>
                 <AccountFoundationProvider>
-                <CaptureProvider>
+                <CaptureProvider><MatchNotificationsProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
-                </CaptureProvider>
+                </MatchNotificationsProvider></CaptureProvider>
                 </AccountFoundationProvider>
                 </I18nProvider>
               </KeyboardProvider>

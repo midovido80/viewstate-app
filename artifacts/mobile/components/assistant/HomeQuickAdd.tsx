@@ -1,3 +1,4 @@
+import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -10,13 +11,14 @@ const positions: readonly [HomeQuickAction, React.ComponentProps<typeof Feather>
 ];
 export function HomeQuickAdd({ label, closeLabel, labels, onAction }: { label: string; closeLabel: string; labels: Record<HomeQuickAction, string>; onAction: (action: HomeQuickAction) => void }) {
   const { fonts } = useAssistantUI(), { width, height } = useWindowDimensions(), insets = useScreenInsets();
+  const { state: account } = useAccountFoundation();
   const trigger = useRef<View>(null), motion = useRef(new Animated.Value(0)).current;
   const [visible, setVisible] = useState(false), [reduced, setReduced] = useState(true), [center, setCenter] = useState({ x: width / 2, y: height / 2 });
   useEffect(() => { let active = true; void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (active) setReduced(value); }).catch(() => undefined);
     const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced); return () => { active = false; listener.remove(); }; }, []);
   useEffect(() => { if (!visible) { motion.stopAnimation(); motion.setValue(0); return; }
-    const animation = Animated.timing(motion, { toValue: 1, duration: reduced ? 0 : 240, easing: Easing.out(Easing.cubic), useNativeDriver: true });
-    animation.start(); return () => animation.stop(); }, [visible, reduced, motion]);
+    const animation = Animated.timing(motion, { toValue: 1, duration: reduced || account.reducedMotion ? 0 : 240, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    animation.start(); return () => animation.stop(); }, [visible, reduced, account.reducedMotion, motion]);
   useEffect(() => { setVisible(false); }, [width, height]);
   function close() { setVisible(false); if (Platform.OS === 'web') trigger.current?.focus(); }
   function open() { trigger.current?.measureInWindow((x, y, w, h) => {

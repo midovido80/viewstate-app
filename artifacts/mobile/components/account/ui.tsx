@@ -28,7 +28,7 @@ export function AccountHeader({ title, onBack, root }: { title: string; onBack?:
   const { L, isRTL, fonts, row } = useL();
   return (
     <View style={[s.header, { backgroundColor: colors.accent, paddingTop: insets.top + 6, flexDirection: row }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={root ? L('الرئيسية', 'Home') : L('رجوع', 'Back')} onPress={root ? () => router.replace('/') : onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/more' as never)))} style={s.iconBtn} testID="account-back">
+      <Pressable accessibilityRole="button" accessibilityLabel={root ? L('الرئيسية', 'Home') : L('رجوع', 'Back')} onPress={root ? () => router.replace('/') : onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/account' as never)))} style={s.iconBtn} testID="account-back">
         <Feather name={root ? 'home' : isRTL ? 'chevron-right' : 'chevron-left'} size={24} color="#FFFFFF" />
       </Pressable>
       <Text numberOfLines={1} style={[s.headerTitle, { fontFamily: fonts.bold }]}>{title}</Text>

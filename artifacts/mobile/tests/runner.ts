@@ -1,3 +1,4 @@
+import './matchNotifications.test';
 import './requiredMatchingFields.test';
 import './dailyAssistant.test';
 import './assistantHome.test';
@@ -3320,8 +3321,8 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
   assert.match(share, /preview\.attachmentIds\.length.*attachments_system_only/);
   assert.match(share, /testID="share-send"/);
   assert.match(share, /const \[sharing, setSharing\] = useState\(false\)/);
-  assert.match(share, /disabled=\{!hasShareableContent \|\| sharing\}/);
-  assert.match(share, /if \(!preview \|\| !hasShareableContent \|\| sharing\) return/);
+  assert.match(share, /disabled=\{!hasShareableContent \|\| sharing \|\| !matchReady\}/);
+  assert.match(share, /if \(!preview \|\| !hasShareableContent \|\| sharing \|\| shareFlight.current \|\| !matchReady\) return/);
   assert.match(share, /share\.select_content/);
   assert.match(share, /selectedAttachments\.map/);
   assert.match(detail, /property-attachment-open-/);
