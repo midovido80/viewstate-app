@@ -1,3 +1,4 @@
+import { RaisedFilterButton } from '@/components/filters/RaisedFilterButton';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -114,7 +115,7 @@ export default function PeopleScreen() {
           accessibilityLabel={t('people.search')}
         />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, minHeight: 52, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-composable-filters">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, minHeight: 60, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="people-composable-filters">
         {PEOPLE_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
             ? !hasActivePeopleFilters
@@ -122,7 +123,7 @@ export default function PeopleScreen() {
               ? filter.directions.includes(option.value)
               : filter.transactions.includes(option.value);
           return (
-            <TouchableOpacity
+            <RaisedFilterButton
               key={option.key}
               onPress={() => {
                 if (option.key === 'all') {
@@ -132,10 +133,7 @@ export default function PeopleScreen() {
                   setFilter(current => toggleRecordFilter(current, option.dimension, option.value));
                 }
               }}
-              style={[
-                styles.filterChip,
-                { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
-              ]}
+              selected={selected}
               testID={`people-filter-${option.key}`}
               accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
               aria-checked={option.key === 'all' ? undefined : selected}
@@ -145,7 +143,7 @@ export default function PeopleScreen() {
                   ? getRecordTransactionFilterLabel(option.key, filter, language)
                   : t(`properties.filter.${option.key}` as keyof Translations)}
               </Text>
-            </TouchableOpacity>
+            </RaisedFilterButton>
           );
         })}
       </ScrollView>
@@ -153,10 +151,11 @@ export default function PeopleScreen() {
         {(['residential', 'commercial'] as const).map(value => {
           const selected = sector === value;
           return (
-            <TouchableOpacity
+            <RaisedFilterButton
               key={value}
               onPress={() => setSector(current => togglePropertySector(current, value))}
-              style={[styles.filterChip, styles.sectorChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
+              selected={selected}
+              style={styles.sectorChip}
               testID={`people-filter-${value}`}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
@@ -165,7 +164,7 @@ export default function PeopleScreen() {
               <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}
               </Text>
-            </TouchableOpacity>
+            </RaisedFilterButton>
           );
         })}
       </View>
@@ -246,10 +245,9 @@ const styles = StyleSheet.create({
   name: { fontSize: 18 },
   classes: { marginTop: 4, fontSize: 13 },
   empty: { textAlign: 'center', paddingTop: 60 },
-  filters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'nowrap' },
-  sectorFilters: { paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
+  filters: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 8, gap: 8, flexWrap: 'nowrap' },
+  sectorFilters: { paddingTop: 4, paddingHorizontal: 20, paddingBottom: 8, gap: 8 },
   sectorChip: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  filterChip: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   error: { paddingHorizontal: 20 },
   add: { position: 'absolute', left: 20, right: 20 },
 });

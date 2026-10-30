@@ -1,3 +1,4 @@
+import { RaisedFilterButton } from '@/components/filters/RaisedFilterButton';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, FlatList, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -244,7 +245,7 @@ export default function PropertiesScreen() {
         />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, minHeight: 52, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="properties-composable-filters">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, minHeight: 60, direction: isRTL ? 'rtl' : 'ltr' }} contentContainerStyle={[styles.filters, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]} testID="properties-composable-filters">
         {PROPERTY_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
             ? !hasActiveRecordFilters(filter) && sector === 'all'
@@ -252,7 +253,7 @@ export default function PropertiesScreen() {
               ? filter.directions.includes(option.value)
               : filter.transactions.includes(option.value);
           return (
-            <TouchableOpacity
+            <RaisedFilterButton
               key={option.key}
               onPress={() => {
                 if (option.key === 'all') {
@@ -262,10 +263,7 @@ export default function PropertiesScreen() {
                   setFilter(current => toggleRecordFilter(current, option.dimension, option.value));
                 }
               }}
-              style={[
-                styles.filterChip,
-                { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border },
-              ]}
+              selected={selected}
               testID={`properties-filter-${option.key}`}
               accessibilityRole={option.key === 'all' ? 'button' : 'checkbox'}
               aria-checked={option.key === 'all' ? undefined : selected}
@@ -275,7 +273,7 @@ export default function PropertiesScreen() {
                   ? getRecordTransactionFilterLabel(option.key, filter, language)
                   : t(`properties.filter.${option.key}` as keyof Translations)}
               </Text>
-            </TouchableOpacity>
+            </RaisedFilterButton>
           );
         })}
       </ScrollView>
@@ -284,10 +282,11 @@ export default function PropertiesScreen() {
         {(['residential', 'commercial'] as const).map(value => {
           const selected = sector === value;
           return (
-            <TouchableOpacity
+            <RaisedFilterButton
               key={value}
               onPress={() => setSector(current => togglePropertySector(current, value))}
-              style={[styles.filterChip, styles.sectorChip, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}
+              selected={selected}
+              style={styles.sectorChip}
               testID={`properties-filter-${value}`}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
@@ -296,7 +295,7 @@ export default function PropertiesScreen() {
               <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontFamily: fonts.medium, fontSize: 13 }}>
                 {value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}
               </Text>
-            </TouchableOpacity>
+            </RaisedFilterButton>
           );
         })}
       </View>
@@ -366,12 +365,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   filters: {
+    paddingTop: 4,
     paddingHorizontal: 20,
     paddingBottom: 8,
     gap: 8,
     flexWrap: 'nowrap',
   },
   sectorFilters: {
+    paddingTop: 4,
     paddingHorizontal: 20,
     paddingBottom: 8,
     gap: 8,
@@ -381,12 +382,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  filterChip: {
-    borderWidth: 1,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
   searchIcon: {
     position: 'absolute',
