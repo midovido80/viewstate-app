@@ -48,7 +48,7 @@ test('headers and fixed actions consume the shared safe spacing and tab height r
     readFile('app/capture/studio.tsx', 'utf8'),
   ]);
   assert.match(root, /initialMetrics=\{initialWindowMetrics\}/);
-  assert.match(tabs, /height: 64 \+ insets.bottom/);
+  assert.match(tabs, /height: 80 \+ insets.bottom/);
   for (const source of [detail, header, footer, studio]) assert.match(source, /useScreenInsets\(\)/);
   for (const source of [detail, footer]) assert.doesNotMatch(source, /#AE313B/);
 });

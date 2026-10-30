@@ -316,7 +316,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   ]);
 
   assert.match(tabLayout, /name="matching"/);
-  assert.match(tabLayout, /name="target"/);
+  assert.match(tabLayout, /RaisedTabBar/);
   assert.match(screen, /testID="matching-mode-saved"/);
   assert.match(screen, /testID="matching-mode-quick"/);
   assert.match(screen, /testID="matching-run"/);
