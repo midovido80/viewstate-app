@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { MATCH_ENGINE_VERSION, evaluateMatch } from '@workspace/property-domain';
 import type {
   MatchResult,
   MatchingPropertyCandidate,
@@ -73,6 +74,7 @@ test('builds the complete approved transient Rent Requirement without persistenc
     bedroomsMinimum: 2,
     bathroomsMinimum: 1,
     occupancy: 'family',
+    rentalPeriodId: 'monthly',
     swimmingPool: false,
     gym: true,
     seaView: false,
@@ -97,7 +99,7 @@ test('builds Buy without carrying any Rent-only input into M1', () => {
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal('bedroomsMinimum' in result.value, false);
+  assert.equal(result.value.bedroomsMinimum, 4);
   assert.equal('occupancy' in result.value, false);
   assert.equal('swimmingPool' in result.value, false);
 });
@@ -153,7 +155,6 @@ test('passes a quick transient Requirement through M4 without a Match store', as
   const candidates: MatchingPropertyCandidate[] = [
     {
       property: matchingProperty('qualified-property'),
-      evidence: { bedrooms: 2, bathrooms: 2 },
     },
   ];
   const result = await new BrokerInitiatedMatching(
@@ -170,7 +171,7 @@ test('passes a quick transient Requirement through M4 without a Match store', as
   assert.deepEqual(result.matches.map(match => match.propertyId), [
     'qualified-property',
   ]);
-  assert.ok(result.matches.every(match => match.score >= 70 && match.qualifies));
+  assert.ok(result.matches.every(match => match.engineVersion === MATCH_ENGINE_VERSION && match.qualifies));
 });
 
 test('Match All runs every valid Requirement in deterministic input order', async () => {
@@ -201,7 +202,7 @@ test('Match All runs every valid Requirement in deterministic input order', asyn
     [first.value, second.value],
     async requirementId => {
       called.push(requirementId);
-      return { requirementId, matches: [] };
+      return { engineVersion: MATCH_ENGINE_VERSION, requirementId, matches: [], needsConfirmation: [] };
     },
   );
   assert.deepEqual(called, [first.value.id, second.value.id]);
@@ -258,14 +259,16 @@ test('Match All groups multiple Requirements once per Person and omits empty Per
     }),
   ];
   const match = (propertyId: string, score: number): MatchResult => ({
+    engineVersion: MATCH_ENGINE_VERSION,
+    category: 'direct', differenceCount: 0, unknownCount: 0,
     requirementId: REQUIREMENT_ID,
     propertyId,
     eligible: true,
     score,
+    priceAmount: 650,
     qualifies: true,
     includedWeight: 100,
     locationRank: 0,
-    priceDistanceFromBudgetMidpoint: 0,
     ineligibilityReasons: [],
     explanations: [],
   });
@@ -273,9 +276,9 @@ test('Match All groups multiple Requirements once per Person and omits empty Per
     [first.value, second.value, empty.value],
     people,
     [
-      { requirementId: first.value.id, matches: [match('property-a', 92)] },
-      { requirementId: second.value.id, matches: [match('property-b', 83)] },
-      { requirementId: empty.value.id, matches: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: first.value.id, matches: [match('property-a', 92)], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: second.value.id, matches: [{ ...match('property-b', 83), requirementId: second.value.id }], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: empty.value.id, matches: [], needsConfirmation: [] },
     ],
   );
   assert.equal(groups.length, 1);
@@ -313,17 +316,23 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   ]);
 
   assert.match(tabLayout, /name="matching"/);
-  assert.match(tabLayout, /name="target"/);
+  assert.match(tabLayout, /RaisedTabBar/);
   assert.match(screen, /testID="matching-mode-saved"/);
   assert.match(screen, /testID="matching-mode-quick"/);
   assert.match(screen, /testID="matching-run"/);
-  assert.match(screen, /testID="matching-zero-results"/);
-  assert.match(screen, /result\.explanations\.map/);
-  assert.match(screen, /matching\.results\.unknown/);
-  assert.match(screen, /MATCH_QUALIFICATION_THRESHOLD/);
+  assert.match(screen, /MatchingResultsGroups/);
+  assert.match(await readFile('components/MatchingResultsGroups.tsx', 'utf8'), /MatchingResultCard/);
+  assert.match(screen, /needsConfirmation/);
+  assert.match(screen, /MATCH_ENGINE_VERSION/);
   assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
   assert.match(screen, /runMatchingForAllRequirements/);
   assert.match(screen, /groupMatchAllResultsByPerson/);
+  assert.match(screen, /runGenerationRef/);
+  assert.match(screen, /store\.getProperty\(propertyId\)/);
+  assert.match(
+    screen,
+    /return \(\) => \{\s*active = false;\s*runGenerationRef\.current \+= 1;/,
+  );
   assert.match(screen, /new BrokerInitiatedMatching\(transientStore, candidateSource\)/);
   assert.match(screen, /Crypto\.randomUUID\(\)/);
   assert.match(screen, /flexDirection: isRTL \? 'row-reverse' : 'row'/);
@@ -333,10 +342,10 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(i18n, /'matching\.results\.unknown': 'غير معروف'/);
   assert.match(i18n, /'matching\.runAll': 'Match all'/);
   assert.match(i18n, /'matching\.runAll': 'مطابقة الكل'/);
-  assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(group\.person\.id\)\}`\)/);
-  assert.match(screen, /router\.push\(`\/property\/\$\{encodeURIComponent\(result\.propertyId\)\}`\)/);
+  assert.match(screen, /router\.push\(`\/person\/\$\{encodeURIComponent\(personId\)\}`\)/);
+  assert.match(screen, /router\.push\(\{ pathname: '\/property\/\[propertyCoreId\]', params: \{ propertyCoreId: propertyId, matchingReturn: token/);
 
-  const explicitHandler = screen.indexOf('const runMatching = async () =>');
+  const explicitHandler = screen.indexOf('const runMatching = async (');
   const firstExecution = screen.indexOf('.runForRequirement(');
   assert.ok(explicitHandler >= 0 && firstExecution > explicitHandler);
   assert.doesNotMatch(
@@ -346,19 +355,229 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.doesNotMatch(screen, /\.sort\(/);
 });
 
-test('Person entry opens the saved Match All mode without selecting one Requirement', async () => {
+test('Person entry scopes execution to the requested Requirement without falling back to Match All', async () => {
   const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
   assert.match(screen, /if \(requestedRequirementId\) setMode\('saved'\)/);
-  assert.doesNotMatch(screen, /selectedRequirementId|setSelectedRequirementId/);
+  assert.match(screen, /requirements\.filter\(item => item\.id === requestedRequirementId\)/);
 
-  const explicitHandler = screen.indexOf('const runMatching = async () =>');
+  const explicitHandler = screen.indexOf('const runMatching = async (');
   const routeSelection = screen.indexOf("if (requestedRequirementId) setMode('saved')");
   const firstExecution = screen.indexOf('.runForRequirement(');
   assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
 });
 
-test('non-seeker post-save state does not render a disabled Requirement CTA', async () => {
+test('Person Details keeps post-save feedback transient and uses classification actions', async () => {
   const personScreen = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(personScreen, /params\.saved === '1' && person\.classifications\.includes\('seeker'\)/);
-  assert.doesNotMatch(personScreen, /testID="person-saved-add-requirement"[^>]*disabled=/);
+  assert.match(personScreen, /testID="person-action-confirmation"/);
+  assert.match(personScreen, /testID="person-primary-action"/);
+  assert.match(personScreen, /getPersonWantedRequirementRoute\(person\.id\)/);
+  assert.doesNotMatch(personScreen, /person-saved-next-step|person-saved-add-property|person-add-wanted-studio/);
+  assert.doesNotMatch(personScreen, /person-add-requirement/);
+});
+
+test('result grouping rejects stale engine versions and filters cross-request results', () => {
+  const requirement = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 'person-1', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '' });
+  assert.ok(requirement.ok); if (!requirement.ok) return;
+  const people = [createPerson({ id: 'person-1', name: 'A', displayPhone: '+96550000001', classifications: ['seeker'], notes: '' })];
+  const match = evaluateMatch(requirement.value, { property: matchingProperty('p') });
+  const stale = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: 'old', requirementId: REQUIREMENT_ID, matches: [match], needsConfirmation: [] } as never]);
+  assert.deepEqual(stale, []);
+  const mixed = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: MATCH_ENGINE_VERSION, requirementId: REQUIREMENT_ID, matches: [match, { ...match, propertyId: 'other', requirementId: 'other' }], needsConfirmation: [] }]);
+  assert.deepEqual(mixed[0].requirementGroups[0].matches.map(item => item.propertyId), ['p']);
+});
+
+test('cards and refinements handle repeated taps in both languages without changing records', async () => {
+  const { registerHooks } = await import('node:module');
+  const state = { ar: false, open: true };
+  (globalThis as any).__matchingInteraction = state;
+  (globalThis as any).React = { createElement: (type: unknown, props: any, ...children: unknown[]) => ({ type, props: { ...props, children: children.length > 1 ? children : children[0] ?? props?.children } }) };
+  const stubs = new Map<string, string>([
+    ['react', `export const useState = () => [globalThis.__matchingInteraction.open, value => { globalThis.__matchingInteraction.open = value; }];`],
+    ['react-native', `export const Text = 'Text'; export const View = 'View'; export const TouchableOpacity = 'TouchableOpacity';`],
+    ['@expo/vector-icons', `export const Feather = 'Feather';`],
+    ['@/components/Button', `export const Button = 'Button';`],
+    ['@/components/PropertyFormCard', `export const PropertyFormCard = 'PropertyFormCard';`],
+    ['@/components/ChoiceTile', `export const ChoiceGrid = 'ChoiceGrid'; export const ChoiceTile = 'ChoiceTile';`],
+    ['@/components/KuwaitAreaSelector', `export const KuwaitAreaSelector = 'KuwaitAreaSelector';`],
+    ['@/contexts/I18nContext', `export const useI18n = () => ({ language: globalThis.__matchingInteraction.ar ? 'ar' : 'en', isRTL: globalThis.__matchingInteraction.ar, fonts: { regular: 'r', medium: 'm', semiBold: 's', bold: 'b' }, t: key => key });`],
+    ['@/hooks/useColors', `export const useColors = () => ({ foreground: '#111', mutedForeground: '#555' });`],
+  ]);
+  const hooks = registerHooks({
+    resolve(specifier, context, next) { return stubs.has(specifier) ? { url: 'matching-interaction:' + encodeURIComponent(specifier), shortCircuit: true } : next(specifier, context); },
+    load(url, context, next) { return url.startsWith('matching-interaction:') ? { format: 'module', source: stubs.get(decodeURIComponent(url.slice('matching-interaction:'.length)))!, shortCircuit: true } : next(url, context); },
+  });
+  const elements = (value: any): any[] => Array.isArray(value) ? value.flatMap(elements) : value?.props ? [value, ...elements(value.props.children)] : [];
+  try {
+    const { MatchingResultCard, MatchingStatusBadge } = await import('../components/MatchingResultCard.tsx');
+    const { MatchingResultsGroups } = await import('../components/MatchingResultsGroups.tsx');
+    const { MatchingRefinements } = await import('../components/MatchingRefinements.tsx');
+    const r = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 's', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '' });
+    assert.ok(r.ok); if (!r.ok) return;
+    const p = matchingProperty('p'); const result = evaluateMatch(r.value, { property: p });
+    const before = JSON.stringify([r.value, p]);
+    for (const ar of [false, true]) {
+      state.ar = ar; let opens = 0; let replacements = 0;
+      for (const [status, icon, color] of [['matched', 'check', '#16A34A'], ['not_met', 'x', '#DC2626'], ['ineligible', 'x', '#DC2626'], ['unknown', 'help-circle', '#B45309']] as const) {
+        const badge = elements(MatchingStatusBadge({ status, label: status }));
+        assert.equal(badge.find(item => item.type === 'Feather')!.props.name, icon);
+        assert.equal(badge.find(item => item.type === 'Feather')!.props.color, '#FFFFFF');
+        assert.equal(badge.find(item => item.props.testID === `matching-status-circle-${status}`)!.props.style.backgroundColor, color);
+      }
+      const group: import('../services/matchingUi.ts').MatchAllPersonGroup = { person: createPerson({ id: 's', name: 'ميدو', displayPhone: '50000000', classifications: ['seeker'] }), requirementGroups: [{ requirement: r.value, matches: [result], needsConfirmation: [] }] };
+      let layout: import('../services/matchingGroups.ts').MatchingResultsLayout = { view: 'people' };
+      let propertyOpens = 0;
+      const renderGroups = (): any[] => elements(MatchingResultsGroups({ groups: [group], properties: [p], layout, onLayoutChange: next => { layout = next; }, policies: {}, busy: false, onRefine: () => {}, onReplace: () => {}, onOpenProperty: () => propertyOpens++ }));
+      const switchView = () => renderGroups().find(item => item.props.testID === 'matching-view-properties')!.props.onPress();
+      switchView(); assert.equal(layout.view, 'properties');
+      assert.equal(renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.accessibilityState.expanded, true);
+      renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.onPress();
+      assert.equal(renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.accessibilityState.expanded, false);
+      renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.onPress();
+      assert.equal(renderGroups().find(item => item.props.testID === 'matching-property-toggle-p')!.props.accessibilityState.expanded, true);
+      const pairCard = renderGroups().find(item => item.type === MatchingResultCard)!;
+      assert.equal(pairCard.props.expanded, false, 'comparison is opt-in, even for the first result');
+      pairCard.props.onToggle();
+      assert.equal(renderGroups().find(item => item.type === MatchingResultCard)!.props.expanded, true);
+      renderGroups().find(item => item.type === MatchingResultCard)!.props.onToggle();
+      assert.equal(renderGroups().find(item => item.type === MatchingResultCard)!.props.expanded, false);
+      pairCard.props.onPress(); assert.equal(propertyOpens, 1);
+      const card = elements(MatchingResultCard({ ...pairCard.props, expanded: true }));
+      const rows = card.filter(item => String(item.props.testID ?? '').startsWith('matching-compare-'));
+      assert.equal(rows[0].props.style.backgroundColor, '#FFFFFF');
+      assert.equal(rows[1].props.style.backgroundColor, '#EFF6FF');
+      assert.equal(rows[0].props.style.flexDirection, ar ? 'row-reverse' : 'row');
+      assert.equal(elements(MatchingResultCard({ ...pairCard.props, expanded: false })).some(item => item.props.testID === 'matching-comparison-table'), false);
+
+      const buttons: any[] = elements(MatchingResultCard({ result, rank: 1, property: p, requirement: r.value, onPress: () => opens++, onReplace: () => replacements++ })).filter(item => item.type === 'Button');
+      assert.equal(buttons.length, 2);
+      buttons[0].props.onPress(); buttons[0].props.onPress(); buttons[1].props.onPress(); buttons[1].props.onPress();
+      assert.equal(opens, 2); assert.equal(replacements, 2);
+      assert.equal(buttons[0].props.title, ar ? 'عرض العقار' : 'View property');
+      assert.equal(buttons[1].props.title, ar ? 'اقتراح عقار آخر' : 'Suggest another property');
+      // The collapsed overview must expose a real difference or missing information,
+      // without accidentally turning unknown evidence into a green success.
+      const stricter = { ...r.value, bedroomsMinimum: 3 };
+      const differing = evaluateMatch(stricter, { property: p });
+      const compact = elements(MatchingResultCard({ result: differing, rank: 1, property: p, requirement: stricter, onPress: () => {}, expanded: false }));
+      assert.equal(compact.some(item => item.props.testID === 'matching-comparison-table'), false);
+      const compactSummary = compact.find(item => item.props.testID === 'matching-card-summary')!;
+      assert.equal(elements(compactSummary).find(item => item.type === MatchingStatusBadge)!.props.status, 'not_met');
+      assert.ok(JSON.stringify(compactSummary).includes(ar ? 'المطلوب' : 'Requested'));
+      const incompleteRequest = { ...r.value, centralAC: true };
+      const unknown = evaluateMatch(incompleteRequest, { property: p });
+      const incomplete = elements(MatchingResultCard({ result: unknown, rank: 1, property: p, requirement: incompleteRequest, onPress: () => {}, expanded: false }));
+      assert.equal(elements(incomplete.find(item => item.props.testID === 'matching-card-summary')).find(item => item.type === MatchingStatusBadge)!.props.status, 'unknown');
+      const attention = elements(MatchingResultCard({ result: differing, rank: 1, property: p, requirement: stricter, onPress: () => {}, expanded: true }));
+      assert.ok(attention.findIndex(item => item.props.testID === 'matching-attention') < attention.findIndex(item => item.props.testID === 'matching-comparison-table'));
+      const minimalBadge = elements(MatchingStatusBadge({ status: 'matched', label: 'Meets', compact: true }));
+      assert.equal(minimalBadge.some(item => item.type === 'Text'), false);
+      assert.equal(minimalBadge[0].props.accessibilityLabel, 'Meets');
+      let policy: import('@workspace/property-domain').MatchingPolicy = {};
+      const render = () => elements(MatchingRefinements({ requirement: r.value, policy, busy: false, onChange: next => { policy = next; } }));
+      render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, ['budget']);
+      render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, []);
+      render().find(item => item.type === 'KuwaitAreaSelector')!.props.onChange(['salmiya']); assert.deepEqual(policy.alternativeAreaIds, ['salmiya']);
+    }
+    assert.equal(JSON.stringify([r.value, p]), before);
+  } finally { hooks.deregister(); }
+});
+
+test('Return session is bounded, cloned, scoped and never stores matching scores', async () => {
+  const { rememberMatchingReturn, readMatchingReturn, matchingBackRoute, withMatchingReturn } = await import('../services/matchingReturnSession.ts');
+  const input = { mode: 'saved' as const, scopeRequirementId: REQUIREMENT_ID, policies: { [REQUIREMENT_ID]: { strictFields: ['budget'] } }, excluded: { [REQUIREMENT_ID]: ['p'] }, scrollOffset: 700, layout: { view: 'properties' as const, group: 'property:p', card: null } };
+  const now = Date.now(); const token = rememberMatchingReturn(input, now);
+  input.excluded[REQUIREMENT_ID].push('later');
+  const read = readMatchingReturn(token, now)!;
+  assert.deepEqual(read.excluded[REQUIREMENT_ID], ['p']);
+  read.excluded[REQUIREMENT_ID].push('mutation');
+  assert.deepEqual(readMatchingReturn(token, now)!.excluded[REQUIREMENT_ID], ['p']);
+  assert.equal((read as any).matches, undefined);
+  assert.deepEqual(read.layout, { view: 'properties', group: 'property:p', card: null });
+  assert.match(matchingBackRoute(token), /\/matching\?returnSession=.*&requirementId=/);
+  assert.match(withMatchingReturn('/property/p?edit=1', token), /edit=1&matchingReturn=/);
+  assert.equal(readMatchingReturn(token, now + 900001), undefined);
+  assert.equal(readMatchingReturn('forged', now), undefined);
+  assert.equal(matchingBackRoute('forged'), '/properties');
+  rememberMatchingReturn({ ...input, scopeRequirementId: undefined }, now);
+  assert.equal(readMatchingReturn(token, now), undefined);
+});
+
+test('Comparison shows actual client range, area names and unknown evidence in both languages', async () => {
+  const { matchingComparisonRows } = await import('../services/matchingPresentation.ts');
+  const r = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 's', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'], minimumBudget: 500, maximumBudget: 800, notes: '' });
+  assert.ok(r.ok); if (!r.ok) return;
+  const base = matchingProperty('p');
+  const p = { ...base, core: { ...base.core, locationArea: { id: 'salmiya' } }, activeOffer: { id: 'offer', propertyCoreId: 'p', transaction: 'rent' as const, rentalPrice: { amount: 150, currencyCode: 'KWD' as const }, rentalPeriodId: 'monthly' as const } };
+  const result = evaluateMatch(r.value, { property: p });
+  for (const language of ['en', 'ar'] as const) {
+    const rows = matchingComparisonRows(result, r.value, p, language);
+    assert.equal(rows.find(row => row.field === 'budget')!.requested, '500–800 KWD');
+    assert.equal(rows.find(row => row.field === 'budget')!.offered, '150 KWD');
+    assert.equal(rows.find(row => row.field === 'budget')!.statusLabel, language === 'ar' ? 'أقل من النطاق' : 'Below range');
+    assert.equal(rows.find(row => row.field === 'location')!.offered, language === 'ar' ? 'السالمية' : 'Salmiya');
+  }
+});
+
+test('Reverse grouping counts distinct people and properties, preserving separate requests and pending results', async () => {
+  const { groupMatchingByProperty, personPropertyCounts, propertyPeopleCounts, matchingCountLabel } = await import('../services/matchingGroups.ts');
+  const person = createPerson({ id: 's1', name: 'Same name', displayPhone: '50000001', classifications: ['seeker'] });
+  const person2 = createPerson({ id: 's2', name: 'Same name', displayPhone: '50000002', classifications: ['seeker'] });
+  const requirement = (id: string, seekerId: string) => {
+    const value = buildTransientRequirement({ id, seekerId, purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '', centralAC: true });
+    assert.ok(value.ok); if (!value.ok) throw Error('fixture'); return value.value;
+  };
+  const r1 = requirement(REQUIREMENT_ID, person.id);
+  const r2 = requirement('66666666-6666-4666-8666-666666666666', person.id);
+  const r3 = requirement('77777777-7777-4777-8777-777777777777', person2.id);
+  const p1 = { ...matchingProperty('p1'), typeDetails: { propertyType: 'apartment' as const, hasCentralAC: true } };
+  const p2 = { ...matchingProperty('p2'), typeDetails: p1.typeDetails };
+  const evaluate = (r: SeekerRequirement, p: Property) => evaluateMatch(r, { property: p });
+  const m1 = evaluate(r1, p1); const m2 = evaluate(r1, p2); const pending = evaluate(r1, matchingProperty('pending'));
+  const groups = [
+    { person, requirementGroups: [{ requirement: r1, matches: [m1, m2, m1], needsConfirmation: [pending] }, { requirement: r2, matches: [evaluate(r2, p1)], needsConfirmation: [] }] },
+    { person: person2, requirementGroups: [{ requirement: r3, matches: [evaluate(r3, p1)], needsConfirmation: [] }] },
+  ];
+  const before = JSON.stringify(groups);
+  const byProperty = groupMatchingByProperty(groups);
+  assert.equal(byProperty.length, 3);
+  const first = byProperty.find(item => item.propertyId === 'p1')!;
+  assert.equal(first.people.length, 2, 'same name does not merge distinct people');
+  assert.equal(first.people.find(item => item.person.id === person.id)!.ready.length, 2, 'two requests remain separate, duplicate pair removed');
+  assert.deepEqual(propertyPeopleCounts(first), { ready: 2, pending: 0 });
+  assert.deepEqual(personPropertyCounts(groups[0]), { ready: 2, pending: 1 });
+  assert.deepEqual(propertyPeopleCounts(byProperty.find(item => item.propertyId === 'pending')!), { ready: 0, pending: 1 });
+  assert.equal(JSON.stringify(groups), before);
+  assert.equal(matchingCountLabel(3, 'properties', true, 'ar'), '3 عقارات تحتاج تأكيد معلومات');
+  assert.equal(matchingCountLabel(4, 'people', false, 'ar'), '4 أشخاص لديهم طلبات مناسبة لهذا العقار');
+  assert.equal(matchingCountLabel(3, 'properties', false, 'en'), '3 properties suggested');
+  const invalidGroups = [{ person, requirementGroups: [{ requirement: r1, matches: [{ ...m1, engineVersion: 'old' }, { ...m1, requirementId: 'wrong' }, { ...m1, eligible: false }, { ...pending, qualifies: false }], needsConfirmation: [{ ...m1 }] }] }];
+  assert.deepEqual(groupMatchingByProperty(invalidGroups as never), []);
+});
+
+
+test('Apartment subtype comparison localizes both requested and actual values', async () => {
+  const { formatPropertyDetailValue } = await import('../services/propertyDetailPresentation.ts');
+  for (const [value, en, ar] of [['standard_apartment', 'Standard Apartment', 'شقة عادية'], ['studio', 'Studio', 'استوديو'], ['duplex', 'Duplex', 'دوبلكس']]) {
+    assert.equal(formatPropertyDetailValue('apartmentSubtype', value, 'en'), en);
+    assert.equal(formatPropertyDetailValue('apartmentSubtype', value, 'ar'), ar);
+  }
+  const r = buildTransientRequirement({ id: REQUIREMENT_ID, seekerId: 's', purpose: 'rent', propertyType: 'apartment', preferredAreaIds: [AREA_ID], minimumBudget: 500, maximumBudget: 800, notes: '' });
+  assert.ok(r.ok); if (!r.ok) return;
+  const req = { ...r.value, catalogPreferences: [{ field: 'apartmentSubtype', kind: 'choice', value: 'standard_apartment' }] } as SeekerRequirement;
+  const property = { ...matchingProperty('p'), typeDetails: { propertyType: 'apartment', apartmentSubtype: 'standard_apartment' } } as Property;
+  const { matchingComparisonRows } = await import('../services/matchingPresentation.ts');
+  for (const language of ['en', 'ar'] as const) {
+    const row = matchingComparisonRows(evaluateMatch(req, { property }), req, property, language).find(row => row.field === 'apartmentSubtype')!;
+    assert.equal(row.requested, language === 'ar' ? 'شقة عادية' : 'Standard Apartment');
+    assert.equal(row.offered, row.requested);
+  }
+});
+
+test('View request carries matching return token and Back validates it before owner fallback', async () => {
+  const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
+  const details = await readFile('app/requirement/view/[requirementId].tsx', 'utf8');
+  assert.ok(screen.includes('params: { requirementId, matchingReturn: token }'));
+  assert.ok(details.includes('const back = () => readMatchingReturn(matchingReturnToken)'));
+  assert.ok(details.includes('router.replace(matchingBackRoute(matchingReturnToken) as never)'));
+  assert.ok(details.includes(': record?.seekerId'));
 });

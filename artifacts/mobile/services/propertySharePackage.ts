@@ -33,7 +33,12 @@ export async function shareReviewedPropertyPackage(input: {
   try {
     await input.shareZip(output.uri);
   } finally {
-    await output.delete();
+    try {
+      await output.delete();
+    } catch {
+      // Cleanup must not replace the platform share result. The temporary file
+      // remains confined to the cache directory if deletion is unavailable.
+    }
   }
 }
 
