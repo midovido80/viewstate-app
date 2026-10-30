@@ -1,21 +1,18 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { RaisedTabBar } from '@/components/navigation/RaisedTabBar';
 import { useI18n } from '@/contexts/I18nContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 
 function ClassicTabLayout() {
   const colors = useColors();
   const { t } = useI18n();
-  const insets = useSafeAreaInsets();
-  const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
+  const insets = useScreenInsets();
 
   return (
     <Tabs
+      tabBar={props => <RaisedTabBar {...props} />}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
@@ -31,11 +28,12 @@ function ClassicTabLayout() {
           position: 'relative',
           overflow: 'hidden',
           zIndex: 100,
-          ...(isWeb ? { height: 84 } : { paddingBottom: insets.bottom }),
+          height: 80 + insets.bottom,
+          paddingBottom: insets.bottom,
         },
         tabBarItemStyle: {
           paddingTop: 6,
-          paddingBottom: isWeb ? 6 : 4,
+          paddingBottom: 4,
         },
       }}
     >
@@ -43,33 +41,31 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: t('home.title'),
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
-            ) : (
-              <Feather name="home" size={22} color={color} />
-            ),
         }}
       />
       <Tabs.Screen
-        name="people"
+        name="properties"
         options={{
-          title: t('people.title'),
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.2" tintColor={color} size={24} />
-            ) : (
-              <Feather name="users" size={22} color={color} />
-            ),
+          title: t('properties.title'),
         }}
       />
       <Tabs.Screen
         name="matching"
         options={{
           title: t('matching.title'),
-          tabBarIcon: ({ color }) => (
-            <Feather name="target" size={22} color={color} />
-          ),
+        }}
+      />
+      <Tabs.Screen
+        name="people"
+        options={{
+          title: t('people.title'),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: t('more.title'),
+          href: null,
         }}
       />
     </Tabs>

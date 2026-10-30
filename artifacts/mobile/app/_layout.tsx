@@ -1,8 +1,9 @@
+import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   Inter_400Regular,
@@ -29,6 +30,7 @@ import {
   type LocalStoreIntegrityStatus,
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
+import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
 import { StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
@@ -79,10 +81,16 @@ function RootLayoutNav({
       ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="account" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
         <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/[requirementId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/view/[requirementId]" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]" options={{ headerShown: false }} />
+        <Stack.Screen name="property/[propertyCoreId]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
       </Stack>
@@ -167,7 +175,7 @@ export default function RootLayout() {
   ) return null;
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       {initialization.status === 'error' || initialization.status === 'retrying' ? (
         <I18nProvider>
           <StartupRecoveryScreen
@@ -181,10 +189,12 @@ export default function RootLayout() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <I18nProvider>
-                <CaptureProvider>
+                <AccountFoundationProvider>
+                <CaptureProvider><MatchNotificationsProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
-                </CaptureProvider>
+                </MatchNotificationsProvider></CaptureProvider>
+                </AccountFoundationProvider>
                 </I18nProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
