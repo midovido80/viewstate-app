@@ -9,7 +9,7 @@ import { BrokerInitiatedMatching } from '@/services/brokerInitiatedMatching';
 import { MyPropertiesMatchingSource } from '@/services/myPropertiesMatchingSource';
 import { validMatchingRequirements } from '@/services/matchingUi';
 import { selectHomeMatches, type HomeMatch } from '@/services/assistantHome';
-import { matchNoticeRepository, playMatchCue } from '@/services/matchNoticeDevice';
+import { matchNoticeRepository, playMatchCue, stopMatchCue } from '@/services/matchNoticeDevice';
 import { claimDueMatchNotices, currentNoticeMatch, initialMatchNotices, isQuietTime, noticeIsDue, reconcileMatchNotices, updateNotice, type MatchNotice, type MatchNoticeSettings, type MatchNoticeState } from '@/services/matchNotifications';
 import { useAccountFoundation } from './AccountFoundationContext';
 import { MatchNoticeToast } from '@/components/notifications/MatchNoticeToast';
@@ -79,9 +79,12 @@ export function MatchNotificationsProvider({ children }: { children: React.React
   }, [account.ready, pathname, refresh]);
   useEffect(() => {
     const timer = setInterval(() => { if (AppState.currentState === 'active') void refresh().catch(() => undefined); }, 30000);
-    const sub = AppState.addEventListener('change', next => { if (next === 'active') void refresh().catch(() => undefined); });
-    return () => { clearInterval(timer); sub.remove(); };
+    const sub = AppState.addEventListener('change', next => { if (next !== 'active') stopMatchCue(); if (next === 'active') void refresh().catch(() => undefined); });
+    return () => { clearInterval(timer); sub.remove(); stopMatchCue(); };
   }, [refresh]);
+  useEffect(() => {
+    if (!account.state.notifications.enabled || !account.state.notifications.matches || !state.settings.sound || isQuietTime(state.settings, new Date())) stopMatchCue();
+  }, [account.state.notifications.enabled, account.state.notifications.matches, state.settings]);
   const mutate = async (fn: (s: MatchNoticeState) => MatchNoticeState) => {
     try { const next = await matchNoticeRepository.update(fn); if (mounted.current) { setState(next); setError(false); } }
     catch (cause) { setError(true); setHistoryReady(false); throw cause; }

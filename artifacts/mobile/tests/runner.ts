@@ -1,3 +1,5 @@
+import './localMatchAudioConfig.test';
+import './localMatchSound.test';
 import './matchNotifications.test';
 import './requiredMatchingFields.test';
 import './dailyAssistant.test';
