@@ -11,15 +11,51 @@ export type PropertyType =
   | "chalet"
   | "other_built_property";
 
+export type PropertyCaptureCategoryId =
+  | "whole_building_corporate_rent"
+  | "whole_building_sale"
+  | "commercial_complex_sale"
+  | "family_apartment"
+  | "studio_apartment"
+  | "bachelor_apartment"
+  | "house"
+  | "villa"
+  | "chalet"
+  | "warehouse"
+  | "duplex";
+
+export interface PropertyDemoCaptureMetadata {
+  readonly categoryId: PropertyCaptureCategoryId;
+  readonly areaSquareMeters?: number;
+  readonly areaUnit?: "square_meter" | "square_foot";
+  readonly numericValues?: Readonly<Record<string, number>>;
+  readonly choices?: Readonly<Record<string, string>>;
+  readonly selectedFeatures?: readonly string[];
+  readonly nearbyServices?: readonly string[];
+}
+
 export type ApartmentSubtype =
   | "studio"
   | "standard_apartment"
   | "duplex";
 
 export type FloorUse = "residential" | "commercial";
+export type PropertyOccupancy = "family" | "bachelor" | "any";
 export type Furnishing = "unfurnished" | "semi_furnished" | "furnished";
 
 export type Transaction = "sale" | "rent";
+
+export type ResidentialAmenity =
+  | "heating"
+  | "balcony"
+  | "maid_room"
+  | "laundry_room"
+  | "solar_heater"
+  | "elevator"
+  | "garden"
+  | "security_guard"
+  | "bbq_area"
+  | "private_roof";
 
 export type PropertyCoreId = string;
 export type OfferId = string;
@@ -60,21 +96,71 @@ export interface ClassifiedLiteralText {
  * Physical facts shared by built properties. Values are optional so an
  * existing BASIC-only record remains a complete Property.
  */
-export interface WholeBuildingTypeDetails {
-  readonly propertyType: "whole_building";
-  readonly plotAreaSquareMeters?: number;
-  readonly builtUpAreaSquareMeters?: number;
-  readonly floorCount?: number;
-  readonly unitCount?: number;
-  readonly apartmentCount?: number;
-  readonly shopCount?: number;
-  readonly officeCount?: number;
-  readonly elevatorCount?: number;
-  readonly parkingSpaceCount?: number;
+export interface ApartmentLayout {
+  readonly apartmentCount: number;
+  readonly bedrooms: number;
+  readonly bathrooms: number;
+}
+export interface FloorApartmentCount {
+  readonly floorNumber: number;
+  readonly apartmentCount: number;
+}
+export interface ApprovedPropertyFormFacts {
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly housingTypes?: readonly ("company_staff" | "bachelor" | "family" | "women" | "mixed")[];
+  readonly hasBuildingParking?: boolean;
+  readonly buildingParkingTypes?: readonly ("public_yard" | "in_building")[];
+  readonly sameApartmentLayout?: boolean;
+  readonly sameApartmentsPerFloor?: boolean;
+  readonly apartmentsPerFloor?: number;
+  readonly apartmentLayouts?: readonly ApartmentLayout[];
+  readonly floorApartmentCounts?: readonly FloorApartmentCount[];
+  readonly hasCommercialShops?: boolean;
+  readonly hasCommercialFloors?: boolean;
+  readonly commercialFloorCount?: number;
+  readonly hasGuardRoom?: boolean;
+  readonly hasBasement?: boolean;
+  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly hasMortgage?: boolean;
+  readonly rentalOccupancy?: "vacant" | "fully_rented" | "partially_rented" | "rented";
+  readonly monthlyIncome?: number;
+  readonly rentalScope?: "entire" | "partial";
+  readonly availableUnitCount?: number;
+  readonly availableAreaSquareMeters?: number;
+  readonly availableFrom?: string;
+  readonly entranceCount?: number;
+  readonly bathroomCount?: number;
+  readonly livingRoomCount?: number;
+  readonly furnishing?: Furnishing;
+  readonly intendedUse?: ClassifiedLiteralText;
+  readonly hasCentralAC?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasKitchen?: boolean;
+  readonly hasPrivateEntrance?: boolean;
+  readonly hasAccessibleEntrance?: boolean;
+  readonly hasFireSystem?: boolean;
+  readonly hasCCTV?: boolean;
+  readonly hasLoadingArea?: boolean;
+  readonly hasSharedBathrooms?: boolean;
+  readonly hasPrivateBathroom?: boolean;
+  readonly hasGlassFront?: boolean;
+  readonly hasMezzanine?: boolean;
+  readonly hasAttachedStorage?: boolean;
+  readonly hasWaterDrainage?: boolean;
+  readonly hasVentilation?: boolean;
+  readonly hasMaidRoom?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
 }
 
-export interface CommercialComplexTypeDetails {
-  readonly propertyType: "commercial_complex";
+export interface WholeBuildingTypeDetails extends ApprovedPropertyFormFacts {
+  readonly propertyType: "whole_building";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
+  readonly bedroomCount?: number;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly floorCount?: number;
@@ -84,28 +170,79 @@ export interface CommercialComplexTypeDetails {
   readonly officeCount?: number;
   readonly elevatorCount?: number;
   readonly parkingSpaceCount?: number;
+  readonly roomsPerUnit?: number;
+  readonly bathroomsPerUnit?: number;
+  readonly hasCentralAC?: boolean;
+}
+
+export interface CommercialComplexTypeDetails extends ApprovedPropertyFormFacts {
+  readonly propertyType: "commercial_complex";
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly hasBasement?: boolean;
+  readonly streetPosition?: "one_street" | "two_streets" | "corner" | "front_back";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly hasMortgage?: boolean;
+  readonly rentalOccupancy?: "vacant" | "fully_rented" | "partially_rented";
+  readonly monthlyIncome?: number;
+  readonly plotAreaSquareMeters?: number;
+  readonly builtUpAreaSquareMeters?: number;
+  readonly floorCount?: number;
+  readonly unitCount?: number;
+  readonly apartmentCount?: number;
+  readonly shopCount?: number;
+  readonly officeCount?: number;
+  readonly elevatorCount?: number;
+  readonly parkingSpaceCount?: number;
+  readonly roomsPerUnit?: number;
+  readonly bathroomsPerUnit?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ApartmentTypeDetails {
   readonly propertyType: "apartment";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly apartmentSubtype?: ApartmentSubtype;
+  /** Canonical open-plan room count for a Studio; distinct from bedrooms. */
+  readonly studioRoomCount?: 1;
   readonly bedroomCount?: number;
   readonly bathroomCount?: number;
   readonly livingRoomCount?: number;
   readonly floorNumber?: number;
   readonly furnishing?: Furnishing;
   readonly hasMaidRoom?: boolean;
+  readonly hasHeating?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+  readonly hasSolarHeater?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasGarden?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
+  readonly hasCentralAC?: boolean;
+  readonly hasKitchen?: boolean;
+  readonly hasHall?: boolean;
+  readonly hasParking?: boolean;
+  readonly hasSplitAC?: boolean;
+  readonly hasSharedPool?: boolean;
+  readonly hasSharedGym?: boolean;
+  readonly hasSeaView?: boolean;
+
 }
 
 export interface EmptyFloorTypeDetails {
   readonly propertyType: "floor";
   readonly floorUse?: undefined;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ResidentialFloorTypeDetails {
   readonly propertyType: "floor";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
   readonly floorUse: "residential";
   readonly builtUpAreaSquareMeters?: number;
   readonly bedroomCount?: number;
@@ -114,12 +251,32 @@ export interface ResidentialFloorTypeDetails {
   readonly floorNumber?: number;
   readonly furnishing?: Furnishing;
   readonly hasMaidRoom?: boolean;
+  readonly hasHeating?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+  readonly hasSolarHeater?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasGarden?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
+  readonly hasCentralAC?: boolean;
 }
 
-export interface CommercialFloorTypeDetails {
+export interface CommercialFloorTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "floor";
   readonly floorUse: "commercial";
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly parkingTypes?: readonly ("private" | "public" | "paid")[];
+  readonly privateParkingCount?: number;
+  readonly rentalOccupancy?: "vacant" | "rented";
+  readonly monthlyIncome?: number;
+  readonly hasElevator?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasPrivateEntrance?: boolean;
+  readonly hasKitchen?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasAccessibleEntrance?: boolean;
   readonly builtUpAreaSquareMeters?: number;
   readonly bathroomCount?: number;
   readonly floorNumber?: number;
@@ -128,6 +285,7 @@ export interface CommercialFloorTypeDetails {
   readonly parkingSpaceCount?: number;
   readonly frontageWidthMeters?: number;
   readonly ceilingHeightMeters?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export type FloorTypeDetails =
@@ -137,6 +295,8 @@ export type FloorTypeDetails =
 
 export interface HouseTypeDetails {
   readonly propertyType: "house";
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly bedroomCount?: number;
@@ -145,15 +305,24 @@ export interface HouseTypeDetails {
   readonly floorCount?: number;
   readonly furnishing?: Furnishing;
   readonly hasMaidRoom?: boolean;
+  readonly hasHeating?: boolean;
+  readonly hasBalcony?: boolean;
+  readonly hasLaundryRoom?: boolean;
+  readonly hasSolarHeater?: boolean;
+  readonly hasElevator?: boolean;
+  readonly hasGarden?: boolean;
+  readonly hasSecurityGuard?: boolean;
+  readonly hasBBQArea?: boolean;
   readonly parkingSpaceCount?: number;
   readonly hasPool?: boolean;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface VillaTypeDetails extends Omit<HouseTypeDetails, "propertyType"> {
   readonly propertyType: "villa";
 }
 
-export interface OfficeTypeDetails {
+export interface OfficeTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "office";
   readonly builtUpAreaSquareMeters?: number;
   readonly floorNumber?: number;
@@ -161,6 +330,7 @@ export interface OfficeTypeDetails {
   readonly intendedUse?: ClassifiedLiteralText;
   readonly commercialActivity?: ClassifiedLiteralText;
   readonly parkingSpaceCount?: number;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ShopTypeDetails extends Omit<OfficeTypeDetails, "propertyType"> {
@@ -171,6 +341,21 @@ export interface ShopTypeDetails extends Omit<OfficeTypeDetails, "propertyType">
 
 export interface WarehouseTypeDetails {
   readonly propertyType: "warehouse";
+  readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
+  readonly warehouseFinish?: "normal" | "good" | "super_deluxe";
+  readonly warehouseKind?: "industrial" | "food";
+  readonly warehouseLevels?: readonly ("basement" | "ground")[];
+  readonly entranceCount?: number;
+  readonly hasVehicleRamp?: boolean;
+  readonly rampVehicleSize?: "large" | "medium" | "small";
+  readonly hasServiceElevator?: boolean;
+  readonly serviceElevatorCapacityTons?: number;
+  readonly hasEscalator?: boolean;
+  readonly hasFireSystem?: boolean;
+  readonly electricityPhase?: "two_phase" | "three_phase";
+  readonly electricityCapacity?: number;
+  readonly electricityCapacityUnit?: "A" | "kW" | "kVA";
+
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly bathroomCount?: number;
@@ -180,6 +365,7 @@ export interface WarehouseTypeDetails {
   readonly ceilingHeightMeters?: number;
   readonly loadingBayCount?: number;
   readonly hasColdStorage?: boolean;
+  readonly hasCentralAC?: boolean;
 }
 
 export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"> {
@@ -187,9 +373,14 @@ export interface ChaletTypeDetails extends Omit<HouseTypeDetails, "propertyType"
   readonly hasWaterfront?: boolean;
 }
 
-export interface OtherBuiltPropertyTypeDetails {
+export interface OtherBuiltPropertyTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "other_built_property";
+  readonly propertyUse?: FloorUse;
+  readonly occupancy?: PropertyOccupancy;
+  readonly masterBedroomCount?: number;
+  readonly bedroomCount?: number;
   readonly clarification: ClassifiedLiteralText;
+  readonly hasCentralAC?: boolean;
   readonly plotAreaSquareMeters?: number;
   readonly builtUpAreaSquareMeters?: number;
   readonly parkingSpaceCount?: number;
@@ -265,12 +456,18 @@ export interface PropertySource {
 export interface PropertyAdditiveMetadata {
   readonly locationEnrichment?: LocationEnrichmentMetadata;
   readonly attachments?: readonly PropertyAttachmentMetadata[];
+  /** Selected nearby-service identifiers captured by the native Property flow. */
+  readonly nearbyServices?: readonly string[];
+  readonly demoCapture?: PropertyDemoCaptureMetadata;
+  readonly areaSquareMeters?: number;
+  readonly areaUnit?: "square_meter" | "square_foot";
 }
 
 export interface PropertyCore {
   readonly id: PropertyCoreId;
   readonly propertyType: PropertyType;
   readonly locationArea: LocationAreaReference;
+  readonly block?: string;
   readonly description?: ClassifiedLiteralText;
   readonly privateNotes?: ClassifiedLiteralText;
   readonly ownerSource?: ClassifiedLiteralText;
@@ -305,6 +502,7 @@ export interface PropertyDraft {
   readonly offerId?: OfferId;
   readonly propertyType?: PropertyType;
   readonly locationAreaId?: LocationAreaId;
+  readonly block?: string;
   readonly transaction?: Transaction;
   readonly salePrice?: PriceValue;
   readonly rentalPrice?: PriceValue;
@@ -343,7 +541,14 @@ export type ValidationIssueCode =
   | "incompatible_rental_terms"
   | "property_core_mismatch"
   | "type_details_mismatch"
-  | "whitespace_only";
+  | "whitespace_only"
+  | "invalid_area"
+  | "invalid_area_unit"
+  | "invalid_demo_category"
+  | "invalid_demo_area"
+  | "invalid_demo_area_unit"
+  | "invalid_demo_value"
+  | "invalid_demo_id";
 
 export interface ValidationIssue {
   readonly code: ValidationIssueCode;

@@ -8,12 +8,15 @@ import {
   createPriceValue,
   createPrivacyMetadata,
   isPropertyType,
+  normalizeLegacySeekerRequirementForRead,
+  normalizeSeekerRequirement,
   projectDraftToProperty,
   updatePropertyDraft,
   validateOffer,
   validateProperty,
   validatePropertyAttachments,
   validatePropertyCore,
+  validateSeekerRequirement,
   validateTypeDetails,
 } from "./index.ts";
 import type {
@@ -280,6 +283,208 @@ test("supports discriminated enrichment details for all eleven Property Types", 
   for (const item of details) {
     assert(validateTypeDetails(item, core(item.propertyType)).ok, `Expected valid ${item.propertyType} details`);
   }
+});
+
+test("residential amenity facts preserve unknown, false, and true without deriving elevator availability", () => {
+  const missing: TypeDetails = { propertyType: "apartment" };
+  const explicit: TypeDetails = {
+    propertyType: "apartment",
+    hasHeating: true,
+    hasBalcony: false,
+    hasMaidRoom: true,
+    hasLaundryRoom: false,
+    hasSolarHeater: true,
+    hasElevator: false,
+    hasGarden: true,
+    hasSecurityGuard: false,
+    hasBBQArea: true,
+  };
+  assert(validateTypeDetails(missing, core("apartment")).ok, "Missing amenity facts remain valid unknowns");
+  assert(validateTypeDetails(explicit, core("apartment")).ok, "Explicit amenity booleans remain valid");
+  assertEqual("hasHeating" in missing, false, "Unknown must remain missing");
+  assertEqual(explicit.hasBalcony, false, "Explicit false must survive");
+  assertEqual(explicit.hasHeating, true, "Explicit true must survive");
+  assertEqual("elevatorCount" in explicit, false, "Elevator availability must not derive a count");
+  assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasElevator: true, hasBalcony: true, hasKitchen: true, hasSecurityGuard: true, hasPrivateEntrance: true, hasAccessibleEntrance: true } as TypeDetails, core("floor")).ok, true, "Commercial Floor accepts its approved shared amenities");
+  assertEqual(validateTypeDetails({ propertyType: "floor", floorUse: "commercial", hasMaidRoom: true } as unknown as TypeDetails, core("floor")).ok, false, "Commercial Floor still rejects residential-only amenities");
+  assertEqual(validateTypeDetails({ propertyType: "office", hasHeating: true } as unknown as TypeDetails, core("office")).ok, false, "Commercial types must reject residential amenities");
+});
+
+test("Studio has a fixed canonical open-room fact and subtype-only feature facts", () => {
+  const studio: TypeDetails = {
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    studioRoomCount: 1,
+    hasKitchen: true,
+    hasHall: false,
+    hasParking: true,
+  };
+  assert(validateTypeDetails(studio, core("apartment")).ok, "Canonical Studio facts must validate");
+  assertEqual(validateTypeDetails({
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    studioRoomCount: 2,
+  } as unknown as TypeDetails, core("apartment")).ok, false, "Studio open-room count is fixed at one");
+  assertEqual(validateTypeDetails({
+    propertyType: "apartment",
+    apartmentSubtype: "standard_apartment",
+    hasKitchen: true,
+  }, core("apartment")).ok, false, "Studio-specific features cannot leak onto another apartment subtype");
+  assertEqual(validateTypeDetails({
+    propertyType: "apartment",
+    studioRoomCount: 1,
+  } as TypeDetails, core("apartment")).ok, false, "Open-room count requires the Studio subtype");
+});
+
+test("building aggregate counts validate only for whole buildings and commercial complexes", () => {
+  const invalidBuildingCounts = {
+    unitCount: 2,
+    apartmentCount: 1,
+    shopCount: 1,
+    officeCount: 1,
+  };
+  for (const propertyType of ["whole_building", "commercial_complex"] as const) {
+    const result = validateTypeDetails(
+      { propertyType, ...invalidBuildingCounts } as TypeDetails,
+      core(propertyType),
+    );
+    assertEqual(result.ok, false, `${propertyType} aggregate over-count must fail`);
+    assert(
+      !result.ok && result.issues.some(item => item.message === "Known apartment, shop, and office counts cannot exceed unitCount."),
+      `${propertyType} must retain its aggregate validation`,
+    );
+  }
+
+  const aggregateFields = ["unitCount", "apartmentCount", "shopCount", "officeCount"] as const;
+  for (const propertyType of PROPERTY_TYPES) {
+    const applicable = aggregateFields.every(field =>
+      PROPERTY_DETAIL_FIELD_DEFINITIONS.find(definition => definition.field === field)
+        ?.appliesTo.includes(propertyType) === true,
+    );
+    const result = validateTypeDetails(
+      { propertyType, ...invalidBuildingCounts } as unknown as TypeDetails,
+      core(propertyType),
+    );
+    const hasAggregateIssue = !result.ok
+      && result.issues.some(item => item.message === "Known apartment, shop, and office counts cannot exceed unitCount.");
+    assertEqual(
+      hasAggregateIssue,
+      applicable,
+      `${propertyType} aggregate validation must follow field applicability`,
+    );
+  }
+
+  const legacyStudio = validateTypeDetails({
+    propertyType: "apartment",
+    apartmentSubtype: "studio",
+    studioRoomCount: 1,
+    ...invalidBuildingCounts,
+  } as unknown as TypeDetails, core("apartment"));
+  assertEqual(legacyStudio.ok, false, "Building-only fields remain inapplicable to Studio");
+  assert(
+    !legacyStudio.ok && !legacyStudio.issues.some(item => item.message === "Known apartment, shop, and office counts cannot exceed unitCount."),
+    "Studio must not receive the building aggregate error",
+  );
+});
+
+test("Requirement Studio feature preferences require the Studio subtype and allow daily rent", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "seeker-1",
+    purpose: "rent" as const,
+    propertyType: "apartment" as const,
+    preferredAreaIds: ["area-1"],
+    preferredAreaMode: "specific_areas" as const,
+    budget: { minimum: 100, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+    rentalPeriodId: "daily",
+    bathroomsMinimum: 1,
+  };
+  assert(validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [
+      { field: "apartmentSubtype", kind: "choice", value: "studio" },
+      { field: "hasKitchen", kind: "feature", value: false },
+      { field: "hasHall", kind: "feature", value: true },
+    ],
+  }).ok, "Studio feature preferences and daily rental cadence must validate");
+  assertEqual(validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [{ field: "hasKitchen", kind: "feature", value: true }],
+  }).ok, false, "Studio features require a Studio subtype choice");
+  assertEqual(validateSeekerRequirement({
+    ...base,
+    catalogPreferences: [
+      { field: "apartmentSubtype", kind: "choice", value: "standard_apartment" },
+      { field: "hasParking", kind: "feature", value: true },
+    ],
+  }).ok, false, "Studio features cannot apply to a non-Studio subtype");
+});
+
+test("new Requirements reject exact Studio Maps locations while legacy hydration strips them", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "seeker-1",
+    purpose: "rent" as const,
+    propertyType: "apartment" as const,
+    preferredAreaIds: ["area-1"],
+    preferredAreaMode: "specific_areas" as const,
+    budget: { minimum: 100, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+    catalogPreferences: [
+      { field: "apartmentSubtype" as const, kind: "choice" as const, value: "studio" },
+    ],
+  };
+  const link = "https://www.google.com/maps/place/Salmiya/@29.3,48.0,15z";
+  const legacy = { ...base, studioMapsLink: link };
+  assertEqual(validateSeekerRequirement(legacy).ok, false, "Exact Maps links are outside new typed candidates");
+  assertEqual(normalizeSeekerRequirement(legacy).ok, false, "New normalization rejects legacy Maps fields");
+  const hydrated = normalizeLegacySeekerRequirementForRead(legacy);
+  assert(hydrated.ok, "Read compatibility accepts an otherwise-valid prior Requirement row");
+  assertEqual("studioMapsLink" in hydrated.value, false, "Hydration must not expose the exact link to callers");
+  assertEqual(hydrated.value.id, base.id, "Hydration preserves Requirement identity");
+  assertEqual(hydrated.value.seekerId, base.seekerId, "Hydration preserves ownership");
+  assertEqual(hydrated.value.notes, base.notes, "Hydration preserves unrelated preferences");
+});
+
+test("new Requirement attachment metadata is rejected and legacy hydration removes only its metadata", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    seekerId: "seeker-1",
+    purpose: "rent" as const,
+    propertyType: "apartment" as const,
+    preferredAreaIds: ["area-1"],
+    preferredAreaMode: "specific_areas" as const,
+    budget: { minimum: 100, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+  };
+  const image: PropertyAttachmentMetadata = {
+    id: "image-1",
+    kind: "image",
+    originalName: "room.jpg",
+    mimeType: "image/jpeg",
+    order: 1,
+    managedUri: "file:///requirements/11111111-1111-4111-8111-111111111111/attachments/image-1.jpg",
+    isCover: true,
+    privacy: createPrivacyMetadata("normal", "normal"),
+  };
+  const pdf: PropertyAttachmentMetadata = {
+    id: "pdf-1",
+    kind: "pdf",
+    originalName: "brief.pdf",
+    mimeType: "application/pdf",
+    order: 0,
+    managedUri: "viewstate-web-attachment:requirement%3A11111111-1111-4111-8111-111111111111:pdf-1",
+    privacy: createPrivacyMetadata("normal", "normal"),
+  };
+  const legacy = { ...base, attachments: [pdf, image] };
+  assertEqual(validateSeekerRequirement(legacy).ok, false, "Attachment metadata is outside new candidates");
+  assertEqual(normalizeSeekerRequirement(legacy).ok, false, "New normalization rejects media metadata");
+  const hydrated = normalizeLegacySeekerRequirementForRead(legacy);
+  assert(hydrated.ok, "Read compatibility accepts prior media-bearing rows");
+  assertEqual("attachments" in hydrated.value, false, "Hydration must return a clean Requirement");
+  assertEqual(hydrated.value.id, base.id, "Media stripping preserves Requirement identity");
+  assertEqual(hydrated.value.budget.maximum, base.budget.maximum, "Media stripping preserves other preferences");
 });
 
 test("rejects enrichment counts that cannot be represented safely", () => {
@@ -590,6 +795,57 @@ test("share preview uses supplied localized BASIC labels and monthly rent wordin
   );
 });
 
+test("share preview includes residential amenity facts only through selected type_details", () => {
+  const sharedProperty: Property = {
+    core: core("apartment"),
+    activeOffer: {
+      id: "offer-1",
+      propertyCoreId: "property-1",
+      transaction: "sale",
+      salePrice: price(),
+    },
+    typeDetails: {
+      propertyType: "apartment",
+      hasHeating: true,
+      hasBalcony: false,
+      hasBBQArea: true,
+    },
+  };
+  const selection = {
+    normalFields: [] as readonly "type_details"[],
+    attachmentIds: [],
+    discloseOwnerSource: false,
+    discloseExactLocation: false,
+    disclosePaci: false,
+    discloseManualLocation: false,
+    discloseMapsLink: false,
+    personContactIds: [],
+  };
+  const hidden = buildPropertySharePreview({
+    property: sharedProperty,
+    selection,
+    availableAttachments: [],
+    rentalCadence: "",
+    attribution: "",
+  });
+  assertEqual(hidden.text, "", "Amenity facts must be omitted when type_details is not selected");
+  const visible = buildPropertySharePreview({
+    property: sharedProperty,
+    selection: { ...selection, normalFields: ["type_details"] },
+    availableAttachments: [],
+    detailLabels: {
+      hasHeating: "Heating",
+      hasBalcony: "Balcony",
+      hasBBQArea: "BBQ area",
+    },
+    rentalCadence: "",
+    attribution: "",
+  });
+  assert(visible.text.includes("Heating: \u2068Yes\u2069"), "True amenity facts must be shared accurately");
+  assert(visible.text.includes("Balcony: \u2068No\u2069"), "Explicit false amenity facts must be shared accurately");
+  assert(visible.text.includes("BBQ area: \u2068Yes\u2069"), "BBQ capitalization must use the canonical field");
+});
+
 test("share preview fail-closes exact locations and maps while never exposing private notes", () => {
   const sharedProperty: Property = {
     core: {
@@ -664,6 +920,24 @@ test("share preview fail-closes exact locations and maps while never exposing pr
     false,
     "Private notes must never enter the preview, even with other disclosures",
   );
+});
+
+test("Requirement may be saved unassigned but rejects an empty owner identifier", () => {
+  const unassigned = {
+    id: "123e4567-e89b-42d3-a456-426614174000",
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: [],
+    preferredAreaMode: "all_kuwait",
+    budget: { minimum: 300, maximum: 500, currencyCode: "KWD" },
+    notes: "",
+    rentalPeriodId: "monthly",
+  };
+  const valid = validateSeekerRequirement(unassigned);
+  assert(valid.ok, "An explicitly unassigned Requirement must be valid before Person linking");
+  if (valid.ok) assertEqual(valid.value.seekerId, undefined, "Normalization must preserve the unassigned state");
+  const invalid = validateSeekerRequirement({ ...unassigned, seekerId: "" });
+  assert(!invalid.ok, "An explicitly present but empty seekerId must remain invalid");
 });
 
 const failures: string[] = [];

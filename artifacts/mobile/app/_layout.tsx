@@ -1,8 +1,9 @@
+import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   Inter_400Regular,
@@ -17,7 +18,9 @@ import {
   Tajawal_700Bold,
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
-import { Stack } from 'expo-router';
+import { useUserData } from '@/contexts/UserDataContext';
+import { RealAccountGate } from '@/contexts/RealAccountContext';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
@@ -25,16 +28,15 @@ import { StatusBar } from 'expo-status-bar';
 SplashScreen.preventAutoHideAsync();
 
 import {
-  store,
   type LocalStoreIntegrityStatus,
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
+import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
 import { StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
 
-const queryClient = new QueryClient();
 
 function RootLayoutNav({
   integrityStatus,
@@ -42,6 +44,8 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
+  const router = useRouter();
+  useEffect(() => { if (process.env.EXPO_PUBLIC_SUPABASE_URL) router.replace('/'); }, []);
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       {integrityStatus.hasUnreadableRecords ? (
@@ -79,10 +83,17 @@ function RootLayoutNav({
       ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="account" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
         <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/[requirementId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/view/[requirementId]" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]" options={{ headerShown: false }} />
+        <Stack.Screen name="property/[propertyCoreId]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
       </Stack>
@@ -96,7 +107,11 @@ type InitializationState =
   | { status: 'error' }
   | { status: 'ready'; integrityStatus: LocalStoreIntegrityStatus };
 
-export default function RootLayout() {
+function ApplicationRoot() {
+  const { store } = useUserData();
+  const [queryClient] = useState(() => new QueryClient());
+  useEffect(() => () => queryClient.clear(), [queryClient]);
+
   const [interLoaded, interError] = useInterFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -139,7 +154,7 @@ export default function RootLayout() {
         initializationAttempt.current = null;
       }
     });
-  }, []);
+  }, [store]);
 
   useEffect(() => {
     initialize(false);
@@ -167,25 +182,23 @@ export default function RootLayout() {
   ) return null;
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       {initialization.status === 'error' || initialization.status === 'retrying' ? (
-        <I18nProvider>
           <StartupRecoveryScreen
             status={initialization.status}
             onRetry={() => initialize(true)}
           />
-        </I18nProvider>
       ) : (
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <I18nProvider>
-                <CaptureProvider>
+                <AccountFoundationProvider>
+                <CaptureProvider><MatchNotificationsProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
-                </CaptureProvider>
-                </I18nProvider>
+                </MatchNotificationsProvider></CaptureProvider>
+                </AccountFoundationProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>
@@ -193,6 +206,10 @@ export default function RootLayout() {
       )}
     </SafeAreaProvider>
   );
+}
+
+export default function RootLayout() {
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot /></RealAccountGate></I18nProvider></SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({

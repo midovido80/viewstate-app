@@ -28,6 +28,12 @@ export interface ContactPhoneChoice {
   normalizedDigits: string;
 }
 
+export interface ContactImportCandidate {
+  key: string;
+  name: string;
+  phones: readonly ContactPhoneChoice[];
+}
+
 function toAsciiDigit(character: string): string {
   const code = character.charCodeAt(0);
   if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
@@ -56,6 +62,10 @@ function contactPhonePayload(value: string): string {
 function hasExplicitInternationalPrefix(value: string): boolean {
   const trimmed = contactPhonePayload(value);
   return trimmed.startsWith('+') || startsWithInternationalZeroPrefix(trimmed);
+}
+
+export function isExplicitInternationalPhone(value: string): boolean {
+  return hasExplicitInternationalPrefix(value);
 }
 
 function explicitInternationalDigits(value: string): string {
@@ -150,4 +160,41 @@ export function buildContactPhoneChoices(
   });
 
   return choices;
+}
+
+/** Preserves every usable per-contact number so multi-number contacts require review. */
+export function buildContactImportCandidates(
+  contacts: readonly PhoneContactLike[],
+): ContactImportCandidate[] {
+  return contacts.flatMap((contact, contactIndex) => {
+    const name = contact.name.trim();
+    if (!name) return [];
+    const phones = new Map<string, ContactPhoneChoice & { isPrimary: boolean }>();
+    contact.phoneNumbers?.forEach((phone, phoneIndex) => {
+      const number = phone.number ? contactPhonePayload(phone.number) : '';
+      if (!number.trim()) return;
+      const normalizedDigits = phoneDigits(number);
+      if (!normalizedDigits) return;
+      const dedupeKey = contactPhoneDedupeKey(number);
+      const existing = phones.get(dedupeKey);
+      if (!existing || (phone.isPrimary === true && !existing.isPrimary)) {
+        phones.set(dedupeKey, {
+          key: `${contact.id ?? contactIndex}-${phoneIndex}-${dedupeKey}`,
+          name,
+          phone: number,
+          normalizedDigits,
+          isPrimary: phone.isPrimary === true,
+        });
+      }
+    });
+    const ordered = [...phones.values()]
+      .sort((left, right) => Number(right.isPrimary) - Number(left.isPrimary))
+      .map(({ isPrimary: _isPrimary, ...choice }) => choice);
+    if (ordered.length === 0) return [];
+    return [{
+      key: String(contact.id ?? contactIndex),
+      name,
+      phones: ordered,
+    }];
+  });
 }
