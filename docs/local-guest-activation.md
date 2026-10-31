@@ -15,7 +15,8 @@ Guest mode reuses the existing Properties/People/Requirements, matching, assista
 notifications, drafts, recovery, maps and media functionality through its own immutable
 scope. Native SQLite and media are under guest-specific filenames/directories; web
 keys and IndexedDB are separate from authenticated accounts, even for equal UUIDs.
-No Google SDK client is created on a normal guest startup. A pending/failed Google
+No Google SDK client is created on a normal guest startup. Returning to guest also
+disposes any existing Google client and stops its automatic refresh/lifecycle work. A pending/failed Google
 verification can be left for guest mode. External Maps or platform sharing still
 use their ordinary external applications when the user chooses them.
 

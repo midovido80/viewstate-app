@@ -132,7 +132,9 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   const startGuest = async (identity?: GuestIdentity) => {
     if (guestStarting.current) return;
     guestStarting.current = true; checking.current = false;
-    hideData(); setError(''); setStage('checking');
+    hideData();
+    const previousGoogleDevice = device.current; device.current = null; previousGoogleDevice?.dispose();
+    setError(''); setStage('checking');
     const expected = epoch.current;
     const valid = () => { if (!mounted.current || expected !== epoch.current) throw new Error('ACCOUNT_CHANGED'); };
     let createdScope: ReturnType<typeof createGuestScope> | undefined;
