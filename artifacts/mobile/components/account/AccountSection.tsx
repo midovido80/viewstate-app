@@ -1,3 +1,4 @@
+import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -79,4 +80,16 @@ function RealAccountSection() {
     <Confirm visible={leaving} title={L('تسجيل الخروج؟', 'Sign out?')} body={L('ستُغلق بياناتك على هذا الجهاز. يمكنك تسجيل الدخول بالحساب نفسه لاستكمال عملك، أو اختيار حساب آخر ببيانات منفصلة.', 'Your data will close on this device. Sign in with the same account to continue, or choose another account with separate data.')} confirmLabel={L('تسجيل الخروج', 'Sign out')} onCancel={() => setLeaving(false)} onConfirm={() => void account.signOut()} />
   </AccountScreen>;
 }
-export function AccountSection() { const account = useRealAccount(); return account ? <RealAccountSection /> : <LegacyAccountSection />; }
+function GuestAccountSection() {
+  const guest = useGuestAccount()!; const { L } = useL(); const router = useRouter();
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const activate = async () => { if (busy) return; setBusy(true); setError(''); try { await guest.activate(); } catch { setError(L('تعذّر بدء التفعيل. بيانات الضيف محفوظة؛ حاول مجددًا.', 'Could not start activation. Guest data is preserved; retry.')); } finally { setBusy(false); } };
+  return <AccountScreen title={L('حسابي', 'My account')} subtitle={L('وضع الضيف — بيانات محلية', 'Guest mode — local data')}>
+    <Card><Row first icon="user" title={guest.identity.name} sub={guest.identity.phone || L('الهاتف غير مضاف', 'No phone added')} onPress={() => router.push('/account/profile' as never)} /></Card>
+    <Note>{L('استخدم العقارات والعملاء والمطابقة والمتابعات محليًا دون تسجيل. لا توجد نسخة احتياطية سحابية؛ يستطيع من يستخدم الجهاز فتح مساحة الضيف.', 'Use properties, clients, matching and follow-ups locally without sign-in. There is no cloud backup; anyone using this device can open its guest workspace.')}</Note>
+    <Btn testID="activate-guest-account" icon="unlock" busy={busy} label={L('تفعيل حسابي', 'Activate my account')} onPress={() => void activate()} />
+    <Note>{L('بعد التحقق من Google، تختار نقل بيانات الضيف إلى هذا الحساب أو البدء دون نقل. لن نرسل بيانات العقارات والميديا إلى السحابة تلقائيًا.', 'After Google verification, choose whether to bring guest data into this account or continue without importing. Properties and media are not automatically uploaded to the cloud.')}</Note>
+    {error ? <Body>{error}</Body> : null}
+  </AccountScreen>;
+}
+export function AccountSection() { const account = useRealAccount(), guest = useGuestAccount(); return account ? <RealAccountSection /> : guest ? <GuestAccountSection /> : <LegacyAccountSection />; }

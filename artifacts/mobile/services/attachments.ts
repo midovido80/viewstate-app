@@ -187,7 +187,7 @@ function extensionFor(source: AttachmentSource): string {
 }
 
 export function createExpoFileStore(module: ExpoFileSystemModule, ownerDirectory?: string): AttachmentFileStore {
-  if (ownerDirectory && !/^viewstate-users\/[0-9a-f-]{36}$/.test(ownerDirectory)) throw new Error('INVALID_MEDIA_OWNER');
+  if (ownerDirectory && !/^viewstate-(?:users|guests)\/[0-9a-f-]{36}$/.test(ownerDirectory)) throw new Error('INVALID_MEDIA_OWNER');
   const copyToManagedScope = async (
     scope: 'properties' | 'requirements',
     recordId: string,
@@ -195,7 +195,7 @@ export function createExpoFileStore(module: ExpoFileSystemModule, ownerDirectory
     source: AttachmentSource,
   ) => {
     assertNative();
-    if (ownerDirectory && new URL(source.uri).pathname.includes('/viewstate-users/')) {
+    if (ownerDirectory && /\/viewstate-(?:users|guests)\//.test(new URL(source.uri).pathname)) {
       assertOwnedMediaUri(source.uri, new module.Directory(module.Paths.document, ownerDirectory).uri);
     }
     const directory = new module.Directory(

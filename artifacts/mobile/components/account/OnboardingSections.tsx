@@ -1,3 +1,4 @@
+import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { AccountSection } from './AccountSection';
 import React from 'react';
@@ -55,10 +56,11 @@ function Unavailable({ method }: { method: AccountMethod }) {
   );
 }
 
-export function WelcomeSection() { const account = useRealAccount(); return account ? <AccountSection /> : <LegacyWelcomeSection />; }
+export function WelcomeSection() { const account = useRealAccount(); const guest = useGuestAccount(); return account || guest ? <AccountSection /> : <LegacyWelcomeSection />; }
 export function PhoneSection() { return <Unavailable method="phone" />; }
 export function ProviderSection({ method }: { method?: string }) {
   const account = useRealAccount();
-  if (account && method !== 'apple') return <AccountSection />;
+  const guest = useGuestAccount();
+  if ((account || guest) && method !== 'apple') return <AccountSection />;
   return <Unavailable method={method === 'apple' ? 'apple' : 'google'} />;
 }

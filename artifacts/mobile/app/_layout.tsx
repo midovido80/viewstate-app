@@ -19,7 +19,8 @@ import {
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
 import { useUserData } from '@/contexts/UserDataContext';
-import { RealAccountGate } from '@/contexts/RealAccountContext';
+import { useGuestAccount } from '@/contexts/GuestAccountContext';
+import { RealAccountGate, useRealAccount } from '@/contexts/RealAccountContext';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -44,8 +45,8 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
-  const router = useRouter();
-  useEffect(() => { if (process.env.EXPO_PUBLIC_SUPABASE_URL) router.replace('/'); }, []);
+  const router = useRouter(); const account = useRealAccount(), guest = useGuestAccount();
+  useEffect(() => { if (account || guest) router.replace('/'); }, []);
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       {integrityStatus.hasUnreadableRecords ? (

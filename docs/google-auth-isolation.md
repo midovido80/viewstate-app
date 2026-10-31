@@ -1,5 +1,9 @@
 # Google account integration — onboarding and local isolation
 
+Guest entry and activation are now described in [local-guest-activation.md](local-guest-activation.md).
+That continuation replaces the mandatory sign-in entry described in this checkpoint;
+Google identity verification and per-account isolation remain in place.
+
 Branch: `work/google-auth-isolation`. This package continues the infrastructure
 checkpoint `19257773cc875383022acef7e5fe9ffadea0621f`.
 It requires Founder acceptance of real sign-in and account switching before release.

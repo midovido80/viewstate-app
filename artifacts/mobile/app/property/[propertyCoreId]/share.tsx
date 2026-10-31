@@ -1,3 +1,4 @@
+import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { accountShareSignature } from '@/services/accountOnboarding';
 import { useUserData } from '@/contexts/UserDataContext';
@@ -86,7 +87,8 @@ function CheckRow({
 
 export default function PropertyShareScreen() {
   const { store, media: { access } } = useUserData();
-  const account = useRealAccount();
+  const account = useRealAccount(), guest = useGuestAccount();
+  const signature = (include: boolean) => account ? accountShareSignature(account.profile, include, language) : include && guest ? '\n\n' + [language === 'ar' ? 'للتواصل' : 'Contact', guest.identity.name, guest.identity.phone].filter(Boolean).join('\n') : '';
   const [includeMyDetails, setIncludeMyDetails] = useState(false);
   const params = useLocalSearchParams<{ propertyCoreId?: string | string[]; matchNoticeId?: string }>();
   const rawId = params.propertyCoreId;
@@ -169,13 +171,13 @@ export default function PropertyShareScreen() {
         attribution: shareT('share.attribution'),
       });
       return {
-        preview: { ...builtPreview, text: shareFormat === 'viewstate' ? viewStateTextCard(toEnglishDigits(builtPreview.text + accountShareSignature(account?.profile ?? null, includeMyDetails, language)), language) : toEnglishDigits(builtPreview.text + accountShareSignature(account?.profile ?? null, includeMyDetails, language)) },
+        preview: { ...builtPreview, text: shareFormat === 'viewstate' ? viewStateTextCard(toEnglishDigits(builtPreview.text + signature(includeMyDetails)), language) : toEnglishDigits(builtPreview.text + signature(includeMyDetails)) },
         failed: false,
       };
     } catch {
       return { preview: null, failed: true };
     }
-  }, [property, selection, t, language, contacts, shareFormat, account?.profile, includeMyDetails]);
+  }, [property, selection, t, language, contacts, shareFormat, account?.profile, guest?.identity, includeMyDetails]);
   const preview = previewResult.preview;
   const fileAdapter = useMemo(() => {
     if (!property || !selection) return undefined;
@@ -249,7 +251,7 @@ export default function PropertyShareScreen() {
 
       <Text style={[styles.note, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive_off')}</Text>
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.normal_fields')}</Text>
-      {account ? <CheckRow disabled={sharing} checked={includeMyDetails} title={language === 'ar' ? 'إظهار بيانات التواصل الخاصة بي' : 'Include my contact details'} subtitle={account.profile.display_name + ' • ' + account.profile.phone} onPress={() => setIncludeMyDetails(v => !v)} testID="share-my-contact" isRTL={isRTL} colors={colors} fonts={fonts} /> : null}
+      {account || guest ? <CheckRow disabled={sharing} checked={includeMyDetails} title={language === 'ar' ? 'إظهار بيانات التواصل الخاصة بي' : 'Include my contact details'} subtitle={account ? account.profile.display_name + ' • ' + account.profile.phone : guest?.identity.name} onPress={() => setIncludeMyDetails(v => !v)} testID="share-my-contact" isRTL={isRTL} colors={colors} fonts={fonts} /> : null}
       {PROPERTY_SHARE_NORMAL_FIELDS.map(field => <CheckRow disabled={sharing} key={field} checked={selection.normalFields.includes(field)} title={normalLabel(field)} onPress={() => toggleNormal(field)} testID={`share-normal-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.attachments')}</Text>
       {(property.attachments ?? []).map(item => <CheckRow disabled={sharing} key={item.id} checked={selection.attachmentIds.includes(item.id)} title={toEnglishDigits(item.originalName)} onPress={() => toggleAttachment(item.id)} testID={`share-attachment-${item.id}`} isRTL={isRTL} colors={colors} fonts={fonts} forceLTR />)}

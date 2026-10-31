@@ -3,6 +3,7 @@ export interface AccountStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
+  getAllKeys?(): Promise<readonly string[]>;
   withExclusiveLock?<T>(name: string, work: () => Promise<T>): Promise<T>;
 }
 export class AccountScopeClosedError extends Error {
@@ -13,17 +14,18 @@ export function assertAccountId(id: string): void {
     throw new Error('INVALID_ACCOUNT_ID');
   }
 }
-export function createAccountScope(userId: string) {
+function createLocalScope(userId: string, guest: boolean) {
   assertAccountId(userId);
   const owner = userId.toLowerCase();
-  const prefix = `@viewstate_user_v1:${owner}:`;
+  const prefix = `@viewstate_${guest ? 'guest' : 'user'}_v1:${owner}:`;
   let active = true;
   const assertActive = () => { if (!active) throw new AccountScopeClosedError(); };
   return {
     userId: owner,
-    databaseName: `viewstate-user-${owner}.db`,
-    mediaDatabaseName: `viewstate-user-media-${owner}`,
-    mediaDirectory: `viewstate-users/${owner}`,
+    kind: guest ? 'guest' as const : 'google' as const,
+    databaseName: `viewstate-${guest ? 'guest' : 'user'}-${owner}.db`,
+    mediaDatabaseName: `viewstate-${guest ? 'guest' : 'user'}-media-${owner}`,
+    mediaDirectory: `viewstate-${guest ? 'guests' : 'users'}/${owner}`,
     assertActive,
     revoke() { active = false; },
     /** Captures this owner forever, even if a different user signs in mid-operation. */
@@ -35,6 +37,7 @@ export function createAccountScope(userId: string) {
         return result;
       };
       return {
+        ...(source.getAllKeys ? { getAllKeys: () => run(async () => (await source.getAllKeys!()).filter(key => key.startsWith(prefix)).map(key => key.slice(prefix.length))) } : {}),
         getItem: key => run(() => source.getItem(prefix + key)),
         setItem: (key, value) => run(() => source.setItem(prefix + key, value)),
         removeItem: key => run(() => source.removeItem(prefix + key)),
@@ -64,4 +67,7 @@ export function createAccountScope(userId: string) {
     },
   };
 }
-export type AccountScope = ReturnType<typeof createAccountScope>;
+export function createAccountScope(userId: string) { return createLocalScope(userId, false); }
+/** Local identity only: never a Supabase anonymous user or authentication credential. */
+export function createGuestScope(localId: string) { return createLocalScope(localId, true); }
+export type AccountScope = ReturnType<typeof createLocalScope>;

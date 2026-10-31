@@ -1,3 +1,5 @@
+import { useGuestAccount } from '@/contexts/GuestAccountContext';
+import { GuestProfileForm } from './GuestProfileForm';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { AccountProfileForm } from './AccountProfileForm';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -101,7 +103,12 @@ function RealProfileSection() {
   return <AccountProfileForm userId={account.profile.user_id} initial={account.profile} photo={account.photo} email={account.email} onCancel={leave}
     onSave={async (value, photo) => { await account.saveContact(value, photo); await saveProfile({ name: value.display_name.trim(), company: value.company.trim(), photo }); leave(); }} />;
 }
+function GuestProfileSection() {
+  const guest = useGuestAccount()!; const { state, saveProfile } = useAccountFoundation(); const router = useRouter();
+  const leave = () => router.canGoBack() ? router.back() : router.replace('/account' as never);
+  return <GuestProfileForm name={guest.identity.name} phone={guest.identity.phone} onCancel={leave} onSave={async (name, phone) => { await guest.saveContact(name, phone); await saveProfile({ ...state.profile, name: name.trim() }); leave(); }} />;
+}
 export function ProfileSection(props: { setup?: boolean }) {
-  const account = useRealAccount();
-  return account ? <RealProfileSection /> : <LegacyProfileSection {...props} />;
+  const account = useRealAccount(), guest = useGuestAccount();
+  return account ? <RealProfileSection /> : guest ? <GuestProfileSection /> : <LegacyProfileSection {...props} />;
 }
