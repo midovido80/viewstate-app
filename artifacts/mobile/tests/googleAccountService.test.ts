@@ -24,7 +24,7 @@ function harness() {
     auth: {
       getSession: async () => ({ data: { session: current }, error: null }),
       getUser: async (token: string) => { userReads++; assert.equal(token, 'fixture-token'); return { data: { user: serverUser }, error: serverFailure ? new Error('revoked') : null }; },
-      signInWithOAuth: async (options: unknown) => { assert.deepEqual(options, { provider: 'google', options: { redirectTo: callback, skipBrowserRedirect: true, scopes: 'openid email profile' } }); return { data: { url: 'https://project.supabase.co/auth/v1/authorize' }, error: null }; },
+      signInWithOAuth: async (options: unknown) => { assert.deepEqual(options, { provider: 'google', options: { redirectTo: callback, skipBrowserRedirect: true, scopes: 'openid email profile', queryParams: { prompt: 'select_account' } } }); return { data: { url: 'https://project.supabase.co/auth/v1/authorize' }, error: null }; },
       exchangeCodeForSession: async (code: string, options: unknown) => { exchanges++; assert.equal(code, 'fixture-code'); assert.deepEqual(options, { flowId: 'fixture_flow_123' }); return { data: { session: current }, error: null }; },
       signOut: async () => ({ error: signOutFailure ? new Error('network') : null }),
       onAuthStateChange: (listener: (event: string, value: Session | null) => void) => { listeners.add(listener); return { data: { subscription: { unsubscribe: () => listeners.delete(listener) } } }; },
@@ -149,7 +149,7 @@ test('the actual pinned SDK generates S256 PKCE and a callback compatible with o
     },
   });
   try {
-    const { data, error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback, skipBrowserRedirect: true, scopes: 'openid email profile' } });
+    const { data, error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback, skipBrowserRedirect: true, scopes: 'openid email profile', queryParams: { prompt: 'select_account' } } });
     assert.equal(error, null);
     const url = new URL(data.url!);
     assert.equal(url.searchParams.get('code_challenge_method'), 's256');
@@ -162,4 +162,20 @@ test('the actual pinned SDK generates S256 PKCE and a callback compatible with o
     assert.deepEqual(readAccountCallback(redirect.href, callback), { code: 'fixture-code' });
     assert.ok([...values.keys()].some(key => key.includes('code-verifier')));
   } finally { client.auth.stopAutoRefresh(); }
+});
+
+test('token refresh verifies outside the SDK callback and cannot keep a rejected identity active', async () => {
+  const h = harness(), service = h.service();
+  let revoked = 0;
+  const lease = await service.openScope(() => { revoked++; });
+  try {
+    const before = h.userReads;
+    h.emit('TOKEN_REFRESHED', session());
+    assert.equal(h.userReads, before, 'never request Auth while its event callback holds the SDK lock');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.ok(h.userReads > before); lease.scope.assertActive();
+    h.failServer(); h.emit('TOKEN_REFRESHED', session());
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(revoked, 1); assert.throws(lease.scope.assertActive, /ACCOUNT_SCOPE_CLOSED/);
+  } finally { lease.close(); service.dispose(); }
 });

@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, FlatList, ScrollView, TextInput, TouchableOpacity } from 'react-native';
@@ -5,7 +6,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
-import { store } from '@/services/persistence';
+
 import { Button } from '@/components/Button';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
@@ -40,6 +41,7 @@ const PROPERTY_FILTER_OPTIONS = [
 ] as const;
 
 export default function PropertiesScreen() {
+  const { store } = useUserData();
   const router = useRouter();
   const { highlight } = useLocalSearchParams<{ highlight?: string | string[] }>();
   const highlightedId = Array.isArray(highlight) ? highlight[0] : highlight;

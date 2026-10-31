@@ -1,3 +1,4 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useState } from 'react';
 import { View, Text } from 'react-native';
 import Constants from 'expo-constants';
@@ -117,15 +118,16 @@ export function AboutSection() {
 }
 
 export function LegalSection() {
+  const account = useRealAccount();
   const { L, fonts, align } = useL(); const colors = useColors();
   const H = ({ t }: { t: string }) => <Text style={{ color: colors.accent, fontFamily: fonts.bold, fontSize: 17, marginTop: 8, textAlign: align }}>{t}</Text>;
   return (
     <AccountScreen title={L('الخصوصية والشروط', 'Privacy & terms')} subtitle={L('مسودة توضيحية، وليست سياسة قانونية معتمدة.', 'Illustrative draft, not an approved legal policy.')}>
       <Card padded>
         <H t={L('الخصوصية', 'Privacy')} />
-        <Body>{L('يحفظ التطبيق بياناتك على هذا الجهاز. السجلات مرتبطة بالجهاز وليست معزولة لكل حساب؛ أي شخص يستخدم الجهاز يمكنه رؤيتها.', 'The app stores your data on this device. Records are device-scoped, not isolated per account; anyone using the device can see them.')}</Body>
-        <Body>{L('لا تسجيل دخول ولا مزامنة سحابية حاليًا. الأذونات تُطلب فقط عند استخدام الميزة وتُدار من إعدادات النظام.', 'There is no sign-in or cloud sync today. Permissions are asked only when a feature is used and are managed in system settings.')}</Body>
-        <Body muted>{L('قبل تفعيل الحسابات سنوضح مزوّدي الدخول والبيانات المجمعة والأغراض والاحتفاظ والتصدير والحذف.', 'Before accounts launch we will explain sign-in providers, collected data, purposes, retention, export and deletion.')}</Body>
+        <Body>{account ? L('تسجيل الدخول باستخدام Google عبر Supabase. يُحفظ البريد ومعرّف الحساب وملف التواصل في الخدمة، وتبقى العقارات والأشخاص والميديا والمسودات محليًا لكل حساب على حدة. الصورة الشخصية محلية.', 'Sign-in uses Google through Supabase. Your email, account ID and contact profile are held by the service; properties, people, media and drafts remain in separate local account storage. Profile photos stay local.') : L('يحفظ التطبيق بياناتك على هذا الجهاز. السجلات مرتبطة بالجهاز وليست معزولة لكل حساب؛ أي شخص يستخدم الجهاز يمكنه رؤيتها.', 'The app stores your data on this device. Records are device-scoped, not isolated per account; anyone using the device can see them.')}</Body>
+        <Body>{account ? L('لم تُفعّل مزامنة العقارات والميديا أو SMS. مشاركة بيانات التواصل اختيارية لكل مشاركة. تُطلب الأذونات عند استخدام الميزة فقط.', 'Property/media sync and SMS are not enabled. Contact details are shared only when selected for that share. Permissions are requested only when a feature is used.') : L('لا تسجيل دخول ولا مزامنة سحابية حاليًا. الأذونات تُطلب فقط عند استخدام الميزة وتُدار من إعدادات النظام.', 'There is no sign-in or cloud sync today. Permissions are asked only when a feature is used and are managed in system settings.')}</Body>
+        <Body muted>{account ? L('هذه نسخة تجريبية. حذف الحساب والتصدير الشامل وسياسات الاحتفاظ النهائية تحتاج استكمالًا قبل الإطلاق العام.', 'This is a trial. Account deletion, full export and final retention policies must be completed before public launch.') : L('قبل تفعيل الحسابات سنوضح مزوّدي الدخول والبيانات المجمعة والأغراض والاحتفاظ والتصدير والحذف.', 'Before accounts launch we will explain sign-in providers, collected data, purposes, retention, export and deletion.')}</Body>
         <H t={L('شروط الاستخدام', 'Terms of use')} />
         <Body>{L('أنت مسؤول عن البيانات التي تدخلها وعن مشاركتها مع الآخرين.', 'You are responsible for the data you enter and for what you share with others.')}</Body>
         <Body muted>{L('هذه مسودة للمراجعة وقد تتغير.', 'This is a draft for review and may change.')}</Body>

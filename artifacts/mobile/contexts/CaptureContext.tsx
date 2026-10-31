@@ -1,6 +1,7 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { PropertyDraft, updatePropertyDraft, projectDraftToProperty, Property } from '@workspace/property-domain';
 import {
   loadDraft,
@@ -10,7 +11,7 @@ import {
   replaceDraftIfUnchanged,
 } from '@/services/draft';
 import { useI18n } from '@/contexts/I18nContext';
-import { store } from '@/services/persistence';
+
 import {
   clearPropertySaveOperation,
   createPropertySaveOperation,
@@ -88,6 +89,7 @@ function isBlankGeneratedScaffold(draft: PropertyDraft): boolean {
 }
 
 export function CaptureProvider({ children }: { children: ReactNode }) {
+  const { store, storage: AsyncStorage, draft: { loadDraft, saveDraft, flushDraftWrites, replaceDraft, replaceDraftIfUnchanged }, recovery: { recoverPreparedCapturedDetails } } = useUserData();
   const { t } = useI18n();
   const [draft, setDraft] = useState<PropertyDraft>(DEFAULT_DRAFT);
   const [captureDetails, setCaptureDetails] = useState<CaptureDetailValues>({});

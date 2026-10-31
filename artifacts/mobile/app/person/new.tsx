@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -10,7 +11,7 @@ import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { createPerson, PERSON_CLASSIFICATIONS, PersonClassification } from '@/services/people';
-import { store } from '@/services/persistence';
+
 import {
   normalizePhoneForCountry,
   PHONE_COUNTRIES,
@@ -20,6 +21,7 @@ import { generateDomainId } from '@/services/identity';
 import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 
 export default function NewPersonScreen() {
+  const { store } = useUserData();
   const router = useRouter();
   const params = useLocalSearchParams<{ returnRequirementId?: string | string[] }>();
   const returnRequirementId = Array.isArray(params.returnRequirementId)

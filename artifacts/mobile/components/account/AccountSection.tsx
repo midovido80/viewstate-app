@@ -1,10 +1,11 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
 import { accountProvider } from '@/services/accountProvider';
 import { AccountScreen, Badge, Body, Btn, Card, Confirm, Note, Row, SectionLabel, Sheet, useCanWrite, useL } from './ui';
 
-export function AccountSection() {
+function LegacyAccountSection() {
   const { state, clearLocalSettings } = useAccountFoundation();
   const { canWrite, busy } = useCanWrite();
   const { L } = useL();
@@ -63,3 +64,19 @@ export function AccountSection() {
     </AccountScreen>
   );
 }
+
+function RealAccountSection() {
+  const account = useRealAccount()!;
+  const { L } = useL();
+  const router = useRouter();
+  const [leaving, setLeaving] = useState(false);
+  return <AccountScreen title={L('حسابي', 'My account')} subtitle={account.email}>
+    <Card><Row first icon="user" title={account.profile.display_name} sub={account.profile.phone} onPress={() => router.push('/account/profile' as never)} />
+    <Row icon="mail" title="Google" sub={L('تم التحقق من الهوية باستخدام Google', 'Identity verified with Google')} /></Card>
+    <Note>{L('العقارات والأشخاص والميديا والمسودات محفوظة محليًا بشكل منفصل لكل حساب. المزامنة السحابية لهذه البيانات لم تُفعّل بعد.', 'Properties, people, media and drafts are stored separately for each account on this device. Cloud sync for this data is not enabled yet.')}</Note>
+    <Btn icon="log-out" label={L('تسجيل الخروج وتبديل الحساب', 'Sign out & switch account')} onPress={() => setLeaving(true)} />
+    <Note>{L('حذف الحساب نهائيًا غير متاح في هذه المرحلة التجريبية.', 'Permanent account deletion is not available in this trial checkpoint.')}</Note>
+    <Confirm visible={leaving} title={L('تسجيل الخروج؟', 'Sign out?')} body={L('ستُغلق بياناتك على هذا الجهاز. يمكنك تسجيل الدخول بالحساب نفسه لاستكمال عملك، أو اختيار حساب آخر ببيانات منفصلة.', 'Your data will close on this device. Sign in with the same account to continue, or choose another account with separate data.')} confirmLabel={L('تسجيل الخروج', 'Sign out')} onCancel={() => setLeaving(false)} onConfirm={() => void account.signOut()} />
+  </AccountScreen>;
+}
+export function AccountSection() { const account = useRealAccount(); return account ? <RealAccountSection /> : <LegacyAccountSection />; }

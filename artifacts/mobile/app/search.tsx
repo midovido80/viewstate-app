@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -24,7 +25,7 @@ import {
   type SearchMatchReason,
 } from '@/services/globalSearch';
 import type { Person } from '@/services/people';
-import { store } from '@/services/persistence';
+
 import { getWantedApartmentSubtypeLabel, isOfferedStudio } from '@/services/propertyDetailPresentation';
 import { flexibleSearchTerms } from '@/services/flexibleSearch';
 import { projectPropertyIntent, projectRequirementIntent } from '@/services/recordIntentPresentation';
@@ -152,6 +153,7 @@ function propertySubtitle(
 }
 
 export default function GlobalSearchScreen() {
+  const { store, assistantRepository } = useUserData();
   const router = useRouter();
   const insets = useScreenInsets();
   const colors = useColors();

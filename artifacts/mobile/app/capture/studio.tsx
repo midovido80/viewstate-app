@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredStar, RequiredFormHint } from '@/components/RequiredForm';
 import { readMatchingReturn } from '@/services/matchingReturnSession';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
@@ -36,7 +37,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { generateDomainId } from '@/services/identity';
-import { store } from '@/services/persistence';
+
 import type { Person } from '@/services/people';
 import {
   buildStudioProperty,
@@ -165,6 +166,7 @@ const propertyAttachmentMetadata = (attachment: LocalAttachment): PropertyAttach
 });
 
 export default function StudioCaptureRoute() {
+  const { store, recovery: { saveStudioPropertyFromPersonSource, retryStudioPropertyRecovery, saveStudioProperty }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore } } = useUserData();
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
   const matchingReturn = readMatchingReturn(firstParam(params.matchingReturn))?.token;

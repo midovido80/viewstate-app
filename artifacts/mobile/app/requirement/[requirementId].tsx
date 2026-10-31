@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
 import { commercialProperty, residentialUnit, requirementCompletionFields } from '@/services/requiredMatchingFields';
 import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
@@ -31,7 +32,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { MARKET_CONFIG } from '@/constants/market';
 import { generateDomainId } from '@/services/identity';
-import { store } from '@/services/persistence';
+
 import {
   buildPersonRequirement,
   formValuesFromRequirement,
@@ -108,6 +109,7 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
+  const { store } = useUserData();
   const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam, floorUse: floorUseParam, propertyUse: propertyUseParam } = useLocalSearchParams<{
     requirementId: string | string[];
     seekerId?: string | string[];

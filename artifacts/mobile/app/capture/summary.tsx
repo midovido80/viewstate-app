@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { useRef, useState } from 'react';
@@ -12,7 +13,7 @@ import { Button } from '@/components/Button';
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatPrice, formatRentalPrice, formatRentalCadence } from '@/constants/market';
 import { SingleFlight } from '@/services/serialTaskQueue';
-import { store } from '@/services/persistence';
+
 import { ModernPropertyForm } from '@/components/ModernPropertyForm';
 import {
   applyFloorTransition,
@@ -40,6 +41,7 @@ import { projectRecordIntent } from '@/services/recordIntentPresentation';
 import { getPropertyCardSummary } from '@/services/cardSummaryPresentation';
 
 export default function SummaryScreen() {
+  const { store, recovery: { finalizeCapturedDetails, loadPreparedCapturedDetails, prepareCapturedDetails } } = useUserData();
   const router = useRouter();
   const { linkPersonId, sourceRole, apartmentSubtype } = useLocalSearchParams<{
     linkPersonId?: string;

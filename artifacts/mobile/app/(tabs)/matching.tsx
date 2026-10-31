@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { MatchingResultsGroups } from '@/components/MatchingResultsGroups';
 import type { MatchingResultsLayout } from '@/services/matchingGroups';
 import { readMatchingReturn, rememberMatchingReturn } from '@/services/matchingReturnSession';
@@ -32,7 +33,7 @@ import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { KUWAIT_AREAS, getAreaById, searchAreas } from '@/constants/kuwait-areas';
-import { store } from '@/services/persistence';
+
 import { MyPropertiesMatchingSource } from '@/services/myPropertiesMatchingSource';
 import {
   BrokerInitiatedMatching,
@@ -161,6 +162,7 @@ function FormInput({
 }
 
 export default function MatchingScreen() {
+  const { store } = useUserData();
   const { requirementId: requestedRequirementId, returnSession } = useLocalSearchParams<{ requirementId?: string; returnSession?: string }>();
   const colors = useColors();
   const { t, isRTL, language, setLanguage, fonts } = useI18n();

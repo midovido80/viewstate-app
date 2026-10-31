@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
 import { Feather } from '@expo/vector-icons';
@@ -48,7 +49,7 @@ import {
   PHONE_COUNTRIES,
   PhoneCountryCode,
 } from '@/services/phoneEntry';
-import { store } from '@/services/persistence';
+
 import { openAndroidWhatsAppContactCompose } from '@/services/propertyShareIntent';
 import {
   getPropertyCardSummary,
@@ -66,6 +67,7 @@ export function getPersonWantedRequirementRoute(personId: string) {
 type PersonLoadState = 'loading' | 'ready' | 'missing' | 'error';
 
 export default function PersonDetailScreen() {
+  const { store } = useUserData();
   const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string }>();
   const id = Array.isArray(params.personId) ? params.personId[0] : params.personId;
   const router = useRouter();

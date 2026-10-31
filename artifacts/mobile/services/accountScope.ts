@@ -3,6 +3,7 @@ export interface AccountStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
+  withExclusiveLock?<T>(name: string, work: () => Promise<T>): Promise<T>;
 }
 export class AccountScopeClosedError extends Error {
   constructor() { super('ACCOUNT_SCOPE_CLOSED'); this.name = 'AccountScopeClosedError'; }
@@ -37,6 +38,7 @@ export function createAccountScope(userId: string) {
         getItem: key => run(() => source.getItem(prefix + key)),
         setItem: (key, value) => run(() => source.setItem(prefix + key, value)),
         removeItem: key => run(() => source.removeItem(prefix + key)),
+        ...(source.withExclusiveLock ? { withExclusiveLock: <T>(name: string, work: () => Promise<T>) => run(() => source.withExclusiveLock!(prefix + name, async () => { assertActive(); return work(); })) } : {}),
       };
     },
     /** Use on immutable per-account store instances, not a mutable global store. */

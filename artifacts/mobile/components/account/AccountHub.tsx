@@ -1,3 +1,4 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -10,6 +11,7 @@ import { AccountHeader, Avatar, Badge, Card, ErrorText, ReadyBanner, Row, Sectio
 import { appVersion } from '@/components/account/InfoSections';
 
 export default function AccountHub() {
+  const account = useRealAccount();
   const colors = useColors();
   const insets = useScreenInsets();
   const router = useRouter();
@@ -19,7 +21,7 @@ export default function AccountHub() {
   const { L, language, fonts, row, align } = useL();
   const [langError, setLangError] = useState<string | null>(null);
   const go = (s: string) => router.push(`/account/${s}` as never);
-  const name = state.profile.name.trim();
+  const name = account?.profile.display_name ?? state.profile.name.trim();
   const switchLanguage = async () => {
     setLangError(null);
     try { await setAppLanguage(language === 'en' ? 'ar' : 'en'); }
@@ -33,11 +35,11 @@ export default function AccountHub() {
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
         <Card hero padded>
           <Pressable accessibilityRole="button" onPress={() => go(name ? 'profile' : 'welcome')} style={{ flexDirection: row, alignItems: 'center', gap: 12 }} testID="more-profile-card">
-            <Avatar name={name} photo={state.profile.photo} />
+            <Avatar name={name} photo={account?.photo ?? state.profile.photo} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.foreground, textAlign: align }}>{name || L('أنشئ ملفك المحلي', 'Set up your local profile')}</Text>
-              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.mutedForeground, textAlign: align }}>{state.profile.company || L('بدون تسجيل دخول', 'No sign-in required')}</Text>
-              <View style={{ flexDirection: row }}><Badge kind="warn" text={L('على هذا الجهاز فقط', 'This device only')} /></View>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.mutedForeground, textAlign: align }}>{account?.profile.company || account?.email || state.profile.company || L('بدون تسجيل دخول', 'No sign-in required')}</Text>
+              <View style={{ flexDirection: row }}><Badge kind="warn" text={account ? L('حساب Google • بيانات محلية منفصلة', 'Google account • separate local data') : L('على هذا الجهاز فقط', 'This device only')} /></View>
             </View>
             <Feather name="settings" size={20} color={colors.primary} />
           </Pressable>

@@ -1,3 +1,5 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
+import { AccountProfileForm } from './AccountProfileForm';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform, View } from 'react-native';
 import { Stack, useFocusEffect, useNavigation, useRouter } from 'expo-router';
@@ -6,7 +8,7 @@ import { chooseLocalProfilePhoto } from '@/services/accountDevice';
 import { AccountScreen, Avatar, Btn, Confirm, ErrorText, Field, Note, useCanWrite, useL } from './ui';
 
 /** Local profile editor. Persists only on Save; Back with unsaved edits asks to keep editing or discard. */
-export function ProfileSection({ setup }: { setup?: boolean }) {
+function LegacyProfileSection({ setup }: { setup?: boolean }) {
   const { state, saveProfile } = useAccountFoundation();
   const { canWrite, busy } = useCanWrite();
   const { L } = useL();
@@ -89,4 +91,17 @@ export function ProfileSection({ setup }: { setup?: boolean }) {
         onConfirm={() => { const go = pendingLeave; allowLeave.current = true; setPendingLeave(null); go?.(); }} />
     </AccountScreen>
   );
+}
+
+function RealProfileSection() {
+  const account = useRealAccount()!;
+  const { saveProfile } = useAccountFoundation();
+  const router = useRouter();
+  const leave = () => router.canGoBack() ? router.back() : router.replace('/account' as never);
+  return <AccountProfileForm userId={account.profile.user_id} initial={account.profile} photo={account.photo} email={account.email} onCancel={leave}
+    onSave={async (value, photo) => { await account.saveContact(value, photo); await saveProfile({ name: value.display_name.trim(), company: value.company.trim(), photo }); leave(); }} />;
+}
+export function ProfileSection(props: { setup?: boolean }) {
+  const account = useRealAccount();
+  return account ? <RealProfileSection /> : <LegacyProfileSection {...props} />;
 }

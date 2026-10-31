@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useMemo, useRef, useState } from 'react';
 import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -6,7 +7,7 @@ import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, type Translations } from '@/contexts/I18nContext';
-import { store } from '@/services/persistence';
+
 import { generateDomainId } from '@/services/identity';
 import { type PersonClassification } from '@/services/people';
 import {
@@ -46,6 +47,7 @@ export function BatchContactImportModal({
   onClose: () => void;
   onImported: () => void;
 }) {
+  const { store } = useUserData();
   const colors = useColors();
   const insets = useScreenInsets();
   const { t, isRTL, fonts } = useI18n();

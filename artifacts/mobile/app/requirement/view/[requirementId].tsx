@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { matchingBackRoute, readMatchingReturn } from '@/services/matchingReturnSession';
 import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
@@ -12,7 +13,7 @@ import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
-import { store } from '@/services/persistence';
+
 import { canHydrateStudioRequirement, getStudioRequirementEditHref, isWantedStudio } from '@/services/propertyDetailPresentation';
 import { getRequirementDetailIdentity, getRequirementDetailsRows, type RequirementDetailRow } from '@/services/requirementDetailsPresentation';
 import { projectRequirementIntent } from '@/services/recordIntentPresentation';
@@ -21,6 +22,7 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 const sections = ['overview', 'location', 'specifications', 'preferences', 'budget', 'notes'] as const;
 
 export default function RequirementDetailsScreen() {
+  const { store } = useUserData();
   const params = useLocalSearchParams<{
     requirementId?: string | string[];
     matchingReturn?: string | string[];

@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -8,7 +9,7 @@ import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { Person } from '@/services/people';
-import { store } from '@/services/persistence';
+
 import { formatPrice, formatRentalPrice, toEnglishDigits } from '@/constants/market';
 import {
   filterPersonActivityLines,
@@ -37,6 +38,7 @@ const PEOPLE_FILTER_OPTIONS = [
 ] as const;
 
 export default function PeopleScreen() {
+  const { store } = useUserData();
   const router = useRouter();
   const colors = useColors();
   const insets = useScreenInsets();

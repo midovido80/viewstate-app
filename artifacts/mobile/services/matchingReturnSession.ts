@@ -15,6 +15,7 @@ export interface MatchingReturnSession {
 }
 let session: MatchingReturnSession | undefined;
 let serial = 0;
+export function clearMatchingReturn() { session = undefined; serial++; }
 /** RAM only, bounded to one return context. Scores are never cached or persisted. */
 export function rememberMatchingReturn(input: Omit<MatchingReturnSession, 'token' | 'engineVersion' | 'createdAt'>, now = Date.now()): string {
   const token = `match-${now}-${++serial}`;

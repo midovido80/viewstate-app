@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
 import { propertyCompletionFields } from '@/services/requiredMatchingFields';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
@@ -67,7 +68,7 @@ import {
   finalizeCapturedDetails,
   prepareCapturedDetails,
 } from '@/services/propertyCaptureSave';
-import { store } from '@/services/persistence';
+
 import { projectRecordIntent } from '@/services/recordIntentPresentation';
 import {
   createExpoFileStore,
@@ -149,6 +150,7 @@ function firstCaptureParam(value?: string | string[]) {
 // selected source role alongside it for installations where child routes
 // replace (rather than inherit) parent params.
 export default function CaptureWorkflow() {
+  const { store, recovery: { finalizeCapturedDetails, prepareCapturedDetails }, media: { createExpoFileStore, openAttachment, createIndexedDbWebAttachmentBlobStore } } = useUserData();
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     linkPersonId?: string | string[];

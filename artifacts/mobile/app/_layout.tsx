@@ -18,7 +18,9 @@ import {
   Tajawal_700Bold,
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
-import { Stack } from 'expo-router';
+import { useUserData } from '@/contexts/UserDataContext';
+import { RealAccountGate } from '@/contexts/RealAccountContext';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
@@ -26,7 +28,6 @@ import { StatusBar } from 'expo-status-bar';
 SplashScreen.preventAutoHideAsync();
 
 import {
-  store,
   type LocalStoreIntegrityStatus,
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
@@ -36,7 +37,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
 
-const queryClient = new QueryClient();
 
 function RootLayoutNav({
   integrityStatus,
@@ -44,6 +44,8 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
+  const router = useRouter();
+  useEffect(() => { if (process.env.EXPO_PUBLIC_SUPABASE_URL) router.replace('/'); }, []);
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       {integrityStatus.hasUnreadableRecords ? (
@@ -81,6 +83,7 @@ function RootLayoutNav({
       ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="account" options={{ headerShown: false }} />
@@ -104,7 +107,11 @@ type InitializationState =
   | { status: 'error' }
   | { status: 'ready'; integrityStatus: LocalStoreIntegrityStatus };
 
-export default function RootLayout() {
+function ApplicationRoot() {
+  const { store } = useUserData();
+  const [queryClient] = useState(() => new QueryClient());
+  useEffect(() => () => queryClient.clear(), [queryClient]);
+
   const [interLoaded, interError] = useInterFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -147,7 +154,7 @@ export default function RootLayout() {
         initializationAttempt.current = null;
       }
     });
-  }, []);
+  }, [store]);
 
   useEffect(() => {
     initialize(false);
@@ -177,25 +184,21 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       {initialization.status === 'error' || initialization.status === 'retrying' ? (
-        <I18nProvider>
           <StartupRecoveryScreen
             status={initialization.status}
             onRetry={() => initialize(true)}
           />
-        </I18nProvider>
       ) : (
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <I18nProvider>
                 <AccountFoundationProvider>
                 <CaptureProvider><MatchNotificationsProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
                 </MatchNotificationsProvider></CaptureProvider>
                 </AccountFoundationProvider>
-                </I18nProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>
@@ -203,6 +206,10 @@ export default function RootLayout() {
       )}
     </SafeAreaProvider>
   );
+}
+
+export default function RootLayout() {
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot /></RealAccountGate></I18nProvider></SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({

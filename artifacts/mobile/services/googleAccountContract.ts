@@ -18,7 +18,7 @@ export function validateUserContactProfile(userId: string, value: Omit<UserConta
   assertAccountId(userId);
   const fields: ProfileField[] = [];
   const name = value.display_name.trim();
-  const phone = value.phone.trim();
+  const phone = value.phone.trim().replace(/[٠-٩۰-۹]/g, digit => String(digit.charCodeAt(0) - (digit.charCodeAt(0) >= 0x6f0 ? 0x6f0 : 0x660)));
   if (!name || name.length > 150) fields.push('display_name');
   if (!/^\+?[0-9 ()-]{6,30}$/.test(phone) || phone.replace(/\D/g, '').length < 6 || phone.replace(/\D/g, '').length > 15) fields.push('phone');
   if (!ACCOUNT_CLASSIFICATIONS.includes(value.classification)) fields.push('classification');

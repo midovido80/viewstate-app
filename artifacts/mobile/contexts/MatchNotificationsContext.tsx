@@ -1,10 +1,11 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { useAppMotion } from '@/hooks/useAppMotion';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import type { Person } from '@/services/people';
-import { store } from '@/services/persistence';
+
 import { BrokerInitiatedMatching } from '@/services/brokerInitiatedMatching';
 import { MyPropertiesMatchingSource } from '@/services/myPropertiesMatchingSource';
 import { validMatchingRequirements } from '@/services/matchingUi';
@@ -14,7 +15,7 @@ import { claimDueMatchNotices, currentNoticeMatch, initialMatchNotices, isQuietT
 import { useAccountFoundation } from './AccountFoundationContext';
 import { MatchNoticeToast } from '@/components/notifications/MatchNoticeToast';
 export interface MatchCatalog { properties: Property[]; people: Person[]; requirements: SeekerRequirement[] }
-async function readMatchCatalog(): Promise<MatchCatalog> {
+async function readMatchCatalog(store: ReturnType<typeof useUserData>['store']): Promise<MatchCatalog> {
   const [properties, people, requirements] = await Promise.all([store.getProperties(), store.getPeople(), store.getRequirements()]);
   return { properties, people, requirements };
 }
@@ -29,6 +30,7 @@ interface Value {
 const Context = createContext<Value | null>(null);
 export function useMatchNotifications(): Value { const value = useContext(Context); if (!value) throw new Error('MatchNotificationsProvider missing'); return value; }
 export function MatchNotificationsProvider({ children }: { children: React.ReactNode }) {
+  const { store, matchNoticeRepository } = useUserData();
   const account = useAccountFoundation(), router = useRouter(), pathname = usePathname();
   const allowMotion = useAppMotion();
   const preferences = useRef(account); preferences.current = account;
@@ -43,7 +45,7 @@ export function MatchNotificationsProvider({ children }: { children: React.React
     const run = jobs.current.catch(() => undefined).then(async () => {
       if (!mounted.current || AppState.currentState && AppState.currentState !== 'active') return;
       try {
-        const records = await readMatchCatalog(), { properties, people, requirements } = records, key = matchingCatalogKey(records);
+        const records = await readMatchCatalog(store), { properties, people, requirements } = records, key = matchingCatalogKey(records);
         let items = latestMatches.current;
         if (key !== savedKey.current) {
           const eligible = validMatchingRequirements(requirements).filter(r => people.some(p => p.id === r.seekerId));
@@ -56,7 +58,7 @@ export function MatchNotificationsProvider({ children }: { children: React.React
             await new Promise(resolve => setTimeout(resolve, 0));
           }
           items = selectHomeMatches(eligible, people, runs, Number.MAX_SAFE_INTEGER);
-          if (matchingCatalogKey(await readMatchCatalog()) !== key) throw new Error('MATCH_CATALOG_CHANGED');
+          if (matchingCatalogKey(await readMatchCatalog(store)) !== key) throw new Error('MATCH_CATALOG_CHANGED');
         }
         if (!mounted.current) return;
         savedKey.current = key; latestMatches.current = items;

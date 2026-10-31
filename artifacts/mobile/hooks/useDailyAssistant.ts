@@ -1,8 +1,9 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
-import { store } from '@/services/persistence';
+
 import type { Person } from '@/services/people';
 import { useI18n } from '@/contexts/I18nContext';
 import { getPropertyCardSummary } from '@/services/cardSummaryPresentation';
@@ -11,11 +12,12 @@ import { assistantRepository } from '@/services/dailyAssistantDevice';
 import { AssistantError, initialAssistant, kuwaitDay, type AssistantInventory, type AssistantState } from '@/services/dailyAssistant';
 import { ASSISTANT_COPY, type AssistantCopyKey } from '@/services/dailyAssistantCopy';
 interface Catalog { properties: Property[]; people: Person[]; requirements: SeekerRequirement[] }
-async function readCatalog(): Promise<Catalog> {
+async function readCatalog(store: ReturnType<typeof useUserData>['store']): Promise<Catalog> {
   const [properties, people, requirements] = await Promise.all([store.getProperties(), store.getPeople(), store.getRequirements()]);
   return { properties, people, requirements };
 }
 export function useDailyAssistant() {
+  const { store, assistantRepository } = useUserData();
   const { language, t } = useI18n();
   const copy = useCallback((key: AssistantCopyKey) => ASSISTANT_COPY[language][key] as string, [language]);
   const [state, setState] = useState<AssistantState>(initialAssistant);
@@ -48,7 +50,7 @@ export function useDailyAssistant() {
     if (running.current) return;
     const token = ++generation.current; setReady(false); setError('');
     try {
-      const [saved, records] = await Promise.all([assistantRepository.load(), readCatalog()]);
+      const [saved, records] = await Promise.all([assistantRepository.load(), readCatalog(store)]);
       if (mounted.current && token === generation.current) { setState(saved); setCatalog(records); setReady(true); setCanUndo(false); }
     } catch (cause) {
       if (mounted.current && token === generation.current) { setError(cause instanceof AssistantError ? explain(cause) : copy('loadError')); setCanUndo(false); }
@@ -72,7 +74,7 @@ export function useDailyAssistant() {
     if (running.current || !ready) return false;
     running.current = true; setBusy(true); setError('');
     try {
-      const records = await readCatalog();
+      const records = await readCatalog(store);
       const targets = buildInventory(records);
       if (sourcePropertyId) {
         const source = await store.getPropertySource(sourcePropertyId);

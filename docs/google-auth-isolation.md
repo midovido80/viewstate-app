@@ -1,132 +1,115 @@
-# Google account integration — foundation checkpoint
+# Google account integration — onboarding and local isolation
 
-This work is on `work/google-auth-isolation`, based on
-`8d62f82d684de276fdff5c569b4d55e0a558983f`. It is not an accepted authentication release.
+Branch: `work/google-auth-isolation`. This package continues the infrastructure
+checkpoint `19257773cc875383022acef7e5fe9ffadea0621f`.
+It requires Founder acceptance of real sign-in and account switching before release.
 
-## Provisioned service
+## Services and configuration
 
-- Organization: `midovido80's Org` (`fbvewlwzjvobtjxqqppr`).
-- Project: `viewstate-app-pilot` (`taduvwcajtjpceavlxrc`).
-- Region: `eu-central-1`.
-- Quoted project cost: $0/month on the existing Free plan. No paid service was requested.
-- No application secrets or service-role keys are committed.
+Personal Supabase project `viewstate-app-pilot` (`taduvwcajtjpceavlxrc`), organization
+`midovido80's Org`, region eu-central-1. Free plan only: no billing, paid SMS or
+mail service. Google provider and the personal web callback were configured by the
+Founder. Replit's read-only public Auth-settings request confirmed Google enabled,
+phone and anonymous disabled. No credentials or privileged keys are in Git.
 
-## Applied and verified
+Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the
+intended environment. Both absent preserves the existing single-device development
+mode; partial/invalid configuration fails closed. Configured mode never mounts the
+application stores or routes before server-verified Google identity and onboarding.
 
-`supabase/migrations/20261031122506_private_user_profiles.sql` creates a private,
-owner-scoped profile with required name, contact phone and classification; company
-is optional. Choosing `other` requires a description. Phone is not SMS verified.
-Classification is descriptive and grants no privileges. There are no public-read
-policies, authorization metadata, security-definer functions or auth signup triggers.
-The migration was created with temporary Supabase CLI 2.122.0, without adding a
-project dependency or changing the lockfile, then applied through the Supabase tool.
+Callbacks:
+- Google Cloud: `https://taduvwcajtjpceavlxrc.supabase.co/auth/v1/callback`.
+- Personal Replit: `https://ba95f458-c6a7-4139-b835-1c6ffdfeab2b-00-3ib2t2yj71ui5.expo.pike.replit.dev/auth/callback`.
+- Future native binary: `viewstate://auth/callback` (must be allowlisted and tested).
 
-`supabase/tests/private_user_profiles.sql` passed against the new project under
-the actual `authenticated` and `anon` database roles. It verifies own read/insert/
-update, rejection of foreign inserts/upserts and ownership reassignment, hidden
-foreign rows, rejection of foreign updates, required-field constraints, and denied
-anonymous reads/inserts. Fixture users and profiles are transactionally rolled back.
-These are SQL ownership tests, not a Google sign-in or device-authentication test.
-Delete policies were inspected but delete operations were not executed: an earlier
-test including deletes hit an expired tool confirmation and did not run. The
-non-deleting version is the test retained here. The security advisor reported no
-findings after the migration.
+## First-user journey
 
-## Account infrastructure implemented (not activated in the app)
+Google -> exact S256 PKCE callback -> online `getUser()` verification -> mandatory
+contact profile -> animated ViewState welcome -> Home. Google verifies the Google
+identity; this flow has no extra app password or redundant verification email.
+Account selection is requested so the Founder can switch Google accounts.
 
-- Pinned `@supabase/supabase-js` 2.118.0, `expo-secure-store` 15.0.8 (Expo 54's
-  compatible version), and `react-native-url-polyfill` 3.0.0. The lockfile has only
-  the intended additions, with no existing-version upgrades.
-- The new SDK requires Node >=22. The internal EAS profile is pinned to Node
-  24.22.1, matching the verified development runtime, instead of its old Node
-  20.19.4. No EAS build was submitted; the remote worker remains unverified.
-- `googleAccountService.ts`: Google OAuth with S256 PKCE, exact callback validation,
-  server `getUser()` verification instead of trusting a stored session, required
-  private-profile validation/save/read-back, and revocable data leases. Native uses
-  the SDK-returned flow ID; web uses one flow per sessionStorage namespace. The SDK's
-  experimental callback-flow flag is not enabled. Optional callback flow IDs are
-  validated and, when a native expected flow ID is available, must match it.
-- `googleAccountDevice.ts`: explicit, lazy construction; publishable-key-only
-  configuration; HTTPS web callbacks; native system browser; OS-backed native
-  session storage and crypto. Plain PKCE authorization URLs are rejected. Tokens
-  are not stored in application AsyncStorage. Browser sessions use sessionStorage.
-- `secureSessionStorage.ts`: bounded Unicode-safe chunks below the native item
-  size limit, manifest commit after writing pieces, queued replacement/removal,
-  preservation of the previous session on failure, and fail-closed reads.
-- `accountScope.ts` and `accountRepositories*.ts`: immutable per-owner keys, native
-  SQLite filename, media namespace names, the existing WebStore/SQLiteStore and
-  settings/assistant/notification repositories. Stale/in-flight operations cannot
-  publish results through a revoked lease or write into a different owner's namespace.
-- Native configuration retains the old `mobile` scheme and adds `viewstate`, plus
-  the SecureStore configuration plugin. These take effect in a future native build;
-  an existing installed APK does not gain native modules or schemes by Preview update.
-- 27 focused tests passed, including real WebStore separation of Properties, People
-  and canonical Requirements and their reload, plus settings/assistant/notices and
-  actual pinned-SDK S256 authorization URL generation. Unit auth ports are fixtures;
-  they are not a claim that a real Google account has signed in.
-- Final local validation: 858/858 Mobile tests, full-workspace TypeScript checks,
-  Property Domain and Matching tests, frozen-lockfile installation, whitespace
-  checks and Android/iOS JavaScript exports passed. The existing root still
-  does not import the new services, so exports do not prove native authentication.
+Name, phone and classification are required. Company and local photo/default
+avatar are optional. Roles: owner, broker, leasing employee, real-estate office,
+other. Other requires a description. Arabic/Persian phone digits are normalized;
+phone ownership is not verified by SMS. Invalid fields have red stars/errors and
+scroll/focus to the first missing field. Save verifies the server's profile read-back.
+Welcome supports Skip with double chevrons, a start action, per-owner completion,
+and system/app reduced motion. Profile edits and sign-out are available in Settings.
 
-## Not enabled yet / acceptance blockers
+Sharing adds a separate, initially unchecked contact-details option. Only explicit
+consent includes name/phone/company/role in the reviewed share text. Email, avatar,
+owner ID and internal app data are not added to this signature.
 
-- Google provider, Google OAuth client and consent screen.
-- Redirect allowlist, callback route, and activation of the new SDK/session boundary
-  in the application root. The implemented services are not imported by the live root.
-- Required-profile screen, sign-out and account switching.
-- Connecting every existing Properties/People/Requirements UI consumer, capture
-  draft/recovery helper, media factory, assistant, match-notice provider, settings
-  provider and in-memory/query cache to the new per-account resources. The factories
-  and their tests do not retroactively isolate the current global application stores.
-- Cloud synchronization or upload of property/media data.
+## Data boundary
 
-The existing application still uses device-global local stores. Do not expose it
-as a multi-user authenticated app until the entire data boundary and switch tests
-are implemented. Do not attach legacy unowned trial data to the first signed-in user.
-The private profile table alone does not isolate the existing application data.
+- Reuses existing WebStore/SQLiteStore and domain validation.
+- Immutable Supabase UUID scopes every local key, SQLite filename and media namespace.
+- Screens, source/contact imports, global search, matching, follow-ups, notices,
+  settings, capture drafts, enrichment/edit recovery and media use scoped resources.
+- Capture draft queues and edit generations belong to their storage instance.
+- Web locks protect recovery writes; owner-specific locks/keys do not collide.
+- Native media are under `viewstate-users/<uuid>`, web blobs in a separate IndexedDB
+  database. Native open/share/delete checks ownership. Temporary share archives use
+  owner cache directories and random filenames.
+- Sign-out/revocation synchronously closes the lease, hides app data, clears matching
+  return memory and stops audio. Provider/query trees remount for the next lease;
+  token refresh is reverified outside the SDK callback lock, and late results cannot publish through a revoked scope or write into another owner.
+- Existing unowned trial records are preserved and never assigned to a login.
+- Language is a device preference; account-specific language overrides still load
+  from the owner's settings. No private business records live in that shared key.
 
-## Continuation
+The private cloud contact profile uses the already applied migration
+`supabase/migrations/20261031122506_private_user_profiles.sql`: owner-only RLS for
+select/insert/update/delete, no anonymous access. Existing SQL tests used actual
+anon/authenticated roles and rolled back fixtures; foreign reads/writes/upserts and
+owner reassignment are denied. Delete policy inspection is not a delete-operation test.
+No new remote schema changes are part of this continuation.
 
-The Supabase connector can manage the project but cannot configure Google OAuth.
-The Founder has verified the correct organization and project in their own browser.
-The separate automation browser is signed into another organization's dashboard and
-does not expose the approved project. Do not create a replacement project there.
-The project's public `/auth/v1/settings` was checked on 2026-10-31: `google: false`,
-`phone: false`, `anonymous_users: false`. No Google client ID or secret is available
-through the existing connector. Configure a dedicated Google OAuth client in the intended Google
-Cloud project (no billing or SMS). Keep the Google client secret in Supabase provider
-configuration only, never Git or chat. Request only identity/email/profile scopes.
+## Verification and limits
 
-Use Google sign-in without a separate app password or redundant verification email.
-Use a checked server identity rather than editable metadata for ownership. Implement
-both native PKCE and exact web callbacks; do not accept arbitrary callback URLs.
-Keep auth disabled in existing previews until ownership guards, account switching,
-deep-link protection and cache/media isolation are verified. Publishable keys may
-be shipped in the app only with the complete RLS boundary in place; privileged keys
-must never be shipped. No email/password or paid SMS provider is part of this stage.
+Local Mobile tests: 865/865, including actual WebStore A/B properties/people/
+requirements, settings, follow-ups, notices, auth session invalidation, scoped draft
+save/clear/reload, independent recovery generations, owner media paths and opt-in
+share signatures. Full workspace TypeScript, Domain/Matching and Android/iOS JS
+exports passed during development. Re-run final checks on the committed revision.
 
-Before acceptance, test user A versus user B (including direct API access, forged
-owner IDs, sign-out/restart, expired sessions and in-flight saves during switching),
-then run the relevant Mobile/Domain/type checks, CI on the same commit, and native
-verification. Neither the existing company/personal Preview nor main/Pilot has
-been switched by this checkpoint.
+The real profile component was exercised in an isolated 390px local QA harness in
+English and Arabic: missing-field focus/errors, classification list, Other's required
+text, and local acceptance of completed fields. The harness creates no login,
+Supabase profile or business records and is not shipped in the application.
 
-## Recovery
+Still unverified: real Google callback round-trip, profile cloud save, logout/restart
+and two real Google accounts on the personal HTTPS Preview; native browser/permissions/
+SecureStore and signing/device compatibility. Fixture auth tests and JS exports do
+not prove these. Property/people/media cloud synchronization, public account deletion
+and final legal policies are pending. Local namespaces separate app usage; business
+SQLite/AsyncStorage data are not an encrypted account vault.
 
-The base commit remains the original app. This package adds unused infrastructure,
-pinned dependencies and native configuration, and does not switch any runtime UI
-consumer to authenticated storage. Returning to the base needs no data rewrite.
-The new Supabase table is independent and unused by existing previews; reverting
-Git does not automatically remove remote database migrations. Keep the project
-and table intact while the package is incomplete. Any later removal of remote
-resources is a separate explicit action. Do not promise zero regressions for the
-future auth integration; acceptance requires the tests above.
+## Personal Preview acceptance
 
-## Official references consulted
+1. Preserve the personal Replit checkpoint and its environment settings, fetch the
+   published branch and check out the exact final SHA/tree. Do not overlay old app code.
+2. Node 24.22.1, pnpm 10.26.1, frozen lockfile. Restart Expo with the existing approved
+   public URL/key; never print tokens, the key, Google secret or auth callback codes.
+3. Sign in as test user A. Verify missing-profile gate cannot be skipped by deep link,
+   required fields and Other, save/read-back, welcome Skip/start and Home.
+4. Add disposable Property/Person/Requirement/draft/media/follow-up/notice as A.
+   Verify signature off/on in preview without sending a message externally.
+5. Sign out; app data must disappear. Sign in B: none of A's records, drafts, media,
+   settings, notices or matching appear. Direct A record routes must reveal nothing.
+6. Create B records, return to A and reload: each account retains only its own data.
+   Test canceled login, failed network/profile save, repeated presses, expiry and a
+   save in flight at logout. No stale UI or old-owner result may return.
+7. Check English/Arabic RTL, scroll, Back, tabs and existing property form journeys.
+   Report actual evidence and failures, not inferred success.
 
-- https://supabase.com/changelog.md
-- https://supabase.com/changelog/cbc-tls-ciphers-deprecated
-- https://supabase.com/docs/guides/auth/quickstarts/with-expo-react-native-social-sign-in
-- https://supabase.com/docs/guides/auth/social-login/auth-google
-- https://supabase.com/docs/guides/database/postgres/row-level-security
+## Recovery and release boundary
+
+Keep the infrastructure parent `19257773...` and the accepted pre-auth UI
+`8d62f82d...` reachable. Reverting source/Preview restores its previous behavior;
+new per-user records are not merged into legacy data and remain separate. Git
+rollback does not remove Supabase tables or auth users. No data deletion is needed.
+
+No main/Pilot movement, company Replit changes, publication, APK, signing or Expo
+ownership transfer is included. The company-linked Expo owner requires its own review.

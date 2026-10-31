@@ -1,3 +1,5 @@
+import type { MediaAccess } from './accountMedia';
+import { assertOwnedMediaUri } from './accountMedia';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
@@ -184,7 +186,8 @@ function extensionFor(source: AttachmentSource): string {
   return subtype ? `.${subtype}` : '';
 }
 
-export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFileStore {
+export function createExpoFileStore(module: ExpoFileSystemModule, ownerDirectory?: string): AttachmentFileStore {
+  if (ownerDirectory && !/^viewstate-users\/[0-9a-f-]{36}$/.test(ownerDirectory)) throw new Error('INVALID_MEDIA_OWNER');
   const copyToManagedScope = async (
     scope: 'properties' | 'requirements',
     recordId: string,
@@ -192,8 +195,12 @@ export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFil
     source: AttachmentSource,
   ) => {
     assertNative();
+    if (ownerDirectory && new URL(source.uri).pathname.includes('/viewstate-users/')) {
+      assertOwnedMediaUri(source.uri, new module.Directory(module.Paths.document, ownerDirectory).uri);
+    }
     const directory = new module.Directory(
       module.Paths.document,
+      ...(ownerDirectory ? [ownerDirectory] : []),
       scope,
       encodeURIComponent(recordId),
       'attachments',
@@ -214,6 +221,9 @@ export function createExpoFileStore(module: ExpoFileSystemModule): AttachmentFil
       copyToManagedScope('requirements', requirementId, attachmentId, source),
     async delete(uri) {
       assertNative();
+      if (ownerDirectory) {
+        assertOwnedMediaUri(uri, new module.Directory(module.Paths.document, ownerDirectory).uri);
+      }
       await new module.File(uri).delete();
     },
   };
@@ -317,12 +327,16 @@ export async function openAttachment(
   },
   intentLauncher: AndroidIntentLauncher = IntentLauncher,
   webBlobStore?: WebAttachmentBlobStore,
+  access?: MediaAccess,
 ): Promise<void> {
+  access?.assertActive();
+  if (platform !== 'web') access?.assertUri(attachment.uri);
   if (platform === 'web') {
     if (attachment.uri.startsWith('viewstate-web-attachment:')) {
       const blob = await (webBlobStore ?? createIndexedDbWebAttachmentBlobStore()).get(attachment.uri);
       if (!blob) throw new Error('ATTACHMENT_FILE_MISSING');
       const objectUrl = URL.createObjectURL(blob);
+      access?.assertActive();
       window.open(objectUrl, '_blank', 'noopener,noreferrer');
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
       return;
@@ -346,6 +360,7 @@ export async function openAttachment(
   if (platform === 'android') {
     try {
       const contentUri = await fileSystem.getContentUriAsync(attachment.uri);
+      access?.assertActive();
       await intentLauncher.startActivityAsync('android.intent.action.VIEW', {
         data: contentUri,
         type: attachment.mimeType,
@@ -354,6 +369,7 @@ export async function openAttachment(
       return;
     } catch {
       if (await sharing.isAvailableAsync()) {
+        access?.assertActive();
         await sharing.shareAsync(attachment.uri, { mimeType: attachment.mimeType });
         return;
       }
@@ -361,10 +377,12 @@ export async function openAttachment(
     }
   }
   if (await opener.canOpenURL(attachment.uri)) {
+    access?.assertActive();
     await opener.openURL(attachment.uri);
     return;
   }
   if (await sharing.isAvailableAsync()) {
+    access?.assertActive();
     await sharing.shareAsync(attachment.uri, { mimeType: attachment.mimeType });
     return;
   }

@@ -71,7 +71,7 @@ export function createGoogleAccountService(client: GoogleAccountPort, browser: G
       try {
         const { data, error } = await client.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo: browser.callback, skipBrowserRedirect: true, scopes: 'openid email profile' },
+          options: { redirectTo: browser.callback, skipBrowserRedirect: true, scopes: 'openid email profile', queryParams: { prompt: 'select_account' } },
         });
         assertEpoch(expected);
         if (error || !data.url) throw new Error('GOOGLE_PROVIDER_UNAVAILABLE');
@@ -87,18 +87,32 @@ export function createGoogleAccountService(client: GoogleAccountPort, browser: G
       const scope = createAccountScope(account.userId);
       let closed = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let refreshCheck: ReturnType<typeof setTimeout> | undefined;
       let unsubscribe = () => undefined as void;
       const dispose = () => {
         if (closed) return false;
         closed = true; scope.revoke();
         if (timer) clearTimeout(timer);
+        if (refreshCheck) clearTimeout(refreshCheck);
         unsubscribe(); activeScopes.delete(revoke);
         return true;
       };
       const revoke = () => { if (dispose()) onRevoked(); };
       const { data } = client.auth.onAuthStateChange((event, session) => {
         // SDK event callbacks must not make awaited Supabase requests (auth lock).
-        if (event === 'SIGNED_OUT' || !session || session.user.id.toLowerCase() !== account.userId) revoke();
+        if (event === 'SIGNED_OUT' || !session || session.user.id.toLowerCase() !== account.userId) { revoke(); return; }
+        if (event === 'TOKEN_REFRESHED' && !closed) {
+          if (refreshCheck) clearTimeout(refreshCheck);
+          refreshCheck = setTimeout(() => {
+            refreshCheck = undefined;
+            void requireAccount().then(latest => {
+              if (closed) return;
+              if (latest.userId !== account.userId) { revoke(); return; }
+              if (timer) clearTimeout(timer);
+              timer = setTimeout(revoke, Math.min(2147483647, Math.max(0, latest.expiresAt - now())));
+            }).catch(revoke);
+          }, 0);
+        }
       });
       unsubscribe = () => data.subscription.unsubscribe();
       timer = setTimeout(revoke, Math.min(2147483647, Math.max(0, account.expiresAt - now())));

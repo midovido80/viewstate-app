@@ -1,3 +1,6 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
+import { accountShareSignature } from '@/services/accountOnboarding';
+import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import { viewStateTextCard } from '@/services/matchNoticePresentation';
 import { Action, AssistantSheet, AssistantText } from '@/components/assistant/ui';
@@ -16,7 +19,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { getAreaById } from '@/constants/kuwait-areas';
-import { store } from '@/services/persistence';
+
 import {
   sharePropertyPreview,
 } from '@/services/propertySharing';
@@ -82,6 +85,9 @@ function CheckRow({
 }
 
 export default function PropertyShareScreen() {
+  const { store, media: { access } } = useUserData();
+  const account = useRealAccount();
+  const [includeMyDetails, setIncludeMyDetails] = useState(false);
   const params = useLocalSearchParams<{ propertyCoreId?: string | string[]; matchNoticeId?: string }>();
   const rawId = params.propertyCoreId;
   const noticeId = typeof params.matchNoticeId === 'string' ? params.matchNoticeId : undefined;
@@ -163,13 +169,13 @@ export default function PropertyShareScreen() {
         attribution: shareT('share.attribution'),
       });
       return {
-        preview: { ...builtPreview, text: shareFormat === 'viewstate' ? viewStateTextCard(toEnglishDigits(builtPreview.text), language) : toEnglishDigits(builtPreview.text) },
+        preview: { ...builtPreview, text: shareFormat === 'viewstate' ? viewStateTextCard(toEnglishDigits(builtPreview.text + accountShareSignature(account?.profile ?? null, includeMyDetails, language)), language) : toEnglishDigits(builtPreview.text + accountShareSignature(account?.profile ?? null, includeMyDetails, language)) },
         failed: false,
       };
     } catch {
       return { preview: null, failed: true };
     }
-  }, [property, selection, t, language, contacts, shareFormat]);
+  }, [property, selection, t, language, contacts, shareFormat, account?.profile, includeMyDetails]);
   const preview = previewResult.preview;
   const fileAdapter = useMemo(() => {
     if (!property || !selection) return undefined;
@@ -179,16 +185,19 @@ export default function PropertyShareScreen() {
       property.attachments ?? [],
       async uri => {
         if (!await Sharing.isAvailableAsync()) throw new Error('LOCAL_FILE_SHARING_UNAVAILABLE');
+        account?.assertActive();
         await Sharing.shareAsync(uri, { mimeType: 'application/zip', dialogTitle: t('share.send') });
       },
       Platform.OS === 'ios' && selectedCover ? {
         attachmentId: selectedCover.id,
         shareWithText: async ({ uri, text }) => {
+          account?.assertActive();
           await Share.share({ message: text, url: uri });
         },
       } : undefined,
+      access,
     );
-  }, [property, selection, t]);
+  }, [property, selection, t, account, access]);
   if (!property || !selection) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.foreground }}>{error || t('edit.loading')}</Text></View>;
   const selectedAttachments = (property.attachments ?? []).filter(item => selection.attachmentIds.includes(item.id));
   const hasShareableContent = !!preview && (preview.text.length > 0 || preview.attachmentIds.length > 0);
@@ -197,11 +206,12 @@ export default function PropertyShareScreen() {
     shareFlight.current = true; setSharing(true);
     setError('');
     try {
+      account?.assertActive();
       if (noticeId) {
         const current = await notificationsRef.current.resolve(noticeId);
         if (current.match.result.propertyId !== id) throw new Error('MATCH_PROPERTY_MISMATCH');
       }
-      await sharePropertyPreview(preview, fileAdapter, text => Share.share({ message: text }));
+      await sharePropertyPreview(preview, fileAdapter, text => { account?.assertActive(); return Share.share({ message: text }); });
       if (noticeId && recipient) setFollowupPrompt(true);
     } catch {
       setError(t('share.failed'));
@@ -239,6 +249,7 @@ export default function PropertyShareScreen() {
 
       <Text style={[styles.note, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive_off')}</Text>
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.normal_fields')}</Text>
+      {account ? <CheckRow disabled={sharing} checked={includeMyDetails} title={language === 'ar' ? 'إظهار بيانات التواصل الخاصة بي' : 'Include my contact details'} subtitle={account.profile.display_name + ' • ' + account.profile.phone} onPress={() => setIncludeMyDetails(v => !v)} testID="share-my-contact" isRTL={isRTL} colors={colors} fonts={fonts} /> : null}
       {PROPERTY_SHARE_NORMAL_FIELDS.map(field => <CheckRow disabled={sharing} key={field} checked={selection.normalFields.includes(field)} title={normalLabel(field)} onPress={() => toggleNormal(field)} testID={`share-normal-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.attachments')}</Text>
       {(property.attachments ?? []).map(item => <CheckRow disabled={sharing} key={item.id} checked={selection.attachmentIds.includes(item.id)} title={toEnglishDigits(item.originalName)} onPress={() => toggleAttachment(item.id)} testID={`share-attachment-${item.id}`} isRTL={isRTL} colors={colors} fonts={fonts} forceLTR />)}

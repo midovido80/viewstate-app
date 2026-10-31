@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View, useWindowDimensions, type ViewStyle } from 'react-native';
@@ -9,7 +10,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useDailyAssistant } from '@/hooks/useDailyAssistant';
-import { store } from '@/services/persistence';
+
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { openWhatsAppComposeWithOpener } from '@/services/whatsappCompose';
 import {
@@ -38,6 +39,7 @@ function id() { return Crypto.randomUUID(); }
 /** Only web scroll containment is CSS. Native scroll containers use bounded layouts + nested scrolling. */
 const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'contain', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
 export default function CompactAssistantScreen() {
+  const { store } = useUserData();
   const h = useDailyAssistant(), { language, setLanguage, t, isRTL } = useI18n();
   const { state: account } = useAccountFoundation(), { row, align, fonts } = useAssistantUI();
   const insets = useScreenInsets(), actualInsets = useSafeAreaInsets(), { width, height, fontScale } = useWindowDimensions(), router = useRouter();

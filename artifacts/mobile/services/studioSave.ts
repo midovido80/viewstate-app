@@ -348,7 +348,7 @@ async function saveStudioPropertyEdit(options: {
           ? { status: 'conflict', propertyId: id }
           : { status: 'recovery_required', propertyId: id, reason: editBaseline.reason };
       }
-      const draft = createEditDraft(editBaseline.baseline);
+      const draft = createEditDraft(editBaseline.baseline, storage);
       if (!await savePropertyEditDraft(draft, null, storage)) {
         return { status: 'recovery_required', propertyId: id, reason: 'edit_draft_conflict' };
       }

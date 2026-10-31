@@ -1,3 +1,4 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, View, Text, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -43,10 +44,11 @@ export function PreviewSheet({ visible, onClose }: { visible: boolean; onClose: 
 }
 
 export function PrivacySection() {
+  const account = useRealAccount();
   const router = useRouter(); const { L } = useL(); const [preview, setPreview] = useState(false);
   return (
     <AccountScreen title={L('الخصوصية والمشاركة', 'Privacy & sharing')} subtitle={L('ما تحفظه يبقى على هذا الجهاز. تختار ما تشاركه.', 'What you save stays on this device. You choose what to share.')}>
-      <Note>{L('لا يوجد حساب سحابي أو تشفير حساب حاليًا. البيانات محفوظة على الجهاز ومتاحة لأي شخص يستخدمه.', 'There is no cloud account or account encryption today. Data stays on the device and is visible to anyone using it.')}</Note>
+      <Note>{account ? L('يستخدم الدخول Google وSupabase. بيانات العقارات والأشخاص والميديا محفوظة محليًا بمساحة منفصلة لكل حساب؛ ملف التواصل محفوظ في Supabase. تختار إظهار بيانات تواصلك عند كل مشاركة.', 'Sign-in uses Google and Supabase. Properties, people and media stay in separate local storage for each account; your contact profile is saved in Supabase. You choose whether to include your contact details for each share.') : L('لا يوجد حساب سحابي أو تشفير حساب حاليًا. البيانات محفوظة على الجهاز ومتاحة لأي شخص يستخدمه.', 'There is no cloud account or account encryption today. Data stays on the device and is visible to anyone using it.')}</Note>
       <Card>
         <Row first icon="share-2" title={L('اختيارات المشاركة الافتراضية', 'Default sharing choices')} sub={L('تفضيلات محفوظة للعرض', 'Saved presentation preferences')} onPress={() => router.push('/account/sharing' as never)} />
         <Row icon="eye" title={L('معاينة مشاركة عقار', 'Preview a property share')} sub={L('مثال وهمي', 'Fictional example')} onPress={() => setPreview(true)} />

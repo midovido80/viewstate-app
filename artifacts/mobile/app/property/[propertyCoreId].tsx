@@ -1,3 +1,4 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
 import { propertyCompletionFields } from '@/services/requiredMatchingFields';
 import { matchingBackRoute, withMatchingReturn } from '@/services/matchingReturnSession';
@@ -46,7 +47,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { formatPrice, formatRentalCadence, formatRentalPrice, MARKET_CONFIG, toEnglishDigits } from '@/constants/market';
 import { getAreaById, searchAreas } from '@/constants/kuwait-areas';
-import { store } from '@/services/persistence';
+
 import {
   Person,
   PROPERTY_SOURCE_ROLES,
@@ -114,6 +115,7 @@ function readNumericDetail(value: unknown): number | undefined {
 }
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
+  const { store, recovery: { createEditDraft, deleteSavedProperty, clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, discardPropertyEditDraft, executePropertyUpdateRecovery, loadPropertyEditDraft, loadPropertyUpdateOperation, persistPropertyUpdateOperation, savePropertyEditDraft }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, openAttachment } } = useUserData();
   const { propertyCoreId, edit, completion, matchingReturn } = useLocalSearchParams<{
     propertyCoreId?: string | string[];
     edit?: string | string[];

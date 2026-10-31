@@ -24,6 +24,7 @@ export const PROPERTY_UPDATE_OPERATION_KEY = '@viewstate_property_update_operati
 export const PROPERTY_EDIT_DRAFT_PREFIX = '@viewstate_property_edit_draft_v1:';
 
 export interface UpdateStorage {
+  withExclusiveLock?<T>(name: string, work: () => Promise<T>): Promise<T>;
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
@@ -96,7 +97,12 @@ export class PendingPropertyUpdateExistsError extends Error {
 
 const draftWrites = new SerialTaskQueue();
 const evidenceWrites = new SerialTaskQueue();
-const generations = new Map<string, number>();
+const ownerGenerations = new WeakMap<UpdateStorage, Map<string, number>>();
+function generationsFor(storage: UpdateStorage) {
+  let values = ownerGenerations.get(storage);
+  if (!values) { values = new Map(); ownerGenerations.set(storage, values); }
+  return values;
+}
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 export const exactPropertyEqual = (left: Property, right: Property) =>
   JSON.stringify(left) === JSON.stringify(right);
@@ -143,6 +149,7 @@ export function propertyEditDraftKey(propertyCoreId: string) {
 }
 
 async function withStorageLock<T>(storage: UpdateStorage, name: string, work: () => Promise<T>): Promise<T> {
+  if (storage.withExclusiveLock) return storage.withExclusiveLock(name, work);
   const isBrowser = typeof document !== 'undefined' && typeof navigator !== 'undefined';
   if (storage !== AsyncStorage || !isBrowser) return work();
   const locks = (navigator as Navigator & { locks?: { request?: <R>(name: string, options: { mode: 'exclusive' }, callback: () => Promise<R>) => Promise<R> } }).locks;
@@ -236,10 +243,10 @@ export async function savePropertyEditDraft(
     : expectedOrStorage as PropertyEditDraftV1 | null;
   assertDraft(draft, draft.propertyCoreId);
   const id = draft.propertyCoreId;
-  const knownGeneration = generations.get(id) ?? 0;
+  const knownGeneration = generationsFor(storage).get(id) ?? 0;
   if (draft.writeGeneration < knownGeneration) return false;
   const scheduledGeneration = draft.writeGeneration;
-  generations.set(id, scheduledGeneration);
+  generationsFor(storage).set(id, scheduledGeneration);
   const snapshot = JSON.stringify({ ...clone(draft), writeGeneration: scheduledGeneration });
   let saved = false;
   await draftWrites.enqueue(async () => {
@@ -269,8 +276,8 @@ export async function discardPropertyEditDraft(
 ): Promise<boolean> {
   if (expected.propertyCoreId !== propertyCoreId) return false;
   const expectedGeneration = expected.writeGeneration;
-  const nextGeneration = Math.max(generations.get(propertyCoreId) ?? 0, expectedGeneration) + 1;
-  generations.set(propertyCoreId, nextGeneration);
+  const nextGeneration = Math.max(generationsFor(storage).get(propertyCoreId) ?? 0, expectedGeneration) + 1;
+  generationsFor(storage).set(propertyCoreId, nextGeneration);
   let discarded = false;
   await draftWrites.enqueue(async () => {
     await withStorageLock(storage, `viewstate-property-edit-draft:${propertyCoreId}`, async () => {
@@ -293,7 +300,7 @@ export async function flushPropertyEditDraftWrites(): Promise<void> {
   await draftWrites.flush();
 }
 
-export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
+export function createEditDraft(baseline: Property, storage: UpdateStorage = AsyncStorage): PropertyEditDraftV1 {
   const price = baseline.activeOffer.transaction === 'sale'
     ? baseline.activeOffer.salePrice
     : baseline.activeOffer.rentalPrice;
@@ -344,7 +351,7 @@ export function createEditDraft(baseline: Property): PropertyEditDraftV1 {
       ...(baseline.locationEnrichment?.coordinates ? { coordinates: clone(baseline.locationEnrichment.coordinates) } : {}),
       ...(baseline.attachments ? { attachments: clone(baseline.attachments) } : {}),
     },
-    writeGeneration: (generations.get(baseline.core.id) ?? 0) + 1,
+    writeGeneration: (generationsFor(storage).get(baseline.core.id) ?? 0) + 1,
   };
 }
 

@@ -1,3 +1,5 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
+import { AccountSection } from './AccountSection';
 import React from 'react';
 import { View, Text } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -11,7 +13,7 @@ function Progress({ pct }: { pct: number }) {
   return <View style={{ height: 4, backgroundColor: '#DCE7F4', borderRadius: 9, overflow: 'hidden', marginBottom: 16 }}><View style={{ width: `${pct}%`, height: '100%', backgroundColor: colors.primary }} /></View>;
 }
 
-export function WelcomeSection() {
+function LegacyWelcomeSection() {
   const { L, fonts } = useL(); const colors = useColors(); const router = useRouter();
   return (
     <AccountScreen title={L('أهلًا بك في ViewState', 'Welcome to ViewState')} subtitle={L('عقاراتك وعلاقاتك وفرصك، في مكان واحد.', 'Your properties, people and opportunities together.')}>
@@ -32,6 +34,7 @@ export function WelcomeSection() {
 
 function Unavailable({ method }: { method: AccountMethod }) {
   const { L, row, fonts } = useL(); const colors = useColors(); const router = useRouter();
+  const account = useRealAccount();
   const name = method === 'phone' ? L('رقم الهاتف', 'phone number') : method === 'google' ? 'Google' : 'Apple';
   return (
     <AccountScreen title={method === 'phone' ? L('الدخول برقم الهاتف', 'Sign in with phone') : L(`الدخول باستخدام ${name}`, `Sign in with ${name}`)}
@@ -46,13 +49,16 @@ function Unavailable({ method }: { method: AccountMethod }) {
         ? L('لم تُفعَّل خدمة رسائل تحقق بعد، لذلك لا نطلب رقمك ولا نرسل رمزًا.', 'No verification-SMS service is enabled yet, so we do not ask for your number or send a code.')
         : L(`لم تُفعَّل خدمة ${name} بعد، لذلك لا نفتح نافذة دخول ولا نطلب بريدًا أو كلمة مرور.`, `${name} sign-in is not enabled yet, so no sign-in window opens and no email or password is requested.`)}</Body>
       <Note>{L('عند تفعيل خدمة معتمدة ستتمكن من ربط وسيلة الدخول بحسابك. لن نعرض أي وسيلة على أنها موثّقة قبل ذلك.', 'Once an approved service is enabled you will be able to link this method. Nothing is shown as verified before then.')}</Note>
-      <Btn label={L('المتابعة بدون تسجيل — ملف محلي', 'Continue without sign-in — local profile')} onPress={() => router.push('/account/setup' as never)} />
+      {!account ? <Btn label={L('المتابعة بدون تسجيل — ملف محلي', 'Continue without sign-in — local profile')} onPress={() => router.push('/account/setup' as never)} /> : null}
       <Btn kind="secondary" label={L('رجوع', 'Back')} onPress={() => router.back()} />
     </AccountScreen>
   );
 }
 
+export function WelcomeSection() { const account = useRealAccount(); return account ? <AccountSection /> : <LegacyWelcomeSection />; }
 export function PhoneSection() { return <Unavailable method="phone" />; }
 export function ProviderSection({ method }: { method?: string }) {
+  const account = useRealAccount();
+  if (account && method !== 'apple') return <AccountSection />;
   return <Unavailable method={method === 'apple' ? 'apple' : 'google'} />;
 }

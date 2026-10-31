@@ -1,5 +1,6 @@
+import { useUserData } from '@/contexts/UserDataContext';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import {
   createAccountRepository, initialAccountFoundation, appendFeedback, validateLocalProfile,
   type AccountFoundation, type AccountLanguage, type LocalProfile, type ShareChoices, type NotificationChoices,
@@ -23,6 +24,7 @@ interface AccountContext {
 }
 const Context = createContext<AccountContext | null>(null);
 export function AccountFoundationProvider({ children }: { children: React.ReactNode }) {
+  const { storage: AsyncStorage } = useUserData();
   const repository = useRef(createAccountRepository(AsyncStorage)).current;
   const { setLanguage } = useI18n();
   const [state, setState] = useState(initialAccountFoundation);
