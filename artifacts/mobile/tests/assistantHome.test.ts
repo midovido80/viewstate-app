@@ -9,7 +9,7 @@ import type { Person } from '../services/people';
 const request = (id = '11111111-1111-4111-8111-111111111111', seekerId = 'one'): SeekerRequirement => ({ id, seekerId, purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'], preferredAreaMode: 'specific_areas', budget: { minimum: 400, maximum: 500, currencyCode: 'KWD' }, rentalPeriodId: 'monthly', notes: '' });
 const person = (id: string): Person => ({ id, name: id, classifications: ['seeker'], displayPhone: '', normalizedPhone: '', notes: '' });
 const result = (propertyId: string, score: number, requirementId = request().id): MatchResult => ({ engineVersion: MATCH_ENGINE_VERSION, requirementId, propertyId, eligible: true, qualifies: true, score, priceAmount: 490, category: 'direct', differenceCount: 0, unknownCount: 0, includedWeight: 100, locationRank: 0, ineligibilityReasons: [], explanations: [] });
-const run = (matches: MatchResult[], requirementId = request().id): BrokerMatchingRunResult => ({ engineVersion: MATCH_ENGINE_VERSION, requirementId, matches, needsConfirmation: [] });
+const run = (matches: MatchResult[], requirementId = request().id): BrokerMatchingRunResult => ({ engineVersion: MATCH_ENGINE_VERSION, requirementId, evaluatedCandidateCount: matches.length, matches, needsConfirmation: [] });
 test('Home quick actions use the existing canonical forms and leave sharing/import to explicit flows', () => {
   assert.equal(homeQuickRoute('property'), '/capture/transaction'); assert.equal(homeQuickRoute('person'), '/person/new'); assert.equal(homeQuickRoute('matching'), '/matching');
   assert.equal(homeQuickRoute('share'), null); assert.equal(homeQuickRoute('import'), null);

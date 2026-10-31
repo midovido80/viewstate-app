@@ -255,8 +255,8 @@ export function MatchingResultsGroups({
               ? "نتائج تحتاج تأكيد معلومات"
               : "Results need information confirmation"
             : ar
-              ? "نتائج المطابقة"
-              : "Matching results"}
+              ? "0 أشخاص لديهم ترشيحات · 0 عقارات مرشحة"
+              : "0 people with suggestions · 0 suggested properties"}
       </Text>
       {layout.view === "people"
         ? groups.map((group) => {
@@ -348,6 +348,25 @@ export function MatchingResultsGroups({
                             ),
                           ).size,
                           "properties",
+                        )}
+                      {!item.matches.length &&
+                        !item.needsConfirmation.length && (
+                          <View
+                            testID={`matching-empty-state-${item.requirement.id}`}
+                            style={{
+                              padding: 10,
+                            }}
+                          >
+                            <Text style={{ ...text, fontSize: 12, lineHeight: 18 }}>
+                              {item.evaluatedCandidateCount === 0
+                                ? ar
+                                  ? "لم تتوفر عقارات للتقييم في هذه الجولة. لم يتغير الطلب المحفوظ."
+                                  : "No properties were available in this run. The saved request was not changed."
+                                : ar
+                                  ? `تم تقييم ${item.evaluatedCandidateCount} عقارات. لا تظهر ترشيحات في هذه الجولة. اضبط النتائج؛ لم يتغير الطلب المحفوظ.`
+                                  : `${item.evaluatedCandidateCount} properties were evaluated. No suggestions are shown in this run. Refine this run; the saved request was not changed.`}
+                            </Text>
+                          </View>
                         )}
                       <MatchingRefinements
                         requirement={item.requirement}

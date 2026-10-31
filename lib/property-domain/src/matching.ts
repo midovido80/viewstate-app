@@ -4,7 +4,7 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v3" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v4" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -20,8 +20,6 @@ export type MatchCategory =
 export interface MatchingPolicy {
   /** Explicit refinements scoped to this Requirement/run, never inferred from browsing. */
   readonly strictFields?: readonly string[];
-  /** Alternative locations must be explicitly selected, not guessed from proximity. */
-  readonly alternativeAreaIds?: readonly string[];
 }
 export interface MatchingPropertyCandidate {
   readonly property: Property;
@@ -174,9 +172,11 @@ export function checkMatchEligibility(
     reasons.push("currency");
   if (!finite(offerPrice.amount) || offerPrice.amount <= 0)
     reasons.push("invalid_price");
-  const index = requirement.preferredAreaIds.indexOf(
-    property.core.locationArea.id,
-  );
+  const areaId = property.core.locationArea?.id;
+  const index =
+    typeof areaId === "string" && areaId.trim()
+      ? requirement.preferredAreaIds.indexOf(areaId)
+      : -1;
   return {
     eligible: reasons.length === 0,
     locationRank: index < 0 ? null : index + 1,
@@ -371,11 +371,10 @@ export function evaluateMatch(
     requirement.preferredAreaMode !== "all_kuwait" &&
     requirement.preferredAreaIds.length > 0
   ) {
-    const area = property.core.locationArea.id;
-    const accepted = requirement.preferredAreaIds.includes(area);
-    const alternative =
-      policy.alternativeAreaIds?.includes(area) === true &&
-      !strict.has("location");
+    const rawArea = property.core.locationArea?.id;
+    const area =
+      typeof rawArea === "string" && rawArea.trim() ? rawArea : undefined;
+    const accepted = area !== undefined && requirement.preferredAreaIds.includes(area);
     if (accepted) add("location", area, area, 25);
     else {
       add(
@@ -384,9 +383,9 @@ export function evaluateMatch(
         area,
         25,
         "exact",
-        !alternative,
+        strict.has("location"),
       );
-      if (alternative) {
+      if (area !== undefined && !strict.has("location")) {
         const index = explanations.length - 1;
         explanations[index] = {
           ...explanations[index],
@@ -624,6 +623,8 @@ export function rankMatchResults(
         b.result.score - a.result.score ||
         a.result.differenceCount - b.result.differenceCount ||
         a.result.unknownCount - b.result.unknownCount ||
+        (a.result.locationRank === null ? 1 : 0) -
+          (b.result.locationRank === null ? 1 : 0) ||
         a.result.priceAmount - b.result.priceAmount ||
         (a.result.propertyChronology ?? a.index) -
           (b.result.propertyChronology ?? b.index) ||

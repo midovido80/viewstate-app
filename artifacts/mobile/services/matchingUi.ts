@@ -44,6 +44,7 @@ export type TransientRequirementResult =
 
 export interface MatchAllRequirementGroup {
   readonly requirement: SeekerRequirement;
+  readonly evaluatedCandidateCount: number;
   readonly matches: readonly MatchResult[];
   readonly needsConfirmation: readonly MatchResult[];
 }
@@ -92,14 +93,14 @@ export function groupMatchAllResultsByPerson(
     const run = runsByRequirementId.get(requirement.id);
     if (!requirement.seekerId) continue;
     const person = peopleById.get(requirement.seekerId);
-    if (!run || run.engineVersion !== MATCH_ENGINE_VERSION || (!run.matches.length && !run.needsConfirmation.length) || !person) continue;
+    if (!run || run.engineVersion !== MATCH_ENGINE_VERSION || !person) continue;
     const existing = groups.get(person.id);
     const requirementGroup = {
       requirement,
+      evaluatedCandidateCount: run.evaluatedCandidateCount,
       matches: run.matches.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id && item.qualifies && item.eligible && (item.category === 'direct' || item.category === 'provisional' || item.category === 'negotiation')),
       needsConfirmation: run.needsConfirmation.filter(item => item.engineVersion === MATCH_ENGINE_VERSION && item.requirementId === requirement.id),
     };
-    if (!requirementGroup.matches.length && !requirementGroup.needsConfirmation.length) continue;
     if (existing) {
       existing.requirementGroups.push(requirementGroup);
     } else {

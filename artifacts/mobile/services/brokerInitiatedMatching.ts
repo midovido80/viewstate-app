@@ -22,6 +22,7 @@ export type BrokerMatchingCandidateSource = Pick<
 export interface BrokerMatchingRunResult {
   readonly engineVersion: typeof MATCH_ENGINE_VERSION;
   readonly requirementId: string;
+  readonly evaluatedCandidateCount: number;
   readonly matches: readonly MatchResult[];
   readonly needsConfirmation: readonly MatchResult[];
 }
@@ -52,6 +53,7 @@ export class BrokerInitiatedMatching {
     return {
       engineVersion: MATCH_ENGINE_VERSION,
       requirementId: requirement.id,
+      evaluatedCandidateCount: candidates.length,
       matches: selectMatchShortlist(results, candidates, excludedIds),
       needsConfirmation: results
         .filter(

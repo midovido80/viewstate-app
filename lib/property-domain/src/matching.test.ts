@@ -143,21 +143,72 @@ test("all Kuwait and each selected area are unrestricted/equal, including purcha
     true,
   );
 });
-test("unselected regions require explicit alternatives and never guess adjacent areas", () => {
+test("known outside areas are discussion alternatives by default, while strict location excludes them", () => {
   const p = {
     ...property(),
     core: { ...property().core, locationArea: { id: "c" } },
   };
-  assert.equal(run(req(), p).category, "excluded");
+  const alternative = run(req(), p);
+  assert.equal(alternative.category, "negotiation");
+  assert.equal(alternative.qualifies, true);
+  assert.equal(alternative.locationRank, null);
   assert.equal(
-    run(req(), p, { alternativeAreaIds: ["c"] }).category,
-    "negotiation",
+    alternative.explanations.find((item) => item.criterion === "location")
+      ?.status,
+    "not_met",
   );
   assert.equal(
-    run(req(), p, { alternativeAreaIds: ["c"], strictFields: ["location"] })
-      .category,
+    run(req(), p, { strictFields: ["location"] }).category,
     "excluded",
   );
+});
+test("requested areas remain equal and otherwise comparable in-area properties rank first", () => {
+  const inAreaA = evaluateMatch(req(), { property: property({}, 490, "area-a") });
+  const inAreaB = evaluateMatch(req(), {
+    property: {
+      ...property({}, 490, "area-b"),
+      core: {
+        ...property().core,
+        id: "area-b",
+        locationArea: { id: "b" },
+      },
+    },
+  });
+  const outside = evaluateMatch(req(), {
+    property: {
+      ...property({}, 490, "outside"),
+      core: {
+        ...property().core,
+        id: "outside",
+        locationArea: { id: "c" },
+      },
+    },
+  });
+  assert.equal(inAreaA.score, inAreaB.score);
+  assert.deepEqual(
+    rankMatchResults([inAreaB, inAreaA]).map((item) => item.propertyId),
+    ["area-b", "area-a"],
+  );
+  assert.deepEqual(
+    rankMatchResults([outside, inAreaA]).map((item) => item.propertyId),
+    ["area-a", "outside"],
+  );
+});
+test("missing area remains unknown instead of matching or becoming a difference", () => {
+  const p = {
+    ...property(),
+    core: {
+      ...property().core,
+      locationArea: { id: "" },
+    },
+  };
+  const result = run(req(), p);
+  assert.equal(
+    result.explanations.find((item) => item.criterion === "location")?.status,
+    "unknown",
+  );
+  assert.equal(result.differenceCount, 0);
+  assert.equal(result.qualifies, false);
 });
 test("price alternatives have exact boundaries and explain the required amount without promising negotiation", () => {
   const x = run(req(), property({}, 520));
