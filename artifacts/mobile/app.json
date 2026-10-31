@@ -6,7 +6,7 @@
     "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": ["mobile", "viewstate"],
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -65,6 +65,7 @@
         }
       ],
       "expo-web-browser",
+      "expo-secure-store",
       [
         "expo-audio",
         {
