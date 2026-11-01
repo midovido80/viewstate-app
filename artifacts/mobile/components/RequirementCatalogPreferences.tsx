@@ -1,5 +1,6 @@
+import { TextInput } from '@/components/FormField';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type CatalogPreference, type FloorUse, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';

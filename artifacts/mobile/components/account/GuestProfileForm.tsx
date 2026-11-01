@@ -1,5 +1,6 @@
+import { TextInput } from '@/components/FormField';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '@/contexts/I18nContext';
 import { validateGuestContact } from '@/services/guestAccount';

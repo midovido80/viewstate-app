@@ -1,7 +1,8 @@
+import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { AMENITY_DETAIL_GROUPS } from '@/services/propertyAmenityOrder';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { FORM_MULTI_FIELDS, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';

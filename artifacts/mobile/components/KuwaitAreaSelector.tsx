@@ -1,7 +1,8 @@
+import { TextInput, FieldSelect } from '@/components/FormField';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useMemo, useState, useEffect } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, Modal, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import {
   getAreaById,
@@ -14,6 +15,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 
 interface KuwaitAreaSelectorProps {
+  readonly invalid?: boolean;
   readonly selectedIds: readonly string[];
   readonly onChange: (ids: string[]) => void;
   readonly onCancel?: () => void;
@@ -23,6 +25,7 @@ interface KuwaitAreaSelectorProps {
 
 export function KuwaitAreaSelector({
   selectedIds,
+  invalid = false,
   onChange,
   onCancel,
   multiSelect = true,
@@ -111,7 +114,7 @@ export function KuwaitAreaSelector({
 
   return (
     <>
-      <TouchableOpacity
+      <FieldSelect active={open} invalid={invalid}
         testID={`${testID}${testID === 'capture-area' ? '-selector' : ''}`}
         accessibilityRole="button"
         onPress={() => setOpen(true)}
@@ -121,7 +124,7 @@ export function KuwaitAreaSelector({
           {summary}
         </Text>
         <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
-      </TouchableOpacity>
+      </FieldSelect>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => { onCancel?.(); setOpen(false); }}>
         <View style={styles.modalBackdrop}>
@@ -138,6 +141,7 @@ export function KuwaitAreaSelector({
             </View>
             <ScrollView style={{ flex: 1, minHeight: 0 }} removeClippedSubviews={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
               <TextInput
+                inheritValidation={false}
                 value={query}
                 onChangeText={setQuery}
                 placeholder={language === 'ar' ? 'ابحث بالمنطقة أو المحافظة' : 'Search area or governorate'}

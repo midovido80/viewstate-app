@@ -1,7 +1,8 @@
+import { TextInput, FieldSelect } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
@@ -150,7 +151,7 @@ export default function NewPersonScreen() {
         <>
         <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} placeholderTextColor={colors.mutedForeground} style={inputStyle} testID="person-name" />
         <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <TouchableOpacity
+          <FieldSelect active={countryOpen}
             onPress={() => setCountryOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={t(selectedCountry.translationKey)}
@@ -160,7 +161,7 @@ export default function NewPersonScreen() {
             <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign }}>
               {selectedCountry.code} +{selectedCountry.dialCode}
             </Text>
-          </TouchableOpacity>
+          </FieldSelect>
           <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
         </View>
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />

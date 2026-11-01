@@ -1,8 +1,9 @@
+import { TextInput } from '@/components/FormField';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
 import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useState } from 'react';
 import { isMissingPositiveAmount } from '@/services/screenInsets';
-import { View, StyleSheet, Text, TextInput } from 'react-native';
+import { View, StyleSheet, Text} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -99,7 +100,7 @@ export default function PriceScreen() {
         <PropertyFormCard title={t('capture.progress.basics')} icon="map-pin">
           <PropertyAreaBlockRow area={<>
             <Text style={{ color: areaError ? colors.destructive : '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('location.areaId')}</Text>
-            <KuwaitAreaSelector selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []} multiSelect={false} onChange={ids => updateDraft({ locationAreaId: ids[0] })} testID="basic-capture-area" />
+            <KuwaitAreaSelector invalid={areaError} selectedIds={draft.locationAreaId ? [draft.locationAreaId] : []} multiSelect={false} onChange={ids => updateDraft({ locationAreaId: ids[0] })} testID="basic-capture-area" />
             {areaError ? <Text accessibilityRole="alert" style={{ color: colors.destructive }}>{language === 'ar' ? 'اختر المنطقة للمتابعة.' : 'Select an area to continue.'}</Text> : null}
           </>} block={<>
             <Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>

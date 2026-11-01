@@ -1,3 +1,4 @@
+import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
 import { commercialProperty, residentialUnit, requirementCompletionFields } from '@/services/requiredMatchingFields';
@@ -5,7 +6,7 @@ import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
 import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { parseFloorUse, getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';

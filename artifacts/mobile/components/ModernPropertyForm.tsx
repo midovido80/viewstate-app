@@ -1,7 +1,8 @@
+import { TextInput } from '@/components/FormField';
 import { PropertyProfileFields } from '@/components/PropertyProfileFields';
 import { getPropertyFormProfile } from '@/services/propertyProfileForm';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
-import { Text, TextInput, View, StyleSheet } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 import type { PropertyType, PropertyCaptureCategoryId, PropertyDemoCaptureMetadata, PropertyDetailField } from '@workspace/property-domain';
 import type { DemoCategoryDefinition } from '@/services/propertyDemoCatalog';
 import { parseDemoNumericInput } from '@/services/propertyDemoCatalog';

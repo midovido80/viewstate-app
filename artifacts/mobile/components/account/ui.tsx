@@ -1,5 +1,6 @@
+import { TextInput } from '@/components/FormField';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, Switch, TextInput, ActivityIndicator, Image, ScrollView, Platform, KeyboardAvoidingView, type TextInputProps } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Switch, ActivityIndicator, Image, ScrollView, Platform, KeyboardAvoidingView, type TextInputProps } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -138,7 +139,7 @@ export function Field({ label, error, ...props }: TextInputProps & { label: stri
   return (
     <View>
       <Text style={[s.fieldLabel, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: align }]}>{label}</Text>
-      <TextInput accessibilityLabel={label} placeholderTextColor="#94A3B8" {...props}
+      <TextInput invalid={error} accessibilityLabel={label} placeholderTextColor="#94A3B8" {...props}
         style={[s.input, { fontFamily: fonts.regular, color: colors.foreground, textAlign: align, borderColor: error ? '#E0A3A3' : tone.inputLine }, props.multiline && { minHeight: 110, textAlignVertical: 'top' }, props.style]} />
     </View>
   );

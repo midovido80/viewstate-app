@@ -1,3 +1,4 @@
+import { FieldValidationContext } from '@/components/FormField';
 import React, { createContext, useContext, useRef, useState } from 'react';
 import { AccessibilityInfo, ScrollView, Text, View, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { useI18n } from '@/contexts/I18nContext';
@@ -66,7 +67,7 @@ export function RequiredField({ id, children, label }: { id: string; children: R
   const content = markFirstLabel(children);
   return <View collapsable={false} ref={view => form!.register(id, view)} testID={`required-${id}`} style={{ gap: 6, ...(invalid ? { borderWidth: 1, borderColor: '#C62828', backgroundColor: '#FFF7F7', borderRadius: 10, padding: 8 } : {}) }}>
     {label && <Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{label}<RequiredStar /></Text>}
-    <RequiredLabelContext.Provider value={!marked}>{content}</RequiredLabelContext.Provider>
+    <FieldValidationContext.Provider value={invalid}><RequiredLabelContext.Provider value={!marked}>{content}</RequiredLabelContext.Provider></FieldValidationContext.Provider>
     {invalid && <Text accessibilityRole="alert" style={{ color: '#C62828', fontFamily: fonts.regular }}>{language === 'ar' ? 'هذا الحقل مطلوب؛ أدخل قيمة صالحة للمتابعة.' : 'This field is required. Enter a valid value to continue.'}</Text>}
   </View>;
 }

@@ -1,4 +1,5 @@
-import { Platform, TextInput } from 'react-native';
+import { TextInput } from '@/components/FormField';
+import { Platform} from 'react-native';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import { enableMatchSound, playMatchCue } from '@/services/matchNoticeDevice';
 import React, { useEffect, useState } from 'react';

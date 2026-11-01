@@ -1,3 +1,4 @@
+import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { MatchingResultsGroups } from '@/components/MatchingResultsGroups';
 import type { MatchingResultsLayout } from '@/services/matchingGroups';
@@ -7,7 +8,6 @@ import {
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   ScrollView,

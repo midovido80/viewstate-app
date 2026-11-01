@@ -1,7 +1,8 @@
+import { TextInput } from '@/components/FormField';
 import { RequiredLabelText } from '@/components/RequiredForm';
 import { propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { ChoiceChip } from '@/components/ChoiceChip';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -111,6 +112,7 @@ export function NumericQuickPick({
       {expanded ? (
         <>
           <TextInput
+            invalid={invalid}
             value={pending}
             onChangeText={input => {
               const transition = resolveExactIntegerInput(input, value, requireExactValue, quickPickValues);

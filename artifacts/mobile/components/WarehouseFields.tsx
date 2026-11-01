@@ -1,6 +1,7 @@
+import { TextInput } from '@/components/FormField';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
 import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
 import { NumericQuickPick } from '@/components/NumericQuickPick';

@@ -1,7 +1,8 @@
+import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useMemo, useRef, useState } from 'react';
-import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Linking, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Contacts from 'expo-contacts';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';

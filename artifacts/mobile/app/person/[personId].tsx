@@ -1,3 +1,4 @@
+import { TextInput, FieldSelect } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
@@ -15,7 +16,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -459,7 +459,7 @@ export default function PersonDetailScreen() {
           <>
             <TextInput value={name} onChangeText={setName} placeholder={t('people.name')} style={inputStyle} testID="person-edit-name" />
             <View style={[styles.phoneRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <TouchableOpacity
+              <FieldSelect active={countryOpen}
                 onPress={() => setCountryOpen(true)}
                 accessibilityRole="button"
                 accessibilityLabel={t(selectedCountry.translationKey)}
@@ -469,7 +469,7 @@ export default function PersonDetailScreen() {
                 <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, writingDirection: 'ltr', textAlign: 'left' }}>
                   {selectedCountry.code} +{toEnglishDigits(selectedCountry.dialCode)}
                 </Text>
-              </TouchableOpacity>
+              </FieldSelect>
               <TextInput
                 value={phone}
                 onChangeText={setPhone}

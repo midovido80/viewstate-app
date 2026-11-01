@@ -1,8 +1,9 @@
+import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';

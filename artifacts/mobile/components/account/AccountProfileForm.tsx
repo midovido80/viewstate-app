@@ -1,5 +1,6 @@
+import { TextInput, FieldSelect } from '@/components/FormField';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';
@@ -74,9 +75,9 @@ export function AccountProfileForm({ userId, initial, photo: initialPhoto = '', 
       {field('company', 'اسم الشركة', 'Company', false, 150)}
       <View style={s.field} onLayout={e => { positions.current.classification = e.nativeEvent.layout.y; }}>
         <Text style={s.label}>{L('التصنيف', 'Classification')}<Text style={s.red}> *</Text></Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={L('اختيار التصنيف', 'Choose classification')} testID="account-classification" onPress={() => setRoles(true)} disabled={busy} style={[s.input, s.select, fields.includes('classification') && s.invalid]}>
+        <FieldSelect active={roles} invalid={fields.includes('classification')} accessibilityRole="button" accessibilityLabel={L('اختيار التصنيف', 'Choose classification')} testID="account-classification" onPress={() => setRoles(true)} disabled={busy} style={[s.input, s.select, fields.includes('classification') && s.invalid]}>
           <Text style={s.label}>{value.classification ? ACCOUNT_ROLE_LABELS[value.classification][language === 'ar' ? 0 : 1] : L('اختر تصنيفك', 'Choose your role')}</Text><Feather name="chevron-down" size={18} color="#64748B" />
-        </Pressable>
+        </FieldSelect>
         {fields.includes('classification') ? <Text style={s.red}>{L('اختر تصنيفك.', 'Choose your role.')}</Text> : null}
       </View>
       {value.classification === 'other' ? field('other_classification', 'اكتب تصنيفك', 'Describe your role', true, 100) : null}

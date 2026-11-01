@@ -1,5 +1,6 @@
+import { TextInput } from '@/components/FormField';
 import React from 'react';
-import { View, Text, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView, TextInput, ActivityIndicator, type TextInputProps } from 'react-native';
+import { View, Text, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, type TextInputProps } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
@@ -28,7 +29,7 @@ export function AssistantText({ children, muted, bold, size = 14, color, center 
 }
 export function AssistantField({ label, error, ...props }: TextInputProps & { label: string; error?: string }) {
   const { fonts, align } = useAssistantUI();
-  return <View style={s.field}><Text style={[s.label, { fontFamily: fonts.semiBold, textAlign: align }]}>{label}</Text><TextInput {...props} accessibilityLabel={label}
+  return <View style={s.field}><Text style={[s.label, { fontFamily: fonts.semiBold, textAlign: align }]}>{label}</Text><TextInput {...props} invalid={!!error} accessibilityLabel={label}
     placeholderTextColor={c.muted} style={[s.input, { fontFamily: fonts.regular, textAlign: align }, !!error && { borderColor: c.red, backgroundColor: c.redBg },
       props.multiline && { minHeight: 90, textAlignVertical: 'top' }, props.style]} />{error ? <AssistantText color={c.red} size={13}>{error}</AssistantText> : null}</View>;
 }

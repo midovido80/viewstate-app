@@ -1,6 +1,7 @@
+import { TextInput, FieldSelect } from '@/components/FormField';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useState, useMemo } from 'react';
-import { View, StyleSheet, Text, TextInput, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
@@ -81,7 +82,7 @@ export default function LocationScreen() {
 
         <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>{t('location.areaId')}</Text>
 
-        <TouchableOpacity
+        <FieldSelect active={modalVisible}
           onPress={() => setModalVisible(true)}
           testID="location-selector"
           accessibilityRole="button"
@@ -99,7 +100,7 @@ export default function LocationScreen() {
             {isValid ? displayValue : t('location.areaId')}
           </Text>
           <Feather name="chevron-down" size={20} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        </FieldSelect>
         {KUWAIT_AREAS.length === 0 && (
           <Text style={[styles.datasetNotice, {
             color: colors.mutedForeground,

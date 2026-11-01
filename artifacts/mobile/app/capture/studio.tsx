@@ -1,3 +1,4 @@
+import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredStar, RequiredFormHint } from '@/components/RequiredForm';
 import { readMatchingReturn } from '@/services/matchingReturnSession';
@@ -19,7 +20,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -1153,7 +1153,7 @@ export default function StudioCaptureRoute() {
         return mode === 'offered' ? (
           <View key={fieldId} ref={setFocusTarget('locationAreaId')} style={[styles.field, getError('locationAreaId') ? { borderColor: colors.destructive, borderWidth: 1, borderRadius: 10, padding: 8, backgroundColor: '#FFF7F7' } : {}]}>
             <Text style={[styles.label, labelStyle]}>{catalogLabel(fieldId)}<RequiredStar /></Text>
-            <KuwaitAreaSelector
+            <KuwaitAreaSelector invalid={Boolean(getError('locationAreaId'))}
               selectedIds={values.locationAreaId ? [values.locationAreaId] : []}
               multiSelect={false}
               onChange={ids => update('locationAreaId', ids[0] ?? '')}
@@ -1180,7 +1180,7 @@ export default function StudioCaptureRoute() {
               ))}
             </ChoiceGrid>
             {values.preferredAreaMode === 'specific_areas' ? (
-              <KuwaitAreaSelector
+              <KuwaitAreaSelector invalid={Boolean(getError('preferredAreaIds') || getError('preferredAreaMode'))}
                 selectedIds={values.preferredAreaIds}
                 onChange={ids => update('preferredAreaIds', ids)}
                 testID="studio-preferred-areas"
