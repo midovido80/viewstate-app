@@ -4,7 +4,7 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v4" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v5" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -197,6 +197,7 @@ export function matchingRefinementFields(
       ...(requirement.masterBedroomsMinimum === undefined
         ? []
         : ["masterBedrooms"]),
+      ...(requirement.purpose === "rent" && requirement.occupancy && requirement.occupancy !== "any" ? ["occupancy"] : []),
       ...(requirement.centralAC === undefined ? [] : ["hasCentralAC"]),
       ...(requirement.driverRoom === undefined ? [] : ["driverRoom"]),
       ...(requirement.preferredAmenities ?? []).map(
@@ -451,14 +452,15 @@ export function evaluateMatch(
       requirement.occupancy !== undefined &&
       requirement.occupancy !== "any"
     ) {
-      add(
-        "occupancy",
-        requirement.occupancy,
-        facts.occupancy === "any" ? requirement.occupancy : facts.occupancy,
-        8,
-        "exact",
-        true,
-      );
+      const housing = Array.isArray(facts.housingTypes) && facts.housingTypes.length
+        ? facts.housingTypes.includes(requirement.occupancy) ? requirement.occupancy
+          : facts.housingTypes.includes('mixed') ? undefined : facts.housingTypes.join(', ')
+        : facts.occupancy === 'any' ? requirement.occupancy : facts.occupancy;
+      add('occupancy', requirement.occupancy, housing, 8, 'exact', false);
+      const index = explanations.length - 1;
+      if (!strict.has('occupancy') && explanations[index].status === 'ineligible') {
+        explanations[index] = { ...explanations[index], status: 'not_met', awardedPoints: 4, code: 'negotiation_required' };
+      }
     }
     for (const [key, field] of [
       ["swimmingPool", "hasPool"],

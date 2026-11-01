@@ -110,6 +110,7 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
   const ar = language === 'ar';
   const value = (field: string, raw: unknown): string => {
     if (raw === undefined) return ar ? 'غير مسجل' : 'Not recorded';
+    if (field === 'occupancy' && raw !== 'any') return formatPropertyDetailValue('housingTypes', String(raw).split(',').map(v=>v.trim()), language);
     const mapped = ({ bedrooms: 'bedroomCount', bathrooms: 'bathroomCount', masterBedrooms: 'masterBedroomCount' } as Record<string, string>)[field] ?? field;
     if (mapped in propertyDetailLabels) return formatPropertyDetailValue(mapped as keyof typeof propertyDetailLabels, raw, language);
     if (field === 'rentalPeriodId') return ({ monthly: ar ? 'شهري' : 'Monthly', yearly: ar ? 'سنوي' : 'Yearly', daily: ar ? 'يومي' : 'Daily' } as Record<string, string>)[String(raw)] ?? String(raw);
@@ -167,4 +168,15 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
     const rank = (field: string) => priority.includes(field) ? priority.indexOf(field) : priority.length;
     return rank(a.field) - rank(b.field);
   });
+}
+
+/** Focus the review on actionable differences; retain the full recorded request underneath. */
+const DISCUSSION_FIELDS = new Set(['location','budget','bedrooms','bedroomCount','builtUpAreaSquareMeters','plotAreaSquareMeters','occupancy','housingTypes']);
+const CONFIRMATION_FIELDS = new Set(['hasParking','hasBuildingParking','parkingSpaceCount','parkingTypes','hasElevator','elevatorCount','hasCentralAC','hasSplitAC']);
+export function matchingReviewRows(rows: readonly MatchingComparisonRow[]) {
+  return {
+    discussions: rows.filter(r=>DISCUSSION_FIELDS.has(r.field) && ['not_met','ineligible'].includes(r.status)),
+    confirmations: rows.filter(r=>CONFIRMATION_FIELDS.has(r.field) && r.status!=='matched'),
+    visible: rows.filter(r=>DISCUSSION_FIELDS.has(r.field) || CONFIRMATION_FIELDS.has(r.field) || r.field==='bathrooms'),
+  };
 }

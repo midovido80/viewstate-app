@@ -329,7 +329,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /testID="matching-run"/);
   assert.match(screen, /MatchingResultsGroups/);
   assert.match(await readFile('components/MatchingResultsGroups.tsx', 'utf8'), /MatchingResultCard/);
-  assert.match(screen, /needsConfirmation/);
+  assert.match(screen, /QuickMatchingResults/);
   assert.match(screen, /MATCH_ENGINE_VERSION/);
   assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
   assert.match(screen, /runMatchingForAllRequirements/);
@@ -340,8 +340,8 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
     screen,
     /return \(\) => \{\s*active = false;\s*runGenerationRef\.current \+= 1;/,
   );
-  assert.match(screen, /new BrokerInitiatedMatching\(transientStore, candidateSource\)/);
-  assert.match(screen, /Crypto\.randomUUID\(\)/);
+  assert.match(screen, /runQuickMatching\(filters, candidates, requirements, people/);
+  assert.doesNotMatch(screen, /firstSeeker|transientStore|Crypto\.randomUUID|buildTransientRequirement/);
   assert.match(screen, /flexDirection: isRTL \? 'row-reverse' : 'row'/);
   assert.match(i18n, /'matching\.title': 'Matching'/);
   assert.match(i18n, /'matching\.title': 'المطابقة'/);
@@ -475,6 +475,15 @@ test('cards and refinements handle repeated taps in both languages without chang
       assert.equal(elements(incomplete.find(item => item.props.testID === 'matching-card-summary')).find(item => item.type === MatchingStatusBadge)!.props.status, 'unknown');
       const attention = elements(MatchingResultCard({ result: differing, rank: 1, property: p, requirement: stricter, onPress: () => {}, expanded: true }));
       assert.ok(attention.findIndex(item => item.props.testID === 'matching-attention') < attention.findIndex(item => item.props.testID === 'matching-comparison-table'));
+      const noisyRequest = { ...r.value, centralAC: true, swimmingPool: true, gym: true, seaView: true };
+      const noisyResult = evaluateMatch(noisyRequest, {property:p});
+      const focusedReview = elements(MatchingResultCard({result:noisyResult,rank:1,property:p,requirement:noisyRequest,onPress:()=>{},expanded:true}));
+      for(const hidden of ['hasPool','hasSharedGym','hasSeaView'])assert.equal(focusedReview.some(item=>item.props.testID===`matching-compare-${hidden}`),false);
+      assert.ok(focusedReview.some(item=>item.props.testID==='matching-compare-hasCentralAC'));
+      const hiddenRequest = {...r.value,purpose:'rent',swimmingPool:true} as SeekerRequirement;
+      const hiddenBlocking = evaluateMatch(hiddenRequest,{property:p},{strictFields:['hasPool']});
+      const blockedSummary=elements(MatchingResultCard({result:hiddenBlocking,rank:1,property:p,requirement:hiddenRequest,onPress:()=>{},expanded:false}));
+      assert.equal(elements(blockedSummary.find(item=>item.props.testID==='matching-card-summary')).find(item=>item.type===MatchingStatusBadge)!.props.status,'unknown');
       const minimalBadge = elements(MatchingStatusBadge({ status: 'matched', label: 'Meets', compact: true }));
       assert.equal(minimalBadge.some(item => item.type === 'Text'), false);
       assert.equal(minimalBadge[0].props.accessibilityLabel, 'Meets');

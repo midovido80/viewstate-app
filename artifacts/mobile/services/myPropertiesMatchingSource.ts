@@ -16,7 +16,7 @@ export class MyPropertiesMatchingSource {
   private snapshot?: Promise<MatchingPropertyCandidate[]>;
   constructor(private readonly store: MyPropertiesStore) {}
   async getCandidates(
-    _requirement: SeekerRequirement,
+    _requirement?: SeekerRequirement,
   ): Promise<MatchingPropertyCandidate[]> {
     if (!this.snapshot) this.snapshot = this.readSnapshot();
     return this.snapshot;

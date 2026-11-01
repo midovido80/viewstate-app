@@ -1,3 +1,4 @@
+import type { QuickMatchingFilters } from './quickMatching';
 import type { MatchingResultsLayout } from '@/services/matchingGroups';
 import { MATCH_ENGINE_VERSION, type MatchingPolicy, type SeekerRequirement } from '@workspace/property-domain';
 
@@ -9,6 +10,7 @@ export interface MatchingReturnSession {
   readonly mode: 'saved' | 'quick';
   readonly layout?: MatchingResultsLayout;
   readonly quickRequirement?: SeekerRequirement;
+  readonly quickFilters?: QuickMatchingFilters;
   readonly policies: Record<string, MatchingPolicy>;
   readonly excluded: Record<string, string[]>;
   readonly scrollOffset: number;

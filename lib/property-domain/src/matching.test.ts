@@ -4,6 +4,7 @@ import {
   evaluateMatch,
   checkMatchEligibility,
   matchingPropertyFacts,
+  matchingRefinementFields,
   rankMatchResults,
   selectMatchShortlist,
   MATCH_ENGINE_VERSION,
@@ -535,4 +536,26 @@ test("secondary unknowns remain unearned and strict fields still require confirm
   assert.equal(run(r, property(), { strictFields: ["nearby:mosque"] }).category, "needs_confirmation");
   assert.equal(run(req({ centralAC: true })).category, "needs_confirmation");
   assert.equal(selectMatchShortlist([preliminary], [{ property: property() }]).length, 1);
+});
+
+
+test("Housing differences can be discussed; strict housing and unknown evidence remain protected", () => {
+  const r=req({occupancy:'family'});
+  const matching=run(r,property({occupancy:'family'}));
+  const differing=run(r,property({occupancy:'bachelor'}));
+  assert.equal(matching.category,'direct');
+  assert.equal(differing.category,'negotiation');
+  assert.equal(differing.explanations.find(e=>e.criterion==='occupancy')?.status,'not_met');
+  assert.equal(differing.explanations.find(e=>e.criterion==='occupancy')?.code,'negotiation_required');
+  assert.equal(run(r,property({occupancy:'bachelor'}),{strictFields:['occupancy']}).category,'excluded');
+  assert.equal(run(r,property({occupancy:undefined})).category,'needs_confirmation');
+  assert.ok(matchingRefinementFields(r).includes('occupancy'));
+});
+test("Whole-building housing follows structured multi-selection without reading stale general occupancy",()=>{
+  const r=req({propertyType:'whole_building',occupancy:'family'});
+  const building=(housingTypes:string[])=>({...property(),core:{...property().core,propertyType:'whole_building'},typeDetails:{propertyType:'whole_building',housingTypes}}) as Property;
+  assert.equal(run(r,building(['family','women'])).category,'direct');
+  assert.equal(run(r,building(['company_staff'])).category,'negotiation');
+  assert.equal(run(r,building(['mixed'])).category,'needs_confirmation');
+  assert.equal(run(r,building([])).category,'needs_confirmation');
 });

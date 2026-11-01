@@ -14,6 +14,7 @@ import { getSavedPropertyTypeLabel } from "@/services/savedPropertyClassificatio
 import {
   matchingCategoryLabel,
   matchingComparisonRows,
+  matchingReviewRows,
 } from "@/services/matchingPresentation";
 import { formatPrice, formatRentalPrice } from "@/constants/market";
 
@@ -113,14 +114,13 @@ export function MatchingResultCard({
   const [fullComparison, setFullComparison] = useState(false);
   const { language, isRTL, fonts, t } = useI18n();
   const ar = language === "ar";
-  const rows = matchingComparisonRows(result, requirement, property, language);
-  const issues = rows.filter(
-    (row) => row.status === "not_met" || row.status === "ineligible",
-  );
-  const unknowns = rows.filter((row) => row.status === "unknown");
-  const summaryStatus = issues.length
+  const review = matchingReviewRows(matchingComparisonRows(result, requirement, property, language));
+  const rows = review.visible;
+  const issues = review.discussions;
+  const unknowns = review.confirmations;
+  const summaryStatus = issues.length || result.category === "negotiation"
     ? "not_met"
-    : unknowns.length
+    : unknowns.length || result.category === "needs_confirmation"
       ? "unknown"
       : "matched";
   const summaryLabel = issues.length
@@ -289,6 +289,7 @@ export function MatchingResultCard({
       </TouchableOpacity>
       {expanded && (
         <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 10 }}>
+          {result.category === 'needs_confirmation' && !issues.length && !unknowns.length && <Text accessibilityRole="alert" style={{ ...text, color: '#946200', fontSize: 13 }}>{ar ? 'بيانات مؤثرة تحتاج مراجعة قبل اعتماد الترشيح. افتح الطلب للتفاصيل.' : 'Important recorded conditions need review before this is a ready suggestion. Open the request for details.'}</Text>}
           {(issues.length > 0 || unknowns.length > 0) && (
             <View
               testID="matching-attention"

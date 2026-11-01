@@ -12,6 +12,8 @@ export interface MatchingResultsLayout {
   /** undefined opens the first group; comparisons open only on request. null closes all. */
   group?: string | null;
   card?: string | null;
+  /** Quick lookup pagination, restored with the existing RAM-only return context. */
+  quickVisible?: number;
 }
 export interface MatchingPair {
   requirement: SeekerRequirement;
