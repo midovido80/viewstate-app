@@ -102,7 +102,12 @@ test("candidate retrieval does not prematurely remove price or location negotiat
     ["over", "outside"],
   );
   assert.equal(evaluateMatch(requirement, result[0]).category, "negotiation");
-  assert.equal(evaluateMatch(requirement, result[1]).category, "excluded");
+  assert.equal(evaluateMatch(requirement, result[1]).category, "negotiation");
+  assert.equal(
+    evaluateMatch(requirement, result[1], { strictFields: ["location"] })
+      .category,
+    "excluded",
+  );
 });
 test("malformed records are ignored and duplicate IDs appear once in deterministic store order", async () => {
   const p = property();

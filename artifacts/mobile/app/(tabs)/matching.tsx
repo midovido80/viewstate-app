@@ -419,7 +419,12 @@ export default function MatchingScreen() {
       id: quickRequirement.seekerId ?? 'manual-seeker', name: language === 'ar' ? 'طلب مطابقة سريع' : 'Quick matching request',
       classifications: ['seeker'], displayPhone: '', normalizedPhone: '', notes: '',
     },
-    requirementGroups: [{ requirement: quickRequirement, matches: runResult.matches, needsConfirmation: runResult.needsConfirmation }],
+    requirementGroups: [{
+      requirement: quickRequirement,
+      evaluatedCandidateCount: runResult.evaluatedCandidateCount,
+      matches: runResult.matches,
+      needsConfirmation: runResult.needsConfirmation,
+    }],
   }] : null);
 
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');

@@ -7,7 +7,6 @@ import {
 } from "@workspace/property-domain";
 import { ChoiceGrid, ChoiceTile } from "@/components/ChoiceTile";
 import { Button } from "@/components/Button";
-import { KuwaitAreaSelector } from "@/components/KuwaitAreaSelector";
 import { useI18n } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { matchingCriterionLabel } from "@/services/matchingPresentation";
@@ -72,34 +71,16 @@ export function MatchingRefinements({
               />
             ))}
           </ChoiceGrid>
-          {requirement.preferredAreaMode !== "all_kuwait" &&
-            !policy.strictFields?.includes("location") && (
-              <>
-                <Text
-                  style={{
-                    color: colors.foreground,
-                    fontFamily: fonts.semiBold,
-                  }}
-                >
-                  {ar
-                    ? "مناطق بديلة تسمح بترشيحها للمناقشة"
-                    : "Alternative areas you allow for discussion"}
-                </Text>
-                <KuwaitAreaSelector
-                  selectedIds={policy.alternativeAreaIds ?? []}
-                  onChange={(ids) => {
-                    if (!busy) onChange({ ...policy, alternativeAreaIds: ids });
-                  }}
-                  testID={`matching-alternative-areas-${requirement.id}`}
-                />
-              </>
-            )}
           <Text
             style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}
           >
-            {ar
-              ? "خاصة بهذه الجلسة فقط؛ لا تغيّر متطلبات العميل المحفوظة. حدود البدائل: زيادة سعر حتى ١٠٪، نقص مساحة حتى ١٠٪، واختلافان بحد أقصى."
-              : "This session only; saved client requirements stay unchanged. Alternatives: up to 10% higher price, 10% less area, and at most two differences."}
+            {requirement.preferredAreaMode !== "all_kuwait"
+              ? ar
+                ? "المناطق خارج المحددة بدائل للمناقشة ما لم تُشدّد المنطقة. هذا التعديل لهذه الجولة فقط ولا يغيّر طلب العميل المحفوظ. الحدود: زيادة سعر حتى ١٠٪، نقص مساحة حتى ١٠٪، واختلافان بحد أقصى."
+                : "Outside-area suggestions are for discussion unless location is strict. This run only; the saved client request stays unchanged. Limits: up to 10% higher price, 10% less area, and at most two differences."
+              : ar
+                ? "هذا التعديل لهذه الجولة فقط ولا يغيّر طلب العميل المحفوظ. الحدود: زيادة سعر حتى ١٠٪، نقص مساحة حتى ١٠٪، واختلافان بحد أقصى."
+                : "This run only; the saved client request stays unchanged. Limits: up to 10% higher price, 10% less area, and at most two differences."}
           </Text>
         </>
       )}

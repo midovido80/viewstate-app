@@ -497,12 +497,12 @@ export default function PersonDetailScreen() {
         ) : (
           <>
             <View style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, borderRadius: 20, gap: 16 }]}>
-              <View style={{ flexDirection: isRTL ? 'row' : 'row-reverse', gap: 12, alignItems: 'center' }}>
+              <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row' : 'row-reverse', gap: 12, alignItems: 'center' }}>
                 <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}><Feather name="user" size={36} color="#94A3B8" /></View>
                 <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
                   <Text style={[styles.name, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{person.name}</Text>
                   <Text style={[styles.phone, styles.ltrText, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{toEnglishDigits(person.displayPhone)}</Text>
-                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>{person.classifications.map(classification => <View key={classification} style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF' }}><Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t(`people.classification.${classification}` as keyof Translations)}</Text></View>)}</View>
+                  <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>{person.classifications.map(classification => <View key={classification} style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF' }}><Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t(`people.classification.${classification}` as keyof Translations)}</Text></View>)}</View>
                 </View>
               </View>
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
@@ -524,12 +524,12 @@ export default function PersonDetailScreen() {
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 }}>
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Text style={[styles.sectionTitle, { color: colors.accent, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
+              <Text style={[styles.sectionTitle, { color: '#173F78', fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.linked_properties')}</Text>
             </View>
-            <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
+            {eligibleSourceRoles.length > 0 || !person.classifications.includes('seeker') ? <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
               <ApprovedAction title={eligibleSourceRoles.length ? (language === 'ar' ? 'إضافة عقار' : 'Add property') : primaryActionLabel} onPress={eligibleSourceRoles.length ? beginAddProperty : activatePrimaryAction} icon="plus" testID="person-primary-action" />
               {eligibleSourceRoles.length ? <ApprovedAction title={t('people.link')} onPress={() => void openLink()} variant="outline" icon="link" testID="person-link-property" /> : null}
-            </View>
+            </View> : null}
             {linked.map(property => {
               const summary = getPropertyCardSummary(property, cardSummaryFormatters);
               const source = sourced.find(item => item.property.core.id === property.core.id)?.source;
@@ -554,9 +554,9 @@ export default function PersonDetailScreen() {
             </View>
             <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 }}>
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Text style={[styles.sectionTitle, { color: colors.accent, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
+              <Text style={[styles.sectionTitle, { color: '#173F78', fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
             </View>
-            {person.classifications.includes('seeker') && eligibleSourceRoles.length > 0 ? <ApprovedAction title={language === 'ar' ? 'إضافة طلب' : 'Add Requirement'} onPress={() => actionForClassification('seeker')} variant="outline" testID="person-requirement-create" style={{ flex: 0 }} /> : null}
+            {person.classifications.includes('seeker') ? <ApprovedAction title={language === 'ar' ? 'إضافة متطلبات' : 'Add requirement'} onPress={() => actionForClassification('seeker')} icon="plus" layout="block" testID="person-requirement-create" style={styles.raisedAction} /> : null}
             {requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => {
               const intent = projectRequirementIntent(requirement, language);
               return (
@@ -606,12 +606,12 @@ export default function PersonDetailScreen() {
                 })}
               </>
             ) : null}
-            <ApprovedAction style={{ flex: 0 }} title={t('people.remove')} onPress={() => { if (!requirementReturnGuard) setDeleteOpen(true); }} disabled={busy || requirementReturnGuard} variant="danger" testID="person-remove" />
+            <ApprovedAction layout="block" icon="trash-2" style={{ marginTop: 4, backgroundColor: '#FFF1F2', borderColor: '#F2B8C0' }} title={t('people.remove')} onPress={() => { if (!requirementReturnGuard) setDeleteOpen(true); }} disabled={busy || requirementReturnGuard} variant="danger" testID="person-remove" />
           </>
         )}
       </KeyboardAwareScrollViewCompat>
       {mode === 'detail' ? <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border }}>
-        <ApprovedAction title={language === 'ar' ? 'تعديل البيانات' : 'Edit details'} onPress={beginEdit} icon="edit-2" testID="person-edit" disabled={requirementReturnGuard} style={{ flex: 0 }} />
+        <ApprovedAction title={language === 'ar' ? 'تعديل بيانات الشخص' : 'Edit person'} onPress={beginEdit} icon="edit-2" variant="outline" layout="block" testID="person-edit" disabled={requirementReturnGuard} />
       </View> : null}
 
       {requirementReturnGuard ? (
@@ -760,7 +760,7 @@ export default function PersonDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 20 },
-  header: { minHeight: 72, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'space-between' },
+  header: { direction: 'ltr', minHeight: 72, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { flex: 1, fontSize: 16, textAlign: 'center' },
   headerSide: { minWidth: 64 },
   headerActions: { alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
   notes: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   choicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   actions: { gap: 10 },
-  secondaryActions: { gap: 10 },
+  secondaryActions: { direction: 'ltr', gap: 10 },
   requirementActions: { flexWrap: 'wrap' },
   requirementAction: { flexGrow: 1, flexBasis: 120 },
   flex: { flex: 1 },
@@ -786,8 +786,9 @@ const styles = StyleSheet.create({
   confirmLink: { marginTop: 10, padding: 14, borderWidth: 1, borderRadius: 12, gap: 10 },
   requirementCard: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 8 },
   requirementTitle: { fontSize: 17 },
-  sectionHeader: { justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  sectionTitle: { fontSize: 18 },
+  sectionHeader: { justifyContent: 'space-between', alignItems: 'center' },
+  raisedAction: { shadowColor: '#173F78', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 3, elevation: 2 },
+  sectionTitle: { fontSize: 18, width: '100%' },
   property: { borderWidth: 1, borderRadius: 10, padding: 14, gap: 12 },
   unlinkButton: { minHeight: 44, borderWidth: 1, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 14 },
   modalSearch: { margin: 16 },

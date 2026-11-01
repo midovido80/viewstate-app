@@ -43,7 +43,7 @@ export function matchingCategoryLabel(
   const labels = {
     provisional: ["Preliminary fit — secondary information missing", "مناسب مبدئيًا — تفاصيل ثانوية ناقصة"],
     direct: ["Meets recorded requirements", "يحقق المتطلبات المسجلة"],
-    negotiation: ["Alternative requiring discussion", "بديل يحتاج تفاوضًا"],
+    negotiation: ["For discussion", "بديل للمناقشة"],
     needs_confirmation: ["Confirm missing information", "يحتاج تأكيد معلومات"],
     excluded: ["Outside matching conditions", "خارج شروط الترشيح"],
   };
@@ -79,6 +79,8 @@ export function matchingExplanationText(
     return ar
       ? `${label}: يحتاج تأكيدًا، ولا يُحسب متحققًا.`
       : `${label}: needs confirmation; not counted as met.`;
+  if (item.criterion === "location" && item.status === "matched")
+    return ar ? "المنطقة ضمن المناطق المطلوبة." : "In a requested area.";
   if (
     item.criterion === "budget" &&
     item.difference !== undefined &&
@@ -89,8 +91,8 @@ export function matchingExplanationText(
       : `Above budget by ${Number(item.difference.toFixed(2))} (${item.percentDifference}%). Price negotiation is not confirmed.`;
   if (item.criterion === "location")
     return ar
-      ? "منطقة بديلة اخترتها للمناقشة، وتحتاج قبول العميل."
-      : "An explicitly selected alternative area; client acceptance is needed.";
+      ? "خارج المناطق المطلوبة؛ بديل للمناقشة فقط، ولم يؤكد العميل قبوله."
+      : "Outside the requested areas; for discussion only, not accepted by the client.";
   return ar
     ? `${label}: المطلوب ${format(item.expected)}؛ المسجل ${format(item.actual)}.`
     : `${label}: requested ${format(item.expected)}; recorded ${format(item.actual)}.`;
@@ -113,20 +115,44 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
     if (field === 'rentalPeriodId') return ({ monthly: ar ? 'شهري' : 'Monthly', yearly: ar ? 'سنوي' : 'Yearly', daily: ar ? 'يومي' : 'Daily' } as Record<string, string>)[String(raw)] ?? String(raw);
     return typeof raw === 'boolean' ? raw ? ar ? 'يوجد' : 'Yes' : ar ? 'لا يوجد' : 'No' : String(raw);
   };
-  const rows = result.explanations.map(item => ({
-    field: item.criterion, label: matchingCriterionLabel(item.criterion, language),
-    requested: item.criterion === 'budget' ? `${requirement.budget.minimum ?? '—'}–${requirement.budget.maximum ?? '—'} ${requirement.budget.currencyCode}` : value(item.criterion, item.expected),
-    offered: item.criterion === 'budget' ? `${result.priceAmount} ${requirement.budget.currencyCode}` : value(item.criterion, item.actual),
-    status: item.status,
-    statusLabel: item.status === 'matched' ? ar ? 'متوافق' : 'Meets' : item.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'غير متوافق' : 'Differs',
-  }));
+  const rows = result.explanations.map(item => {
+    let offered = item.criterion === 'budget'
+      ? `${result.priceAmount} ${requirement.budget.currencyCode}`
+      : value(item.criterion, item.actual);
+    if (
+      ['builtUpAreaSquareMeters', 'plotAreaSquareMeters'].includes(item.criterion)
+      && item.status === 'not_met'
+      && item.difference !== undefined
+      && item.difference < 0
+      && item.percentDifference !== undefined
+    ) {
+      const shortfall = Number(Math.abs(item.difference).toFixed(2));
+      offered += ar
+        ? ` · أقل بـ${shortfall} م² (نحو ${item.percentDifference}٪)`
+        : ` · ${shortfall} m² less (about ${item.percentDifference}%)`;
+    }
+    return {
+      field: item.criterion,
+      label: matchingCriterionLabel(item.criterion, language),
+      requested: item.criterion === 'budget'
+        ? `${requirement.budget.minimum ?? '—'}–${requirement.budget.maximum ?? '—'} ${requirement.budget.currencyCode}`
+        : value(item.criterion, item.expected),
+      offered,
+      status: item.status,
+      statusLabel: item.status === 'matched'
+        ? ar ? 'متوافق' : 'Meets'
+        : item.status === 'unknown'
+          ? ar ? 'غير مسجل' : 'Unknown'
+          : ar ? 'غير متوافق' : 'Differs',
+    };
+  });
   const location: MatchingComparisonRow = {
     field: 'location', label: ar ? 'المنطقة' : 'Area',
     requested: requirement.preferredAreaMode === 'all_kuwait' ? ar ? 'كل الكويت' : 'All Kuwait' : requirement.preferredAreaIds.map(id => getAreaById(id)?.[language] ?? (ar ? 'منطقة محددة' : 'Selected area')).join('، '),
-    offered: property ? getAreaById(property.core.locationArea.id)?.[language] ?? (ar ? 'غير مسجلة' : 'Not recorded') : ar ? 'غير مسجلة' : 'Not recorded',
+    offered: property ? getAreaById(property.core.locationArea?.id)?.[language] ?? (ar ? 'غير مسجلة' : 'Not recorded') : ar ? 'غير مسجلة' : 'Not recorded',
     status: !property ? 'unknown' : rows.find(row => row.field === 'location')?.status ?? 'matched', statusLabel: ar ? 'متوافق' : 'Meets',
   };
-  if (location.status !== 'matched') location.statusLabel = location.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'منطقة بديلة' : 'Alternative';
+  if (location.status !== 'matched') location.statusLabel = location.status === 'unknown' ? ar ? 'غير مسجل' : 'Unknown' : ar ? 'بديل للمناقشة' : 'For discussion';
   const withoutLocation = rows.filter(row => row.field !== 'location');
   withoutLocation.push(location);
   const budget = withoutLocation.find(row => row.field === 'budget');

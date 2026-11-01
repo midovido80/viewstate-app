@@ -209,3 +209,28 @@ test('Amenities stay contiguous in two columns before parking and conditional de
   }
   assert.equal(JSON.stringify(entries), before);
 });
+
+test('Standalone person actions keep a 48px nonshrinking hit target in both directions', async () => {
+  const { ApprovedAction } = await import('../components/ApprovedActions.tsx');
+  const flatten = (styles: any): any => Object.assign({}, ...styles.flat(Infinity).filter(Boolean));
+  for (const rtl of [false, true]) {
+    state.rtl = rtl;
+    for (const options of [{ layout: 'block' as const }, { style: { flex: 0 } }]) {
+      let presses = 0;
+      const action = ApprovedAction({ title: rtl ? 'إضافة متطلبات' : 'Add requirement', onPress: () => presses++, ...options });
+      const style = flatten(action.props.style);
+      assert.equal(style.height, 48);
+      assert.equal(style.minHeight, 48);
+      assert.equal(style.flexBasis, 'auto');
+      assert.equal(style.flexShrink, 0);
+      assert.equal(style.width, '100%');
+      assert.equal(style.flexDirection, rtl ? 'row-reverse' : 'row');
+      action.props.onPress(); action.props.onPress();
+      assert.equal(presses, 2);
+      assert.equal(action.props.accessibilityRole, 'button');
+    }
+    const row = ApprovedAction({ title: 'Call', onPress() {} });
+    assert.equal(flatten(row.props.style).flex, 1);
+    assert.equal(flatten(row.props.style).height, 56);
+  }
+});

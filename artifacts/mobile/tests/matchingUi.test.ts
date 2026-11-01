@@ -202,14 +202,14 @@ test('Match All runs every valid Requirement in deterministic input order', asyn
     [first.value, second.value],
     async requirementId => {
       called.push(requirementId);
-      return { engineVersion: MATCH_ENGINE_VERSION, requirementId, matches: [], needsConfirmation: [] };
+      return { engineVersion: MATCH_ENGINE_VERSION, requirementId, evaluatedCandidateCount: 0, matches: [], needsConfirmation: [] };
     },
   );
   assert.deepEqual(called, [first.value.id, second.value.id]);
   assert.deepEqual(runs.map(run => run.requirementId), called);
 });
 
-test('Match All groups multiple Requirements once per Person and omits empty Persons', () => {
+test('Match All retains empty Requirement cards without counting them as suggestions', async () => {
   const first = buildTransientRequirement({
     id: REQUIREMENT_ID,
     seekerId: 'person-1',
@@ -276,17 +276,24 @@ test('Match All groups multiple Requirements once per Person and omits empty Per
     [first.value, second.value, empty.value],
     people,
     [
-      { engineVersion: MATCH_ENGINE_VERSION, requirementId: first.value.id, matches: [match('property-a', 92)], needsConfirmation: [] },
-      { engineVersion: MATCH_ENGINE_VERSION, requirementId: second.value.id, matches: [{ ...match('property-b', 83), requirementId: second.value.id }], needsConfirmation: [] },
-      { engineVersion: MATCH_ENGINE_VERSION, requirementId: empty.value.id, matches: [], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: first.value.id, evaluatedCandidateCount: 2, matches: [match('property-a', 92)], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: second.value.id, evaluatedCandidateCount: 1, matches: [{ ...match('property-b', 83), requirementId: second.value.id }], needsConfirmation: [] },
+      { engineVersion: MATCH_ENGINE_VERSION, requirementId: empty.value.id, evaluatedCandidateCount: 0, matches: [], needsConfirmation: [] },
     ],
   );
-  assert.equal(groups.length, 1);
+  assert.equal(groups.length, 2);
   assert.equal(groups[0]?.person.id, 'person-1');
   assert.deepEqual(
     groups[0]?.requirementGroups.map(group => group.matches[0]?.propertyId),
     ['property-a', 'property-b'],
   );
+  assert.equal(groups[1]?.person.id, 'person-2');
+  assert.deepEqual(groups[1]?.requirementGroups.map(group => group.requirement.id), [empty.value.id]);
+  assert.equal(groups[1]?.requirementGroups[0]?.evaluatedCandidateCount, 0);
+  assert.deepEqual(groups[1]?.requirementGroups[0]?.matches, []);
+  assert.deepEqual(groups[1]?.requirementGroups[0]?.needsConfirmation, []);
+  const { personPropertyCounts } = await import('../services/matchingGroups.ts');
+  assert.deepEqual(personPropertyCounts(groups[1]!), { ready: 0, pending: 0 });
 });
 
 test('Match All filters invalid saved Requirements without changing them', () => {
@@ -382,7 +389,7 @@ test('result grouping rejects stale engine versions and filters cross-request re
   const match = evaluateMatch(requirement.value, { property: matchingProperty('p') });
   const stale = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: 'old', requirementId: REQUIREMENT_ID, matches: [match], needsConfirmation: [] } as never]);
   assert.deepEqual(stale, []);
-  const mixed = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: MATCH_ENGINE_VERSION, requirementId: REQUIREMENT_ID, matches: [match, { ...match, propertyId: 'other', requirementId: 'other' }], needsConfirmation: [] }]);
+  const mixed = groupMatchAllResultsByPerson([requirement.value], people, [{ engineVersion: MATCH_ENGINE_VERSION, requirementId: REQUIREMENT_ID, evaluatedCandidateCount: 2, matches: [match, { ...match, propertyId: 'other', requirementId: 'other' }], needsConfirmation: [] }]);
   assert.deepEqual(mixed[0].requirementGroups[0].matches.map(item => item.propertyId), ['p']);
 });
 
@@ -398,7 +405,6 @@ test('cards and refinements handle repeated taps in both languages without chang
     ['@/components/Button', `export const Button = 'Button';`],
     ['@/components/PropertyFormCard', `export const PropertyFormCard = 'PropertyFormCard';`],
     ['@/components/ChoiceTile', `export const ChoiceGrid = 'ChoiceGrid'; export const ChoiceTile = 'ChoiceTile';`],
-    ['@/components/KuwaitAreaSelector', `export const KuwaitAreaSelector = 'KuwaitAreaSelector';`],
     ['@/contexts/I18nContext', `export const useI18n = () => ({ language: globalThis.__matchingInteraction.ar ? 'ar' : 'en', isRTL: globalThis.__matchingInteraction.ar, fonts: { regular: 'r', medium: 'm', semiBold: 's', bold: 'b' }, t: key => key });`],
     ['@/hooks/useColors', `export const useColors = () => ({ foreground: '#111', mutedForeground: '#555' });`],
   ]);
@@ -423,7 +429,7 @@ test('cards and refinements handle repeated taps in both languages without chang
         assert.equal(badge.find(item => item.type === 'Feather')!.props.color, '#FFFFFF');
         assert.equal(badge.find(item => item.props.testID === `matching-status-circle-${status}`)!.props.style.backgroundColor, color);
       }
-      const group: import('../services/matchingUi.ts').MatchAllPersonGroup = { person: createPerson({ id: 's', name: 'ميدو', displayPhone: '50000000', classifications: ['seeker'] }), requirementGroups: [{ requirement: r.value, matches: [result], needsConfirmation: [] }] };
+      const group: import('../services/matchingUi.ts').MatchAllPersonGroup = { person: createPerson({ id: 's', name: 'ميدو', displayPhone: '50000000', classifications: ['seeker'] }), requirementGroups: [{ requirement: r.value, evaluatedCandidateCount: 1, matches: [result], needsConfirmation: [] }] };
       let layout: import('../services/matchingGroups.ts').MatchingResultsLayout = { view: 'people' };
       let propertyOpens = 0;
       const renderGroups = (): any[] => elements(MatchingResultsGroups({ groups: [group], properties: [p], layout, onLayoutChange: next => { layout = next; }, policies: {}, busy: false, onRefine: () => {}, onReplace: () => {}, onOpenProperty: () => propertyOpens++ }));
@@ -476,7 +482,40 @@ test('cards and refinements handle repeated taps in both languages without chang
       const render = () => elements(MatchingRefinements({ requirement: r.value, policy, busy: false, onChange: next => { policy = next; } }));
       render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, ['budget']);
       render().find(item => item.props.optionId === 'budget')!.props.onPress(); assert.deepEqual(policy.strictFields, []);
-      render().find(item => item.type === 'KuwaitAreaSelector')!.props.onChange(['salmiya']); assert.deepEqual(policy.alternativeAreaIds, ['salmiya']);
+      render().find(item => item.props.optionId === 'location')!.props.onPress(); assert.deepEqual(policy.strictFields, ['location']);
+      const refinementCopy = JSON.stringify(render());
+      assert.ok(refinementCopy.includes(ar ? 'المناطق خارج المحددة بدائل للمناقشة' : 'Outside-area suggestions are for discussion unless location is strict'));
+      render().find(item => item.props.optionId === 'location')!.props.onPress(); assert.deepEqual(policy.strictFields, []);
+
+      const emptyGroup: import('../services/matchingUi.ts').MatchAllPersonGroup = {
+        person: group.person,
+        requirementGroups: [{
+          requirement: r.value,
+          evaluatedCandidateCount: 2,
+          matches: [],
+          needsConfirmation: [],
+        }],
+      };
+      const emptyTree = elements(MatchingResultsGroups({
+        groups: [emptyGroup],
+        properties: [],
+        layout: { view: 'people' },
+        onLayoutChange: () => {},
+        policies: {},
+        busy: false,
+        onRefine: () => {},
+        onReplace: () => {},
+        onOpenProperty: () => {},
+      }));
+      assert.ok(emptyTree.some(item => item.props.testID === `matching-request-group-${r.value.id}`));
+      const emptyState = emptyTree.find(item => item.props.testID === `matching-empty-state-${r.value.id}`)!;
+      assert.ok(JSON.stringify(emptyState).includes(ar ? 'تم تقييم 2 عقارات' : '2 properties were evaluated'));
+      const refinementNode = emptyTree.find(item => item.type === MatchingRefinements)!;
+      const refinementControl = elements(MatchingRefinements(refinementNode.props));
+      assert.ok(refinementControl.some(item => item.type === 'Button' && item.props.title === (ar ? 'ضبط شروط هذه النتائج' : 'Refine these results')));
+      const zeroCounts = JSON.stringify(emptyTree.find(item => item.props.testID === 'matching-distinct-counts'));
+      assert.ok(zeroCounts.includes(ar ? '0 عقارات مرشحة' : '0 suggested properties'));
+      assert.equal(emptyTree.some(item => item.type === MatchingResultCard), false);
     }
     assert.equal(JSON.stringify([r.value, p]), before);
   } finally { hooks.deregister(); }
@@ -534,8 +573,8 @@ test('Reverse grouping counts distinct people and properties, preserving separat
   const evaluate = (r: SeekerRequirement, p: Property) => evaluateMatch(r, { property: p });
   const m1 = evaluate(r1, p1); const m2 = evaluate(r1, p2); const pending = evaluate(r1, matchingProperty('pending'));
   const groups = [
-    { person, requirementGroups: [{ requirement: r1, matches: [m1, m2, m1], needsConfirmation: [pending] }, { requirement: r2, matches: [evaluate(r2, p1)], needsConfirmation: [] }] },
-    { person: person2, requirementGroups: [{ requirement: r3, matches: [evaluate(r3, p1)], needsConfirmation: [] }] },
+    { person, requirementGroups: [{ requirement: r1, evaluatedCandidateCount: 3, matches: [m1, m2, m1], needsConfirmation: [pending] }, { requirement: r2, evaluatedCandidateCount: 1, matches: [evaluate(r2, p1)], needsConfirmation: [] }] },
+    { person: person2, requirementGroups: [{ requirement: r3, evaluatedCandidateCount: 1, matches: [evaluate(r3, p1)], needsConfirmation: [] }] },
   ];
   const before = JSON.stringify(groups);
   const byProperty = groupMatchingByProperty(groups);
@@ -550,7 +589,7 @@ test('Reverse grouping counts distinct people and properties, preserving separat
   assert.equal(matchingCountLabel(3, 'properties', true, 'ar'), '3 عقارات تحتاج تأكيد معلومات');
   assert.equal(matchingCountLabel(4, 'people', false, 'ar'), '4 أشخاص لديهم طلبات مناسبة لهذا العقار');
   assert.equal(matchingCountLabel(3, 'properties', false, 'en'), '3 properties suggested');
-  const invalidGroups = [{ person, requirementGroups: [{ requirement: r1, matches: [{ ...m1, engineVersion: 'old' }, { ...m1, requirementId: 'wrong' }, { ...m1, eligible: false }, { ...pending, qualifies: false }], needsConfirmation: [{ ...m1 }] }] }];
+  const invalidGroups = [{ person, requirementGroups: [{ requirement: r1, evaluatedCandidateCount: 2, matches: [{ ...m1, engineVersion: 'old' }, { ...m1, requirementId: 'wrong' }, { ...m1, eligible: false }, { ...pending, qualifies: false }], needsConfirmation: [{ ...m1 }] }] }];
   assert.deepEqual(groupMatchingByProperty(invalidGroups as never), []);
 });
 
