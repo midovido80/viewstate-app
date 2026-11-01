@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';
 import colors from '@/constants/colors';
 
@@ -20,7 +20,7 @@ export function StartupRecoveryScreen({
   onRetry: () => void;
 }) {
   const { t, isRTL, fonts } = useI18n();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const retrying = status === 'retrying';
 
   return (
