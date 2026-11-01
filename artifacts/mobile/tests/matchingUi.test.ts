@@ -399,9 +399,11 @@ test('cards and refinements handle repeated taps in both languages without chang
   (globalThis as any).__matchingInteraction = state;
   (globalThis as any).React = { createElement: (type: unknown, props: any, ...children: unknown[]) => ({ type, props: { ...props, children: children.length > 1 ? children : children[0] ?? props?.children } }) };
   const stubs = new Map<string, string>([
-    ['react', `export const useState = () => [globalThis.__matchingInteraction.open, value => { globalThis.__matchingInteraction.open = value; }];`],
+    ['react', `export default globalThis.React; export const useState = () => [globalThis.__matchingInteraction.open, value => { globalThis.__matchingInteraction.open = value; }];`],
     ['react-native', `export const Text = 'Text'; export const View = 'View'; export const TouchableOpacity = 'TouchableOpacity';`],
     ['@expo/vector-icons', `export const Feather = 'Feather';`],
+    ['react-native-svg', `export default 'Svg'; export const Circle = 'Circle';`],
+    ['@/components/PropertyCover', `export const PropertyCover = 'PropertyCover';`],
     ['@/components/Button', `export const Button = 'Button';`],
     ['@/components/PropertyFormCard', `export const PropertyFormCard = 'PropertyFormCard';`],
     ['@/components/ChoiceTile', `export const ChoiceGrid = 'ChoiceGrid'; export const ChoiceTile = 'ChoiceTile';`],
@@ -448,6 +450,11 @@ test('cards and refinements handle repeated taps in both languages without chang
       assert.equal(renderGroups().find(item => item.type === MatchingResultCard)!.props.expanded, false);
       pairCard.props.onPress(); assert.equal(propertyOpens, 1);
       const card = elements(MatchingResultCard({ ...pairCard.props, expanded: true }));
+      assert.equal(card.find(item => item.props.testID === 'matching-property-client-pair') !== undefined, true);
+      const { MatchScoreRing } = await import('../components/MatchScoreRing.tsx');
+      assert.equal(card.find(item => item.type === MatchScoreRing)?.props.score, result.score, 'the visual score comes unchanged from the engine');
+      const ring = elements(MatchScoreRing({ score: result.score }));
+      assert.match(ring.find(item => item.props.testID === 'matching-score-ring').props.accessibilityLabel, new RegExp(`${Math.round(result.score)}%`));
       const rows = card.filter(item => String(item.props.testID ?? '').startsWith('matching-compare-'));
       assert.equal(rows[0].props.style.backgroundColor, '#FFFFFF');
       assert.equal(rows[1].props.style.backgroundColor, '#EFF6FF');

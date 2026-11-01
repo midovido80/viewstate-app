@@ -93,12 +93,12 @@ export function AccountProfileForm({ userId, initial, photo: initialPhoto = '', 
 }
 export const accountScreenStyles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F7F9FC' }, content: { flexGrow: 1, padding: 20, gap: 18, width: '100%', maxWidth: 520, alignSelf: 'center' },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, brand: { fontSize: 24, fontWeight: '800', color: '#2360D9' }, title: { fontSize: 25, fontWeight: '700', color: '#172B4D' },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, brand: { fontSize: 24, fontWeight: '800', color: '#235AF3' }, title: { fontSize: 25, fontWeight: '700', color: '#172B4D' },
   description: { fontSize: 14, lineHeight: 22, color: '#52647B' }, email: { fontSize: 14, color: '#52647B', writingDirection: 'ltr' },
   field: { gap: 8 }, label: { fontSize: 15, fontWeight: '600', color: '#172B4D' }, muted: { fontWeight: '400', color: '#52647B' }, red: { color: '#C52F3B', fontSize: 14, lineHeight: 21 },
-  input: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, backgroundColor: 'white', fontSize: 16, color: '#172B4D' }, invalid: { borderColor: '#C52F3B', backgroundColor: '#FFF5F5' },
+  input: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: '#B8C8DF', borderRadius: 12, backgroundColor: 'white', fontSize: 16, color: '#172B4D' }, invalid: { borderColor: '#C52F3B', backgroundColor: '#FFF5F5' },
   select: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, avatarRow: { flexDirection: 'row', gap: 16, alignItems: 'center' }, avatar: { width: 72, height: 72, borderRadius: 36 }, avatarEmpty: { backgroundColor: '#EAF1FD', alignItems: 'center', justifyContent: 'center' },
-  quiet: { minHeight: 44, justifyContent: 'center', paddingVertical: 10 }, link: { color: '#2360D9', fontSize: 14, fontWeight: '600' }, primary: { minHeight: 50, borderRadius: 14, backgroundColor: '#245DF4', alignItems: 'center', justifyContent: 'center', padding: 14 }, primaryText: { color: 'white', fontSize: 16, fontWeight: '700' },
+  quiet: { minHeight: 44, justifyContent: 'center', paddingVertical: 10 }, link: { color: '#235AF3', fontSize: 14, fontWeight: '600' }, primary: { minHeight: 50, borderRadius: 14, backgroundColor: '#235AF3', alignItems: 'center', justifyContent: 'center', padding: 14 }, primaryText: { color: 'white', fontSize: 16, fontWeight: '700' },
   backdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#00000066' }, sheet: { width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: 'white', borderRadius: 20, padding: 20, gap: 10 }, role: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E8EDF4', paddingVertical: 12 },
 });
 const s = accountScreenStyles;

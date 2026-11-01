@@ -1,3 +1,5 @@
+import { WelcomeExperience as Welcome } from '@/components/account/WelcomeExperience';
+import { AccountEntryScreen } from '@/components/account/AccountEntryScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { createGuestScope } from '@/services/accountScope';
@@ -8,9 +10,8 @@ import { flushPropertyEditDraftWrites } from '@/services/propertyUpdateRecovery'
 import { flushPropertyEnrichmentDraftWrites } from '@/services/propertyEnrichmentRecovery';
 import { transferGuestDevice } from '@/services/guestTransferDevice';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Animated, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { useI18n } from './I18nContext';
 import { UserDataProvider, buildUserData, type UserResources } from './UserDataContext';
@@ -32,39 +33,12 @@ interface RealAccount { email: string; profile: UserContactProfile; photo: strin
 const Context = createContext<RealAccount | null>(null);
 export function useRealAccount() { return useContext(Context); }
 
-function Welcome({ reducedMotion, onDone, busy }: { reducedMotion: boolean; onDone(): void; busy: boolean }) {
-  const { language, isRTL } = useI18n();
-  const ar = language === 'ar';
-  const opacity = useRef(new Animated.Value(1)).current;
-  const y = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    let animation: Animated.CompositeAnimation | undefined;
-    let alive = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then(system => {
-      if (!alive || reducedMotion || system) return;
-      opacity.setValue(0); y.setValue(14);
-      animation = Animated.parallel([Animated.timing(opacity, { toValue: 1, duration: 650, useNativeDriver: true }), Animated.spring(y, { toValue: 0, damping: 18, stiffness: 110, useNativeDriver: true })]);
-      animation.start();
-    }).catch(() => undefined);
-    return () => { alive = false; animation?.stop(); };
-  }, [reducedMotion, opacity, y]);
-  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={[s.content, { direction: isRTL ? 'rtl' : 'ltr' }]}>
-    <Pressable accessibilityRole="button" disabled={busy} style={[s.quiet, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-end' }]} onPress={onDone}><Text style={s.link}>{ar ? 'تخطي' : 'Skip'}</Text><Feather name={isRTL ? 'chevrons-left' : 'chevrons-right'} size={20} color="#2360D9" /></Pressable>
-    <View style={{ flex: 1, justifyContent: 'center', gap: 28, paddingVertical: 48 }}>
-      <Animated.Text style={[s.brand, { fontSize: 40, textAlign: 'center', opacity, transform: [{ translateY: y }] }]}>ViewState</Animated.Text>
-      <Text style={[s.title, { textAlign: 'center' }]}>{ar ? 'عقاراتك وعلاقاتك وفرصك، في مكان واحد.' : 'Your properties, people and opportunities. Together.'}</Text>
-      <Text style={[s.description, { textAlign: 'center' }]}>{ar ? 'سجّل عقاراتك وعملاءك، حدّد متطلباتهم، واكتشف أقرب المطابقات. رتّب متابعاتك ومواعيد معايناتك من الرئيسية.' : 'Capture properties and clients, record their requirements and find the closest matches. Organize follow-ups and viewings from Home.'}</Text>
-    </View>
-    <Pressable accessibilityRole="button" testID="account-welcome-start" style={s.primary} disabled={busy} onPress={onDone}>{busy ? <ActivityIndicator color="white" /> : <Text style={s.primaryText}>{ar ? 'ابدأ استخدام ViewState' : 'Start using ViewState'}</Text>}</Pressable>
-  </ScrollView></SafeAreaView>;
-}
-
 /** With configuration present, no app screen or device-global store mounts before verified onboarding. */
 export function RealAccountGate({ children }: { children: React.ReactNode }) {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const configured = Boolean(url || publishableKey);
-  const { language, setLanguage, isRTL } = useI18n();
+  const { language, isRTL } = useI18n();
   const L = (ar: string, en: string) => language === 'ar' ? ar : en;
   const [stage, setStage] = useState<'checking' | 'signin' | 'profile' | 'welcome' | 'ready' | 'error' | 'guest_profile' | 'guest_welcome' | 'guest_ready' | 'transfer'>('checking');
   const [guest, setGuest] = useState<GuestActive | null>(null);
@@ -253,7 +227,7 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
     finally { if (mounted.current) setBusy(false); }
   };
   if (stage === 'guest_profile') return <GuestProfileForm onSave={saveGuest} onCancel={() => setStage('signin')} />;
-  if (guest && stage === 'guest_welcome') return <View style={{ flex: 1 }}><Welcome reducedMotion={guest.reducedMotion} busy={busy} onDone={() => void finishGuest()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
+  if (guest && stage === 'guest_welcome') return <View style={{ flex: 1 }}><Welcome name={guest.identity.name} reducedMotion={guest.reducedMotion} busy={busy} onDone={() => void finishGuest()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
   if (guest && stage === 'guest_ready') return <GuestAccountProvider value={{ identity: guest.identity, activate, saveContact: saveGuest }}><UserDataProvider value={guest.data}><React.Fragment key={'guest-' + guest.id}>{children}</React.Fragment></UserDataProvider></GuestAccountProvider>;
   if (active && stage === 'transfer') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={[s.content, { justifyContent: 'center', direction: isRTL ? 'rtl' : 'ltr' }]}>
     <Text style={s.brand}>ViewState</Text><Text style={s.title}>{L('نقل بيانات الضيف إلى حسابك؟', 'Bring guest data into your account?')}</Text><Text style={s.email}>{active.lease.account.email}</Text>
@@ -264,20 +238,10 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
     <Pressable accessibilityRole="button" disabled={busy} style={s.quiet} onPress={() => void signOut()}><Text style={s.red}>{L('تسجيل الخروج', 'Sign out')}</Text></Pressable>
   </ScrollView></SafeAreaView>;
   if (active && stage === 'profile') return <AccountProfileForm userId={active.lease.account.userId} email={active.lease.account.email} initial={active.profile ?? (pendingTransfer.current ? { user_id: active.lease.account.userId, display_name: pendingTransfer.current.name, phone: pendingTransfer.current.phone, company: '', classification: '' as UserContactProfile['classification'], other_classification: '' } : null)} photo={active.photo} onSave={saveContact} onCancel={() => void signOut()} />;
-  if (active && stage === 'welcome') return <View style={{ flex: 1 }}><Welcome reducedMotion={active.reducedMotion} busy={busy} onDone={() => void finishWelcome()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
+  if (active && stage === 'welcome') return <View style={{ flex: 1 }}><Welcome name={active.profile?.display_name} reducedMotion={active.reducedMotion} busy={busy} onDone={() => void finishWelcome()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
   if (active?.profile && stage === 'ready') return <Context.Provider value={{ email: active.lease.account.email, profile: active.profile, photo: active.photo, assertActive: () => assertCurrent(active), saveContact, signOut }}><UserDataProvider value={active.data}><React.Fragment key={active.id}>{children}</React.Fragment></UserDataProvider></Context.Provider>;
-  return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={[s.content, { justifyContent: 'center', direction: isRTL ? 'rtl' : 'ltr' }]}>
-    <Text style={s.brand}>ViewState</Text>
-    <Pressable accessibilityRole="button" style={[s.quiet, { alignSelf: 'flex-end' }]} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={s.link}>{language === 'ar' ? 'English' : 'العربية'}</Text></Pressable>
-    <Text style={s.title}>{L('مساعدك العقاري الشخصي', 'Your personal property assistant')}</Text>
-    <Text style={s.description}>{L('استخدم ViewState محليًا دون حساب، أو فعّل حساب Google. لكل مساحة بيانات منفصلة.', 'Use ViewState locally without an account, or activate a Google account. Each workspace keeps separate data.')}</Text>
-    {error ? <Text accessibilityRole="alert" style={s.red}>{error}</Text> : null}
-    {stage === 'checking' ? <ActivityIndicator size="large" color="#2360D9" /> : stage === 'error' ? <>
-      <Pressable accessibilityRole="button" style={s.primary} onPress={() => void bootstrap(true)}><Text style={s.primaryText}>{L('إعادة المحاولة', 'Retry')}</Text></Pressable>
-      {device.current ? <Pressable accessibilityRole="button" style={s.quiet} disabled={busy} onPress={() => void signOut()}><Text style={s.red}>{L('تسجيل الخروج', 'Sign out')}</Text></Pressable> : null}
-    </> : <Pressable accessibilityRole="button" testID="google-sign-in" style={s.primary} disabled={busy} onPress={() => void signIn()}>{busy ? <ActivityIndicator color="white" /> : <Text style={s.primaryText}>{L('المتابعة باستخدام Google', 'Continue with Google')}</Text>}</Pressable>}
-    <Pressable accessibilityRole="button" testID="use-as-guest" style={[s.input, { alignItems: 'center', justifyContent: 'center' }]} disabled={busy} onPress={() => void startGuest()}><Text style={s.link}>{L('استخدام بدون حساب', 'Use as guest')}</Text></Pressable>
-    {Platform.OS === 'web' && window.self !== window.top ? <Pressable accessibilityRole="button" style={s.quiet} onPress={() => window.open(window.location.origin, '_blank', 'noopener,noreferrer')}><Text style={s.link}>{L('فتح التطبيق في تبويب مستقل', 'Open app in a separate tab')}</Text></Pressable> : null}
-    <Text style={s.description}>{L('نتحقق من الهوية لدى Google. لن نطلب كلمة مرور Google داخل التطبيق، ولن نرسل SMS. بيانات العقارات والميديا لا تتزامن سحابيًا بعد.', 'Identity is verified with Google. We never ask for your Google password inside the app or send SMS. Property and media cloud sync is not enabled yet.')}</Text>
-  </ScrollView></SafeAreaView>;
+  return <AccountEntryScreen checking={stage === 'checking'} failed={stage === 'error'} busy={busy} error={error}
+    onGoogle={() => void signIn()} onGuest={() => void startGuest()} onRetry={() => void bootstrap(true)}
+    onSignOut={device.current ? () => void signOut() : undefined}
+    onOpenBrowser={Platform.OS === 'web' && window.self !== window.top ? () => { window.open(window.location.origin, '_blank', 'noopener,noreferrer'); } : undefined} />;
 }

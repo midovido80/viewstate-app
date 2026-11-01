@@ -100,7 +100,7 @@ export default function PeopleScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <PrimaryTabHeader title={t('people.title')} />
+      <PrimaryTabHeader title={t('people.title')} compactSearch />
       <View style={styles.searchWrap}>
         <Feather name="search" size={20} color={colors.mutedForeground} style={[styles.icon, isRTL ? { right: 34 } : { left: 34 }]} />
         <TextInput

@@ -33,7 +33,7 @@ test('browser fallback is narrow-screen only and never reduces measured safe are
 
 test('ordinary data uses navy while invalid required amounts retain error styling', () => {
   assert.equal(palette.light.accent, '#173F78');
-  assert.equal(palette.light.destructive, '#E11D48');
+  assert.equal(palette.light.destructive, '#D73C4A');
   for (const value of [undefined, null, '', ' ', 0, -1, NaN, Infinity, 'bad']) assert.equal(isMissingPositiveAmount(value), true);
   for (const value of [1, '500', 1500.5]) assert.equal(isMissingPositiveAmount(value), false);
 });

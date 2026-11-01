@@ -1,3 +1,6 @@
+import { projectPropertyFacts } from '@/services/propertyFactProjection';
+import { PropertySpecIcon } from '@/components/PropertySpecIcon';
+import { PropertyCover } from '@/components/PropertyCover';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
@@ -93,6 +96,12 @@ export default function PropertiesScreen() {
     const type = property?.core.propertyType ?? requirement?.propertyType;
     const isStudio = property ? isOfferedStudio(property) : requirement ? isWantedStudio(requirement) : false;
     const transaction = item.transaction;
+    const facts = property ? projectPropertyFacts(property).templateFacts : undefined;
+    const cardFacts = facts ? [
+      { key: 'bedroomCount', icon: 'bed-outline' as const, value: facts.bedroomCount },
+      { key: 'bathroomCount', icon: 'shower' as const, value: facts.bathroomCount },
+      { key: 'areaSquareMeters', icon: 'set-square' as const, value: facts.areaSquareMeters },
+    ].filter(f => typeof f.value === 'number' && Number.isFinite(f.value)) : [];
     const summaryFormatters = {
       language,
       translate: (key: string) => t(key as keyof Translations),
@@ -122,10 +131,13 @@ export default function PropertiesScreen() {
           testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
           accessibilityRole="button"
           accessibilityLabel={`${badges.map(badge => badge.label).join(', ')}, ${areaLabel}`}
+          style={{ flexDirection: 'row', gap: 12, alignItems: 'stretch' }}
         >
+        <PropertyCover property={property} label={typeLabel} style={{ width: 102, minHeight: 146, borderRadius: 13 }} />
+        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
         <View style={[styles.cardHeader, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]}>
           <View
-            style={{ flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr', alignItems: 'center', gap: 8 }}
+            style={{ flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr', alignItems: 'center', gap: 5, flexWrap: 'wrap', flex: 1 }}
             testID={`record-badges-${item.kind}-${item.id}`}
           >
             {badges.map(badge => (
@@ -153,19 +165,25 @@ export default function PropertiesScreen() {
           </View>
         </View>
 
-        <View style={styles.cardBody}>
+        <View style={[styles.cardBody, { paddingTop: 4, gap: 5 }]}>
           <Text style={[styles.price, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
             {priceLabel}
           </Text>
           <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
             {areaLabel}
           </Text>
+          {cardFacts.length > 0 && <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 5, direction: isRTL ? 'rtl' : 'ltr' }}>
+            {cardFacts.map(fact => <View key={fact.key} accessibilityLabel={`${fact.key === 'bedroomCount' ? language === 'ar' ? 'غرف النوم' : 'Bedrooms' : fact.key === 'bathroomCount' ? language === 'ar' ? 'الحمامات' : 'Bathrooms' : language === 'ar' ? 'المساحة بالمتر المربع' : 'Area in square meters'}: ${fact.value}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <PropertySpecIcon name={fact.icon} size={16} color={colors.mutedForeground} /><Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 12 }}>{String(fact.value)}{fact.key === 'areaSquareMeters' ? language === 'ar' ? ' م²' : ' m²' : ''}</Text>
+            </View>)}
+          </View>}
           {summary?.studioAreaLabel ? (
             <Text testID={`studio-area-summary-${item.kind}-${item.id}`}
               style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {summary.studioAreaLabel}
             </Text>
           ) : null}
+        </View>
         </View>
         </TouchableOpacity>
         {item.kind === 'wanted' && !item.person ? (
@@ -202,7 +220,7 @@ export default function PropertiesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <PrimaryTabHeader title={t('properties.title')} />
+      <PrimaryTabHeader title={t('properties.title')} compactSearch />
 
       {loadResult ? (
         Object.entries(loadResult.errors).filter(([, failed]) => failed).length > 0 ? (
@@ -409,14 +427,18 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#172C4D',
+    shadowOpacity: 0.04,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 3 },
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   badge: {
     paddingHorizontal: 8,

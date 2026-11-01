@@ -1,3 +1,5 @@
+import { PropertyCover } from "@/components/PropertyCover";
+import { MatchScoreRing } from "@/components/MatchScoreRing";
 import { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -150,8 +152,12 @@ export function MatchingResultCard({
       testID={`matching-result-${result.propertyId}`}
       style={{
         borderWidth: 1,
-        borderColor: "#D5DFED",
-        borderRadius: 14,
+        borderColor: "#DBE3EF",
+        borderRadius: 19,
+        shadowColor: "#172C4D",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
         backgroundColor: "#FFFFFF",
         overflow: "hidden",
         minWidth: 0,
@@ -174,6 +180,13 @@ export function MatchingResultCard({
           backgroundColor: personHeading ? "#FFF4E8" : "#FFFFFF",
         }}
       >
+        <View style={{ direction: 'ltr', flexDirection: rowDirection, gap: 12, alignItems: 'center' }}>
+          <MatchScoreRing score={result.score} />
+          <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+            <Text style={{ ...text, fontFamily: fonts.semiBold, color: '#B45309', fontSize: 13 }} numberOfLines={2}>{personName || (ar ? 'طلب مطابقة' : 'Matching request')}</Text>
+            <View style={{ flexDirection: rowDirection, gap: 5, alignItems: 'center' }}><Feather name="link" size={14} color="#235AF3" /><Text style={{ ...text, fontSize: 12, color: '#62738D' }}>{ar ? 'العقار والطلب' : 'Property & request'}</Text></View>
+          </View>
+        </View>
         <View
           style={{
             direction: "ltr",
@@ -228,6 +241,18 @@ export function MatchingResultCard({
             </Text>
           )}
         </View>
+        {expanded && property && <View testID="matching-property-client-pair" style={{ direction: 'ltr', flexDirection: rowDirection, borderWidth: 1, borderColor: '#E3EAF5', borderRadius: 13, overflow: 'hidden' }}>
+          <View style={{ flex: 1, minWidth: 0, padding: 10, gap: 7 }}>
+            <PropertyCover property={property} style={{ height: 86, borderRadius: 10 }} />
+            <Text style={{ ...text, color: '#172C4D', fontFamily: fonts.semiBold, fontSize: 13 }} numberOfLines={2}>{getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}`))}</Text>
+            <Text style={{ ...text, color: '#62738D', fontSize: 12 }}>{area?.[language] ?? '—'}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0, padding: 10, gap: 7, borderStartWidth: 1, borderColor: '#E3EAF5' }}>
+            <View style={{ height: 86, borderRadius: 10, backgroundColor: '#EAF0FF', alignItems: 'center', justifyContent: 'center' }}><Feather name="user" size={34} color="#7592BE" /></View>
+            <Text style={{ ...text, color: '#B45309', fontFamily: fonts.semiBold, fontSize: 13 }} numberOfLines={2}>{personName || (ar ? 'طلب مطابقة' : 'Matching request')}</Text>
+            <Text style={{ ...text, color: '#62738D', fontSize: 12 }}>{requirement.budget.minimum}–{requirement.budget.maximum} {requirement.budget.currencyCode}</Text>
+          </View>
+        </View>}
         {perspective === "people" && property && (
           <Text
             style={{

@@ -5,74 +5,29 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';
+import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
+import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 
-interface PrimaryTabHeaderProps {
-  title: string;
-}
-
-export function PrimaryTabHeader({ title }: PrimaryTabHeaderProps) {
-  const router = useRouter();
-  const colors = useColors();
-  const insets = useScreenInsets();
-  const { t, isRTL, fonts } = useI18n();
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.primary, paddingTop: insets.top }]}>
-      <View style={[styles.content, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Text style={[styles.title, { color: colors.primaryForeground, fontFamily: fonts.bold }]}>
-          {title}
-        </Text>
-      </View>
-      <View style={[styles.searchContainer, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <TouchableOpacity
-          style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.2)', flexDirection: isRTL ? 'row-reverse' : 'row' }]}
-          onPress={() => router.push('/search' as never)}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={t('search.open')}
-          testID="global-search-open"
-        >
-          <Feather name="search" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.searchText, { color: colors.primaryForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>
-            {t('common.search')}
-          </Text>
+export function PrimaryTabHeader({ title, compactSearch = false }: { title: string; compactSearch?: boolean }) {
+  const router = useRouter(), colors = useColors(), insets = useScreenInsets();
+  const { t, isRTL, fonts, language } = useI18n(), notices = useMatchNotifications();
+  const row = isRTL ? 'row-reverse' : 'row';
+  return <View style={[styles.container, { backgroundColor: colors.card, paddingTop: insets.top }]}>
+    <View style={[styles.brandRow, { flexDirection: row }]}>
+      <ViewStateBrand />
+      <View style={{ flexDirection: row, gap: 4 }}>
+        {compactSearch && <TouchableOpacity testID="global-search-open" accessibilityRole="button" accessibilityLabel={t('search.open')} onPress={() => router.push('/search' as never)} style={styles.tool}><Feather name="search" size={21} color={colors.text} /></TouchableOpacity>}
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={language === 'ar' ? `الإشعارات، ${notices.historyReady ? notices.unread : '—'}` : `Notifications, ${notices.historyReady ? notices.unread : '—'}`} onPress={() => router.push('/notifications' as never)} style={styles.tool}>
+          <Feather name="bell" size={21} color={colors.text} />
+          {notices.historyReady && notices.unread > 0 ? <View style={styles.badge}><Text style={{ color: 'white', fontSize: 10, fontFamily: fonts.bold }}>{notices.unread > 99 ? '99+' : notices.unread}</Text></View> : null}
         </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)} style={styles.tool}><Feather name="settings" size={21} color={colors.text} /></TouchableOpacity>
       </View>
     </View>
-  );
+    <Text accessibilityRole="header" style={[styles.title, { color: colors.text, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
+    {!compactSearch && <TouchableOpacity style={[styles.searchBar, { backgroundColor: colors.background, borderColor: colors.border, flexDirection: row }]} onPress={() => router.push('/search' as never)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t('search.open')} testID="global-search-open">
+      <Feather name="search" size={18} color={colors.mutedForeground} /><Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 14, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{t('common.search')}</Text>
+    </TouchableOpacity>}
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 16,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    zIndex: 10,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 28,
-  },
-  searchContainer: {
-    paddingHorizontal: 20,
-  },
-  searchBar: {
-    flex: 1,
-    height: 44,
-    borderRadius: 8,
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  searchText: {
-    fontSize: 16,
-    flex: 1,
-  },
-});
+const styles = StyleSheet.create({ container: { paddingHorizontal: 18, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#E9EDF5', zIndex: 10 }, brandRow: { minHeight: 53, alignItems: 'center', justifyContent: 'space-between', gap: 10 }, title: { fontSize: 25, lineHeight: 36, marginBottom: 8 }, searchBar: { minHeight: 44, borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, alignItems: 'center', gap: 9 }, tool: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, badge: { position: 'absolute', top: 1, right: 1, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 3, backgroundColor: '#D73C4A', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' } });

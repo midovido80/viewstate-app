@@ -36,8 +36,8 @@ export function RaisedTabBar({ state, descriptors, navigation }: Props) {
 const styles = StyleSheet.create({
   bar: { position: 'relative', zIndex: 100, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E1E7F0' },
   row: { direction: 'ltr', gap: 6, alignItems: 'stretch' },
-  button: { flex: 1, minWidth: 0, minHeight: 72, paddingHorizontal: 4, paddingVertical: 7, gap: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderBottomWidth: 3, borderColor: '#D8E1EF', shadowColor: '#173F78', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 3 },
-  selected: { backgroundColor: '#EAF2FF', borderColor: '#9AB6FF' },
+  button: { flex: 1, minWidth: 0, minHeight: 64, paddingHorizontal: 4, paddingVertical: 7, gap: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderBottomWidth: 2, borderColor: '#D8E1EF', shadowColor: '#173F78', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 3 },
+  selected: { backgroundColor: '#EAF0FF', borderColor: '#9AB6FF' },
   pressed: { transform: [{ translateY: 1 }], shadowOpacity: 0, elevation: 0, backgroundColor: '#DFEAFA' },
   label: { fontSize: 12, lineHeight: 18, textAlign: 'center', flexShrink: 1 },
 });

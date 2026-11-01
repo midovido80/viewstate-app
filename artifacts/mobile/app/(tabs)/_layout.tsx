@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAppMotion } from '@/hooks/useAppMotion';
 import { useColors } from '@/hooks/useColors';
 import { Tabs } from 'expo-router';
 import { RaisedTabBar } from '@/components/navigation/RaisedTabBar';
@@ -6,7 +7,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 
 function ClassicTabLayout() {
-  const colors = useColors();
+  const colors = useColors(), allowMotion = useAppMotion();
   const { t } = useI18n();
   const insets = useScreenInsets();
 
@@ -17,6 +18,7 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
+        animation: allowMotion ? 'fade' : 'none',
         sceneStyle: {
           overflow: 'hidden',
         },

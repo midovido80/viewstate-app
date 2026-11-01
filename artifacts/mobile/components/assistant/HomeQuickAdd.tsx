@@ -36,7 +36,7 @@ export function HomeQuickAdd({ label, closeLabel, labels, onAction }: { label: s
     </Modal>
   </View>;
 }
-const q = StyleSheet.create({ stage: { height: 97, alignItems: 'center', justifyContent: 'center', gap: 5 }, trigger: { width: 62, height: 62, borderRadius: 31, backgroundColor: c.blue, alignItems: 'center', justifyContent: 'center' },
+const q = StyleSheet.create({ stage: { height: 97, alignItems: 'center', justifyContent: 'center', gap: 5 }, trigger: { width: 62, height: 62, borderRadius: 31, backgroundColor: c.blue, borderWidth: 3, borderColor: '#DCE6FF', shadowColor: c.blue, shadowOpacity: .2, shadowOffset: { width: 0, height: 5 }, shadowRadius: 10, elevation: 4, alignItems: 'center', justifyContent: 'center' },
   caption: { fontSize: 12, color: c.muted }, petal: { position: 'absolute', width: 76, height: 72, borderRadius: 26, backgroundColor: 'white', elevation: 6, shadowColor: '#142D50', shadowOpacity: .15, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } },
   petalAction: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 5, padding: 4 }, petalLabel: { fontSize: 13, color: c.blue, textAlign: 'center' },
 });

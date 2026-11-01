@@ -26,7 +26,7 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  Dimensions,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -128,6 +128,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const detailBackRoute = matchingBackRoute(matchingReturnToken);
   const router = useRouter();
   const colors = useColors();
+  const { width: screenWidth } = useWindowDimensions();
   const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
@@ -1201,7 +1202,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const visibleContent = getPropertyDetailVisibleContent(property);
 
   const galleryImages = (property?.attachments ?? []).filter(a => a.kind === 'image');
-  const galleryPageWidth = Dimensions.get('window').width - 24;
+  const galleryPageWidth = Math.max(1, screenWidth - 24);
   const otherFiles = (property?.attachments ?? []).filter(a => a.kind !== 'image');
 
   const handleShare = () => {
@@ -1429,7 +1430,77 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         {mode === 'detail' ? (
           <>
             <View style={{ paddingHorizontal: 12, gap: 8 }}>
-              <View testID="property-identity-card" style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10 }}>
+            {shouldShowPropertyGallery(galleryImages.length) ? (
+              <View style={{ paddingBottom: 4 }}>
+                  <View style={{ height: 240, borderRadius: 19, overflow: 'hidden', backgroundColor: colors.card }}>
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onScroll={event => {
+                      const nextIndex = getGalleryIndexFromScrollOffset(
+                        event.nativeEvent.contentOffset.x,
+                        galleryPageWidth,
+                        galleryImages.length,
+                      );
+                      setActiveGalleryIndex(current => current === nextIndex ? current : nextIndex);
+                    }}
+                    onScrollEndDrag={event => setActiveGalleryIndex(getGalleryIndexFromScrollOffset(
+                      event.nativeEvent.contentOffset.x,
+                      galleryPageWidth,
+                      galleryImages.length,
+                    ))}
+                    onMomentumScrollEnd={event => setActiveGalleryIndex(getGalleryIndexFromScrollOffset(
+                      event.nativeEvent.contentOffset.x,
+                      galleryPageWidth,
+                      galleryImages.length,
+                    ))}
+                  >
+                    {galleryImages.map(img => (
+                      (Platform.OS !== 'web' || galleryImageSources[img.id]) ? (
+                        <Image key={img.id} source={{ uri: Platform.OS === 'web' ? galleryImageSources[img.id] : img.managedUri }} style={{ width: galleryPageWidth, height: 240, resizeMode: 'cover' }} />
+                      ) : (
+                        <View key={img.id} style={{ width: galleryPageWidth, height: 240, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                          {galleryResolutionError ? (
+                            <Text
+                              accessibilityRole="alert"
+                              testID="property-gallery-resolution-error"
+                              style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}
+                            >
+                              {galleryResolutionError}
+                            </Text>
+                          ) : (
+                            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }}>
+                              {language === 'ar' ? 'جارٍ تحميل الصورة…' : 'Loading photo…'}
+                            </Text>
+                          )}
+                        </View>
+                      )
+                    ))}
+                  </ScrollView>
+                  <View style={{ position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
+                    <Text testID="property-gallery-counter" style={{ color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 }}>
+                      {activeGalleryIndex + 1} / {galleryImages.length}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const image = galleryImages[activeGalleryIndex];
+                      if (image) void openPropertyAttachment(image);
+                    }}
+                    disabled={openingAttachmentId !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('detail.expand_photo')}
+                    testID="property-gallery-expand"
+                    style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 16 }}
+                  >
+                    <Feather name="maximize" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  </View>
+              </View>
+            ) : null}
+              <View testID="property-identity-card" style={{ backgroundColor: '#FFFFFF', borderRadius: 19, padding: 16, borderWidth: 1, borderColor: '#DBE3EF', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                   <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 21, lineHeight: 28, textAlign: isRTL ? 'right' : 'left' }}>{savedTypeLabel}</Text>
                   <View style={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', backgroundColor: '#EFF6FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
@@ -1530,76 +1601,6 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Text style={{ color: '#173F78', fontFamily: fonts.regular, fontSize: 14, lineHeight: 22, textAlign: isRTL ? 'right' : 'left' }}>{descriptionText}</Text>
               </View> : null}
 
-            {shouldShowPropertyGallery(galleryImages.length) ? (
-              <View style={{ paddingBottom: 4 }}>
-                  <View style={{ height: 180, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.card }}>
-                  <ScrollView
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    scrollEventThrottle={16}
-                    onScroll={event => {
-                      const nextIndex = getGalleryIndexFromScrollOffset(
-                        event.nativeEvent.contentOffset.x,
-                        galleryPageWidth,
-                        galleryImages.length,
-                      );
-                      setActiveGalleryIndex(current => current === nextIndex ? current : nextIndex);
-                    }}
-                    onScrollEndDrag={event => setActiveGalleryIndex(getGalleryIndexFromScrollOffset(
-                      event.nativeEvent.contentOffset.x,
-                      galleryPageWidth,
-                      galleryImages.length,
-                    ))}
-                    onMomentumScrollEnd={event => setActiveGalleryIndex(getGalleryIndexFromScrollOffset(
-                      event.nativeEvent.contentOffset.x,
-                      galleryPageWidth,
-                      galleryImages.length,
-                    ))}
-                  >
-                    {galleryImages.map(img => (
-                      (Platform.OS !== 'web' || galleryImageSources[img.id]) ? (
-                        <Image key={img.id} source={{ uri: Platform.OS === 'web' ? galleryImageSources[img.id] : img.managedUri }} style={{ width: galleryPageWidth, height: 180, resizeMode: 'cover' }} />
-                      ) : (
-                        <View key={img.id} style={{ width: galleryPageWidth, height: 180, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                          {galleryResolutionError ? (
-                            <Text
-                              accessibilityRole="alert"
-                              testID="property-gallery-resolution-error"
-                              style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: 'center' }}
-                            >
-                              {galleryResolutionError}
-                            </Text>
-                          ) : (
-                            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: 'center' }}>
-                              {language === 'ar' ? 'جارٍ تحميل الصورة…' : 'Loading photo…'}
-                            </Text>
-                          )}
-                        </View>
-                      )
-                    ))}
-                  </ScrollView>
-                  <View style={{ position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
-                    <Text testID="property-gallery-counter" style={{ color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 }}>
-                      {activeGalleryIndex + 1} / {galleryImages.length}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      const image = galleryImages[activeGalleryIndex];
-                      if (image) void openPropertyAttachment(image);
-                    }}
-                    disabled={openingAttachmentId !== null}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('detail.expand_photo')}
-                    testID="property-gallery-expand"
-                    style={{ position: 'absolute', bottom: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 16 }}
-                  >
-                    <Feather name="maximize" size={20} color="#fff" />
-                  </TouchableOpacity>
-                  </View>
-              </View>
-            ) : null}
 
             {otherFiles.length > 0 && (
               <View style={{ marginBottom: 4 }}>

@@ -108,26 +108,10 @@ type InitializationState =
   | { status: 'error' }
   | { status: 'ready'; integrityStatus: LocalStoreIntegrityStatus };
 
-function ApplicationRoot() {
+function ApplicationRoot({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontError: Error | null }) {
   const { store } = useUserData();
   const [queryClient] = useState(() => new QueryClient());
   useEffect(() => () => queryClient.clear(), [queryClient]);
-
-  const [interLoaded, interError] = useInterFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
-
-  const [tajawalLoaded, tajawalError] = useTajawalFonts({
-    Tajawal_400Regular,
-    Tajawal_500Medium,
-    Tajawal_700Bold,
-  });
-
-  const fontsLoaded = interLoaded && tajawalLoaded;
-  const fontError = interError || tajawalError;
 
   const [initialization, setInitialization] = useState<InitializationState>({
     status: 'initializing',
@@ -210,7 +194,25 @@ function ApplicationRoot() {
 }
 
 export default function RootLayout() {
-  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot /></RealAccountGate></I18nProvider></SafeAreaProvider>;
+  const [interLoaded, interError] = useInterFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  const [tajawalLoaded, tajawalError] = useTajawalFonts({
+    Tajawal_400Regular,
+    Tajawal_500Medium,
+    Tajawal_700Bold,
+  });
+
+  const fontsLoaded = interLoaded && tajawalLoaded;
+  const fontError = interError || tajawalError;
+
+  // Load the approved fonts before the auth gate, including first launch and Guest setup.
+  if (!fontsLoaded && !fontError) return null;
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot fontsLoaded={fontsLoaded} fontError={fontError} /></RealAccountGate></I18nProvider></SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({
