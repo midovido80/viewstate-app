@@ -1,3 +1,4 @@
+import { projectPropertyProfileDetails } from './formContracts.ts';
 import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import type { PropertyDetailField } from "./taxonomy.ts";
 import type { Property } from "./types.ts";
@@ -70,6 +71,7 @@ export interface PropertyShareRequest {
   readonly labels?: Partial<PropertyShareLabels>;
   readonly detailLabels?: Partial<Record<PropertyDetailField, string>>;
   readonly detailValueLabels?: Readonly<Record<string, string>>;
+  readonly formattedDetailValues?: Partial<Record<PropertyDetailField, string>>;
   /** Localized display values for BASIC enums and the approved Area ID. */
   readonly normalValueLabels?: Readonly<Record<string, string>>;
   /** Optional localized price rendering; the canonical amount is still selected here. */
@@ -290,14 +292,14 @@ export function buildPropertySharePreview(
     add(labels.area, localizedNormalValue(property.core.locationArea.id), "📍");
   }
   if (fields.has("type_details") && property.typeDetails !== undefined) {
-    const details = property.typeDetails as unknown as Record<string, unknown>;
+    const details = projectPropertyProfileDetails(property.core.propertyType, property.activeOffer.transaction, property.typeDetails as unknown as Record<string, unknown>);
     for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
       const value = details[definition.field];
       if (value === undefined) continue;
-      const literalValue = typeof value === "object" && value !== null && "value" in value
+      const literalValue = request.formattedDetailValues?.[definition.field] ?? (typeof value === "object" && value !== null && "value" in value
         ? String((value as { value: unknown }).value)
         : request.detailValueLabels?.[String(value)]
-          ?? (typeof value === "boolean" ? value ? "Yes" : "No" : String(value));
+          ?? (typeof value === "boolean" ? value ? "Yes" : "No" : String(value)));
        add(request.detailLabels?.[definition.field] ?? `${labels.typeDetails} · ${definition.field}`, literalValue, "▫");
     }
   }
