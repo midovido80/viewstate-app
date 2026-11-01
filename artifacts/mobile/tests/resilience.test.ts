@@ -103,7 +103,7 @@ test('canonical identity enrichment unions roles without replacing authored fiel
   });
 });
 
-test('property source eligibility is based on the selected role', () => {
+test('property source role is independent of Person classification', () => {
   const person = createPerson({
     id: 'multi-role-source',
     classifications: ['owner', 'seeker'],
@@ -111,7 +111,7 @@ test('property source eligibility is based on the selected role', () => {
     displayPhone: '51111111',
   });
   assert.equal(personCanBePropertySource(person, 'owner'), true);
-  assert.equal(personCanBePropertySource(person, 'broker'), false);
+  assert.equal(personCanBePropertySource(person, 'broker'), true);
 });
 
 test('WebStore resolves same-phone creation to the stable identity and unions roles', async () => {
@@ -143,14 +143,14 @@ test('WebStore resolves same-phone creation to the stable identity and unions ro
   assert.equal((await store.getPerson(canonical.id))?.name, 'Canonical literal');
 });
 
-test('person source picker remains role-first and persistence enforces eligibility', async () => {
+test('person source picker remains role-first and persistence requires an existing identity', async () => {
   const [detail, persistence] = await Promise.all([
     readFile(sourcePath('../app/property/[propertyCoreId].tsx'), 'utf8'),
     readFile(sourcePath('../services/persistence.ts'), 'utf8'),
   ]);
-  assert.match(detail, /setSourceRole\(role\)[\s\S]{0,260}setSourcePersonId\(''\)/);
-  assert.match(detail, /sourcePeople\.filter\(person => person\.classifications\.includes\(sourceRole\)\)/);
-  assert.match(persistence, /PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED/);
+  assert.match(detail, /onPress=\{\(\) => setSourceRole\(role\)\}/);
+  assert.match(detail, /visibleSourcePeople\.map\(person =>/);
+  assert.match(persistence, /PROPERTY_SOURCE_TARGET_MISSING/);
 });
 
 test('consolidation code preserves dependent relationship semantics and refuses opaque dependents', async () => {
@@ -316,12 +316,12 @@ test('Native consolidation preflights every persisted relationship before writes
       }),
     },
     {
-      name: 'source role ineligibility',
+      name: 'invalid source role',
       error: /UNREADABLE_PROPERTY_SOURCE_STORAGE/,
       corrupt: (db, first) => db.sources.push({
         propertyCoreId: 'native-preflight-property',
         personId: first.id,
-        role: 'broker',
+        role: 'invalid-role',
       }),
     },
   ];
@@ -1303,7 +1303,7 @@ test('Arabic and English recovery and preservation warnings are present', async 
   assert.match(translations, /'startup\.retry': 'إعادة المحاولة'/);
   assert.match(translations, /Nothing was deleted, reset, or replaced/);
   assert.match(translations, /لم يتم حذف أي بيانات أو إعادة ضبطها أو استبدالها/);
-  assert.match(translations, /Unreadable records are still preserved locally/);
+  assert.match(translations, /Unreadable records are preserved locally/);
   assert.match(translations, /السجلات غير المقروءة محفوظة محلياً/);
 });
 
