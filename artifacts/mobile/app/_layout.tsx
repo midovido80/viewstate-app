@@ -19,9 +19,8 @@ import {
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
 import { useUserData } from '@/contexts/UserDataContext';
-import { useGuestAccount } from '@/contexts/GuestAccountContext';
-import { RealAccountGate, useRealAccount } from '@/contexts/RealAccountContext';
-import { Stack, useRouter } from 'expo-router';
+import { RealAccountGate } from '@/contexts/RealAccountContext';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
@@ -34,7 +33,7 @@ import {
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
 import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
 
@@ -45,8 +44,8 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
-  const router = useRouter(); const account = useRealAccount(), guest = useGuestAccount();
-  useEffect(() => { if (account || guest) router.replace('/'); }, []);
+  // Expo Router restores the requested route. Auth/onboarding remain owned by the root gate.
+  // Never replace a restored property URL merely because its account is ready.
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       {integrityStatus.hasUnreadableRecords ? (
@@ -100,6 +99,10 @@ function RootLayoutNav({
       </Stack>
     </View>
   );
+}
+
+function AppLoadingScreen() {
+  return <View testID="app-startup-loading" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.light.background }} accessibilityLabel="Loading / جارٍ التحميل" accessibilityState={{ busy: true }}><ActivityIndicator size="large" color={colors.light.primary} /></View>;
 }
 
 type InitializationState =
@@ -164,7 +167,7 @@ function ApplicationRoot({ fontsLoaded, fontError }: { fontsLoaded: boolean; fon
       && !fontsLoaded
       && !fontError
     )
-  ) return null;
+  ) return <AppLoadingScreen />;
 
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
@@ -211,7 +214,7 @@ export default function RootLayout() {
   const fontError = interError || tajawalError;
 
   // Load the approved fonts before the auth gate, including first launch and Guest setup.
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError) return <AppLoadingScreen />;
   return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot fontsLoaded={fontsLoaded} fontError={fontError} /></RealAccountGate></I18nProvider></SafeAreaProvider>;
 }
 

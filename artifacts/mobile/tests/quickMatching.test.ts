@@ -82,3 +82,37 @@ test('Whole-building housing differences use translated labels, never stored opt
  const row=matchingComparisonRows(evaluateMatch(r,{property:p}),r,p,'ar').find(r=>r.field==='occupancy')!;
  assert.ok(row.offered.includes('شركات'));assert.ok(row.offered.includes('عزاب'));assert.doesNotMatch(row.offered,/company_staff|bachelor/);assert.equal(row.status,'not_met');
 });
+
+test('matching budgets display missing bounds, open budget and explicit zero without changing saved data', async () => {
+ const {formatMatchingBudget}=await import('../services/matchingPresentation.ts');
+ for(const language of ['ar','en'] as const){
+  const text=(minimum:number|undefined,maximum:number|undefined,open=false)=>formatMatchingBudget({budget:{minimum,maximum,currencyCode:'KWD'},...(open?{unspecifiedFields:['budget']}:{})},language);
+  assert.equal(text(undefined,450),language==='ar'?'حتى 450 د.ك':'Up to 450 KWD');
+  assert.equal(text(350,undefined),language==='ar'?'من 350 د.ك':'From 350 KWD');
+  assert.equal(text(350,450),'350–450 KWD');
+  assert.equal(text(0,450),'0–450 KWD');
+  assert.equal(text(undefined,undefined,true),language==='ar'?'ميزانية مفتوحة':'Open budget');
+  assert.equal(text(undefined,undefined),language==='ar'?'غير محدد':'Not specified');
+ }
+ const r=request(1,{budget:{maximum:450,currencyCode:'KWD'}}),before=JSON.stringify(r);formatMatchingBudget(r,'ar');assert.equal(JSON.stringify(r),before);
+});
+
+test('commercial facts stay visible in compact review with true matched, missing and different states',async()=>{
+ const {compactMatchingComparisonRows}=await import('../services/matchingPresentation.ts');
+ const r=request(1,{propertyType:'office',commercialServices:{automaticNumberCount:2,cleaning:true,kitchen:'shared'}});
+ const offered={...property(),core:{...property().core,propertyType:'office'},typeDetails:{propertyType:'office',automaticNumberCount:3,hasFacilityCleaning:true,hasKitchen:true,kitchenAccess:'shared'}} as Property;
+ for(const language of ['ar','en'] as const){
+  const before=JSON.stringify([r,offered]);const result=evaluateMatch(r,{property:offered});const rows=matchingComparisonRows(result,r,offered,language),review=matchingReviewRows(rows);
+  const compact=compactMatchingComparisonRows(review.visible);
+  for(const field of ['automaticNumberCount','facilityCleaning','kitchenAccess']){assert.equal(compact.filter(row=>row.field===field).length,1);assert.equal(compact.find(row=>row.field===field)?.status,'matched');}
+  assert.equal(compact.find(row=>row.field==='kitchenAccess')?.requested,language==='ar'?'مشترك':'Shared');
+  assert.equal(JSON.stringify([r,offered]),before);
+ }
+ const missing={...offered,typeDetails:{propertyType:'office',hasKitchen:true}} as Property;
+ const review=matchingReviewRows(matchingComparisonRows(evaluateMatch(r,{property:missing}),r,missing,'ar'));
+ assert.deepEqual(review.confirmations.filter(row=>['automaticNumberCount','facilityCleaning','kitchenAccess'].includes(row.field)).map(row=>row.status),['unknown','unknown','unknown']);
+ const bad={...offered,typeDetails:{propertyType:'office',automaticNumberCount:1,hasFacilityCleaning:false,hasKitchen:true,kitchenAccess:'private'}} as Property;
+ const badRows=matchingReviewRows(matchingComparisonRows(evaluateMatch(r,{property:bad}),r,bad,'ar')).visible;
+ for(const field of ['automaticNumberCount','facilityCleaning','kitchenAccess'])assert.notEqual(badRows.find(row=>row.field===field)?.status,'matched');
+ assert.equal(badRows.find(row=>row.field==='kitchenAccess')?.offered,'خاص');
+});

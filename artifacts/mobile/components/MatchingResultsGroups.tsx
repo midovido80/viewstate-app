@@ -1,3 +1,4 @@
+import { formatMatchingBudget } from '@/services/matchingPresentation';
 import { Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type {
@@ -141,7 +142,7 @@ export function MatchingResultsGroups({
     const details = [
       areas,
       typeLabel,
-      `${requirement.budget.minimum}–${requirement.budget.maximum} ${requirement.budget.currencyCode}`,
+      formatMatchingBudget(requirement, language),
       requirement.bedroomsMinimum !== undefined
         ? `${requirement.bedroomsMinimum}${ar ? " غرف فأكثر" : "+ beds"}`
         : "",

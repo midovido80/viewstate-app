@@ -6,6 +6,8 @@ import { emptyQuickMatchingFilters, type QuickMatchingFilters } from '../service
 const state={ar:true,values:[] as any[],cursor:0};(globalThis as any).__quickUI=state;
 (globalThis as any).React={createElement:(type:any,props:any,...children:any[])=>({type,props:{...props,children:children.length?children:props?.children}})};
 const stubs=new Map([
+ ['@/components/PropertyCover',`export const PropertyCover='PropertyCover';`],
+ ['@/components/MatchScoreRing',`export const MatchScoreRing='MatchScoreRing';`],
  ['react',`export const useState=initial=>{const s=globalThis.__quickUI,i=s.cursor++;if(!(i in s.values))s.values[i]=typeof initial==='function'?initial():initial;return [s.values[i],v=>s.values[i]=typeof v==='function'?v(s.values[i]):v];};`],
  ['react-native',`export const Text='Text',View='View',TouchableOpacity='TouchableOpacity',Modal='Modal',ScrollView='ScrollView';`],
  ['@expo/vector-icons',`export const Feather='Feather';`],
@@ -58,4 +60,16 @@ test('Property results keep the exact no-client phrase, paginate without losing 
  const card=tree.find(e=>e.type==='MatchingResultCard')!;assert.equal(card.props.requirement.id,r.id);card.props.onViewPerson();card.props.onViewRequirement();card.props.onPress();assert.deepEqual(opened,['real-client',r.id,'p-0']);
  card.props.onToggle();assert.equal(render(QuickMatchingResults,props()).find(e=>e.type==='MatchingResultCard')!.props.expanded,true);
  tree.find(e=>e.props.testID==='quick-show-more')!.props.onPress();tree=render(QuickMatchingResults,props());assert.equal(tree.filter(e=>e.props.testID?.startsWith('quick-property-')).length,25);assert.equal(tree.some(e=>e.props.testID==='quick-show-more'),false);
+});
+
+
+test('actual card renders commercial rows before Full comparison and formats one-bound budget', async()=>{
+ const {MatchingResultCard}=await import('../components/MatchingResultCard.tsx');
+ for(const ar of [true,false]){state.ar=ar;reset();
+ const r={id:'11111111-1111-4111-8111-111111111111',seekerId:'client',purpose:'rent',propertyType:'office',preferredAreaIds:['salmiya'],budget:{maximum:450,currencyCode:'KWD'},rentalPeriodId:'monthly',centralAC:true,catalogPreferences:[{field:'builtUpAreaSquareMeters',kind:'number',comparison:'minimum',value:120}],commercialServices:{automaticNumberCount:2,cleaning:true,kitchen:'shared'},notes:''} as SeekerRequirement;
+ const p={core:{id:'commercial-ui',propertyType:'office',locationArea:{id:'salmiya'}},activeOffer:{id:'offer',propertyCoreId:'commercial-ui',transaction:'rent',rentalPrice:{amount:400,currencyCode:'KWD'},rentalPeriodId:'monthly'},typeDetails:{propertyType:'office',builtUpAreaSquareMeters:120,hasCentralAC:true,automaticNumberCount:3,hasFacilityCleaning:true,hasKitchen:true,kitchenAccess:'shared'}} as Property;
+ const tree=render(MatchingResultCard,{result:evaluateMatch(r,{property:p}),requirement:r,property:p,expanded:true,perspective:'properties',onPress:()=>undefined});
+ for(const field of ['automaticNumberCount','facilityCleaning','kitchenAccess'])assert.equal(tree.filter(e=>e.props.testID===`matching-compare-${field}`).length,1,field);
+ const content=JSON.stringify(tree);assert.ok(content.includes(ar?'حتى 450 د.ك':'Up to 450 KWD'));assert.ok(!content.includes('undefined–'));
+ }
 });

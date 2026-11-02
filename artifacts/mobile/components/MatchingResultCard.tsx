@@ -14,6 +14,8 @@ import { useI18n } from "@/contexts/I18nContext";
 import { getAreaById } from "@/constants/kuwait-areas";
 import { getSavedPropertyTypeLabel } from "@/services/savedPropertyClassification";
 import {
+  compactMatchingComparisonRows,
+  formatMatchingBudget,
   matchingCategoryLabel,
   matchingComparisonRows,
   matchingReviewRows,
@@ -134,7 +136,8 @@ export function MatchingResultCard({
         ? `${unknowns.length} بنود تحتاج تأكيدًا`
         : `${unknowns.length} ${unknowns.length === 1 ? "field needs" : "fields need"} confirmation`
       : matchingCategoryLabel(result.category, language);
-  const visibleRows = fullComparison ? rows : rows.slice(0, 5);
+  const compactRows = compactMatchingComparisonRows(rows);
+  const visibleRows = fullComparison ? rows : compactRows;
   const area = property
     ? getAreaById(property.core.locationArea.id)
     : undefined;
@@ -250,7 +253,7 @@ export function MatchingResultCard({
           <View style={{ flex: 1, minWidth: 0, padding: 10, gap: 7, borderStartWidth: 1, borderColor: '#E3EAF5' }}>
             <View style={{ height: 86, borderRadius: 10, backgroundColor: '#EAF0FF', alignItems: 'center', justifyContent: 'center' }}><Feather name="user" size={34} color="#7592BE" /></View>
             <Text style={{ ...text, color: '#B45309', fontFamily: fonts.semiBold, fontSize: 13 }} numberOfLines={2}>{personName || (ar ? 'طلب مطابقة' : 'Matching request')}</Text>
-            <Text style={{ ...text, color: '#62738D', fontSize: 12 }}>{requirement.budget.minimum}–{requirement.budget.maximum} {requirement.budget.currencyCode}</Text>
+            <Text style={{ ...text, color: '#62738D', fontSize: 12 }}>{formatMatchingBudget(requirement, language)}</Text>
           </View>
         </View>}
         {perspective === "people" && property && (
@@ -286,8 +289,7 @@ export function MatchingResultCard({
               : ar
                 ? "طلب للشراء"
                 : "Purchase request"}{" "}
-            · {requirement.budget.minimum}–{requirement.budget.maximum}{" "}
-            {requirement.budget.currencyCode}
+            · {formatMatchingBudget(requirement, language)}
           </Text>
         )}
         {!expanded && (
@@ -469,7 +471,7 @@ export function MatchingResultCard({
               .
             </Text>
           )}
-          {rows.length > 5 && (
+          {rows.length > compactRows.length && (
             <Button
               title={
                 fullComparison

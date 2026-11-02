@@ -1,3 +1,4 @@
+import { formatPrice } from '@/constants/market';
 import { getAreaById } from '@/constants/kuwait-areas';
 import type {
   MatchExplanation,
@@ -10,6 +11,16 @@ import {
 import { DEMO_NEARBY_SERVICES } from "@/services/propertyDemoCatalog";
 
 type Language = "en" | "ar";
+/** Display only: never fills missing bounds or changes the matching budget. */
+export function formatMatchingBudget(requirement: Pick<import('@workspace/property-domain').SeekerRequirement, 'budget' | 'unspecifiedFields'>, language: Language): string {
+  const { minimum, maximum, currencyCode } = requirement.budget;
+  const ar = language === 'ar';
+  if (minimum !== undefined && maximum !== undefined) return `${minimum}–${maximum} ${currencyCode}`;
+  if (maximum !== undefined) return `${ar ? 'حتى' : 'Up to'} ${formatPrice(maximum, currencyCode, language)}`;
+  if (minimum !== undefined) return `${ar ? 'من' : 'From'} ${formatPrice(minimum, currencyCode, language)}`;
+  return requirement.unspecifiedFields?.includes('budget') ? (ar ? 'ميزانية مفتوحة' : 'Open budget') : (ar ? 'غير محدد' : 'Not specified');
+}
+
 const labels: Record<string, [string, string]> = {
   automaticNumberCount: ['Number of PACI numbers', 'عدد الأرقام الآلية'],
   facilityCleaning: ['Facility cleaning', 'نظافة مرافق'],
@@ -144,7 +155,7 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
       field: item.criterion,
       label: matchingCriterionLabel(item.criterion, language),
       requested: item.criterion === 'budget'
-        ? `${requirement.budget.minimum ?? '—'}–${requirement.budget.maximum ?? '—'} ${requirement.budget.currencyCode}`
+        ? formatMatchingBudget(requirement, language)
         : value(item.criterion, item.expected),
       offered,
       status: item.status,
@@ -181,10 +192,17 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
 /** Focus the review on actionable differences; retain the full recorded request underneath. */
 const DISCUSSION_FIELDS = new Set(['location','budget','bedrooms','bedroomCount','builtUpAreaSquareMeters','plotAreaSquareMeters','occupancy','housingTypes']);
 const CONFIRMATION_FIELDS = new Set(['hasParking','hasBuildingParking','parkingSpaceCount','parkingTypes','hasElevator','elevatorCount','hasCentralAC','hasSplitAC']);
+export const COMMERCIAL_COMPARISON_FIELDS = new Set(['automaticNumberCount', 'facilityCleaning', 'kitchenAccess']);
+
+/** Keep the three explicitly requested commercial facts visible even in compact comparison. */
+export function compactMatchingComparisonRows(rows: readonly MatchingComparisonRow[]): readonly MatchingComparisonRow[] {
+  return rows.filter((row, index) => index < 5 || COMMERCIAL_COMPARISON_FIELDS.has(row.field));
+}
+
 export function matchingReviewRows(rows: readonly MatchingComparisonRow[]) {
   return {
     discussions: rows.filter(r=>DISCUSSION_FIELDS.has(r.field) && ['not_met','ineligible'].includes(r.status)),
-    confirmations: rows.filter(r=>CONFIRMATION_FIELDS.has(r.field) && r.status!=='matched'),
-    visible: rows.filter(r=>DISCUSSION_FIELDS.has(r.field) || CONFIRMATION_FIELDS.has(r.field) || r.field==='bathrooms'),
+    confirmations: rows.filter(r=>(CONFIRMATION_FIELDS.has(r.field) && r.status!=='matched') || (COMMERCIAL_COMPARISON_FIELDS.has(r.field) && r.status === 'unknown')),
+    visible: rows.filter(r=>DISCUSSION_FIELDS.has(r.field) || CONFIRMATION_FIELDS.has(r.field) || r.field==='bathrooms' || COMMERCIAL_COMPARISON_FIELDS.has(r.field)),
   };
 }
