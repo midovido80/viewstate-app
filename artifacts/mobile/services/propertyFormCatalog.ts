@@ -330,11 +330,15 @@ const LABELS: Record<string, readonly [string, string]> = {
   hasSharedGym: ['Shared gym in building', 'جيم مشترك بالمبنى'],
   hasSeaView: ['Sea view', 'إطلالة بحرية'],
   hasKitchen: ['Kitchen', 'مطبخ'],
+  automaticNumberCount: ['Number of PACI numbers', 'عدد الأرقام الآلية'],
+  hasFacilityCleaning: ['Facility cleaning', 'نظافة مرافق'],
+  kitchenAccess: ['Kitchen access', 'المطبخ خاص / مشترك'],
   hasHall: ['Hall', 'صالة'],
   hasParking: ['Parking', 'موقف سيارة'],
 };
 
 const COUNT_FIELDS = new Set<PropertyDetailField>([
+  'automaticNumberCount',
   'apartmentsPerFloor', 'commercialFloorCount', 'availableUnitCount',
   'privateParkingCount',
   'entranceCount',
@@ -349,6 +353,7 @@ const DECIMAL_FIELDS = new Set<PropertyDetailField>([
   'plotAreaSquareMeters', 'builtUpAreaSquareMeters', 'frontageWidthMeters', 'ceilingHeightMeters',
 ]);
 const BOOLEAN_FIELDS = new Set<string>([
+  'hasFacilityCleaning',
   'sameApartmentLayout', 'sameApartmentsPerFloor', 'hasBuildingParking', 'hasCommercialShops', 'hasCommercialFloors', 'hasGuardRoom', 'hasCCTV', 'hasLoadingArea', 'hasSharedBathrooms', 'hasPrivateBathroom', 'hasGlassFront', 'hasMezzanine', 'hasAttachedStorage', 'hasWaterDrainage', 'hasVentilation',
   'hasVehicleRamp', 'hasServiceElevator', 'hasEscalator', 'hasFireSystem',
   'hasPrivateEntrance', 'hasAccessibleEntrance',
@@ -357,6 +362,7 @@ const BOOLEAN_FIELDS = new Set<string>([
   'hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView',
 ]);
 const CHOICE_FIELDS = new Set<PropertyDetailField>([
+  'kitchenAccess',
   'housingTypes', 'buildingParkingTypes', 'rentalScope',
   'warehouseFinish', 'warehouseKind', 'warehouseLevels', 'rampVehicleSize', 'electricityPhase', 'electricityCapacityUnit',
   'buildingAgeBand', 'streetPosition', 'parkingTypes', 'rentalOccupancy',

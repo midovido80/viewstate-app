@@ -92,12 +92,12 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
   const detailGroups = AMENITY_DETAIL_GROUPS.filter(group => profile.fields.includes(group[0]));
   const groupedFields = new Set<string>(detailGroups.flat());
   const amenityEntries = [
-    ...profile.amenities.filter(field => !groupedFields.has(field)).map(field => ({ field, content: <ChoiceTile key={field} optionId={field} label={fieldLabel(field)} role="checkbox" selected={values[field] === 'true'} onPress={() => onChange(field, values[field] === 'true' ? '' : 'true')} /> })),
+    ...profile.amenities.filter(field => !groupedFields.has(field) && !(field === 'hasFacilityCleaning' || field === 'hasKitchen' && (propertyType === 'office' || propertyType === 'floor' && values.floorUse === 'commercial'))).map(field => ({ field, content: <ChoiceTile key={field} optionId={field} label={fieldLabel(field)} role="checkbox" selected={values[field] === 'true'} onPress={() => onChange(field, values[field] === 'true' ? '' : 'true')} /> })),
     ...detailGroups.map(group => ({ field: group[0], details: true, content: <>{group.filter(field => profile.fields.includes(field)).map(renderField)}</> })),
   ];
   const yieldPercent = transaction === 'sale' && propertyType === 'whole_building' ? grossAnnualRentalYield(salePrice, values.monthlyIncome?.trim() ? Number(values.monthlyIncome) : undefined) : undefined;
   return <View style={{ gap: 12 }}>
-    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field)).map(field => <RequiredField key={field} id={field}>{renderField(field)}</RequiredField>)}
+    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field) && !['automaticNumberCount', 'kitchenAccess'].includes(field)).map(field => <RequiredField key={field} id={field}>{renderField(field)}</RequiredField>)}
       {yieldPercent !== undefined && <View><Text style={labelStyle}>{ar ? 'العائد السنوي الإجمالي قبل المصروفات' : 'Gross annual yield before expenses'}</Text><Text style={labelStyle}>{yieldPercent.toFixed(2)}%</Text></View>}
     </PropertyFormCard>
     <PropertyFormCard title={ar ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>

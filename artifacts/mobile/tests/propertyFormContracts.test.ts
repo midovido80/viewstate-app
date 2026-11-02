@@ -108,3 +108,34 @@ test('Residential Floor remains a single apartment without building-count fields
   assert.equal(getPropertyFormProfile('floor', 'sale', { floorUse: 'commercial' }), undefined);
   assert.equal(isPropertyProfileFieldVisible('roomsPerUnit', 'commercial_complex', 'sale'), false);
 });
+
+test('Office and commercial Floor services round-trip in Rent and Sale without deriving PACI count from area', () => {
+  for (const type of ['office', 'floor'] as const) for (const transaction of ['rent', 'sale'] as const) {
+    const { facts, saved } = roundTrip(type, transaction, { ...(type === 'floor' ? { floorUse: 'commercial' } : {}), areaSquareMeters: 120, automaticNumberCount: '3', hasFacilityCleaning: 'true', hasKitchen: 'true', kitchenAccess: 'shared' });
+    assert.equal(facts.automaticNumberCount, 3);
+    assert.equal(facts.hasFacilityCleaning, true);
+    assert.equal(facts.kitchenAccess, 'shared');
+    assert.equal(formatPropertyDetailValue('kitchenAccess', facts.kitchenAccess, 'ar'), 'مشترك');
+    assert.equal(formatPropertyDetailValue('kitchenAccess', 'private', 'en'), 'Private');
+    const changedArea = buildPropertyWithCaptureDetails(saved, { ...(type === 'floor' ? { floorUse: 'commercial' } : {}), areaSquareMeters: 600, automaticNumberCount: '3', hasFacilityCleaning: 'true', hasKitchen: 'true', kitchenAccess: 'shared' });
+    assert.equal((changedArea.typeDetails as unknown as Record<string, unknown>).automaticNumberCount, 3);
+  }
+});
+
+test('commercial service physical validation rejects invalid counts, wrong scopes and ungrounded kitchen access', () => {
+  for (const value of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', NaN]) assert.equal(validateProperty({ ...basic('office', 'rent'), typeDetails: { propertyType: 'office', automaticNumberCount: value } as never }).ok, false);
+  for (const value of [0, 2]) assert.equal(validateProperty({ ...basic('office', 'rent'), typeDetails: { propertyType: 'office', automaticNumberCount: value } }).ok, true);
+  for (const type of ['apartment', 'shop', 'whole_building'] as const) assert.equal(validateProperty({ ...basic(type, 'rent'), typeDetails: { propertyType: type, automaticNumberCount: 2 } as never }).ok, false);
+  assert.equal(validateProperty({ ...basic('floor', 'rent'), typeDetails: { propertyType: 'floor', floorUse: 'residential', hasFacilityCleaning: true } as never }).ok, false);
+  for (const details of [{ kitchenAccess: ['private'], hasKitchen: true }, { kitchenAccess: 'public', hasKitchen: true }, { kitchenAccess: 'private' }, { kitchenAccess: 'shared', hasKitchen: false }, { hasFacilityCleaning: 'true' }]) assert.equal(validateProperty({ ...basic('office', 'rent'), typeDetails: { propertyType: 'office', ...details } as never }).ok, false);
+});
+
+test('legacy kitchen presence remains unspecified; clearing the kitchen removes its private/shared child', () => {
+  const legacy: Property = { ...basic('office', 'rent'), typeDetails: { propertyType: 'office', hasKitchen: true } };
+  const reloaded = buildPropertyDetailsUpdateCandidate(legacy, createEditDraft(legacy).choices);
+  assert.equal((reloaded.typeDetails as unknown as Record<string, unknown>).kitchenAccess, undefined);
+  const old = buildPropertyWithCaptureDetails(basic('office', 'rent'), { hasKitchen: 'true', kitchenAccess: 'private', automaticNumberCount: '0' });
+  const cleared = buildPropertyWithCaptureDetails(old, { hasKitchen: '', kitchenAccess: 'private', automaticNumberCount: '' });
+  const facts = (cleared.typeDetails ?? {}) as unknown as Record<string, unknown>;
+  assert.equal(facts.hasKitchen, undefined); assert.equal(facts.kitchenAccess, undefined); assert.equal(facts.automaticNumberCount, undefined);
+});

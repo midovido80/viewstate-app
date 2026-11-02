@@ -388,3 +388,19 @@ test('commercial saved detail rows translate every new service and omit resident
   assert.equal(rows.some(row => row.value.includes('مدرسة')), false);
   assert.equal(JSON.stringify(result.value), before);
 });
+
+test('commercial request compares only recorded offered count, cleaning and kitchen privacy', async () => {
+  const { buildPropertyWithCaptureDetails } = await import('@/services/propertyCaptureDetails');
+  const base = { core: { id: 'office-parity', propertyType: 'office', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'offer', propertyCoreId: 'office-parity', transaction: 'rent', rentalPrice: { amount: 400, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' } } as import('@workspace/property-domain').Property;
+  const result = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType: 'office', commercialServices: { automaticNumberCount: 2, cleaning: true, kitchen: 'shared' } });
+  assert.equal(result.ok, true); if (!result.ok) return;
+  const offered = buildPropertyWithCaptureDetails(base, { areaSquareMeters: 120, automaticNumberCount: '3', hasFacilityCleaning: 'true', hasKitchen: 'true', kitchenAccess: 'shared' });
+  const good = evaluateMatch(result.value, { property: offered });
+  for (const field of ['automaticNumberCount', 'facilityCleaning', 'kitchenAccess']) assert.equal(good.explanations.find(item => item.criterion === field)?.status, 'matched', field);
+  const wrong = buildPropertyWithCaptureDetails(base, { automaticNumberCount: '1', hasFacilityCleaning: 'false', hasKitchen: 'true', kitchenAccess: 'private' });
+  const bad = evaluateMatch(result.value, { property: wrong });
+  for (const field of ['automaticNumberCount', 'facilityCleaning', 'kitchenAccess']) assert.notEqual(bad.explanations.find(item => item.criterion === field)?.status, 'matched', field);
+  const legacy = buildPropertyWithCaptureDetails(base, { areaSquareMeters: 120, hasKitchen: 'true' });
+  const missing = evaluateMatch(result.value, { property: legacy });
+  for (const field of ['automaticNumberCount', 'facilityCleaning', 'kitchenAccess']) { const item = missing.explanations.find(item => item.criterion === field); assert.equal(item?.status, 'unknown', field); assert.equal(item?.awardedPoints, 0); }
+});

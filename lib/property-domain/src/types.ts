@@ -106,6 +106,10 @@ export interface FloorApartmentCount {
   readonly apartmentCount: number;
 }
 export interface ApprovedPropertyFormFacts {
+  /** Manual count only, unrelated to area or the PACI identifier. */
+  readonly automaticNumberCount?: number;
+  readonly hasFacilityCleaning?: boolean;
+  readonly kitchenAccess?: 'private' | 'shared';
   readonly buildingAgeBand?: "1_5" | "6_12" | "over_12";
   readonly housingTypes?: readonly ("company_staff" | "bachelor" | "family" | "women" | "mixed")[];
   readonly hasBuildingParking?: boolean;

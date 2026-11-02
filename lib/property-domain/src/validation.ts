@@ -258,7 +258,7 @@ export function validateTypeDetails(
       issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Select unique approved values.'));
     }
   }
-  for (const field of ['sameApartmentLayout', 'sameApartmentsPerFloor', 'hasBuildingParking', 'hasCommercialShops', 'hasCommercialFloors', 'hasGuardRoom', 'hasCCTV', 'hasLoadingArea', 'hasSharedBathrooms', 'hasPrivateBathroom', 'hasGlassFront', 'hasMezzanine', 'hasAttachedStorage', 'hasWaterDrainage', 'hasVentilation']) {
+  for (const field of ['hasFacilityCleaning', 'sameApartmentLayout', 'sameApartmentsPerFloor', 'hasBuildingParking', 'hasCommercialShops', 'hasCommercialFloors', 'hasGuardRoom', 'hasCCTV', 'hasLoadingArea', 'hasSharedBathrooms', 'hasPrivateBathroom', 'hasGlassFront', 'hasMezzanine', 'hasAttachedStorage', 'hasWaterDrainage', 'hasVentilation']) {
     if (candidate[field] !== undefined && typeof candidate[field] !== 'boolean') issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Expected a boolean.'));
   }
   for (const field of ['apartmentsPerFloor', 'commercialFloorCount', 'availableUnitCount']) {
@@ -339,7 +339,11 @@ export function validateTypeDetails(
     }
   }
 
+  if (candidate.kitchenAccess !== undefined && (typeof candidate.kitchenAccess !== 'string' || !['private', 'shared'].includes(candidate.kitchenAccess) || candidate.hasKitchen !== true)) {
+    issues.push(issue('invalid_physical_value', ['typeDetails', 'kitchenAccess'], 'Kitchen access requires an existing kitchen and private/shared selection.'));
+  }
   const countFields = [
+    "automaticNumberCount",
     "privateParkingCount",
     "bathroomCount",
     "parkingSpaceCount",

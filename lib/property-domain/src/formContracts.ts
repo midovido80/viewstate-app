@@ -9,7 +9,7 @@ export interface PropertyFormProfile {
 }
 export const FORM_JSON_FIELDS = ['apartmentLayouts', 'floorApartmentCounts'] as const;
 export const FORM_MULTI_FIELDS = ['housingTypes', 'buildingParkingTypes', 'parkingTypes', 'warehouseLevels'] as const;
-export const FORM_STRING_FIELDS = ['availableFrom', 'rentalScope'] as const;
+export const FORM_STRING_FIELDS = ['availableFrom', 'rentalScope', 'kitchenAccess'] as const;
 export const BUILDING_AMENITIES: readonly PropertyDetailField[] = ['hasCentralAC', 'hasSecurityGuard', 'hasCCTV', 'hasFireSystem', 'hasAccessibleEntrance'];
 export const COMMERCIAL_AMENITIES: readonly PropertyDetailField[] = ['hasCentralAC', 'hasElevator', 'hasPrivateEntrance', 'hasKitchen', 'hasSecurityGuard', 'hasCCTV', 'hasFireSystem', 'hasAccessibleEntrance'];
 const apartmentStructure: readonly PropertyDetailField[] = ['floorCount', 'hasBasement', 'apartmentCount', 'sameApartmentsPerFloor', 'apartmentsPerFloor', 'floorApartmentCounts', 'sameApartmentLayout', 'roomsPerUnit', 'bathroomsPerUnit', 'apartmentLayouts'];
@@ -32,10 +32,10 @@ export function getPropertyFormProfile(type: PropertyType, transaction: Transact
   };
   if (type === 'floor' && values.floorUse === 'commercial' && transaction === 'rent') return {
     id: 'floor_rent', nearby: false,
-    fields: ['floorUse', 'buildingAgeBand', 'floorNumber', 'bathroomCount', 'intendedUse', ...parking, 'availableFrom'],
-    amenities: [...COMMERCIAL_AMENITIES.filter(field => field !== 'hasCCTV'), 'hasBalcony'],
+    fields: ['automaticNumberCount', 'kitchenAccess', 'floorUse', 'buildingAgeBand', 'floorNumber', 'bathroomCount', 'intendedUse', ...parking, 'availableFrom'],
+    amenities: [...COMMERCIAL_AMENITIES.filter(field => field !== 'hasCCTV'), 'hasBalcony', 'hasFacilityCleaning'],
   };
-  if (type === 'office') return { id: 'office', nearby: false, fields: ['buildingAgeBand', 'floorNumber', 'bathroomCount', 'intendedUse', ...parking], amenities: [...COMMERCIAL_AMENITIES, 'hasPrivateBathroom'] };
+  if (type === 'office') return { id: 'office', nearby: false, fields: ['automaticNumberCount', 'kitchenAccess', 'buildingAgeBand', 'floorNumber', 'bathroomCount', 'intendedUse', ...parking], amenities: [...COMMERCIAL_AMENITIES, 'hasPrivateBathroom', 'hasFacilityCleaning'] };
   if (type === 'shop') return { id: 'shop', nearby: false, fields: ['buildingAgeBand', 'floorNumber', 'frontageWidthMeters', 'ceilingHeightMeters', 'entranceCount', 'bathroomCount', 'commercialActivity', ...parking], amenities: ['hasGlassFront', 'hasCentralAC', 'hasMezzanine', 'hasAttachedStorage', 'hasWaterDrainage', 'hasVentilation', 'hasFireSystem', 'hasLoadingArea'] };
   if (type === 'other_built_property' && values.propertyUse === 'residential') return {
     id: 'other_residential', nearby: true,
@@ -53,6 +53,7 @@ const falsity = (v: unknown) => v === false || v === 'false';
 const selected = (v: unknown, item: string) => Array.isArray(v) ? v.includes(item) : typeof v === 'string' && v.split(',').includes(item);
 /** Shared conditional field contract for create, edit, persistence and saved display. */
 export function isPropertyProfileFieldVisible(field: string, type: PropertyType, transaction: Transaction | undefined, values: Readonly<Record<string, unknown>> = {}): boolean {
+  if (field === 'kitchenAccess' && (type === 'office' || type === 'floor' && values.floorUse === 'commercial')) return truth(values.hasKitchen);
   const profile = getPropertyFormProfile(type, transaction, values);
   if (!profile) return true;
   if (field === 'plotAreaSquareMeters' || field === 'builtUpAreaSquareMeters') return true;

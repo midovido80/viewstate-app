@@ -1,11 +1,11 @@
 import type { PropertyDetailField } from '@workspace/property-domain';
 
 export const COMMERCIAL_FLOOR_SALE_FIELDS: readonly PropertyDetailField[] = [
-  'buildingAgeBand', 'floorNumber', 'bathroomCount', 'parkingTypes', 'privateParkingCount',
+  'automaticNumberCount', 'kitchenAccess', 'buildingAgeBand', 'floorNumber', 'bathroomCount', 'parkingTypes', 'privateParkingCount',
   'intendedUse', 'rentalOccupancy', 'monthlyIncome',
 ];
 export const COMMERCIAL_FLOOR_SALE_AMENITIES: readonly PropertyDetailField[] = [
-  'hasCentralAC', 'hasElevator', 'hasBalcony', 'hasPrivateEntrance', 'hasKitchen', 'hasSecurityGuard', 'hasAccessibleEntrance',
+  'hasFacilityCleaning', 'hasCentralAC', 'hasElevator', 'hasBalcony', 'hasPrivateEntrance', 'hasKitchen', 'hasSecurityGuard', 'hasAccessibleEntrance',
 ];
 export const COMMERCIAL_FLOOR_SALE_OCCUPANCY = [
   ['vacant', 'Vacant', 'شاغر'], ['rented', 'Rented', 'مؤجر'],
@@ -29,7 +29,7 @@ export function commercialFloorSaleLabel(field: PropertyDetailField, language: '
   const labels: Partial<Record<PropertyDetailField, readonly [string, string]>> = {
     buildingAgeBand: ['Property age', 'عمر العقار'],
     hasElevator: ['Elevator serving the floor', 'مصعد يخدم الدور'],
-    hasKitchen: ['Private kitchen / pantry', 'مطبخ / بوفيه خاص بالدور'],
+    hasKitchen: ['Kitchen', 'مطبخ'],
     hasSecurityGuard: ['Building security / guard', 'أمن / حارس للمبنى'],
   };
   return labels[field]?.[language === 'ar' ? 1 : 0] ?? fallback;

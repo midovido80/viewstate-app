@@ -1,3 +1,5 @@
+import { hasOfficeRequirementServices } from '@workspace/property-domain';
+import { CommercialOfferedServices } from '@/components/CommercialOfferedServices';
 import { TextInput } from '@/components/FormField';
 import { PropertyProfileFields } from '@/components/PropertyProfileFields';
 import { getPropertyFormProfile } from '@/services/propertyProfileForm';
@@ -39,7 +41,7 @@ export interface ModernPropertyFormProps {
   hidePropertyUse?: boolean;
 }
 
-export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
+function PropertyFormBody({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
   if (propertyType === 'warehouse') return <WarehouseFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
   const hasExtraFields = category && (category.numericFields.some(item => !isMappedTemplateField(item.id)) || category.choices.some(choice => !isMappedTemplateField(choice.id)));
   const nearbySection = onNearbyChange ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
@@ -102,3 +104,8 @@ export function ModernPropertyForm({ transaction, salePrice, recordScopeKey, pro
 }
 
 const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } });
+
+
+export function ModernPropertyForm(props: ModernPropertyFormProps) {
+  return <View><PropertyFormBody {...props} />{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View>;
+}

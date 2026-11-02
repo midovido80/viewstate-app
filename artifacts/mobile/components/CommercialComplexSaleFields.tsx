@@ -27,7 +27,7 @@ export function CommercialComplexSaleFields({ profile = 'complex', recordScopeKe
   const income = values.monthlyIncome?.trim() ? Number(values.monthlyIncome) : undefined;
   const yieldPercent = grossAnnualRentalYield(salePrice, income);
   const isFloor = profile === 'floor';
-  const fields = isFloor ? COMMERCIAL_FLOOR_SALE_FIELDS : COMMERCIAL_COMPLEX_SALE_FIELDS;
+  const fields = isFloor ? COMMERCIAL_FLOOR_SALE_FIELDS.filter(field => !['automaticNumberCount', 'kitchenAccess'].includes(field)) : COMMERCIAL_COMPLEX_SALE_FIELDS;
   const labelFor = (field: PropertyDetailField) => isFloor ? commercialFloorSaleLabel(field, language, propertyDetailLabels[field][language === 'ar' ? 1 : 0]) : propertyDetailLabels[field][language === 'ar' ? 1 : 0];
   const renderField = (field: PropertyDetailField) => {
     if (field === 'privateParkingCount' && !values.parkingTypes?.split(',').includes('private')) return null;
@@ -63,7 +63,7 @@ export function CommercialComplexSaleFields({ profile = 'complex', recordScopeKe
     </PropertyFormCard>
     <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
       <OrderedPropertyAmenities entries={[
-        ...(isFloor ? COMMERCIAL_FLOOR_SALE_AMENITIES : []).map(amenity => ({ field: amenity, content: <ChoiceChip key={amenity} optionId={amenity} label={labelFor(amenity)} selected={values[amenity] === 'true'} testID={`commercial-floor-${amenity}`} onPress={() => onChange(amenity, values[amenity] === 'true' ? '' : 'true')} /> })),
+        ...(isFloor ? COMMERCIAL_FLOOR_SALE_AMENITIES.filter(field => !['hasKitchen', 'hasFacilityCleaning'].includes(field)) : []).map(amenity => ({ field: amenity, content: <ChoiceChip key={amenity} optionId={amenity} label={labelFor(amenity)} selected={values[amenity] === 'true'} testID={`commercial-floor-${amenity}`} onPress={() => onChange(amenity, values[amenity] === 'true' ? '' : 'true')} /> })),
         { field: 'parkingTypes', details: true, content: <>{renderField('parkingTypes')}{renderField('privateParkingCount')}</> },
       ]} />
     </PropertyFormCard>

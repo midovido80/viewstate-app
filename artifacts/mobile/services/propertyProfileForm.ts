@@ -1,6 +1,7 @@
 import { FORM_JSON_FIELDS, FORM_MULTI_FIELDS, FORM_STRING_FIELDS, getPropertyFormProfile, isPropertyProfileFieldVisible, propertyFormValueToDraft, type Property, type PropertyDetailField } from '@workspace/property-domain';
 export { getPropertyFormProfile, isPropertyProfileFieldVisible, propertyFormValueToDraft };
 export const PROFILE_CHOICES: Partial<Record<PropertyDetailField, readonly (readonly [string, string, string])[]>> = {
+  kitchenAccess: [['private', 'Private', 'خاص'], ['shared', 'Shared', 'مشترك']],
   housingTypes: [['company_staff', 'Companies / staff', 'شركات / موظفون'], ['bachelor', 'Bachelors', 'عزاب'], ['family', 'Families', 'عائلات'], ['women', 'Women', 'سيدات'], ['mixed', 'Mixed housing', 'مختلط']],
   buildingParkingTypes: [['public_yard', 'Public yard', 'ساحة عامة'], ['in_building', 'Building parking', 'مواقف بالبناية']],
   rentalScope: [['entire', 'Entire complex', 'كامل المجمع'], ['partial', 'Part of the complex', 'جزء من المجمع']],

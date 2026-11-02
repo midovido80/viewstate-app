@@ -1117,3 +1117,16 @@ test('commercial services survive native and web restart without modifying older
   assert.deepEqual(await restarted.getRequirement(commercial.id), commercial);
   assert.deepEqual(await restarted.getRequirement(ids.rent), rentRequirement());
 });
+
+test('offered commercial services survive Web store recreation alongside an unrelated old property', async () => {
+  const { buildPropertyWithCaptureDetails } = await import('@/services/propertyCaptureDetails');
+  const base = { core: { id: 'offered-services', propertyType: 'office', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'offer', propertyCoreId: 'offered-services', transaction: 'rent', rentalPrice: { amount: 500, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' } } as import('@workspace/property-domain').Property;
+  const property = buildPropertyWithCaptureDetails(base, { automaticNumberCount: '3', hasFacilityCleaning: 'true', hasKitchen: 'true', kitchenAccess: 'shared' });
+  const storage = new MemoryStorage(); const store = new WebStore(storage, locks);
+  const previous = { ...base, core: { ...base.core, id: 'older-office' }, activeOffer: { ...base.activeOffer, id: 'older-offer', propertyCoreId: 'older-office' } };
+  await store.saveProperty(previous); const oldBytes = JSON.stringify(await store.getProperty(previous.core.id));
+  await store.saveProperty(property);
+  const restarted = new WebStore(storage, locks); const reloaded = await restarted.getProperty(property.core.id);
+  assert.deepEqual(reloaded?.typeDetails, property.typeDetails);
+  assert.equal(JSON.stringify(await restarted.getProperty(previous.core.id)), oldBytes);
+});

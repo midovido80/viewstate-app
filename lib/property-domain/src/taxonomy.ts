@@ -64,6 +64,9 @@ export type PropertyDetailField =
   | "hasCommercialFloors"
   | "commercialFloorCount"
   | "hasGuardRoom"
+  | "automaticNumberCount"
+  | "hasFacilityCleaning"
+  | "kitchenAccess"
   | "hasCCTV"
   | "hasLoadingArea"
   | "hasSharedBathrooms"
@@ -204,6 +207,9 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasPool", appliesTo: ["house", "villa", "chalet"] },
   { field: "hasWaterfront", appliesTo: ["chalet"] },
   { field: "hasCentralAC", appliesTo: ["whole_building", "apartment", "floor", "house", "villa", "chalet", "commercial_complex", "office", "shop", "warehouse", "other_built_property"] },
+  { field: "automaticNumberCount", appliesTo: ["office", "floor"], floorUses: ["commercial"] },
+  { field: "hasFacilityCleaning", appliesTo: ["office", "floor"], floorUses: ["commercial"] },
+  { field: "kitchenAccess", appliesTo: ["office", "floor"], floorUses: ["commercial"] },
   { field: "hasKitchen", appliesTo: ["apartment", "floor", "office", "other_built_property"], apartmentSubtypes: ["studio"], floorUses: ["commercial"] },
   { field: "hasSplitAC", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },
   { field: "hasSharedPool", appliesTo: ["apartment"], apartmentSubtypes: ["studio"] },

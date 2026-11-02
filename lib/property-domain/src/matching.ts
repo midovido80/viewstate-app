@@ -5,7 +5,7 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v6" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v7" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -491,15 +491,15 @@ export function evaluateMatch(
     }
     const services = requirement.commercialServices;
     if (services) {
-      // No offered PACI count/cleaning fact exists yet: missing evidence remains unknown.
-      if (services.automaticNumberCount !== undefined) add('automaticNumberCount', services.automaticNumberCount, undefined, 4, 'minimum');
-      if (services.cleaning !== undefined) flexibleFeature('facilityCleaning', services.cleaning);
+      // Only manually recorded offered facts can satisfy commercial service preferences.
+      if (services.automaticNumberCount !== undefined) add('automaticNumberCount', services.automaticNumberCount, facts.automaticNumberCount, 4, 'minimum');
+      if (services.cleaning !== undefined) add('facilityCleaning', services.cleaning, facts.hasFacilityCleaning, 4, 'exact');
       if (services.security !== undefined) flexibleFeature('hasSecurityGuard', services.security);
       if (services.cameras !== undefined) flexibleFeature('hasCCTV', services.cameras);
       if (services.elevators !== undefined) flexibleFeature('hasElevator', services.elevators);
       if (services.bathrooms !== undefined) flexibleFeature(services.bathrooms === 'private' ? 'hasPrivateBathroom' : 'hasSharedBathrooms', true);
-      // Existing hasKitchen says nothing about private/shared ownership.
-      if (services.kitchen !== undefined) add('kitchenAccess', services.kitchen, undefined, 4, 'exact');
+      // A legacy kitchen checkbox alone still says nothing about private/shared ownership.
+      if (services.kitchen !== undefined) add('kitchenAccess', services.kitchen, facts.hasKitchen === true ? facts.kitchenAccess : undefined, 4, 'exact');
       for (const kind of services.parkingTypes ?? []) {
         const actual = Array.isArray(facts.parkingTypes) ? facts.parkingTypes.includes(kind) : undefined;
         add(`parking:${kind}`, true, actual, 4, 'exact');
