@@ -1217,3 +1217,20 @@ Android/iOS native runtime acceptance, physical-device acceptance, and full FW01
 Any change to the frozen revision, source scope, or the three frozen files requires new explicit Founder approval under the mandatory governance lifecycle.
 
 Final state: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.
+
+## Founder decision — 2026-10-01: Property sector selection
+Three equal-width buttons (All, Residential, Commercial) precede the type list. All is default; tapping the active Residential/Commercial filter returns to All. Floor is shared and takes its use from the selected sector; All requires selecting Floor use before proceeding. Do not repeat that choice in the new Floor form. Preserve existing stored floorUse contracts and older records.
+Duplex is directly selectable under Residential/All using propertyType=apartment and apartmentSubtype=duplex. Commercial Duplex and a new dedicated Duplex form are deferred. No new tool or dependency is authorized within this feature package.
+
+## Founder decision — 2026-10-07: Residential Occupancy and Master bedrooms
+Add optional Family/Bachelor/Any Occupancy to all residential Offered Property forms, including Studio. Add optional actual Master bedrooms directly below Bedrooms on all residential types except Studio. Master bedrooms are part of total bedrooms and cannot exceed a known total. These facts are excluded from commercial forms and introduce no duplicate Wanted Requirement fields.
+Residential Other uses optional propertyUse to distinguish it from commercial Other without changing the existing canonical property type; old unclassified records remain supported. Persisted Other use is locked during details editing. Additive local persistence only; no new dependency or bulk migration is authorized.
+
+## Founder decision — 2026-10-15: Property inventory sector filters
+Add Residential and Commercial controls below the current Properties tab filter row. Use mutually exclusive sector selection; tapping the active sector restores both sectors, and All clears both sector and intent facets. Sector restrictions intersect search and existing filters for Offered/Wanted rows. Shared Floor/Other types require a known stored use to appear in a specific sector; unknown legacy use remains available in the unfiltered list without inference or migration.
+
+## Founder decision — 2026-10-15: Explicit Floor names and canonical use
+Replace the main selector's generic Floor choice with Residential floor and Commercial floor. All shows both; Residential and Commercial each show their matching choice. Selection saves the existing propertyType=floor and floorUse=residential/commercial contracts for Offered and Wanted, without another Floor-use question in the new selected-use form. Apply localized specific names to inventory cards, details, review and search. Preserve draft transition protections and leave unknown legacy Floor use unclassified until explicitly completed. This supersedes the earlier main-selector generic Floor/use-choice presentation, without changing the stored taxonomy.
+
+## Founder decision — 2026-10-15: People sector filters
+Apply Residential/Commercial filters to People in combination with the existing intent filters. Wanted + Rent + Residential requires one owned residential Rental Request. Offered combinations use the linked/source Property's own transaction and canonical sector. Never satisfy different selected dimensions using separate records for one Person. Cards and overflow counts reflect matching activities; All clears the filters and retains persons without associated activity. Sector is derived for presentation only, without persisting or guessing unknown use.

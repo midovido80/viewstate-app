@@ -9,7 +9,9 @@ import {
   normalizeGoogleMapsLink,
   openGoogleMapsQuery as openGoogleMapsQueryWithOpener,
   openPastedGoogleMapsLink,
+  openPropertyMapsLocation as openPropertyMapsLocationWithOpener,
   type LinkOpener,
+  type MapCoordinates,
 } from './mapsLink';
 
 export type { Coordinates } from './coordinateRequest';
@@ -68,6 +70,23 @@ export async function openPastedLocationLink(
     await openPastedGoogleMapsLink(location.link, opener, Platform.OS);
   } catch (error) {
     if (error instanceof Error && error.message === 'INVALID_LOCATION_LINK') throw error;
+    throw new Error('LOCATION_LINK_UNAVAILABLE');
+  }
+}
+
+export async function openSavedPropertyMapsLocation(
+  link: string | undefined,
+  coordinates: MapCoordinates | undefined,
+  opener: LinkOpener = Linking,
+  platform: string = Platform.OS,
+): Promise<void> {
+  try {
+    await openPropertyMapsLocationWithOpener(link, coordinates, opener, platform);
+  } catch (error) {
+    if (error instanceof Error && (
+      error.message === 'INVALID_LOCATION_LINK'
+      || error.message === 'INVALID_KUWAIT_COORDINATES'
+    )) throw error;
     throw new Error('LOCATION_LINK_UNAVAILABLE');
   }
 }
