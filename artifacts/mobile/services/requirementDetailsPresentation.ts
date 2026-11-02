@@ -1,4 +1,6 @@
-import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
+import { isCommercialRequirement } from '@workspace/property-domain';
+import { commercialServiceRows } from '@/services/commercialRequirementPresentation';
+import { COMMERCIAL_NEARBY_SERVICES, DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { CatalogPreference, PropertyDetailField, SeekerRequirement } from '@workspace/property-domain';
 import { getAreaById } from '@/constants/kuwait-areas';
@@ -63,6 +65,9 @@ export function getRequirementDetailsRows(
       ? items.map(localizedAmenity).join(language === 'ar' ? '، ' : ', ')
       : words(language, 'None', 'لا يوجد');
   const studio = isWantedStudio(requirement);
+  const commercial = isCommercialRequirement(requirement.propertyType, requirement.floorUse, requirement.propertyUse);
+  if (commercial && requirement.commercialActivity) add('specifications', 'commercialActivity', label('Commercial activity', 'النشاط التجاري'), requirement.commercialActivity);
+  if (commercial && requirement.commercialServices) for (const row of commercialServiceRows(requirement.commercialServices, language)) add('preferences', row.field, row.label, row.value);
   const subtype = getWantedApartmentSubtypeLabel(requirement, language);
 
   add('overview', 'purpose', label('Purpose', 'الغرض'), translate(`requirements.purpose.${requirement.purpose}`));
@@ -127,7 +132,7 @@ export function getRequirementDetailsRows(
   const preferences = requirement.catalogPreferences ?? [];
   const allowed = new Set(getRequirementCatalogFields(requirement.propertyType, requirement.floorUse, studio ? 'studio' : undefined).map(item => item.field));
   for (const preference of preferences) {
-    if (preference.field === 'apartmentSubtype') continue;
+    if (preference.field === 'apartmentSubtype' || (commercial && (preference.field === 'intendedUse' || (preference.field === 'commercialActivity' && requirement.commercialActivity)))) continue;
     // Studio-only fields and read-compatible catalog entries are still saved contract data.
     if (!allowed.has(preference.field) && !studio) {
       const definition = getPropertyFormField(preference.field);
@@ -161,7 +166,7 @@ export function getRequirementDetailsRows(
     requirement.budget.maximum === undefined ? unspecified(language) : formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language));
   }
   if (requirement.preferredNearbyServices?.length) {
-    add('preferences', 'preferredNearbyServices', label('Nearby services', 'الخدمات القريبة'), requirement.preferredNearbyServices.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · '));
+    add('preferences', 'preferredNearbyServices', label('Nearby services', 'الخدمات القريبة'), requirement.preferredNearbyServices.flatMap(id => { const item = (commercial ? COMMERCIAL_NEARBY_SERVICES : DEMO_NEARBY_SERVICES).find(item => item.id === id); return item ? [item.label[language === 'ar' ? 1 : 0]] : commercial ? [] : [id]; }).join(' · '));
   }
   if (requirement.notes.length) {
     add('notes', 'notes', label('Notes', 'ملاحظات'), requirement.notes);
@@ -172,7 +177,7 @@ export function getRequirementDetailsRows(
     words(language, 'None', 'لا يوجد'),
   ]);
   return rows.filter(row =>
-    row.field !== 'preferredAmenityExclusions'
+    row.value.length > 0 && row.field !== 'preferredAmenityExclusions'
     && !hiddenValues.has(row.value));
 }
 

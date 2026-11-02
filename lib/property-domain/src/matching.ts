@@ -1,10 +1,11 @@
+import { isCommercialRequirement } from './commercialRequirements.ts';
 import type { Property } from "./types.ts";
 import type { SeekerRequirement } from "./requirements.ts";
 import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v5" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v6" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -478,8 +479,38 @@ export function evaluateMatch(
     for (const amenity of list ?? [])
       flexibleFeature(amenityFields[amenity], expected);
   }
+  if (isCommercialRequirement(requirement.propertyType, requirement.floorUse, requirement.propertyUse)) {
+    if (requirement.commercialActivity !== undefined) {
+      // Literal recorded activity only; this does not determine licensing permission.
+      const aliases: Record<string, string> = { 'مكتب': 'office', 'تجزئة': 'retail', 'مطعم': 'restaurant', 'عيادة': 'clinic', 'مستودع': 'warehouse' };
+      const normalized = (value: string) => { const text = value.trim().toLocaleLowerCase().replace(/\s+/g, ' '); return aliases[text] ?? text; };
+      const actual = typeof facts.commercialActivity === 'string' ? facts.commercialActivity : undefined;
+      add('commercialActivity', normalized(requirement.commercialActivity), actual === undefined ? undefined : normalized(actual), 6, 'exact', false);
+      const index = explanations.length - 1;
+      explanations[index] = { ...explanations[index], expected: requirement.commercialActivity, ...(actual === undefined ? {} : { actual }) };
+    }
+    const services = requirement.commercialServices;
+    if (services) {
+      // No offered PACI count/cleaning fact exists yet: missing evidence remains unknown.
+      if (services.automaticNumberCount !== undefined) add('automaticNumberCount', services.automaticNumberCount, undefined, 4, 'minimum');
+      if (services.cleaning !== undefined) flexibleFeature('facilityCleaning', services.cleaning);
+      if (services.security !== undefined) flexibleFeature('hasSecurityGuard', services.security);
+      if (services.cameras !== undefined) flexibleFeature('hasCCTV', services.cameras);
+      if (services.elevators !== undefined) flexibleFeature('hasElevator', services.elevators);
+      if (services.bathrooms !== undefined) flexibleFeature(services.bathrooms === 'private' ? 'hasPrivateBathroom' : 'hasSharedBathrooms', true);
+      // Existing hasKitchen says nothing about private/shared ownership.
+      if (services.kitchen !== undefined) add('kitchenAccess', services.kitchen, undefined, 4, 'exact');
+      for (const kind of services.parkingTypes ?? []) {
+        const actual = Array.isArray(facts.parkingTypes) ? facts.parkingTypes.includes(kind) : undefined;
+        add(`parking:${kind}`, true, actual, 4, 'exact');
+      }
+    }
+  }
   for (const preference of requirement.catalogPreferences ?? []) {
     if (preference.field === "apartmentSubtype") continue;
+    // Retired commercial Intended use never overrides the real commercial type.
+    if (isCommercialRequirement(requirement.propertyType, requirement.floorUse, requirement.propertyUse)
+      && (preference.field === 'intendedUse' || (preference.field === 'commercialActivity' && requirement.commercialActivity !== undefined))) continue;
     const field = preference.field;
     if (preference.kind === "number") {
       const area =

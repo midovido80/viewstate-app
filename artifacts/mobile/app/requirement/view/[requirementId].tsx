@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
-import type { SeekerRequirement } from '@workspace/property-domain';
+import { hasOfficeRequirementServices, type SeekerRequirement } from '@workspace/property-domain';
 import type { Person } from '@/services/people';
 import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 import { Button } from '@/components/Button';
@@ -183,7 +183,7 @@ export default function RequirementDetailsScreen() {
     overview: caption('THE REQUEST', 'الطلب'),
     location: caption('LOCATION', 'الموقع'),
     specifications: caption('SPECIFICATIONS', 'المواصفات'),
-    preferences: caption('PREFERENCES', 'التفضيلات'),
+    preferences: record && hasOfficeRequirementServices(record.propertyType, record.floorUse) ? caption('PROPERTY SERVICES', 'خدمات العقار') : caption('PREFERENCES', 'التفضيلات'),
     budget: caption('BUDGET', 'الميزانية'),
     notes: caption('NOTES', 'ملاحظات'),
   };

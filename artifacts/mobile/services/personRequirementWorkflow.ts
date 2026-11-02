@@ -1,4 +1,5 @@
 import {
+  cloneCommercialServices,
   normalizeSeekerRequirement,
   validateSeekerRequirement,
   type PropertyType,
@@ -24,6 +25,8 @@ export interface RequirementFormValues {
   readonly maximumBudget?: number;
   readonly currencyCode: string;
   readonly notes: string;
+  readonly commercialActivity?: string;
+  readonly commercialServices?: SeekerRequirement['commercialServices'];
   readonly preferredNearbyServices?: readonly string[];
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
@@ -90,7 +93,7 @@ export function parseOptionalRequirementNumber(
   if (!trimmed) return { ok: true, value: undefined };
   if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return { ok: false };
   const value = Number(trimmed);
-  if (!Number.isFinite(value) || (options.integer && !Number.isInteger(value))) {
+  if (!Number.isFinite(value) || (options.integer && !Number.isSafeInteger(value))) {
     return { ok: false };
   }
   return { ok: true, value };
@@ -117,6 +120,8 @@ export function buildPersonRequirement(
       currencyCode: values.currencyCode,
     },
     notes: values.notes,
+    ...(values.commercialActivity !== undefined ? { commercialActivity: values.commercialActivity } : {}),
+    ...(values.commercialServices !== undefined ? { commercialServices: cloneCommercialServices(values.commercialServices) } : {}),
     ...(values.unspecifiedFields !== undefined ? { unspecifiedFields: [...values.unspecifiedFields] } : {}),
     ...(values.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...values.preferredNearbyServices] } : {}),
     ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
@@ -166,6 +171,8 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     maximumBudget: requirement.budget.maximum,
     currencyCode: requirement.budget.currencyCode,
     notes: requirement.notes,
+    ...(requirement.commercialActivity !== undefined ? { commercialActivity: requirement.commercialActivity } : {}),
+    ...(requirement.commercialServices !== undefined ? { commercialServices: cloneCommercialServices(requirement.commercialServices) } : {}),
     ...(requirement.unspecifiedFields !== undefined ? { unspecifiedFields: [...requirement.unspecifiedFields] } : {}),
     ...(requirement.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...requirement.preferredNearbyServices] } : {}),
     ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),

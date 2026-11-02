@@ -195,8 +195,8 @@ test('Requirement form renders the approved labels and one grouped amenity secti
   assert.match(source, /new Set\(\[\.\.\.amenities/);
   assert.equal((source.match(/<Text style=\{styles\.heading\}>\{label\('Preferred amenities', 'المزايا المفضلة'\)\}/g) ?? []).length, 1);
   assert.ok(source.indexOf('fields={leadingFields}') < source.indexOf('testID="requirement-bedrooms-quick-pick"'));
-  assert.ok(source.indexOf('testID="requirement-required-area"') < source.indexOf('fields={otherSpecificationFields}'));
-  assert.ok(source.indexOf('fields={otherSpecificationFields}') < source.indexOf('testID="requirement-central-ac"'));
+  assert.ok(source.indexOf('testID="requirement-required-area"') < source.indexOf('fields={editableSpecificationFields}'));
+  assert.ok(source.indexOf('fields={editableSpecificationFields}') < source.indexOf('testID="requirement-central-ac"'));
   assert.match(source, /purpose === 'rent' && coreApplicable &&/);
   assert.match(component, /if \(isBoolean\)[\s\S]*?return <ChoiceChip/);
   assert.doesNotMatch(component, /غير مهم|Not important/);

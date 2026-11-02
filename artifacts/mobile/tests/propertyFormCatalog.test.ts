@@ -95,7 +95,7 @@ test('BEHAVIOR: Standard wanted Apartment form exposes multi-bedroom, bathroom, 
   const requirementScreen = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   assert.match(requirementScreen, /purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam/);
   assert.match(requirementScreen, /setPurpose\(initialPurpose\); setPropertyType\(initialPropertyType\); setApartmentSubtype\(initialApartmentSubtype\)/);
-  assert.match(requirementScreen, /leadingFields\.filter\(field => field !== 'apartmentSubtype'\)/);
+  assert.match(requirementScreen, /leadingFields\.filter\(field => field !== 'apartmentSubtype' &&/);
   assert.match(requirementScreen, /testID="requirement-bedrooms-quick-pick"/);
   assert.match(requirementScreen, /testID="requirement-bathrooms-quick-pick"/);
   assert.match(requirementScreen, /testID="requirement-floor-number"/);

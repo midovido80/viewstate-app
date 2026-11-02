@@ -311,3 +311,80 @@ test('People search remains name/phone-only and distinguishes an empty database 
   assert.match(strings, /'people\.no_filtered_results': 'No People match the selected criteria/);
   assert.match(strings, /'people\.no_filtered_results': 'لا يوجد أشخاص يطابقون المعايير المحددة/);
 });
+
+test('commercial services and free-text activity survive normalizer and editor round-trip', () => {
+  for (const [propertyType, floorUse] of [['office', undefined], ['floor', 'commercial']] as const) {
+    const result = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType, floorUse,
+      commercialActivity: '  مكتب استشارات هندسية  ', centralAC: true,
+      commercialServices: { automaticNumberCount: 2, cleaning: true, security: true, cameras: true, elevators: true, bathrooms: 'shared', kitchen: 'private', parkingTypes: ['private', 'paid'] },
+    });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    if (!result.ok) continue;
+    assert.equal(result.value.commercialActivity, 'مكتب استشارات هندسية');
+    const form = formValuesFromRequirement(JSON.parse(JSON.stringify(result.value)));
+    const rebuilt = buildPersonRequirement(ID, SEEKER, form);
+    assert.equal(rebuilt.ok, true);
+    if (rebuilt.ok) assert.deepEqual(rebuilt.value, result.value);
+    assert.notEqual(form.commercialServices, result.value.commercialServices);
+    assert.notEqual(form.commercialServices?.parkingTypes, result.value.commercialServices?.parkingTypes);
+  }
+});
+
+test('commercial count rejects fractions, negatives, overflow and malformed services', () => {
+  const base = { ...basic, purpose: 'rent' as const, propertyType: 'office' as const };
+  for (const value of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', Infinity, NaN]) assert.equal(buildPersonRequirement(ID, SEEKER, { ...base, commercialServices: { automaticNumberCount: value as number } }).ok, false);
+  for (const count of [0, 2, 123]) assert.equal(buildPersonRequirement(ID, SEEKER, { ...base, commercialServices: { automaticNumberCount: count } }).ok, true);
+  for (const services of [{ bathrooms: 'public' }, { kitchen: true }, { cameras: 'true' }, { parkingTypes: ['private', 'private'] }, { parkingTypes: ['residential'] }, { unexpected: true }]) assert.equal(buildPersonRequirement(ID, SEEKER, { ...base, commercialServices: services as never }).ok, false);
+  assert.deepEqual(parseOptionalRequirementNumber('٢', { integer: true }), { ok: true, value: 2 });
+  assert.deepEqual(parseOptionalRequirementNumber('۲', { integer: true }), { ok: true, value: 2 });
+  assert.equal(parseOptionalRequirementNumber('9007199254740992', { integer: true }).ok, false);
+});
+
+test('commercial-only fields cannot leak into residential; parking/activity work across commercial types', () => {
+  assert.equal(buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', commercialActivity: 'Office' }).ok, false);
+  assert.equal(buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', commercialServices: { parkingTypes: ['paid'] } }).ok, false);
+  for (const propertyType of ['shop', 'warehouse', 'commercial_complex'] as const) {
+    assert.equal(buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType, commercialActivity: 'نشاط حر', commercialServices: { parkingTypes: ['public', 'paid'] } }).ok, true);
+    assert.equal(buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType, commercialServices: { automaticNumberCount: 2 } }).ok, false);
+  }
+});
+
+test('PACI count never derives from area or identifier and unknown evidence earns no match', () => {
+  const property = { core: { id: 'office-offer', propertyType: 'office', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'offer', propertyCoreId: 'office-offer', transaction: 'rent', rentalPrice: { amount: 400, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' }, areaSquareMeters: 120, locationEnrichment: { paciNumber: '12345678' }, typeDetails: { propertyType: 'office', parkingTypes: ['private'] } } as unknown as import('@workspace/property-domain').Property;
+  const result = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType: 'office', commercialServices: { automaticNumberCount: 2, cleaning: true, kitchen: 'shared', parkingTypes: ['private', 'paid'] } });
+  assert.equal(result.ok, true); if (!result.ok) return;
+  const match = evaluateMatch(result.value, { property });
+  for (const criterion of ['automaticNumberCount', 'facilityCleaning', 'kitchenAccess']) {
+    const explanation = match.explanations.find(item => item.criterion === criterion);
+    assert.equal(explanation?.status, 'unknown', criterion); assert.equal(explanation?.awardedPoints, 0);
+  }
+  assert.equal(match.explanations.find(item => item.criterion === 'parking:private')?.status, 'matched');
+  assert.notEqual(match.explanations.find(item => item.criterion === 'parking:paid')?.status, 'matched');
+});
+
+test('retired commercial Intended use does not compare office against Residential or rewrite source', () => {
+  const result = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType: 'office', catalogPreferences: [{ field: 'intendedUse', kind: 'choice', value: 'residential' }] });
+  assert.equal(result.ok, true); if (!result.ok) return;
+  const source = JSON.stringify(result.value);
+  const property = { core: { id: 'office', propertyType: 'office', locationArea: { id: 'salmiya' } }, activeOffer: { id: 'offer', propertyCoreId: 'office', transaction: 'rent', rentalPrice: { amount: 400, currencyCode: 'KWD' }, rentalPeriodId: 'monthly' }, typeDetails: { propertyType: 'office' } } as import('@workspace/property-domain').Property;
+  assert.equal(evaluateMatch(result.value, { property }).explanations.some(item => item.criterion === 'intendedUse'), false);
+  assert.equal(JSON.stringify(result.value), source);
+});
+
+
+test('commercial saved detail rows translate every new service and omit residential nearby options', async () => {
+  const { getRequirementDetailsRows } = await import('@/services/requirementDetailsPresentation');
+  const result = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', propertyType: 'office', commercialActivity: 'نشاط تجريبي', commercialServices: { automaticNumberCount: 0, security: false, bathrooms: 'private', kitchen: 'shared', parkingTypes: ['paid'] }, preferredNearbyServices: ['school', 'other', 'bank_atm'] });
+  assert.equal(result.ok, true); if (!result.ok) return;
+  const before = JSON.stringify(result.value);
+  const rows = getRequirementDetailsRows(result.value, 'ar', value => value);
+  assert.equal(rows.find(row => row.field === 'commercialActivity')?.value, 'نشاط تجريبي');
+  assert.equal(rows.find(row => row.field === 'commercialServices.automaticNumberCount')?.value, '0');
+  assert.equal(rows.find(row => row.field === 'commercialServices.security')?.value, 'يجب ألا يتوفر');
+  assert.equal(rows.find(row => row.field === 'commercialServices.bathrooms')?.value, 'خاص');
+  assert.equal(rows.find(row => row.field === 'commercialServices.kitchen')?.value, 'مشترك');
+  assert.equal(rows.find(row => row.field === 'commercialServices.parkingTypes')?.value, 'مدفوعة');
+  assert.equal(rows.find(row => row.field === 'preferredNearbyServices')?.value, 'أخرى · صراف آلي');
+  assert.equal(rows.some(row => row.value.includes('مدرسة')), false);
+  assert.equal(JSON.stringify(result.value), before);
+});

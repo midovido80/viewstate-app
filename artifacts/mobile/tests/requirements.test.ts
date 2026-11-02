@@ -1100,3 +1100,20 @@ test('Integrated Native and Web stores preserve Requirement data while disabled 
     webRequirement,
   );
 });
+test('commercial services survive native and web restart without modifying older rows', async () => {
+  const personReader = { getPerson: async (id: string) => id === 'seeker-1' ? seeker(id) : null };
+  const commercial: RentSeekerRequirement = {
+    id: ids.other, seekerId: 'seeker-1', purpose: 'rent', propertyType: 'office', preferredAreaIds: ['salmiya'],
+    budget: { minimum: undefined, maximum: 800, currencyCode: 'KWD' }, notes: '', commercialActivity: 'استشارات',
+    commercialServices: { automaticNumberCount: 2, bathrooms: 'private', kitchen: 'shared', cameras: true, parkingTypes: ['private', 'public'] },
+  };
+  const db = new RequirementDatabase(); const native = new SQLiteRequirementStore(() => db, personReader);
+  await native.saveRequirement(rentRequirement()); const original = db.requirements.get(ids.rent); await native.saveRequirement(commercial);
+  assert.deepEqual(await new SQLiteRequirementStore(() => db, personReader).getRequirement(commercial.id), commercial);
+  assert.equal(db.requirements.get(ids.rent), original);
+  const storage = new MemoryStorage(); const web = new WebRequirementStore(storage, () => locks, personReader);
+  await web.saveRequirement(rentRequirement()); await web.saveRequirement(commercial);
+  const restarted = new WebRequirementStore(storage, () => locks, personReader);
+  assert.deepEqual(await restarted.getRequirement(commercial.id), commercial);
+  assert.deepEqual(await restarted.getRequirement(ids.rent), rentRequirement());
+});

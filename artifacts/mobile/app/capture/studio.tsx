@@ -1552,6 +1552,7 @@ export default function StudioCaptureRoute() {
           {propertyReview ? (language === 'ar' ? 'مراجعة العقار' : 'Property review') : editing ? t('studio.edit_title') : t(mode === 'offered' ? 'studio.title.offered' : 'studio.title.wanted')}
         </Text>
       </View>
+      {mode === 'wanted' && <View testID="requirement-pinned-property-type" style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#EDF4FF', borderBottomWidth: 1, borderBottomColor: '#C6D8F1' }}><Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'العقار المطلوب: شقة · استوديو' : 'Required property: Apartment · Studio'}</Text></View>}
       {loading ? (
         <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>
       ) : !recordLoaded ? (

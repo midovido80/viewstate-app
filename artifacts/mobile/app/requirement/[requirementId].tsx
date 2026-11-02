@@ -1,9 +1,12 @@
+import { hasOfficeRequirementServices, type CommercialRequirementServices as CommercialServices } from '@workspace/property-domain';
+import { CommercialRequirementServices } from '@/components/CommercialRequirementServices';
+import { commercialServicesSummary } from '@/services/commercialRequirementPresentation';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
 import { commercialProperty, residentialUnit, requirementCompletionFields } from '@/services/requiredMatchingFields';
 import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
-import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
+import { COMMERCIAL_NEARBY_SERVICES, DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -177,6 +180,11 @@ export default function RequirementEditor() {
   const [maximum, setMaximum] = useState('');
   const [cadence, setCadence] = useState<RequirementRentalPeriodId>('monthly');
   const [notes, setNotes] = useState('');
+  const [commercialActivity, setCommercialActivity] = useState('');
+  const [commercialServices, setCommercialServices] = useState<CommercialServices>({});
+  const [automaticNumberCount, setAutomaticNumberCount] = useState('');
+  const [bathroomsEnabled, setBathroomsEnabled] = useState(false);
+  const [kitchenEnabled, setKitchenEnabled] = useState(false);
   const [nearbyServices, setNearbyServices] = useState<readonly string[]>([]);
   const draftId = useRef(editing ? routeRequirementId : generateDomainId());
   const studioForwardedId = useRef<string | null>(null);
@@ -206,6 +214,7 @@ export default function RequirementEditor() {
     setPurpose(initialPurpose); setPropertyType(initialPropertyType); setApartmentSubtype(initialApartmentSubtype); setFloorUse(initialPropertyType === 'floor' ? initialFloorUse : undefined); setAreaMode(undefined); setAreas([]);
     setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setParking(''); setFloorNumber(''); setRequiredArea('');
     setUnspecified([]); setPropertyUse(initialPropertyUse);
+    setCommercialActivity(''); setCommercialServices({}); setAutomaticNumberCount(''); setBathroomsEnabled(false); setKitchenEnabled(false); setNearbyServices([]);
     setDriverRoom(false); setCatalog([...getGenericRequirementApartmentSubtypePreference(initialApartmentSubtype)]); setAmenities([]); setExcludedAmenities([]); setServices([]); setCentralACPreference(undefined); setMinimum(''); setMaximum(''); setCadence('monthly'); setNotes('');
     if (!editing) return;
     let cancelled = false;
@@ -238,6 +247,12 @@ export default function RequirementEditor() {
       setCatalog((form.catalogPreferences ?? []).filter(item => !['livingRoomCount', 'parkingSpaceCount', 'floorNumber', 'builtUpAreaSquareMeters', 'hasMaidRoom'].includes(item.field)));
       setAmenities([...(record.preferredAmenities ?? []), ...(legacyMaid ? ['maid_room' as const] : [])]); setServices(RENT_SERVICES.filter(value => form[value] === true)); setCentralACPreference(form.centralAC);
       setExcludedAmenities([...(record as SeekerRequirement & Extension).preferredAmenityExclusions ?? []]);
+      const legacyActivity = form.catalogPreferences?.find(item => item.field === 'commercialActivity' && item.kind === 'choice');
+      const legacyActivityLabels: Record<string, readonly [string, string]> = { office: ['Office', 'مكتب'], retail: ['Retail', 'تجزئة'], restaurant: ['Restaurant', 'مطعم'], clinic: ['Clinic', 'عيادة'], warehouse: ['Warehouse', 'مستودع'] };
+      setCommercialActivity(form.commercialActivity ?? (legacyActivity?.kind === 'choice' ? legacyActivityLabels[legacyActivity.value]?.[language === 'ar' ? 1 : 0] ?? legacyActivity.value : ''));
+      setCommercialServices(form.commercialServices ? { ...form.commercialServices, automaticNumberCount: undefined } : {});
+      setAutomaticNumberCount(form.commercialServices?.automaticNumberCount === undefined ? '' : String(form.commercialServices.automaticNumberCount));
+      setBathroomsEnabled(form.commercialServices?.bathrooms !== undefined); setKitchenEnabled(form.commercialServices?.kitchen !== undefined);
       setOccupancy(form.occupancy); setCadence(form.rentalPeriodId ?? 'monthly');
       setMinimum(form.minimumBudget === undefined ? '' : String(form.minimumBudget)); setMaximum(form.maximumBudget === undefined ? '' : String(form.maximumBudget)); setNotes(form.notes); setNearbyServices(form.preferredNearbyServices ?? []);
     }).catch(() => {
@@ -281,13 +296,13 @@ export default function RequirementEditor() {
 
   const catalogWithCore = useMemo(() => {
     const applicable = new Set(getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype).map(field => field.field));
-    const values = catalog.filter(item => !['livingRoomCount', 'parkingSpaceCount', 'floorNumber', 'builtUpAreaSquareMeters'].includes(item.field));
+    const values = catalog.filter(item => !['livingRoomCount', 'parkingSpaceCount', 'floorNumber', 'builtUpAreaSquareMeters'].includes(item.field) && !(commercialProperty(propertyType, { floorUse, propertyUse }) && ['intendedUse', 'commercialActivity'].includes(item.field)));
     const numeric = (field: NumberField, value: string, comparison: 'minimum' | 'exact') => {
       const parsed = parseOptionalRequirementNumber(value, { integer: comparison !== 'minimum' || field !== 'builtUpAreaSquareMeters' });
       return parsed.ok && parsed.value !== undefined ? [{ field, kind: 'number' as const, comparison, value: parsed.value }] : [];
     };
-    return [...values, ...(applicable.has('livingRoomCount') ? numeric('livingRoomCount', livingRooms, 'minimum') : []), ...(applicable.has('parkingSpaceCount') ? numeric('parkingSpaceCount', parking, 'minimum') : []), ...(applicable.has('floorNumber') ? numeric('floorNumber', floorNumber, 'exact') : []), ...((applicable.has('builtUpAreaSquareMeters') || commercialProperty(propertyType, { floorUse, propertyUse })) ? numeric('builtUpAreaSquareMeters', requiredArea, 'minimum') : [])];
-  }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse, propertyUse, apartmentSubtype]);
+    return [...values, ...(applicable.has('livingRoomCount') ? numeric('livingRoomCount', livingRooms, 'minimum') : []), ...((commercialProperty(propertyType, { floorUse, propertyUse }) ? commercialServices.parkingTypes?.includes('private') : applicable.has('parkingSpaceCount')) ? numeric('parkingSpaceCount', parking, 'minimum') : []), ...(applicable.has('floorNumber') ? numeric('floorNumber', floorNumber, 'exact') : []), ...((applicable.has('builtUpAreaSquareMeters') || commercialProperty(propertyType, { floorUse, propertyUse })) ? numeric('builtUpAreaSquareMeters', requiredArea, 'minimum') : [])];
+  }, [catalog, livingRooms, parking, floorNumber, requiredArea, propertyType, floorUse, propertyUse, apartmentSubtype, commercialServices.parkingTypes]);
 
   const candidate = () => {
     if (editing && (!recordLoaded || !baseline || baseline.id !== routeRequirementId)) return { ok: false as const, message: language === 'ar' ? 'تعذر تحميل المتطلب المطلوب.' : 'The requested Requirement could not be loaded.' };
@@ -296,13 +311,20 @@ export default function RequirementEditor() {
     const min = parse(minimum, false); const max = parse(maximum, false);
     const beds = parse(bedrooms); const baths = parse(bathrooms); const masters = parse(masterBedrooms);
     const builtArea = parse(requiredArea, false);
+    const commercial = commercialProperty(propertyType, { floorUse, propertyUse });
+    const office = hasOfficeRequirementServices(propertyType, floorUse);
+    const count = parse(automaticNumberCount);
+    if (commercial && commercialServices.parkingTypes?.includes('private') && !parse(parking).ok) return { ok: false as const, message: language === 'ar' ? 'أدخل عددًا صحيحًا للمواقف الخاصة.' : 'Enter a valid whole number for private parking.' };
+    if (office && (!count.ok || (bathroomsEnabled && !commercialServices.bathrooms) || (kitchenEnabled && !commercialServices.kitchen))) return { ok: false as const, message: language === 'ar' ? 'صحح عدد الأرقام الآلية واختر خاص أو مشترك للخدمات المحددة.' : 'Correct the PACI count and choose private or shared for selected facilities.' };
     if (!areaMode) return { ok: false as const, message: language === 'ar' ? 'اختر نطاق المناطق.' : 'Choose an area scope.' };
     if (propertyType === 'floor' && !floorUse) return { ok: false as const, message: language === 'ar' ? 'اختر استخدام الدور.' : 'Choose the floor use.' };
     if (areaMode === 'specific_areas' && !areas.length) return { ok: false as const, message: language === 'ar' ? 'اختر منطقة واحدة على الأقل.' : 'Select at least one area.' };
     if (!min.ok || !max.ok || !beds.ok || !baths.ok || !masters.ok || !builtArea.ok || invalidCatalogFields.size > 0) return { ok: false as const, message: language === 'ar' ? 'أدخل أرقاماً صالحة.' : 'Enter valid numbers.' };
     const values = {
       unspecifiedFields: unspecified, purpose, propertyType, preferredAreaIds: areaMode === 'all_kuwait' ? [] : areas, preferredAreaMode: areaMode,
-      minimumBudget: min.value, maximumBudget: max.value, currencyCode: MARKET_CONFIG.currencyCode, notes, preferredNearbyServices: nearbyServices,
+      minimumBudget: min.value, maximumBudget: max.value, currencyCode: MARKET_CONFIG.currencyCode, notes, preferredNearbyServices: commercial ? nearbyServices.filter(id => COMMERCIAL_NEARBY_SERVICES.some(item => item.id === id)) : nearbyServices,
+      ...(commercialActivity.trim() && commercial ? { commercialActivity: commercialActivity.trim() } : {}),
+      ...(commercial ? { commercialServices: { ...(office ? commercialServices : { parkingTypes: commercialServices.parkingTypes }), ...(office && count.ok && count.value !== undefined ? { automaticNumberCount: count.value } : {}) } } : {}),
       ...(beds.value !== undefined ? { bedroomsMinimum: beds.value } : {}),
       ...(baths.value !== undefined ? { bathroomsMinimum: baths.value } : {}),
       ...(masters.value !== undefined ? { masterBedroomsMinimum: masters.value } : {}),
@@ -328,8 +350,8 @@ export default function RequirementEditor() {
     const removedCatalog = next === 'floor' && floorUse === undefined ? [] : catalog.filter(item => !nextAllowed.has(item.field));
     const hasCore = bedrooms || bathrooms || masterBedrooms || livingRooms || driverRoom;
     const nextHasCentralAC = getApplicablePropertyFormFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).some(field => field.field === 'hasCentralAC');
-    const removedNames = [...(!nextResidential ? [bedrooms && 'Bedrooms', bathrooms && 'Bathrooms', masterBedrooms && 'Master bedrooms', livingRooms && 'Living rooms', driverRoom && 'Driver room'].filter(Boolean) : []), ...removedCatalog.map(item => item.field), ...(!nextResidential ? [...amenities, ...excludedAmenities, ...(driverRoom ? ['driverRoom'] : []), ...services] : []), ...(centralACPreference !== undefined && !nextHasCentralAC ? ['centralAC'] : [])].map(value => localizedPreferenceName(String(value), language, next, next === 'floor' ? floorUse : undefined)).filter(Boolean);
-    const apply = () => { setPropertyType(next); if (next !== 'floor') setFloorUse(undefined); else if (initialFloorUse) setFloorUse(initialFloorUse); if (next !== 'apartment') setApartmentSubtype(undefined); const allowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).map(item => item.field)); if (!(next === 'floor' && floorUse === undefined)) setCatalog(current => current.filter(item => allowed.has(item.field))); if (!nextResidential) { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } if (!nextHasCentralAC) setCentralACPreference(undefined); };
+    const removedNames = [...(Object.keys(commercialServices).length || automaticNumberCount || commercialActivity ? [language === 'ar' ? 'خدمات العقار والنشاط التجاري' : 'Property services and commercial activity'] : []), ...(!nextResidential ? [bedrooms && 'Bedrooms', bathrooms && 'Bathrooms', masterBedrooms && 'Master bedrooms', livingRooms && 'Living rooms', driverRoom && 'Driver room'].filter(Boolean) : []), ...removedCatalog.map(item => item.field), ...(!nextResidential ? [...amenities, ...excludedAmenities, ...(driverRoom ? ['driverRoom'] : []), ...services] : []), ...(centralACPreference !== undefined && !nextHasCentralAC ? ['centralAC'] : [])].map(value => localizedPreferenceName(String(value), language, next, next === 'floor' ? floorUse : undefined)).filter(Boolean);
+    const apply = () => { setCommercialServices({}); setAutomaticNumberCount(''); setBathroomsEnabled(false); setKitchenEnabled(false); if (!commercialProperty(next, { floorUse: next === 'floor' ? floorUse : undefined })) setCommercialActivity(''); setPropertyType(next); if (next !== 'floor') setFloorUse(undefined); else if (initialFloorUse) setFloorUse(initialFloorUse); if (next !== 'apartment') setApartmentSubtype(undefined); setParking(''); const allowed = new Set(getRequirementCatalogFields(next, next === 'floor' ? floorUse : undefined, nextSubtype).map(item => item.field)); if (!(next === 'floor' && floorUse === undefined)) setCatalog(current => current.filter(item => allowed.has(item.field))); if (!nextResidential) { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } if (!nextHasCentralAC) setCentralACPreference(undefined); };
     if ((hasCore && !nextResidential) || removedNames.length) {
       const message = language === 'ar' ? `سيؤدي التغيير إلى إزالة مواصفات غير متوافقة: ${removedNames.join('، ')}` : `Changing type removes incompatible preferences: ${removedNames.join(', ')}`;
       if (typeof window !== 'undefined' && window.confirm) { if (window.confirm(message)) apply(); } else Alert.alert(t('transition.requirement.title'), message, [{ text: t('capture.cancel') }, { text: t('transition.remove_confirm'), onPress: apply }]);
@@ -342,7 +364,7 @@ export default function RequirementEditor() {
     const removedCatalog = catalog.filter(item => !nextAllowed.has(item.field));
     const hasResidential = bedrooms || bathrooms || masterBedrooms || livingRooms || parking || driverRoom;
     const removedNames = [...removedCatalog.map(item => item.field), ...(next === 'commercial' ? [...amenities, ...excludedAmenities, ...(driverRoom ? ['driverRoom'] : []), ...services] : [])];
-    const apply = () => { setFloorUse(next); const allowed = new Set(getRequirementCatalogFields('floor', next).map(item => item.field)); setCatalog(current => current.filter(item => allowed.has(item.field))); if (next === 'commercial') { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } };
+    const apply = () => { setCommercialServices({}); setAutomaticNumberCount(''); setBathroomsEnabled(false); setKitchenEnabled(false); if (next !== 'commercial') setCommercialActivity(''); setFloorUse(next); const allowed = new Set(getRequirementCatalogFields('floor', next).map(item => item.field)); setCatalog(current => current.filter(item => allowed.has(item.field))); if (next === 'commercial') { setBedrooms(''); setBathrooms(''); setMasterBedrooms(''); setLivingRooms(''); setDriverRoom(false); setAmenities([]); setExcludedAmenities([]); setServices([]); } };
     if ((propertyType === 'floor' && next === 'commercial' && hasResidential) || removedNames.length) {
       const names = removedNames.map(value => localizedPreferenceName(String(value), language, 'floor', next));
       const message = language === 'ar' ? `سيؤدي التغيير إلى إزالة مواصفات غير متوافقة: ${names.join('، ')}` : `Changing floor use removes incompatible preferences: ${names.join(', ')}`;
@@ -361,7 +383,10 @@ export default function RequirementEditor() {
   };
 
   const needsSize = commercialProperty(propertyType, { floorUse, propertyUse });
+  const officeServices = hasOfficeRequirementServices(propertyType, floorUse);
+  const validCommercialServices = (!officeServices || (parseOptionalRequirementNumber(automaticNumberCount, { integer: true }).ok && (!bathroomsEnabled || !!commercialServices.bathrooms) && (!kitchenEnabled || !!commercialServices.kitchen))) && (!needsSize || !commercialServices.parkingTypes?.includes('private') || parseOptionalRequirementNumber(parking, { integer: true }).ok);
   const requiredForm = useRequiredForm(requirementCompletionFields({ type: propertyType, floorUse, propertyUse, areaMode, areas, bedrooms, bathrooms, size: requiredArea, minimum, maximum, unspecified }));
+  const focusCommercialError = () => requiredForm.focus(!parseOptionalRequirementNumber(automaticNumberCount, { integer: true }).ok ? 'commercial-services' : bathroomsEnabled && !commercialServices.bathrooms ? 'commercial-bathrooms' : kitchenEnabled && !commercialServices.kitchen ? 'commercial-kitchen' : 'commercial-services');
   const validateRequired = () => {
     const missing = requiredForm.validate();
     if (!missing.length) return true;
@@ -389,6 +414,7 @@ export default function RequirementEditor() {
     if (propertyType === 'floor' && !floorUse) { setStep(1); setError(language === 'ar' ? 'اختر استخدام الدور.' : 'Choose the floor use.'); return; }
     if ((coreApplicable && [bedrooms, bathrooms, masterBedrooms, livingRooms].some(value => !parseOptionalRequirementNumber(value).ok)) || (applicableCoreFields.has('parkingSpaceCount') && !parseOptionalRequirementNumber(parking).ok) || (applicableCoreFields.has('floorNumber') && !parseOptionalRequirementNumber(floorNumber).ok) || (applicableCoreFields.has('builtUpAreaSquareMeters') && !parseOptionalRequirementNumber(requiredArea, { integer: false }).ok)) { setStep(3); setError(language === 'ar' ? 'صحح المواصفات الأساسية.' : 'Correct the core specifications.'); return; }
     if (!parseOptionalRequirementNumber(minimum, { integer: false }).ok || !parseOptionalRequirementNumber(maximum, { integer: false }).ok) { setStep(4); setError(language === 'ar' ? 'صحح الميزانية.' : 'Correct the budget.'); return; }
+    if (!validCommercialServices) { setStep(3); focusCommercialError(); setError(label('Correct the selected commercial services.', 'صحح خدمات العقار المحددة.')); return; }
     const result = candidate();
     if (!result.ok) { setError(result.message); return; }
     setError(''); setStep(5);
@@ -400,6 +426,7 @@ export default function RequirementEditor() {
     }
     const fieldsForStep = step === 2 ? ['areas'] : step === 3 ? ['propertyUse', 'areas', 'bedrooms', 'bathrooms', 'area'] : [];
     if (requiredForm.fields.some(field => fieldsForStep.includes(field.id) && !field.valid)) { requiredForm.validate(); return; }
+    if (step === 3 && !validCommercialServices) { focusCommercialError(); setError(label('Correct the PACI count and select private or shared for the selected facilities.', 'صحح عدد الأرقام الآلية واختر خاص أو مشترك للخدمات المحددة.')); return; }
     setError('');
     if (startsAtSpecifications && step === 1) setShowCatalogBackControls(false);
     setStep(value => startsAtSpecifications && value === 1 ? 3 : value + 1);
@@ -597,8 +624,14 @@ export default function RequirementEditor() {
   const applicableCoreFields = new Set(getApplicablePropertyFormFields(propertyType, floorUse, apartmentSubtype).map(field => field.field));
   const catalogDefinitions = getRequirementCatalogFields(propertyType, floorUse, apartmentSubtype);
   const { leading: leadingFields, specifications: otherSpecificationFields, amenities: amenityCatalogFields } = getRequirementPresentationFields(propertyType, floorUse, apartmentSubtype);
-  const editableLeadingFields = leadingFields.filter(field => field !== 'apartmentSubtype');
-  const showPreferredAmenities = coreApplicable || applicableCoreFields.has('hasCentralAC') || amenityCatalogFields.length > 0;
+  const editableLeadingFields = leadingFields.filter(field => field !== 'apartmentSubtype' && !(needsSize && ['intendedUse', 'commercialActivity'].includes(field)));
+  const editableSpecificationFields = otherSpecificationFields.filter(field => !(needsSize && ['intendedUse', 'commercialActivity'].includes(field)));
+  const toggleCommercialFacility = (field: 'bathrooms' | 'kitchen') => {
+    const enabled = field === 'bathrooms' ? bathroomsEnabled : kitchenEnabled;
+    if (field === 'bathrooms') setBathroomsEnabled(!enabled); else setKitchenEnabled(!enabled);
+    if (enabled) setCommercialServices(current => { const next = { ...current }; delete next[field]; return next; });
+  };
+  const showPreferredAmenities = !officeServices && (coreApplicable || applicableCoreFields.has('hasCentralAC') || amenityCatalogFields.length > 0);
   const poolCatalogApplies = amenityCatalogFields.includes('hasPool');
   const catalogPool = catalog.find(item => item.field === 'hasPool' && item.kind === 'feature');
   const poolSelected = catalogPool?.kind === 'feature' && catalogPool.value === true || services.includes('swimmingPool');
@@ -617,21 +650,24 @@ export default function RequirementEditor() {
   });
   const coreReviewLines = [
     ...(propertyType === 'floor' && floorUse ? [`${label('Floor use', 'استخدام الدور')}: ${floorUse === 'commercial' ? label('Commercial', 'تجاري') : label('Residential', 'سكني')}`] : []),
-    ...choiceReviewLines(leadingFields),
+    ...choiceReviewLines(editableLeadingFields),
+    ...(needsSize && commercialActivity.trim() ? [`${label('Commercial activity', 'النشاط التجاري')}: ${commercialActivity.trim()}`] : []),
+    ...(needsSize ? commercialServicesSummary({ ...commercialServices, ...(officeServices && automaticNumberCount.trim() ? { automaticNumberCount: (() => { const parsed = parseOptionalRequirementNumber(automaticNumberCount, { integer: true }); return parsed.ok ? parsed.value : undefined; })() } : {}) }, language) : []),
     ...(coreApplicable ? [`${label('Bedrooms', 'غرف النوم')}: ${bedrooms || '—'}`, `${label('Master bedrooms', 'غرف النوم الرئيسية')}: ${masterBedrooms || '—'}`, `${label('Bathrooms', 'الحمامات')}: ${bathrooms || '—'}`, `${label('Hall', 'صالة')}: ${livingRooms || '—'}`] : []),
-    ...(applicableCoreFields.has('parkingSpaceCount') ? [`${label('Parking', 'موقف')}: ${parking || '—'}`] : []),
+    ...((needsSize ? commercialServices.parkingTypes?.includes('private') : applicableCoreFields.has('parkingSpaceCount')) ? [`${label(needsSize ? 'Private parking count' : 'Parking', needsSize ? 'عدد المواقف الخاصة' : 'موقف')}: ${parking || '—'}`] : []),
     ...(applicableCoreFields.has('floorNumber') ? [`${label('Floor', 'الطابق')}: ${floorNumber || '—'}`] : []),
     ...(applicableCoreFields.has('builtUpAreaSquareMeters') ? [`${label('Area', 'المساحة')}: ${requiredArea || '—'}`] : []),
-    ...choiceReviewLines(otherSpecificationFields),
+    ...choiceReviewLines(editableSpecificationFields),
   ];
   const reviewLines = [
     `${label('Areas', 'المناطق')}: ${areaMode === 'all_kuwait' ? label('All Kuwait', 'كل مناطق الكويت') : areas.map(id => { const area = getAreaById(id); return area ? (language === 'ar' ? area.ar : area.en) : label('Unknown area', 'منطقة غير معروفة'); }).join(', ')}`,
     ...coreReviewLines,
+    ...(officeServices && centralACPreference !== undefined ? [`${label('Central AC', 'تكييف مركزي')}: ${centralACPreference ? label('Required', 'مطلوب') : label('Must not have', 'يجب ألا يتوفر')}`] : []),
     ...(purpose === 'rent' && coreApplicable ? [`${label('Occupancy', 'الإشغال')}: ${occupancy ? label(occupancy, occupancy === 'family' ? 'عائلي' : occupancy === 'bachelor' ? 'عزاب' : 'أي') : '—'}`] : []),
     ...(showPreferredAmenities ? [`${label('Preferred amenities', 'المزايا المفضلة')}: ${[...new Set([...amenities, ...(driverRoom ? ['driverRoom'] : []), ...excludedAmenities.map(value => `${value}:excluded`), ...services, ...(centralACPreference !== undefined && applicableCoreFields.has('hasCentralAC') ? [`centralAC${centralACPreference ? '' : ':excluded'}`] : []), ...catalog.filter(item => item.kind === 'feature' && amenityCatalogFields.includes(item.field)).map(item => `${item.field}${item.value ? '' : ':excluded'}`)].map(value => value.endsWith(':excluded') ? `${AMENITY_LABELS[value.slice(0, -9)]?.[language === 'ar' ? 'ar' : 'en'] ?? value.slice(0, -9)} (${label('Must not have', 'يجب ألا تتوفر')})` : AMENITY_LABELS[value]?.[language === 'ar' ? 'ar' : 'en'] ?? (value === 'driverRoom' ? label('Driver room', 'غرفة سائق') : label('Selected amenity', 'ميزة محددة'))))].join(', ') || '—'}`] : []),
     `${label('Budget', 'الميزانية')}: ${minimum || '—'}–${maximum || '—'} ${MARKET_CONFIG.currencyCode}`,
     ...(purpose === 'rent' ? [`${label('Cadence', 'الدورية')}: ${cadence === 'daily' ? label('Daily', 'يومياً') : cadence === 'yearly' ? label('Yearly', 'سنوياً') : label('Monthly', 'شهرياً')}`] : []),
-    ...(nearbyServices.length ? [`${label('Nearby services', 'الخدمات القريبة')}: ${nearbyServices.map(id => DEMO_NEARBY_SERVICES.find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · ')}`] : []),
+    ...(nearbyServices.length ? [`${label('Nearby services', 'الخدمات القريبة')}: ${(needsSize ? nearbyServices.filter(id => COMMERCIAL_NEARBY_SERVICES.some(item => item.id === id)) : nearbyServices).map(id => (needsSize ? COMMERCIAL_NEARBY_SERVICES : DEMO_NEARBY_SERVICES).find(item => item.id === id)?.label[language === 'ar' ? 1 : 0] ?? id).join(' · ')}`] : []),
     ...(notes.trim() ? [`${label('Notes', 'الملاحظات')}: ${notes}`] : []),
   ];
   catalogInvalidBridge = (field, invalid) => setInvalidCatalogFields(current => {
@@ -776,7 +812,7 @@ export default function RequirementEditor() {
     );
   }
 
-  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => step > (startsAtSpecifications ? 3 : 0) ? previousStep() : router.canGoBack() ? router.back() : router.replace('/people' as never)} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('capture.back')}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View><KeyboardAvoidingView behavior="padding" style={styles.body}><RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><KeyboardAwareScrollViewCompat ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16} contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled"><RequiredFormHint />
+  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}><View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => step > (startsAtSpecifications ? 3 : 0) ? previousStep() : router.canGoBack() ? router.back() : router.replace('/people' as never)} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('capture.back')}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{editing ? t('requirements.edit') : t('requirements.add')}</Text><Text style={{ color: colors.mutedForeground }}>{startsAtSpecifications ? `${step >= 3 ? step - 2 : 1}/${3}` : `${step + 1}/${STEPS.length}`}</Text></View>{(startsAtSpecifications || step >= 1) && <View testID="requirement-pinned-property-type" style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#EDF4FF', borderBottomWidth: 1, borderBottomColor: '#C6D8F1' }}><Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{label('Required property', 'العقار المطلوب')}: {propertyType === 'floor' ? getFloorTypeLabel(floorUse, language, t('propertyType.floor')) : propertyType === 'apartment' && apartmentSubtype ? `${t('propertyType.apartment')} · ${apartmentSubtypeLabel(apartmentSubtype)}` : t(`propertyType.${propertyType}`)}</Text></View>}<KeyboardAvoidingView behavior="padding" style={styles.body}><RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><KeyboardAwareScrollViewCompat ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16} contentContainerStyle={styles.content} bottomOffset={80} keyboardShouldPersistTaps="handled"><RequiredFormHint />
      {shouldRenderRequirementRecoveryControls(!!error, recoveryAction) ? <View>
        {error ? <Text style={{ color: colors.destructive }} testID="requirement-error">{error}</Text> : null}
        {recoveryAction && recoveryAction !== 'edit_conflict' && <View style={styles.recoveryActions}>
@@ -797,8 +833,9 @@ export default function RequirementEditor() {
    {step === 1 && <><Text style={styles.heading}>{t('requirements.property_type')}</Text><ChoiceGrid style={styles.wrap}>{PROPERTY_TYPES.map(value => <ChoiceChip key={value} label={value === 'floor' ? getFloorTypeLabel(floorUse, language, t('propertyType.floor')) : t(`propertyType.${value}`)} selected={propertyType === value} onPress={() => transitionType(value)} testID={`requirement-type-${value}`} role="radio" />)}</ChoiceGrid>{showCatalogBackControls && propertyType === 'apartment' && <><Text style={styles.heading}>{label('Apartment subtype', 'نوع الشقة')}</Text><ChoiceGrid style={styles.wrap}>{(['standard_apartment', 'duplex'] as const).map(value => <ChoiceChip key={value} label={apartmentSubtypeLabel(value)} selected={apartmentSubtype === value} onPress={() => changeApartmentSubtype(value)} testID={`requirement-apartment-subtype-${value}`} role="radio" />)}</ChoiceGrid></>}{propertyType === 'floor' && !initialFloorUse && <><Text style={styles.heading}>{label('Floor use', 'استخدام الدور')}</Text><ChoiceGrid style={styles.wrap}>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={label(value === 'residential' ? 'Residential' : 'Commercial', value === 'residential' ? 'سكني' : 'تجاري')} selected={floorUse === value} onPress={() => transitionFloor(value)} testID={`requirement-floor-use-${value}`} role="radio" />)}</ChoiceGrid></>}</>}
     {step === 2 && <RequiredField id="areas"><Text style={styles.heading}>{t('requirements.areas')}</Text><ChoiceGrid style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode !== 'all_kuwait'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></ChoiceGrid>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</RequiredField>}
      {step === 3 && <View testID="requirement-core-step">
-       <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>{propertyType === 'other_built_property' && <RequiredField id="propertyUse" label={label('Property use', 'تصنيف العقار')}><ChoiceGrid>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={value === 'residential' ? label('Residential', 'سكني') : label('Commercial', 'تجاري')} selected={propertyUse === value} role="radio" onPress={() => { setPropertyUse(value); setBedrooms(''); setBathrooms(''); setRequiredArea(''); setUnspecified(current => current.filter(field => field === 'budget')); }} />)}</ChoiceGrid></RequiredField>}
+       <Text style={styles.heading}>{label('Core specifications', 'المواصفات الأساسية')}</Text>{propertyType === 'other_built_property' && <RequiredField id="propertyUse" label={label('Property use', 'تصنيف العقار')}><ChoiceGrid>{(['residential', 'commercial'] as const).map(value => <ChoiceChip key={value} label={value === 'residential' ? label('Residential', 'سكني') : label('Commercial', 'تجاري')} selected={propertyUse === value} role="radio" onPress={() => { setPropertyUse(value); if (value !== 'commercial') { setCommercialServices({}); setAutomaticNumberCount(''); setCommercialActivity(''); setBathroomsEnabled(false); setKitchenEnabled(false); } setBedrooms(''); setBathrooms(''); setRequiredArea(''); setUnspecified(current => current.filter(field => field === 'budget')); }} />)}</ChoiceGrid></RequiredField>}
        {startsAtSpecifications && <RequiredField id="areas"><Text style={styles.heading}>{t('requirements.areas')}</Text><ChoiceGrid style={styles.wrap}><ChoiceChip label={label('All Kuwait', 'كل مناطق الكويت')} selected={areaMode === 'all_kuwait'} onPress={() => { setAreaMode('all_kuwait'); setAreas([]); }} testID="requirement-all-kuwait" role="radio" /><ChoiceChip label={label('Specific areas', 'مناطق محددة')} selected={areaMode === 'specific_areas'} onPress={() => setAreaMode('specific_areas')} testID="requirement-specific-areas" role="radio" /></ChoiceGrid>{areaMode !== 'all_kuwait' && <KuwaitAreaSelector selectedIds={areas} onChange={ids => { setAreas(ids); if (ids.length) setAreaMode('specific_areas'); }} multiSelect testID="requirement-area-selector" />}</RequiredField>}
+       {needsSize && <View style={{ gap: 8 }}><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{label('Commercial activity', 'النشاط التجاري')}</Text><TextInput value={commercialActivity} onChangeText={setCommercialActivity} maxLength={250} placeholder={label('Enter the commercial activity', 'اكتب النشاط التجاري')} style={styles.input} testID="requirement-commercial-activity" accessibilityLabel={label('Commercial activity', 'النشاط التجاري')} /></View>}
        {editableLeadingFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:leading`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={editableLeadingFields} />}
        {unitApplicable && <>
          <RequiredField id="bedrooms"><NumericQuickPick scopeKey={scopeKey} label={label('Bedrooms', 'غرف النوم')} value={bedrooms} onChangeText={constrain('bedrooms', setBedrooms)} testID="requirement-bedrooms-quick-pick" />{unspecifiedChoice('bedrooms')}</RequiredField>
@@ -806,10 +843,10 @@ export default function RequirementEditor() {
          <RequiredField id="bathrooms"><NumericQuickPick scopeKey={scopeKey} label={label('Bathrooms', 'الحمامات')} value={bathrooms} onChangeText={constrain('bathrooms', setBathrooms)} testID="requirement-bathrooms-quick-pick" />{unspecifiedChoice('bathrooms')}</RequiredField>
           <NumericQuickPick scopeKey={scopeKey} label={label('Hall', 'صالة')} value={livingRooms} onChangeText={setLivingRooms} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-living-rooms" />
        </>}
-        {applicableCoreFields.has('parkingSpaceCount') && <NumericQuickPick scopeKey={scopeKey} label={label('Parking', 'موقف')} value={parking} onChangeText={setParking} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-parking" />}
+        {!needsSize && applicableCoreFields.has('parkingSpaceCount') && <NumericQuickPick scopeKey={scopeKey} label={label('Parking', 'موقف')} value={parking} onChangeText={setParking} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-parking" />}
         {applicableCoreFields.has('floorNumber') && <NumericQuickPick scopeKey={scopeKey} label={label('Floor', 'الطابق')} value={floorNumber} onChangeText={setFloorNumber} testID="requirement-floor-number" />}
         {(needsSize || applicableCoreFields.has('builtUpAreaSquareMeters')) && <RequiredField id="area" label={label('Required area (m²)', 'المساحة المطلوبة (م²)')}><TextInput value={requiredArea} onChangeText={constrain('area', setRequiredArea)} placeholder={label('Required area (m²)', 'المساحة المطلوبة (م²)')} keyboardType="decimal-pad" style={styles.input} testID="requirement-required-area" />{needsSize && unspecifiedChoice('area')}</RequiredField>}
-        {otherSpecificationFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:specifications`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={otherSpecificationFields} />}
+        {editableSpecificationFields.length > 0 && <RequirementCatalogPreferences scopeKey={`${scopeKey}:specifications`} propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} onInvalidChange={catalogInvalidBridge} fields={editableSpecificationFields} />}
         {purpose === 'rent' && coreApplicable && <><Text style={styles.heading}>{label('Occupancy', 'الإشغال')}</Text><ChoiceGrid style={styles.wrap}>{(['family', 'bachelor', 'any'] as const).map(value => <ChoiceChip key={value} label={value === 'family' ? label('Family', 'عائلي') : value === 'bachelor' ? label('Bachelor', 'عزاب') : label('Any', 'أي')} selected={occupancy === value} onPress={() => setOccupancy(current => current === value ? undefined : value)} role="radio" />)}</ChoiceGrid></>}
         {showPreferredAmenities && <><Text style={styles.heading}>{label('Preferred amenities', 'المزايا المفضلة')}</Text><ChoiceGrid style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]} testID="requirement-amenities-flow">
           {coreApplicable && <ChoiceChip label={`${driverRoom ? '✓ ' : ''}${label('Driver room', 'غرفة سائق')}`} selected={driverRoom} onPress={() => setDriverRoom(value => !value)} testID="requirement-driver-room" role="checkbox" />}
@@ -817,7 +854,10 @@ export default function RequirementEditor() {
           {coreApplicable && purpose === 'rent' && poolCatalogApplies && <ChoiceChip label={`${poolSelected || poolExcluded ? '✓ ' : ''}${AMENITY_LABELS.swimmingPool[language === 'ar' ? 'ar' : 'en']}${poolExcluded ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={poolSelected || poolExcluded} onPress={togglePool} testID="requirement-service-swimmingPool" role="checkbox" />}
           {applicableCoreFields.has('hasCentralAC') && <ChoiceChip label={`${centralACPreference !== undefined ? '✓ ' : ''}${AMENITY_LABELS.centralAC[language === 'ar' ? 'ar' : 'en']}${centralACPreference === false ? label(' · Must not have', ' · يجب ألا تتوفر') : ''}`} selected={centralACPreference !== undefined} onPress={() => setCentralACPreference(current => current === undefined ? true : undefined)} testID="requirement-central-ac" role="checkbox" />}
         <RequirementCatalogPreferencesProxy propertyType={propertyType} floorUse={floorUse} values={catalog} onChange={setCatalog} amenities={amenities} onAmenitiesChange={setAmenities} excluded={excludedAmenities} onExcludedChange={setExcludedAmenities} showAmenities={coreApplicable} amenityFields={purpose === 'rent' ? amenityCatalogFields.filter(field => field !== 'hasPool') : amenityCatalogFields} /></ChoiceGrid></>}
-       <NearbyServicesSelector values={nearbyServices} onChange={setNearbyServices} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />
+       {needsSize && <CommercialRequirementServices register={requiredForm.register} office={officeServices} value={commercialServices} onChange={next => { if (!next.parkingTypes?.includes('private')) setParking(''); setCommercialServices(next); }} count={automaticNumberCount} onCountChange={setAutomaticNumberCount} centralAC={centralACPreference} onCentralACChange={setCentralACPreference} bathroomsEnabled={bathroomsEnabled} kitchenEnabled={kitchenEnabled} onToggleFacility={toggleCommercialFacility} />}
+       {needsSize && commercialServices.parkingTypes?.includes('private') && <NumericQuickPick scopeKey={scopeKey} label={label('Private parking count', 'عدد المواقف الخاصة')} value={parking} onChangeText={setParking} quickPickValues={[0, 1, 2, 3, 4, 5]} testID="requirement-private-parking-count" />}
+       {needsSize && nearbyServices.some(id => !COMMERCIAL_NEARBY_SERVICES.some(item => item.id === id)) && <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular }}>{label('Saving this edit removes nearby services that do not belong to the commercial form.', 'حفظ التعديل يزيل الخدمات القريبة القديمة التي لا تنتمي للفورم التجاري.')}</Text>}
+       <NearbyServicesSelector commercial={needsSize} values={nearbyServices} onChange={setNearbyServices} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />
      </View>}
     {step === 4 && <><RequiredField id="budget" label={t('requirements.budget')}><TextInput value={minimum} onChangeText={constrain('budget', setMinimum)} placeholder={t('requirements.budget_from')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-min" /><TextInput value={maximum} onChangeText={constrain('budget', setMaximum)} placeholder={t('requirements.budget_to')} keyboardType="decimal-pad" style={styles.input} testID="requirement-budget-max" />{unspecifiedChoice('budget')}</RequiredField>{purpose === 'rent' && <ChoiceGrid style={styles.wrap}>{(['daily', 'monthly', 'yearly'] as const).map(value => <ChoiceChip key={value} label={value === 'daily' ? label('Daily', 'يومياً') : value === 'monthly' ? label('Monthly', 'شهرياً') : label('Yearly', 'سنوياً')} selected={cadence === value} onPress={() => setCadence(value)} testID={`requirement-rental-period-${value}`} role="radio" />)}</ChoiceGrid>}<Text style={styles.heading}>{t('requirements.notes')}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={[styles.input, styles.notes]} testID="requirement-notes" /></>}
     {step === 5 && <><Text style={styles.heading}>{label('Review', 'مراجعة')}</Text><Text style={styles.summaryTitle}>{projectRequirementIntent({ purpose }, language).label} · {(propertyType === 'floor' ? getFloorTypeLabel(floorUse, language, t('propertyType.floor')) : t(`propertyType.${propertyType}`))}</Text>{reviewLines.map((line, index) => <Text key={`${index}-${line}`} style={styles.summary}>{line}</Text>)}</>}

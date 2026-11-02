@@ -11,6 +11,12 @@ import { DEMO_NEARBY_SERVICES } from "@/services/propertyDemoCatalog";
 
 type Language = "en" | "ar";
 const labels: Record<string, [string, string]> = {
+  automaticNumberCount: ['Number of PACI numbers', 'عدد الأرقام الآلية'],
+  facilityCleaning: ['Facility cleaning', 'نظافة مرافق'],
+  kitchenAccess: ['Kitchen access', 'المطبخ خاص / مشترك'],
+  'parking:private': ['Private parking', 'مواقف خاصة'],
+  'parking:public': ['Public parking', 'مواقف عامة'],
+  'parking:paid': ['Paid parking', 'مواقف مدفوعة'],
   budget: ["Price", "السعر"],
   location: ["Area", "المنطقة"],
   bedrooms: ["Bedrooms", "غرف النوم"],
@@ -57,6 +63,7 @@ export function matchingExplanationText(
   const label = matchingCriterionLabel(item.criterion, language);
   const format = (value: unknown) => {
     if (value === undefined) return ar ? "غير مسجل" : "Not recorded";
+    if (item.criterion === 'kitchenAccess') return value === 'private' ? (ar ? 'خاص' : 'Private') : value === 'shared' ? (ar ? 'مشترك' : 'Shared') : String(value);
     if (item.criterion === "location")
       return ar ? "منطقة بديلة" : "Alternative area";
     if (item.criterion in propertyDetailLabels)
@@ -110,6 +117,7 @@ export function matchingComparisonRows(result: import('@workspace/property-domai
   const ar = language === 'ar';
   const value = (field: string, raw: unknown): string => {
     if (raw === undefined) return ar ? 'غير مسجل' : 'Not recorded';
+    if (field === 'kitchenAccess') return raw === 'private' ? (ar ? 'خاص' : 'Private') : raw === 'shared' ? (ar ? 'مشترك' : 'Shared') : String(raw);
     if (field === 'occupancy' && raw !== 'any') return formatPropertyDetailValue('housingTypes', String(raw).split(',').map(v=>v.trim()), language);
     const mapped = ({ bedrooms: 'bedroomCount', bathrooms: 'bathroomCount', masterBedrooms: 'masterBedroomCount' } as Record<string, string>)[field] ?? field;
     if (mapped in propertyDetailLabels) return formatPropertyDetailValue(mapped as keyof typeof propertyDetailLabels, raw, language);

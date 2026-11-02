@@ -42,7 +42,7 @@ test('Requirement enters its specifications page from explicit catalog context',
   assert.match(route, /step === 3 && <View testID="requirement-core-step">[\s\S]*requirement-all-kuwait/);
   assert.match(route, /step === 5 && <><Text style=\{styles\.heading\}>\{label\('Review'/);
   assert.match(route, /projectRequirementIntent\(\{ purpose \}, language\)\.label.*propertyType\.\$\{propertyType\}/);
-  assert.match(route, /choiceReviewLines\(leadingFields\)/);
+  assert.match(route, /choiceReviewLines\(editableLeadingFields\)/);
   assert.match(route, /getWantedApartmentSubtypeLabel/);
   assert.match(route, /isWantedStudio\(baseline\)/, 'Studio Requirements retain their dedicated forwarding path');
 });

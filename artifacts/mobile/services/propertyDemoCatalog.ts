@@ -51,6 +51,16 @@ export const DEMO_NEARBY_SERVICES = [
   option('shopping_center', 'Shopping center', 'مركز تسوق'),
 ] as const;
 
+/** Commercial requests deliberately exclude residential neighbourhood facilities. */
+export const COMMERCIAL_NEARBY_SERVICES = [
+  option('supermarket', 'Co-op / Supermarket', 'جمعية / سوبر ماركت'),
+  option('bus_station', 'Bus stop', 'محطة باص'),
+  option('mosque', 'Mosque', 'مسجد'),
+  option('pharmacy', 'Pharmacy', 'صيدلية'),
+  option('bank_atm', 'ATM', 'صراف آلي'),
+  option('other', 'Other', 'أخرى'),
+] as const;
+
 const features = (items: readonly [string, string, string][]) =>
   items.map(([id, en, ar]) => option(id, en, ar));
 

@@ -1,3 +1,4 @@
+import { isCommercialRequirement, hasOfficeRequirementServices, commercialServiceErrors, cloneCommercialServices, type CommercialRequirementServices } from './commercialRequirements.ts';
 import type { FloorUse, LocationAreaId, PropertyType } from "./types.ts";
 import type { ResidentialAmenity } from "./types.ts";
 import type { PropertyDetailField } from "./taxonomy.ts";
@@ -59,6 +60,8 @@ export interface SeekerRequirementBase {
   /** Explicitly unconstrained inputs; no additional scoring or hard-filter meaning. */
   readonly unspecifiedFields?: readonly ('budget' | 'bedrooms' | 'bathrooms' | 'area')[];
   readonly preferredNearbyServices?: readonly string[];
+  readonly commercialActivity?: string;
+  readonly commercialServices?: CommercialRequirementServices;
   readonly preferredAmenities?: readonly ResidentialAmenity[];
   readonly preferredAmenityExclusions?: readonly ResidentialAmenity[];
   readonly catalogPreferences?: readonly CatalogPreference[];
@@ -140,6 +143,7 @@ const COMMON_SPEC_FIELDS = ["bedroomsMinimum", "bathroomsMinimum", "centralAC"] 
 const REQUIREMENT_TYPED_FIELDS = ["masterBedroomsMinimum", "driverRoom"] as const;
 
 const REQUIREMENT_FIELDS = new Set([
+  "commercialActivity", "commercialServices",
   "id",
   "seekerId",
   "purpose",
@@ -570,6 +574,15 @@ export function validateSeekerRequirement(
     });
   }
 
+  const commercial = isCommercialRequirement(value.propertyType as PropertyType, value.floorUse as FloorUse, value.propertyUse as FloorUse);
+  if (value.commercialActivity !== undefined && (!commercial || typeof value.commercialActivity !== 'string' || !value.commercialActivity.trim() || value.commercialActivity.length > 250)) {
+    issues.push(issue('invalid_requirement', ['commercialActivity'], 'Commercial activity must be non-empty text up to 250 characters on a commercial request.'));
+  }
+  if (value.commercialServices !== undefined) {
+    const errors = commercial ? commercialServiceErrors(value.commercialServices, hasOfficeRequirementServices(value.propertyType as PropertyType, value.floorUse as FloorUse)) : ['commercialServices'];
+    errors.forEach(field => issues.push(issue('invalid_requirement', ['commercialServices', field], 'Invalid commercial service preference.')));
+  }
+
   if (value.preferredNearbyServices !== undefined && (!Array.isArray(value.preferredNearbyServices)
     || value.preferredNearbyServices.some(id => typeof id !== "string" || !id.trim())
     || new Set(value.preferredNearbyServices).size !== value.preferredNearbyServices.length)) {
@@ -766,6 +779,8 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(validation.value.commercialActivity !== undefined ? { commercialActivity: validation.value.commercialActivity.trim() } : {}),
+    ...(validation.value.commercialServices !== undefined ? { commercialServices: cloneCommercialServices(validation.value.commercialServices) } : {}),
     ...(validation.value.unspecifiedFields !== undefined ? { unspecifiedFields: [...validation.value.unspecifiedFields] } : {}),
     ...(validation.value.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...validation.value.preferredNearbyServices] } : {}),
     ...(source.bedroomsMinimum !== undefined
