@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 /** Presentation-only tokens: the approved demo can be restyled without replacing its state/commands. */
 export const assistantTone = {
   background: '#F5F7FB', paper: '#FFFFFF', ink: '#172C4D', navy: '#142D50', blue: '#235AF3',
@@ -6,6 +6,7 @@ export const assistantTone = {
   red: '#D73C4A', redBg: '#FFF0F1', green: '#128B64', greenBg: '#EAF6EF', neutral: '#EDF1F5',
 };
 const c = assistantTone;
+const touchSize = Platform.OS === 'android' ? 48 : 44;
 export const s = StyleSheet.create({
   homeHeader: { backgroundColor: c.paper, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: c.line }, homeHeaderInner: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: 16, alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   homeContent: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: 18, gap: 14 },
@@ -24,7 +25,7 @@ export const s = StyleSheet.create({
   headerRow: { alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   logo: { fontSize: 23, color: 'white' }, search: { backgroundColor: 'white', minHeight: 44, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', gap: 9 },
   headerSmall: { color: c.blue, fontSize: 14 }, headerTools: { gap: 8, alignItems: 'center' },
-  language: { minHeight: 44, minWidth: 44, paddingHorizontal: 10, borderRadius: 10, backgroundColor: c.pale, alignItems: 'center', justifyContent: 'center' },
+  language: { minHeight: touchSize, minWidth: touchSize, paddingHorizontal: 10, borderRadius: 10, backgroundColor: c.pale, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#D9E8FB', alignItems: 'center', justifyContent: 'center' },
   headingRow: { alignItems: 'center', justifyContent: 'space-between', gap: 10 }, title: { fontSize: 24, lineHeight: 32, color: c.ink },
   date: { fontSize: 13, lineHeight: 21, color: c.muted },
@@ -36,7 +37,7 @@ export const s = StyleSheet.create({
   badge: { minWidth: 27, minHeight: 27, paddingHorizontal: 6, borderRadius: 20, borderWidth: 1, borderColor: c.red, alignItems: 'center', justifyContent: 'center', backgroundColor: c.red },
   badgeZero: { backgroundColor: c.paper }, badgeText: { color: '#FFFFFF', fontSize: 13, lineHeight: 19, textAlign: 'center' },
   button: { minHeight: 44, paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 7 },
-  buttonText: { fontSize: 14, lineHeight: 21, textAlign: 'center' }, iconButton: { width: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  buttonText: { fontSize: 14, lineHeight: 21, textAlign: 'center' }, iconButton: { width: touchSize, height: touchSize, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   calendarBar: { padding: 6, alignItems: 'center', justifyContent: 'space-between', gap: 4 }, calendarCaption: { flex: 1, minWidth: 0, minHeight: 44, paddingHorizontal: 7, alignItems: 'center', gap: 6 },
   sectionTitle: { fontSize: 18, lineHeight: 26, color: c.ink }, small: { fontSize: 13, lineHeight: 21, color: c.muted },
   alert: { backgroundColor: c.redBg, borderWidth: 1, borderColor: '#EDB7BF', borderRadius: 12, padding: 12, gap: 8 },

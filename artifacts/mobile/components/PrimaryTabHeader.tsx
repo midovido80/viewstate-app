@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -7,6 +7,8 @@ import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';
 import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
+
+const touchSize = Platform.OS === 'android' ? 48 : 44;
 
 export function PrimaryTabHeader({ title, compactSearch = false }: { title: string; compactSearch?: boolean }) {
   const router = useRouter(), colors = useColors(), insets = useScreenInsets();
@@ -30,4 +32,4 @@ export function PrimaryTabHeader({ title, compactSearch = false }: { title: stri
     </TouchableOpacity>}
   </View>;
 }
-const styles = StyleSheet.create({ container: { paddingHorizontal: 18, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#E9EDF5', zIndex: 10 }, brandRow: { minHeight: 53, alignItems: 'center', justifyContent: 'space-between', gap: 10 }, title: { fontSize: 25, lineHeight: 36, marginBottom: 8 }, searchBar: { minHeight: 44, borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, alignItems: 'center', gap: 9 }, tool: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, badge: { position: 'absolute', top: 1, right: 1, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 3, backgroundColor: '#D73C4A', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' } });
+const styles = StyleSheet.create({ container: { paddingHorizontal: 18, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#E9EDF5', zIndex: 10 }, brandRow: { minHeight: 53, alignItems: 'center', justifyContent: 'space-between', gap: 10 }, title: { fontSize: 25, lineHeight: 36, marginBottom: 8 }, searchBar: { minHeight: touchSize, borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, alignItems: 'center', gap: 9 }, tool: { width: touchSize, height: touchSize, alignItems: 'center', justifyContent: 'center' }, badge: { position: 'absolute', top: 1, right: 1, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 3, backgroundColor: '#D73C4A', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' } });
