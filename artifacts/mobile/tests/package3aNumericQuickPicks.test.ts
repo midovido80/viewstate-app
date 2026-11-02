@@ -1,0 +1,329 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import {
+  createNumericQuickPickLocalState,
+  createQuickPickValidationScope,
+  DEMO_NUMERIC_QUICK_PICK_VALUES,
+  FLOOR_NUMBER_QUICK_PICK_VALUES,
+  NUMERIC_QUICK_PICK_VALUES,
+  isPropertyNumericQuickPickSurface,
+  isRequirementNumericQuickPickSurface,
+  hasPendingInvalidQuickPick,
+  parseExactIntegerInput,
+  openNumericQuickPickMore,
+  reconcileNumericQuickPickScope,
+  resolveExactIntegerInput,
+  selectNumericQuickPick,
+  shouldOpenExactEntry,
+  synchronizeNumericQuickPickValue,
+  updateInvalidQuickPickFields,
+  updateScopedInvalidQuickPickFields,
+  hasPendingInvalidQuickPickForScope,
+  selectNumericQuickPickState,
+} from '../services/numericQuickPick.ts';
+
+test('BEHAVIOR: quick values set the intended exact numeric value', () => {
+  for (const value of [1, 2, 3, 4, 5]) {
+    assert.equal(selectNumericQuickPick(value), String(value));
+  }
+});
+
+test('BEHAVIOR: +6 always opens with a committed, valid six for blank and quick-pick values', () => {
+  assert.deepEqual(openNumericQuickPickMore(), { expanded: true, value: '6', invalid: false });
+  assert.deepEqual(createNumericQuickPickLocalState('capture:bedrooms', ''), {
+    scopeKey: 'capture:bedrooms',
+    pending: '',
+    invalid: false,
+    expanded: false,
+  });
+  for (const value of ['', '1', '5', '12']) {
+    const opened = openNumericQuickPickMore();
+    const committed = resolveExactIntegerInput(opened.value, value, true);
+    assert.deepEqual(committed, { pending: '6', committedValue: '6', invalid: false });
+  }
+});
+
+test('BEHAVIOR: exact 6 remains exactly 6 and opens exact-entry mode', () => {
+  assert.deepEqual(parseExactIntegerInput('6'), { kind: 'valid', normalized: '6', value: 6 });
+  assert.equal(shouldOpenExactEntry('6'), true);
+});
+
+test('BEHAVIOR: a higher exact value remains unchanged and reopens expanded', () => {
+  assert.deepEqual(parseExactIntegerInput('12'), { kind: 'valid', normalized: '12', value: 12 });
+  assert.equal(shouldOpenExactEntry('12'), true);
+});
+
+test('BEHAVIOR: switching from a high value to a quick value replaces it', () => {
+  const custom = { ...createNumericQuickPickLocalState('capture:bedrooms', '8'), pending: '12', expanded: true };
+  const selected = selectNumericQuickPickState(custom, 3);
+  assert.deepEqual(selected, {
+    scopeKey: 'capture:bedrooms',
+    pending: '3',
+    invalid: false,
+    expanded: false,
+  });
+  assert.equal(selectNumericQuickPick(3), '3');
+});
+
+test('BEHAVIOR: explicit zero remains valid, exact, and expanded', () => {
+  assert.deepEqual(parseExactIntegerInput('0'), { kind: 'valid', normalized: '0', value: 0 });
+  assert.equal(shouldOpenExactEntry('0'), true);
+});
+
+test('BEHAVIOR: floor number zero is selectable and restores as a collapsed quick pick', () => {
+  const selected = selectNumericQuickPick(0, FLOOR_NUMBER_QUICK_PICK_VALUES);
+  assert.equal(selected, '0');
+  assert.deepEqual(createNumericQuickPickLocalState('property:shop', selected, FLOOR_NUMBER_QUICK_PICK_VALUES), {
+    scopeKey: 'property:shop',
+    pending: '0',
+    invalid: false,
+    expanded: false,
+  });
+  const loading = createNumericQuickPickLocalState('property:shop', '', FLOOR_NUMBER_QUICK_PICK_VALUES);
+  assert.deepEqual(synchronizeNumericQuickPickValue(loading, 'property:shop', selected, FLOOR_NUMBER_QUICK_PICK_VALUES), {
+    scopeKey: 'property:shop',
+    pending: '0',
+    invalid: false,
+    expanded: false,
+  });
+  assert.deepEqual(resolveExactIntegerInput(selected, ''), {
+    pending: '0', committedValue: '0', invalid: false,
+  });
+  assert.deepEqual(openNumericQuickPickMore(), { expanded: true, value: '6', invalid: false });
+  assert.deepEqual(resolveExactIntegerInput('0', '0', true, FLOOR_NUMBER_QUICK_PICK_VALUES), {
+    pending: '0', committedValue: '0', invalid: false,
+  });
+  for (const value of ['1', '2', '3', '4', '5']) {
+    assert.equal(resolveExactIntegerInput(value, '0', true, FLOOR_NUMBER_QUICK_PICK_VALUES).invalid, true);
+  }
+  const invalidFields = updateInvalidQuickPickFields(new Set<string>(), 'floorNumber', false);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
+  assert.equal(parseExactIntegerInput(selected).kind, 'valid');
+});
+
+test('BEHAVIOR: floor zero remains distinct from blank and does not change default quick picks', () => {
+  assert.deepEqual(parseExactIntegerInput(''), { kind: 'blank', normalized: '' });
+  assert.deepEqual(parseExactIntegerInput(selectNumericQuickPick(0, FLOOR_NUMBER_QUICK_PICK_VALUES)), {
+    kind: 'valid', normalized: '0', value: 0,
+  });
+  assert.deepEqual(FLOOR_NUMBER_QUICK_PICK_VALUES, [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(DEMO_NUMERIC_QUICK_PICK_VALUES, [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(NUMERIC_QUICK_PICK_VALUES, [1, 2, 3, 4, 5]);
+  assert.equal(resolveExactIntegerInput('0', '6', true).invalid, true);
+  assert.deepEqual(createNumericQuickPickLocalState('default:zero', '0'), {
+    scopeKey: 'default:zero', pending: '0', invalid: false, expanded: true,
+  });
+});
+
+test('BEHAVIOR: blank remains distinct from explicit zero', () => {
+  assert.deepEqual(parseExactIntegerInput(''), { kind: 'blank', normalized: '' });
+  assert.notDeepEqual(parseExactIntegerInput(''), parseExactIntegerInput('0'));
+});
+
+test('BEHAVIOR: Arabic and Persian digits normalize without changing exact value', () => {
+  assert.deepEqual(parseExactIntegerInput('١٢'), { kind: 'valid', normalized: '12', value: 12 });
+  assert.deepEqual(parseExactIntegerInput('۶'), { kind: 'valid', normalized: '6', value: 6 });
+});
+
+test('BEHAVIOR: malformed, negative, decimal, and unsafe pending input remains invalid', () => {
+  for (const value of ['8x', '-1', '2.5', String(Number.MAX_SAFE_INTEGER + 1)]) {
+    const transition = resolveExactIntegerInput(value, '8');
+    assert.equal(transition.invalid, true);
+    assert.equal(transition.committedValue, '8');
+    assert.equal(transition.pending, value);
+  }
+});
+
+test('BEHAVIOR: valid pending input replaces the committed value without range conversion', () => {
+  assert.deepEqual(resolveExactIntegerInput('12', '8'), {
+    pending: '12',
+    committedValue: '12',
+    invalid: false,
+  });
+});
+
+test('BEHAVIOR: blank exact-entry input remains a blocker and clears the committed numeric draft', () => {
+  assert.deepEqual(resolveExactIntegerInput('', '8'), {
+    pending: '',
+    committedValue: '',
+    invalid: false,
+  });
+  const blank = resolveExactIntegerInput('', '8', true);
+  assert.deepEqual(blank, {
+    pending: '',
+    committedValue: '',
+    invalid: true,
+  });
+  let invalidFields = updateInvalidQuickPickFields(new Set<string>(), 'bedrooms', blank.invalid);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), true);
+
+  const arabic = resolveExactIntegerInput('١٢', blank.committedValue, true);
+  assert.deepEqual(arabic, {
+    pending: '12',
+    committedValue: '12',
+    invalid: false,
+  });
+  invalidFields = updateInvalidQuickPickFields(invalidFields, 'bedrooms', arabic.invalid);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
+
+  assert.deepEqual(resolveExactIntegerInput('۶', '8', true), {
+    pending: '6',
+    committedValue: '6',
+    invalid: false,
+  });
+});
+
+test('BEHAVIOR: invalid pending fields block commit until each field is corrected or unmounted', () => {
+  let invalidFields = new Set<string>();
+  invalidFields = updateInvalidQuickPickFields(invalidFields, 'bedrooms', true);
+  invalidFields = updateInvalidQuickPickFields(invalidFields, 'bathrooms', true);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), true);
+  invalidFields = updateInvalidQuickPickFields(invalidFields, 'bedrooms', false);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), true);
+  invalidFields = updateInvalidQuickPickFields(invalidFields, 'bathrooms', false);
+  assert.equal(hasPendingInvalidQuickPick(invalidFields), false);
+});
+
+test('BEHAVIOR: A invalid to B valid resets pending text and permits B save', () => {
+  const a = { ...createNumericQuickPickLocalState('property:A', '8'), pending: '8x', invalid: true, expanded: true };
+  const b = reconcileNumericQuickPickScope(a, 'property:B', '3');
+  assert.deepEqual(b, { scopeKey: 'property:B', pending: '3', invalid: false, expanded: false });
+  let validation = createQuickPickValidationScope<string>('property:A');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A', 'property:A', 'bedrooms', true);
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:B', 'property:B', 'bedrooms', false);
+  assert.equal(hasPendingInvalidQuickPickForScope(validation, 'property:B'), false);
+});
+
+test('BEHAVIOR: identical numeric values still reset across record identities', () => {
+  const a = { ...createNumericQuickPickLocalState('requirement:A', '6'), pending: '6x', invalid: true };
+  assert.deepEqual(reconcileNumericQuickPickScope(a, 'requirement:B', '6'), {
+    scopeKey: 'requirement:B', pending: '6', invalid: false, expanded: true,
+  });
+});
+
+test('BEHAVIOR: same-identity rerender preserves invalid pending text and blocker', () => {
+  const current = { ...createNumericQuickPickLocalState('property:A', '8'), pending: '8x', invalid: true };
+  assert.equal(synchronizeNumericQuickPickValue(current, 'property:A', '8'), current);
+  let validation = createQuickPickValidationScope<string>('property:A');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A', 'property:A', 'bedrooms', true);
+  assert.equal(hasPendingInvalidQuickPickForScope(validation, 'property:A'), true);
+});
+
+test('BEHAVIOR: same-identity async initialization synchronizes value when no invalid text exists', () => {
+  const loading = createNumericQuickPickLocalState('requirement:A', '');
+  assert.deepEqual(synchronizeNumericQuickPickValue(loading, 'requirement:A', '6'), {
+    scopeKey: 'requirement:A', pending: '6', invalid: false, expanded: true,
+  });
+});
+
+test('BEHAVIOR: record initialization preserves blank, zero, quick, six, and higher exact values', () => {
+  for (const [value, expanded] of [['', false], ['0', true], ['3', false], ['6', true], ['12', true]] as const) {
+    assert.deepEqual(createNumericQuickPickLocalState(`record:${value}`, value), {
+      scopeKey: `record:${value}`, pending: value, invalid: false, expanded,
+    });
+  }
+});
+
+test('BEHAVIOR: inapplicable control scope leaves no obsolete save blocker', () => {
+  let validation = createQuickPickValidationScope<string>('property:A');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A', 'property:A', 'parking', true);
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:A:commercial', 'property:A', 'parking', false);
+  assert.equal(hasPendingInvalidQuickPickForScope(validation, 'property:A:commercial'), false);
+});
+
+test('BEHAVIOR: stale A callbacks cannot restore A state or clear a legitimate B error', () => {
+  let validation = createQuickPickValidationScope<string>('property:B');
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:B', 'property:B', 'bedrooms', true);
+  validation = updateScopedInvalidQuickPickFields(validation, 'property:B', 'property:A', 'bedrooms', false);
+  assert.equal(validation.scopeKey, 'property:B');
+  assert.deepEqual([...validation.invalidFields], ['bedrooms']);
+});
+
+test('BEHAVIOR: new Requirement preserves same-owner state and resets on observable owner change', () => {
+  const ownerA = 'requirement:new:owner:person-A';
+  const current = { ...createNumericQuickPickLocalState(ownerA, ''), pending: '2x', invalid: true, expanded: true };
+  assert.equal(reconcileNumericQuickPickScope(current, ownerA, ''), current);
+  assert.deepEqual(reconcileNumericQuickPickScope(current, 'requirement:new:owner:person-B', ''), {
+    scopeKey: 'requirement:new:owner:person-B', pending: '', invalid: false, expanded: false,
+  });
+});
+
+test('BEHAVIOR: every active Property count surface uses the shared quick picks', () => {
+  for (const type of ['apartment', 'house', 'villa', 'chalet'] as const) {
+    assert.equal(isPropertyNumericQuickPickSurface(type), true);
+  }
+  assert.equal(isPropertyNumericQuickPickSurface('floor', 'residential'), true);
+  assert.equal(isPropertyNumericQuickPickSurface('floor', 'commercial'), true);
+  assert.equal(isPropertyNumericQuickPickSurface('office'), true);
+  assert.equal(isPropertyNumericQuickPickSurface('warehouse'), true);
+});
+
+test('BEHAVIOR: only unambiguous residential Rent Requirements use quick picks', () => {
+  for (const type of ['apartment', 'house', 'villa', 'chalet'] as const) {
+    assert.equal(isRequirementNumericQuickPickSurface('rent', type), true);
+    assert.equal(isRequirementNumericQuickPickSurface('buy', type), false);
+  }
+  assert.equal(isRequirementNumericQuickPickSurface('rent', 'floor'), false);
+  assert.equal(isRequirementNumericQuickPickSurface('rent', 'office'), false);
+});
+
+test('BEHAVIOR: unsupported quick values cannot be converted into stored markers', () => {
+  assert.throws(() => selectNumericQuickPick(0), /INVALID_NUMERIC_QUICK_PICK/);
+  assert.throws(() => selectNumericQuickPick(6), /INVALID_NUMERIC_QUICK_PICK/);
+});
+
+test('SOURCE ASSERTION: production control commits six and shows input only after +6', async () => {
+  const source = await readFile('components/NumericQuickPick.tsx', 'utf8');
+  assert.match(source, /label="\+6"/);
+  assert.match(source, /openNumericQuickPickMore\(\)/);
+  assert.match(source, /onChangeText\(transition\.value\)/);
+  assert.match(source, /\{expanded \? \([\s\S]*testID=\{\`\$\{testID\}-exact-input\`\}[\s\S]*\) : null\}/);
+  assert.doesNotMatch(source, /Enter exact value|أدخل قيمة محددة|exact-open/);
+  assert.match(source, /accessibilityRole="alert"/);
+  assert.match(source, /minHeight: 44/);
+});
+
+test('SOURCE ASSERTION: legacy demo counter uses the same +6 transition and supported chip catalog', async () => {
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(capture, /DEMO_NUMERIC_QUICK_PICK_VALUES\.map/);
+  assert.match(capture, /openNumericQuickPickMore\(\)/);
+  assert.match(capture, /setExact\(transition\.value\)[\s\S]*onChange\(Number\(transition\.value\)\)/);
+  assert.match(capture, /label="\+6"/);
+  assert.match(capture, /onPress=\{\(\) => \{ const selected = selectNumericQuickPick\(number, DEMO_NUMERIC_QUICK_PICK_VALUES\); setExpanded\(false\); setExact\(''\)/);
+  assert.doesNotMatch(capture, /Enter exact value|أدخل قيمة محددة/);
+});
+
+test('SOURCE ASSERTION: only property floorNumber gets the extra zero quick pick', async () => {
+  const source = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
+  assert.match(source, /quickPickValues=\{field === 'floorNumber' \? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined\}/);
+  const demo = await readFile('components/ModernPropertyForm.tsx', 'utf8');
+  assert.match(demo, /quickPickValues=\{item\.id === 'floorNumber' \? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined\}/);
+});
+
+test('SOURCE ASSERTION: Property applies quick picks only to the three authorized fields', async () => {
+  const source = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
+  assert.match(source, /definition\.control === 'numeric_quick_pick'/);
+  assert.match(source, /isPropertyNumericQuickPickSurface\(propertyType, floorUse\)/);
+  assert.match(source, /requireExactValue=\{requireExactValue\}/);
+  const capture = await readFile('app/capture/index.tsx', 'utf8');
+  assert.match(capture, /<ModernPropertyForm[\s\S]{0,250}requireExactValue/);
+  const [form, fields] = await Promise.all([
+    readFile('components/ModernPropertyForm.tsx', 'utf8'),
+    readFile('components/ModernPropertyFields.tsx', 'utf8'),
+  ]);
+  assert.match(form, /<ModernPropertyFields[\s\S]{0,350}requireExactValue=\{requireExactValue\}/);
+  assert.match(fields, /<PropertyEnrichmentFields[\s\S]{0,250}requireExactValue=\{requireExactValue\}/);
+});
+
+test('SOURCE ASSERTION: Requirement keeps ambiguous surfaces on current inputs and Buy without Rent details', async () => {
+  const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
+  assert.match(source, /const scopeKey = editing \? `requirement:\$\{routeRequirementId\}` : `requirement:new:\$\{ownerFromRoute/);
+  assert.match(source, /const coreApplicable = isResidential\(propertyType, floorUse\)/);
+  assert.match(source, /scopeKey=\{scopeKey\} label=\{label\('Bedrooms'/);
+  assert.match(source, /scopeKey=\{scopeKey\} label=\{label\('Bathrooms'/);
+  assert.match(source, /parseOptionalRequirementNumber\(value\)\.ok/);
+  assert.match(source, /\.\.\.\(purpose === 'rent' \? \{ rentalPeriodId: cadence/);
+  const quickPick = await readFile('components/NumericQuickPick.tsx', 'utf8');
+  assert.match(quickPick, /onChangeText\(transition\.invalid && transition\.pending !== ''[\s\S]*transition\.committedValue\)/);
+});
