@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Property domain standalone typecheck
+        run: pnpm --filter @workspace/property-domain typecheck
+
       - name: Property domain tests
         run: pnpm --filter @workspace/property-domain test
 

@@ -6,7 +6,7 @@
     "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": ["mobile", "viewstate"],
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -19,8 +19,14 @@
     },
     "android": {
       "package": "com.viewstate.app",
-      "versionCode": 4,
-      "softwareKeyboardLayoutMode": "resize"
+      "versionCode": 6,
+      "softwareKeyboardLayoutMode": "resize",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -58,7 +64,17 @@
           "microphonePermission": false
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "./plugins/withLocalMatchAudio.cjs"
     ],
     "experiments": {
       "typedRoutes": true,

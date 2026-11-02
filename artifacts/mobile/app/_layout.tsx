@@ -1,8 +1,9 @@
+import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   Inter_400Regular,
@@ -17,6 +18,8 @@ import {
   Tajawal_700Bold,
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
+import { useUserData } from '@/contexts/UserDataContext';
+import { RealAccountGate } from '@/contexts/RealAccountContext';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -25,16 +28,15 @@ import { StatusBar } from 'expo-status-bar';
 SplashScreen.preventAutoHideAsync();
 
 import {
-  store,
   type LocalStoreIntegrityStatus,
 } from '@/services/persistence';
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
+import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
 
-const queryClient = new QueryClient();
 
 function RootLayoutNav({
   integrityStatus,
@@ -42,6 +44,8 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
+  // Expo Router restores the requested route. Auth/onboarding remain owned by the root gate.
+  // Never replace a restored property URL merely because its account is ready.
   return (
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       {integrityStatus.hasUnreadableRecords ? (
@@ -79,15 +83,26 @@ function RootLayoutNav({
       ) : null}
       <Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="account" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
         <Stack.Screen name="person/[personId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/[requirementId]" options={{ headerShown: false }} />
+        <Stack.Screen name="requirement/view/[requirementId]" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]" options={{ headerShown: false }} />
+        <Stack.Screen name="property/[propertyCoreId]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
       </Stack>
     </View>
   );
+}
+
+function AppLoadingScreen() {
+  return <View testID="app-startup-loading" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.light.background }} accessibilityLabel="Loading / جارٍ التحميل" accessibilityState={{ busy: true }}><ActivityIndicator size="large" color={colors.light.primary} /></View>;
 }
 
 type InitializationState =
@@ -96,22 +111,10 @@ type InitializationState =
   | { status: 'error' }
   | { status: 'ready'; integrityStatus: LocalStoreIntegrityStatus };
 
-export default function RootLayout() {
-  const [interLoaded, interError] = useInterFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
-
-  const [tajawalLoaded, tajawalError] = useTajawalFonts({
-    Tajawal_400Regular,
-    Tajawal_500Medium,
-    Tajawal_700Bold,
-  });
-
-  const fontsLoaded = interLoaded && tajawalLoaded;
-  const fontError = interError || tajawalError;
+function ApplicationRoot({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontError: Error | null }) {
+  const { store } = useUserData();
+  const [queryClient] = useState(() => new QueryClient());
+  useEffect(() => () => queryClient.clear(), [queryClient]);
 
   const [initialization, setInitialization] = useState<InitializationState>({
     status: 'initializing',
@@ -139,7 +142,7 @@ export default function RootLayout() {
         initializationAttempt.current = null;
       }
     });
-  }, []);
+  }, [store]);
 
   useEffect(() => {
     initialize(false);
@@ -164,28 +167,26 @@ export default function RootLayout() {
       && !fontsLoaded
       && !fontError
     )
-  ) return null;
+  ) return <AppLoadingScreen />;
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       {initialization.status === 'error' || initialization.status === 'retrying' ? (
-        <I18nProvider>
           <StartupRecoveryScreen
             status={initialization.status}
             onRetry={() => initialize(true)}
           />
-        </I18nProvider>
       ) : (
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <I18nProvider>
-                <CaptureProvider>
+                <AccountFoundationProvider>
+                <CaptureProvider><MatchNotificationsProvider>
                   <StatusBar style="dark" backgroundColor={colors.light.background} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
-                </CaptureProvider>
-                </I18nProvider>
+                </MatchNotificationsProvider></CaptureProvider>
+                </AccountFoundationProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>
@@ -193,6 +194,28 @@ export default function RootLayout() {
       )}
     </SafeAreaProvider>
   );
+}
+
+export default function RootLayout() {
+  const [interLoaded, interError] = useInterFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  const [tajawalLoaded, tajawalError] = useTajawalFonts({
+    Tajawal_400Regular,
+    Tajawal_500Medium,
+    Tajawal_700Bold,
+  });
+
+  const fontsLoaded = interLoaded && tajawalLoaded;
+  const fontError = interError || tajawalError;
+
+  // Load the approved fonts before the auth gate, including first launch and Guest setup.
+  if (!fontsLoaded && !fontError) return <AppLoadingScreen />;
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot fontsLoaded={fontsLoaded} fontError={fontError} /></RealAccountGate></I18nProvider></SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({
