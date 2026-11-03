@@ -1130,3 +1130,12 @@ test('offered commercial services survive Web store recreation alongside an unre
   assert.deepEqual(reloaded?.typeDetails, property.typeDetails);
   assert.equal(JSON.stringify(await restarted.getProperty(previous.core.id)), oldBytes);
 });
+
+test('Kitchen specifications and new occupancy survive native and web repository restarts', async () => {
+  const personReader = { getPerson: async (id: string) => id === 'seeker-1' ? seeker(id) : null };
+  const value: RentSeekerRequirement = { ...rentRequirement(), preferredAreaMode:'all_kuwait',preferredAreaIds:[],occupancy:'company_staff',kitchens:[{layout:'american',equipment:'equipped',access:'private'},{layout:'regular',equipment:'unequipped'}] };
+  const db=new RequirementDatabase();await new SQLiteRequirementStore(()=>db,personReader).saveRequirement(value);
+  assert.deepEqual(await new SQLiteRequirementStore(()=>db,personReader).getRequirement(value.id),value);
+  const storage=new MemoryStorage();await new WebRequirementStore(storage,()=>locks,personReader).saveRequirement(value);
+  assert.deepEqual(await new WebRequirementStore(storage,()=>locks,personReader).getRequirement(value.id),value);
+});

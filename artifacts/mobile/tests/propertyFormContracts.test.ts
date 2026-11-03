@@ -45,10 +45,12 @@ test('Different apartment and floor layouts survive capture, edit hydration, sav
   assert.equal(facts.apartmentsPerFloor, undefined);
   for (const lang of ['ar', 'en'] as const) assert.ok(!formatPropertyDetailValue('apartmentLayouts', layouts, lang).includes('[object Object]'));
 });
-test('Building sale preserves family/bachelor/any, permits exactly 1–4 shops and 1–2 commercial floors', () => {
+test('Building sale preserves family/bachelor/any, permits manual counts above common dropdown values while retaining total-floor validation', () => {
   const { facts } = roundTrip('whole_building', 'sale', { ...building, occupancy: 'family', hasCommercialShops: 'true', shopCount: '4', hasCommercialFloors: 'true', commercialFloorCount: '2', rentalOccupancy: 'partially_rented', monthlyIncome: '8000', parkingTypes: 'private,paid', privateParkingCount: '6', hasMortgage: 'true' });
   assert.equal(facts.shopCount, 4); assert.equal(facts.commercialFloorCount, 2);
-  for (const bad of [{ shopCount: '5' }, { commercialFloorCount: '3' }]) assert.throws(() => buildPropertyWithCaptureDetails(basic('whole_building', 'sale'), { ...building, hasCommercialShops: 'true', hasCommercialFloors: 'true', ...bad }));
+  const manual=roundTrip('whole_building','sale',{...building,floorCount:'40',hasCommercialShops:'true',shopCount:'20',hasCommercialFloors:'true',commercialFloorCount:'15'});
+  assert.equal(manual.facts.floorCount,40);assert.equal(manual.facts.shopCount,20);assert.equal(manual.facts.commercialFloorCount,15);
+  for (const bad of [{ shopCount: '0' }, { commercialFloorCount: '0' }, { commercialFloorCount:'5' }]) assert.throws(() => buildPropertyWithCaptureDetails(basic('whole_building', 'sale'), { ...building, hasCommercialShops: 'true', hasCommercialFloors: 'true', ...bad }));
 });
 test('Conditional child facts are removed on save when parent changes without erasing unrelated data', () => {
   const initial = buildPropertyWithCaptureDetails(basic('whole_building', 'sale'), { ...building, hasCommercialShops: 'true', shopCount: '4', hasCommercialFloors: 'true', commercialFloorCount: '2' });

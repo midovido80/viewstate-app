@@ -95,7 +95,7 @@ test('Amenity taps select or clear a fact while historical false is readable and
   for (const initial of ['', 'true', 'false']) {
     const changes: unknown[] = [];
     const form = PropertyEnrichmentFields({ recordScopeKey: 'test', propertyType: 'apartment', values: { hasBalcony: initial, bedroomCount: '3' }, onChange: (field, value) => changes.push([field, value]) });
-    const tile = elements(form).find(item => item.type === tiles.ChoiceTile)!;
+    const tile = elements(form).find(item => typeof item.type === 'function' && item.type.name === 'ChoiceTile')!;
     assert.ok(tile);
     assert.equal(props(tile).selected, initial !== '');
     if (initial === 'false') assert.match(props(tile).label, /بدون|No /);

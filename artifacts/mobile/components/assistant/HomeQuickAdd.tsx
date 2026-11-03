@@ -9,7 +9,7 @@ import { assistantTone as c } from './styles';
 const positions: readonly [HomeQuickAction, React.ComponentProps<typeof Feather>['name'], number, number][] = [
   ['person', 'user-plus', 0, -110], ['property', 'home', 105, -34], ['import', 'download', 65, 89], ['share', 'share-2', -65, 89], ['matching', 'target', -105, -34],
 ];
-export function HomeQuickAdd({ label, closeLabel, labels, onAction }: { label: string; closeLabel: string; labels: Record<HomeQuickAction, string>; onAction: (action: HomeQuickAction) => void }) {
+export function HomeQuickAdd({ label, closeLabel, labels, onAction, compact = false }: { compact?: boolean; label: string; closeLabel: string; labels: Record<HomeQuickAction, string>; onAction: (action: HomeQuickAction) => void }) {
   const { fonts } = useAssistantUI(), { width, height } = useWindowDimensions(), insets = useScreenInsets();
   const { state: account } = useAccountFoundation();
   const trigger = useRef<View>(null), motion = useRef(new Animated.Value(0)).current;
@@ -24,7 +24,7 @@ export function HomeQuickAdd({ label, closeLabel, labels, onAction }: { label: s
   function open() { trigger.current?.measureInWindow((x, y, w, h) => {
     setCenter({ x: Math.max(145, Math.min(x + w / 2, width - 145)), y: Math.max(insets.top + 150, Math.min(y + h / 2, height - insets.bottom - 150)) }); setVisible(true);
   }); }
-  return <View style={q.stage}><Pressable ref={trigger} testID="home-quick-add" accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: visible }} onPress={open} style={q.trigger}><Feather name="plus" size={31} color="white" /></Pressable><Text style={[q.caption, { fontFamily: fonts.regular }]}>{label}</Text>
+  return <View style={compact ? { width: 66, height: 64, marginTop: -22, borderRadius: 36, backgroundColor: '#FFFFFF', alignItems: 'center', paddingTop: 3 } : q.stage}><Pressable ref={trigger} testID="home-quick-add" accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: visible }} onPress={open} style={q.trigger}><Feather name="plus" size={31} color="white" /></Pressable>{!compact && <Text style={[q.caption, { fontFamily: fonts.regular }]}>{label}</Text>}
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={close}>
       <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: '#142D5066' }]} onPress={close} accessibilityRole="button" accessibilityLabel={closeLabel} />

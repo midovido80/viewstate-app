@@ -3,7 +3,7 @@ import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities'
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { Text, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
-import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';

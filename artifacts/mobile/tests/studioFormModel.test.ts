@@ -629,3 +629,13 @@ test('STRUCTURAL: Studio projections exclude building aggregates and reject unsu
     'unknown legacy catalog preferences cannot be silently discarded',
   );
 });
+
+test('Studio kitchens and wanted housing retain exact independent values through save and reopen',()=>{
+ const kitchens=[{layout:'american' as const,equipment:'equipped' as const},{layout:'regular' as const,equipment:'unequipped' as const}];
+ const offered={...createStudioFormValues('offered','rent'),locationAreaId:'salmiya',price:'400',kitchens};
+ const property=buildStudioProperty(offered,'11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222');
+ assert.deepEqual(readStudioProperty(property).kitchens,kitchens);
+ const wanted={...createStudioFormValues('wanted','rent'),preferredAreaMode:'all_kuwait' as const,budgetMaximum:'500',occupancy:'women' as const,kitchens};
+ const requirement=buildStudioRequirement(wanted,'11111111-1111-4111-8111-111111111111','seeker-1');
+ assert.deepEqual(readStudioRequirement(requirement).kitchens,kitchens);assert.equal(readStudioRequirement(requirement).occupancy,'women');
+});

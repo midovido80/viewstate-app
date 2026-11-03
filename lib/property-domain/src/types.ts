@@ -1,3 +1,4 @@
+import type { KitchenSpec } from './kitchens.ts';
 export type PropertyType =
   | "whole_building"
   | "commercial_complex"
@@ -40,7 +41,7 @@ export type ApartmentSubtype =
   | "duplex";
 
 export type FloorUse = "residential" | "commercial";
-export type PropertyOccupancy = "family" | "bachelor" | "any";
+export type PropertyOccupancy = "family" | "bachelor" | "company_staff" | "women" | "mixed" | "any";
 export type Furnishing = "unfurnished" | "semi_furnished" | "furnished";
 
 export type Transaction = "sale" | "rent";
@@ -106,6 +107,7 @@ export interface FloorApartmentCount {
   readonly apartmentCount: number;
 }
 export interface ApprovedPropertyFormFacts {
+  readonly kitchens?: readonly KitchenSpec[];
   /** Manual count only, unrelated to area or the PACI identifier. */
   readonly automaticNumberCount?: number;
   readonly hasFacilityCleaning?: boolean;
@@ -203,7 +205,7 @@ export interface CommercialComplexTypeDetails extends ApprovedPropertyFormFacts 
   readonly hasCentralAC?: boolean;
 }
 
-export interface ApartmentTypeDetails {
+export interface ApartmentTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "apartment";
   readonly occupancy?: PropertyOccupancy;
   readonly masterBedroomCount?: number;
@@ -243,7 +245,7 @@ export interface EmptyFloorTypeDetails {
   readonly hasCentralAC?: boolean;
 }
 
-export interface ResidentialFloorTypeDetails {
+export interface ResidentialFloorTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "floor";
   readonly occupancy?: PropertyOccupancy;
   readonly masterBedroomCount?: number;
@@ -297,7 +299,7 @@ export type FloorTypeDetails =
   | ResidentialFloorTypeDetails
   | CommercialFloorTypeDetails;
 
-export interface HouseTypeDetails {
+export interface HouseTypeDetails extends ApprovedPropertyFormFacts {
   readonly propertyType: "house";
   readonly occupancy?: PropertyOccupancy;
   readonly masterBedroomCount?: number;

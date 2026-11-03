@@ -1,3 +1,4 @@
+import type { KitchenSpec } from '@workspace/property-domain';
 import {
   cloneCommercialServices,
   normalizeSeekerRequirement,
@@ -16,6 +17,7 @@ import {
 import { getAreaById } from '@/constants/kuwait-areas';
 
 export interface RequirementFormValues {
+  readonly kitchens?: readonly KitchenSpec[];
   readonly unspecifiedFields?: SeekerRequirement['unspecifiedFields'];
   readonly purpose: RequirementPurpose;
   readonly propertyType: PropertyType;
@@ -133,6 +135,7 @@ export function buildPersonRequirement(
     ...(values.preferredAmenityExclusions !== undefined
       ? { preferredAmenityExclusions: [...values.preferredAmenityExclusions] }
       : {}),
+    ...(values.kitchens !== undefined ? { kitchens: values.kitchens.map(item=>({...item})) } : {}),
     ...(values.catalogPreferences !== undefined
       ? { catalogPreferences: [...values.catalogPreferences] }
       : {}),
@@ -184,6 +187,7 @@ export function formValuesFromRequirement(requirement: SeekerRequirement): Requi
     ...(requirement.preferredAmenityExclusions !== undefined
       ? { preferredAmenityExclusions: [...requirement.preferredAmenityExclusions] }
       : {}),
+    ...(requirement.kitchens !== undefined ? { kitchens: requirement.kitchens.map(item=>({...item})) } : {}),
     ...(requirement.catalogPreferences !== undefined
       ? { catalogPreferences: [...requirement.catalogPreferences] }
       : {}),

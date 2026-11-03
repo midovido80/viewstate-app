@@ -24,7 +24,7 @@ export default function SuccessScreen() {
   }>();
   const colors = useColors();
   const insets = useScreenInsets();
-  const { t, isRTL, fonts } = useI18n();
+  const { t, isRTL, fonts, language } = useI18n();
   const navigateOnce = (destination: string, replace = false) => {
     if (navigationStartedRef.current) return;
     navigationStartedRef.current = true;
@@ -65,6 +65,7 @@ export default function SuccessScreen() {
         {t('summary.success_detail')}
       </Text>
       <View style={styles.spacer} />
+      {propertyCoreId && <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} onPress={() => navigateOnce(`/matching?propertyId=${encodeURIComponent(propertyCoreId)}`)} size="large" testID="property-match-now" />}
       {showCaptureFollowUp && propertyCoreId ? (
         <>
           <Button

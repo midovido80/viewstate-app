@@ -1,6 +1,6 @@
 import { PropertyFormCard } from '@/components/PropertyFormCard';
 import { Text, View } from 'react-native';
-import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { COMMERCIAL_NEARBY_SERVICES, DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 
 export function NearbyServicesSelector({ values, onChange, language, color, fontFamily, commercial = false }: {

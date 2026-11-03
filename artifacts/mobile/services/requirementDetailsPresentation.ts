@@ -93,16 +93,15 @@ export function getRequirementDetailsRows(
     requirement.preferredAreaMode === 'all_kuwait' ? label('All Kuwait', 'كل مناطق الكويت')
       : requirement.preferredAreaMode === 'specific_areas' ? label('Specific areas', 'مناطق محددة')
         : unspecified(language));
-  add('location', 'preferredAreaIds', label('Preferred areas, in order', 'المناطق المفضلة بالترتيب'),
-    requirement.preferredAreaMode === 'all_kuwait'
-      ? label('Not applicable — all Kuwait', 'لا ينطبق — كل الكويت')
-      : requirement.preferredAreaIds.length
+  if (requirement.preferredAreaMode !== 'all_kuwait') add('location', 'preferredAreaIds', label('Areas', 'المناطق'),
+    requirement.preferredAreaIds.length
         ? requirement.preferredAreaIds.map(id => {
           const area = getAreaById(id);
           return area ? (language === 'ar' ? area.ar : area.en) : label('Unknown area', 'منطقة غير معروفة');
-        }).join(' → ')
+        }).join(' — ')
         : unspecified(language));
 
+  if (requirement.kitchens !== undefined) add('specifications','kitchens',label('Kitchens','المطابخ'),formatPropertyDetailValue('kitchens',requirement.kitchens,language));
   if (studio) {
     const openRoom = getWantedStudioDisplayRows(requirement, language).find(row => row.field === 'studioRoomCount');
     if (openRoom) add('specifications', openRoom.field, openRoom.label, openRoom.value);

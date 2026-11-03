@@ -1,5 +1,4 @@
 import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
-import { MatchScoreRing } from '@/components/MatchScoreRing';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,10 +20,8 @@ import {
   shiftMonth, sortFollowups, suggestFollowups, taskPersonName, validateDraft, type AssistantSuggestion,
   type Followup, type FollowupDraft, type Outcome, type TaskFilter, type TaskKind,
 } from '@/services/dailyAssistant';
-import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 import { MatchingResultCard } from '@/components/MatchingResultCard';
 import { useAssistantHomeMatches } from '@/hooks/useAssistantHomeMatches';
-import { HomeQuickAdd } from './HomeQuickAdd';
 import { homeQuickRoute, homeGreetingPeriod, searchAssistantFollowups, type HomeQuickAction } from '@/services/assistantHome';
 import { getRequirementCardSummary } from '@/services/cardSummaryPresentation';
 import type { AssistantCopyKey } from '@/services/dailyAssistantCopy';
@@ -39,7 +36,7 @@ function blankDraft(date: string, kind: TaskKind = 'call'): FollowupDraft {
 }
 function id() { return Crypto.randomUUID(); }
 /** Only web scroll containment is CSS. Native scroll containers use bounded layouts + nested scrolling. */
-const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'contain', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
+const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'auto', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
 export default function CompactAssistantScreen() {
   const { store } = useUserData();
   const h = useDailyAssistant(), { language, setLanguage, t, isRTL } = useI18n();
@@ -50,12 +47,13 @@ export default function CompactAssistantScreen() {
   const matches = useAssistantHomeMatches(h.ready, h.catalog);
   const [allStatus, setAllStatus] = useState<'pending' | 'done' | 'cancelled' | 'all'>('pending');
   const [matchView, setMatchView] = useState<'people' | 'properties'>('people'), [expandedMatch, setExpandedMatch] = useState<string | null>(null);
-  const params = useLocalSearchParams<{ followupId?: string; followupPersonId?: string; followupPropertyId?: string }>(), openedFollowup = useRef<string | null>(null);
+  const params = useLocalSearchParams<{ followupId?: string; followupPersonId?: string; followupPropertyId?: string; quickAction?: string; quickActionKey?: string }>(), openedFollowup = useRef<string | null>(null);
   useEffect(() => { const taskId = params.followupId; if (!taskId) { openedFollowup.current = null; return; } if (!h.ready || taskId === openedFollowup.current) return;
     openedFollowup.current = taskId; const task = h.state.tasks.find(t => t.id === taskId); if (task) { setExpected(task); setMode('detail'); } else h.notify(C('noSearch'));
     router.setParams({ followupId: undefined });
   }, [params.followupId, h.ready, h.state.tasks, C, router]);
-  const listRef = useRef<React.ElementRef<typeof GestureScrollView>>(null);
+  const listRef = useRef<ScrollView>(null), pageRef = useRef<ScrollView>(null);
+  const agendaGesture = useRef({ y: 0, offset: 0, content: 0, viewport: 0, page: 0 });
   const [overdue, setOverdue] = useState(false);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>(null), [expected, setExpected] = useState<Followup | null>(null);
@@ -84,7 +82,7 @@ export default function CompactAssistantScreen() {
   const rows = selectFollowups(h.state, h.inventory, h.selectedDay, 'all', '', overdue, today);
   const overdueTasks = sortFollowups(h.state.tasks.filter(v => v.status === 'pending' && v.date < today));
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
-  const listHeight = Math.max(180, Math.min(height * .4, 224));
+  const listHeight = rows.length > 3 ? Math.min(height * .4, 264) : undefined;
   useEffect(() => { listRef.current?.scrollTo({ y: 0, animated: false }); }, [h.selectedDay, overdue]);
   const dateLabel = (day: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) =>
     new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-ca-gregory-nu-latn' : 'en-GB', { ...options, timeZone: ASSISTANT_TIME_ZONE }).format(new Date(day + 'T12:00:00Z'));
@@ -113,7 +111,7 @@ export default function CompactAssistantScreen() {
     setCalendarMonth(day.slice(0, 7) + '-01'); setMode('calendar');
   }
   function pickDay(day: string) {
-    if (calendarTarget.current === 'page') { chooseDay(day); setMode(null); }
+    if (calendarTarget.current === 'page') { chooseDay(day); setDraft(blankDraft(day)); setMode('actions'); }
     else { if (calendarTarget.current === 'editor') setDraft(d => ({ ...d, date: day })); if (calendarTarget.current === 'reschedule') setNewDate(day); if (calendarTarget.current === 'next') setNextDate(day); setMode(calendarBack.current); }
   }
   function openPicker(which: 'people' | 'properties') { pickerBack.current = mode; setPickerQuery(''); setMode(which); }
@@ -178,6 +176,11 @@ export default function CompactAssistantScreen() {
     return <AssistantField label={C('time') + (required ? '' : ' · ' + C('optional'))} value={value} onChangeText={onChange} placeholder="09:30" maxLength={5}
       keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'} autoCorrect={false} autoCapitalize="none" error={fieldError === 'time' || fieldError === 'conflict' ? formError : undefined} style={{ textAlign: 'left', writingDirection: 'ltr' }} />;
   }
+  useEffect(() => {
+    if (!params.quickAction || !h.ready) return;
+    quickAction(params.quickAction as HomeQuickAction);
+    router.setParams({ quickAction: undefined, quickActionKey: undefined });
+  }, [params.quickAction, params.quickActionKey, h.ready]);
   function quickAction(action: HomeQuickAction) {
     const href = homeQuickRoute(action);
     if (href) { setMode(null); router.push(href as never); }
@@ -287,22 +290,33 @@ export default function CompactAssistantScreen() {
 
   }
   const best = matches.items[0], profileName = account.profile.name.trim(), greeting = profileName ? C(homeGreetingPeriod(h.now)) + ' ' + profileName : C('defaultName');
-  return <View style={s.root}><ScrollView testID="assistant-page-scroll" style={s.outer} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 14 }}>
+  return <View style={s.root}><ScrollView ref={pageRef} onScroll={event => { agendaGesture.current.page = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} nestedScrollEnabled testID="assistant-page-scroll" style={s.outer} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 14 }}>
     <View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><ViewStateBrand /></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (notifications.historyReady ? notifications.unread : '—')} onPress={() => router.push('/notifications' as never)}><Feather name="bell" size={21} color={c.ink} />{notifications.historyReady && notifications.unread > 0 && <View style={s.homeBellBadge}><CountBadge count={notifications.unread} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)}><Feather name="settings" size={21} color={c.ink} /></Pressable></View></View></View>
     <View style={s.homeContent}>
       <View style={[s.helloRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.helloTitle, { fontFamily: fonts.bold, textAlign: align }]}>{greeting}</Text><Txt muted size={13}>{C('homeQuestion')}</Txt></View><View style={s.homeDateTools}><Txt bold size={13}>{dateLabel(today, { weekday: 'long' })}</Txt><Txt muted size={11}>{dateLabel(today, { day: 'numeric', month: 'short', year: 'numeric' })}</Txt><View style={[s.row, { flexDirection: row, gap: 0 }]}><IconButton label={C('calendar')} name="calendar" onPress={() => openCalendar()} /><IconButton label={C('homeActions')} name="more-vertical" onPress={() => setMode('actions')} /></View></View></View>
       <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={C('homeSearch')} style={[s.homeSearch, { flexDirection: row }]} onPress={() => router.push('/search' as never)}><Feather name="search" size={19} color={c.blue} /><View style={s.grow}><Txt muted size={14}>{C('homeSearch')}</Txt></View></Pressable>
       {h.error && !mode ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}
       {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><View style={s.grow}><Txt color={c.red}>{h.notice}</Txt></View>{h.canUndo && <Action label={C('undo')} onPress={() => void h.undo()} tone="danger" disabled={h.busy} />}</View> : null}
-      <HomeQuickAdd label={C('quickHomeAdd')} closeLabel={C('homeCloseMenu')} labels={{ person: C('homePerson'), property: C('homeProperty'), import: C('homeImport'), share: C('homeShare'), matching: C('homeMatching') }} onAction={quickAction} />
-      <View style={s.homeMatchPanel} testID="home-best-matches"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><View style={s.grow}><View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><Txt bold size={16}>{C('bestHomeMatches')}</Txt>{matches.status === 'ready' && <CountBadge count={matches.items.length} />}</View>{matches.status === 'ready' && matches.items.length > 0 && <Txt muted size={12}>{matches.items.filter(item => item.result.score > 90).length + ' ' + C('aboveNinety')}</Txt>}</View><Action label={C('viewBestMatches')} onPress={() => setMode('matches')} tone="secondary" disabled={matches.status !== 'ready' || !matches.items.length} /></View>
-        {h.error && !h.ready ? <Txt color={c.red}>{C('loadError')}</Txt> : matches.status === 'loading' ? <ActivityIndicator color={c.blue} /> : matches.status === 'error' ? <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote> : best ? <View style={[s.row, { flexDirection: row, justifyContent: 'space-between', marginTop: 10 }]}><View style={s.grow}><Pressable accessibilityRole="button" onPress={() => linkedPreview('person', best.person.id)}><Txt color={c.person} bold>{best.person.name}</Txt></Pressable><Pressable accessibilityRole="button" onPress={() => linkedPreview('property', best.result.propertyId)}><Txt color={c.blue} size={13}>{propertyTitle(best.result.propertyId)}</Txt></Pressable></View><MatchScoreRing score={best.result.score} size={66} /></View> : <Txt muted>{C('homeNoMatches')}</Txt>}
+      <View style={{ gap: 8 }} testID="home-compact-calendar"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><Txt bold>{dateLabel(h.selectedDay, { month: 'long', year: 'numeric' })}</Txt><Action label={C('calendar')} icon="calendar" tone="quiet" onPress={() => openCalendar()} /></View>
+        <View style={{ flexDirection: row, gap: 4 }}>{Array.from({ length: 7 }, (_, i) => addDays(h.selectedDay, i - 3)).map(day => { const count = h.state.tasks.filter(task => task.date === day && task.status === 'pending').length; return <Pressable key={day} accessibilityRole="button" accessibilityLabel={dateLabel(day) + ' · ' + count} onPress={() => { chooseDay(day); setDraft(blankDraft(day)); setMode('actions'); }} style={{ flex: 1, alignItems: 'center', gap: 3, paddingVertical: 8, borderRadius: 10, backgroundColor: day === h.selectedDay ? '#EAF0FF' : '#FFFFFF' }}><Txt muted size={10}>{dateLabel(day, { weekday: 'short' })}</Txt><Txt bold>{Number(day.slice(-2))}</Txt>{count > 0 && <CountBadge count={count} />}</Pressable>; })}</View>
       </View>
+      <View style={s.homeMatchPanel} testID="home-best-matches"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><View style={s.grow}><Txt bold size={16}>{C('bestHomeMatches')}</Txt></View>{matches.status === 'ready' ? <CountBadge count={matches.items.length} /> : <ActivityIndicator color={c.blue} />}<Action label={language === 'ar' ? 'عرض' : 'View'} onPress={() => router.push({ pathname: '/matching', params: { best: '1' } } as never)} tone="secondary" disabled={matches.status !== 'ready'} /></View>{matches.status === 'error' && <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote>}</View>
       <View style={[s.homeSectionBar, { flexDirection: row }]}><View style={[s.row, s.grow, { flexDirection: row }]}><Txt bold size={18}>{overdue ? C('overdueTitle') : h.selectedDay === today ? C('today') : dateLabel(h.selectedDay, { weekday: 'short', day: 'numeric', month: 'short' })}</Txt>{h.ready && <CountBadge count={rows.length} />}</View><Action label={C('allFollowups')} tone="quiet" onPress={() => { setQuery(''); setMode('allTasks'); }} disabled={!h.ready} /></View>
       {h.ready && h.state.settings.showOverdue && overdueTasks.length > 0 ? <View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><Feather name="alert-triangle" color={c.red} size={17} /><View style={s.grow}><Txt color={c.red} size={12}>{overdueTasks.length + ' ' + C('overdueNoun')}</Txt></View><Action label={C(overdue ? 'today' : 'review')} tone="danger" onPress={() => overdue ? chooseDay(today) : setOverdue(true)} /></View> : null}
-      <View style={s.homeAgenda}><GestureScrollView ref={listRef} testID="assistant-task-list" accessibilityLabel={C('agendaDay')} disallowInterruption shouldActivateOnStart={Platform.OS === 'android'} bounces={false} overScrollMode="never" scrollsToTop={false} persistentScrollbar removeClippedSubviews={false} keyboardShouldPersistTaps="handled" style={[{ height: listHeight, flexGrow: 0 }, containedWebScroll]}>
+      <View style={s.homeAgenda}><ScrollView nestedScrollEnabled scrollEnabled={rows.length > 3} ref={listRef}
+        onLayout={event => { agendaGesture.current.viewport=event.nativeEvent.layout.height; }}
+        onContentSizeChange={(_,content) => { agendaGesture.current.content=content; }}
+        onScroll={event=>{ agendaGesture.current.offset=event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
+        onTouchStart={event=>{ agendaGesture.current.y=event.nativeEvent.pageY; }}
+        onTouchMove={event=>{
+          if (Platform.OS==='web' || rows.length<=3) return;
+          const gesture=agendaGesture.current, delta=event.nativeEvent.pageY-gesture.y; gesture.y=event.nativeEvent.pageY;
+          if (delta>0 && gesture.offset<=1 || delta<0 && gesture.offset>=gesture.content-gesture.viewport-1) {
+            pageRef.current?.scrollTo({y:Math.max(0,gesture.page-delta),animated:false});
+          }
+        }} testID="assistant-task-list" accessibilityLabel={C('agendaDay')} bounces={false} overScrollMode="never" scrollsToTop={false} persistentScrollbar removeClippedSubviews={false} keyboardShouldPersistTaps="handled" style={[{ height: listHeight, flexGrow: 0 }, containedWebScroll]}>
         {!h.ready ? <View style={s.empty}>{h.error ? <Txt color={c.red}>{C('loadError')}</Txt> : <ActivityIndicator color={c.blue} />}</View> : rows.length ? rows.map(taskRow) : <View style={s.empty}><Feather name="check-circle" color={c.blue} size={26} /><Txt bold>{C('noTasks')}</Txt><Action label={C('addFollowup')} onPress={() => openEditor()} /></View>}
-      </GestureScrollView></View>
+      </ScrollView></View>
       <Txt bold size={18}>{C('homeOverview')}</Txt><View style={[s.homeOverview, { flexDirection: row }]}>{[
         ['properties', h.catalog.properties.length, C('properties')], ['people', h.catalog.people.length, t('people.title')], ['requirements', h.catalog.requirements.length, C('homeRequirements')],
       ].map(([key, count, label]) => <Pressable key={key} style={s.homeStat} accessibilityRole="button" disabled={!h.ready} onPress={() => key === 'requirements' ? setMode('requirements') : router.push(('/' + key) as never)}><Text style={[s.homeStatValue, { fontFamily: fonts.medium }]}>{h.ready ? count : '—'}</Text><Txt muted size={13}>{label}</Txt></Pressable>)}</View>

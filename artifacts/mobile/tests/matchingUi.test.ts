@@ -331,7 +331,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(await readFile('components/MatchingResultsGroups.tsx', 'utf8'), /MatchingResultCard/);
   assert.match(screen, /QuickMatchingResults/);
   assert.match(screen, /MATCH_ENGINE_VERSION/);
-  assert.match(screen, /new BrokerInitiatedMatching\(store, candidateSource\)/);
+  assert.match(screen, /new BrokerInitiatedMatching\(store, (?:requestedPropertyId|candidateSource)/);
   assert.match(screen, /runMatchingForAllRequirements/);
   assert.match(screen, /groupMatchAllResultsByPerson/);
   assert.match(screen, /runGenerationRef/);
@@ -364,11 +364,11 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
 
 test('Person entry scopes execution to the requested Requirement without falling back to Match All', async () => {
   const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
-  assert.match(screen, /if \(requestedRequirementId\) setMode\('saved'\)/);
+  assert.match(screen, /if \(requestedRequirementId \|\| requestedPropertyId \|\| best\) setMode\('saved'\)/);
   assert.match(screen, /requirements\.filter\(item => item\.id === requestedRequirementId\)/);
 
   const explicitHandler = screen.indexOf('const runMatching = async (');
-  const routeSelection = screen.indexOf("if (requestedRequirementId) setMode('saved')");
+  const routeSelection = screen.indexOf("if (requestedRequirementId || requestedPropertyId || best) setMode('saved')");
   const firstExecution = screen.indexOf('.runForRequirement(');
   assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
 });

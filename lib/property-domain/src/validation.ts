@@ -1,3 +1,4 @@
+import { validKitchens, kitchensApply } from './kitchens.ts';
 import {
   isApartmentSubtype,
   isFloorUse,
@@ -167,7 +168,7 @@ export function validateTypeDetails(
       }
     }
   }
-  if (candidate.occupancy !== undefined && !["family", "bachelor", "any"].includes(candidate.occupancy as string)) {
+  if (candidate.occupancy !== undefined && !["family", "bachelor", "company_staff", "women", "mixed", "any"].includes(candidate.occupancy as string)) {
     issues.push(issue("invalid_physical_value", ["typeDetails", "occupancy"], "Occupancy must be family, bachelor, or any."));
   }
   if (candidate.propertyUse !== undefined && !isFloorUse(candidate.propertyUse)) {
@@ -203,6 +204,7 @@ export function validateTypeDetails(
     ));
   }
 
+  if (candidate.kitchens !== undefined && (!validKitchens(candidate.kitchens) || !kitchensApply(details.propertyType, candidate.floorUse ?? candidate.propertyUse))) issues.push(issue('invalid_physical_value', ['typeDetails','kitchens'], 'Invalid kitchen details.'));
   for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
     const value = candidate[definition.field];
     if (value === undefined) continue;
@@ -265,8 +267,7 @@ export function validateTypeDetails(
     const value = candidate[field];
     if (value !== undefined && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)) issues.push(issue('invalid_physical_value', ['typeDetails', field], 'Expected a positive integer.'));
   }
-  if (candidate.hasCommercialShops === true && candidate.shopCount !== undefined && ![1, 2, 3, 4].includes(candidate.shopCount as number)) issues.push(issue('invalid_physical_value', ['typeDetails', 'shopCount'], 'Choose one to four shops.'));
-  if (candidate.commercialFloorCount !== undefined && ![1, 2].includes(candidate.commercialFloorCount as number)) issues.push(issue('invalid_physical_value', ['typeDetails', 'commercialFloorCount'], 'Choose one or two commercial floors.'));
+  if (candidate.hasCommercialShops === true && candidate.shopCount !== undefined && (typeof candidate.shopCount !== 'number' || !Number.isSafeInteger(candidate.shopCount) || candidate.shopCount < 1)) issues.push(issue('invalid_physical_value', ['typeDetails','shopCount'], 'Expected a positive whole number.'));
   if (typeof candidate.commercialFloorCount === 'number' && typeof candidate.floorCount === 'number' && candidate.commercialFloorCount > candidate.floorCount) issues.push(issue('invalid_physical_value', ['typeDetails', 'commercialFloorCount'], 'Commercial floors cannot exceed total floors.'));
   if (candidate.availableFrom !== undefined && (typeof candidate.availableFrom !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate.availableFrom) || Number.isNaN(Date.parse(candidate.availableFrom)) || new Date(candidate.availableFrom).toISOString().slice(0, 10) !== candidate.availableFrom)) issues.push(issue('invalid_physical_value', ['typeDetails', 'availableFrom'], 'Use a valid YYYY-MM-DD date.'));
   for (const [field, keys] of [['apartmentLayouts', ['apartmentCount', 'bedrooms', 'bathrooms']], ['floorApartmentCounts', ['floorNumber', 'apartmentCount']]] as const) {

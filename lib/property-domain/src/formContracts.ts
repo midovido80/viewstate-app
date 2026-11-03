@@ -1,3 +1,4 @@
+import { kitchensApply } from './kitchens.ts';
 import type { PropertyType, Transaction } from './types.ts';
 import type { PropertyDetailField } from './taxonomy.ts';
 
@@ -7,7 +8,7 @@ export interface PropertyFormProfile {
   readonly amenities: readonly PropertyDetailField[];
   readonly nearby: boolean;
 }
-export const FORM_JSON_FIELDS = ['apartmentLayouts', 'floorApartmentCounts'] as const;
+export const FORM_JSON_FIELDS = ['apartmentLayouts', 'floorApartmentCounts', 'kitchens'] as const;
 export const FORM_MULTI_FIELDS = ['housingTypes', 'buildingParkingTypes', 'parkingTypes', 'warehouseLevels'] as const;
 export const FORM_STRING_FIELDS = ['availableFrom', 'rentalScope', 'kitchenAccess'] as const;
 export const BUILDING_AMENITIES: readonly PropertyDetailField[] = ['hasCentralAC', 'hasSecurityGuard', 'hasCCTV', 'hasFireSystem', 'hasAccessibleEntrance'];
@@ -53,6 +54,7 @@ const falsity = (v: unknown) => v === false || v === 'false';
 const selected = (v: unknown, item: string) => Array.isArray(v) ? v.includes(item) : typeof v === 'string' && v.split(',').includes(item);
 /** Shared conditional field contract for create, edit, persistence and saved display. */
 export function isPropertyProfileFieldVisible(field: string, type: PropertyType, transaction: Transaction | undefined, values: Readonly<Record<string, unknown>> = {}): boolean {
+  if (field === 'kitchens') return kitchensApply(type, values.floorUse ?? values.propertyUse);
   if (field === 'kitchenAccess' && (type === 'office' || type === 'floor' && values.floorUse === 'commercial')) return truth(values.hasKitchen);
   const profile = getPropertyFormProfile(type, transaction, values);
   if (!profile) return true;

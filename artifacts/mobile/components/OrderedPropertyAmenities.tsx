@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { View } from 'react-native';
-import { ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceGrid } from '@/components/FormChoices';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 
 /** Keep the two-column choices uninterrupted; counts and conditional controls follow. */

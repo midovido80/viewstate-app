@@ -2198,6 +2198,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       </Modal>
 
+      {mode === 'detail' && <View style={{paddingHorizontal:12,paddingVertical:6,backgroundColor:colors.card}}><Button title={language==='ar'?'مطابقة الآن':'Match now'} onPress={()=>router.push({pathname:'/matching',params:{propertyId:property.core.id}} as never)} testID="property-detail-match-now" /></View>}
       {mode === 'detail' && (
         <View style={{ flexShrink: 0, paddingHorizontal: 12, paddingBottom: Math.max(insets.bottom, 10), paddingTop: 8, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: colors.border, direction: 'ltr', flexDirection: isRTL ? 'row' : 'row-reverse', gap: 10 }}>
           {Platform.OS === 'web' ? (

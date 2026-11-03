@@ -281,6 +281,7 @@ export default function RequirementDetailsScreen() {
               ) : null}
             </View>
           ) : null}
+          <Button title={caption('Match now', 'مطابقة الآن')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: record.id } } as never)} testID="requirement-match-now" />
           {!postSave || record.seekerId ? (
             <Button title={t('requirements.edit')} onPress={edit} testID="requirement-details-edit" />
           ) : null}
@@ -326,7 +327,7 @@ const styles = StyleSheet.create({
   section: { gap: 10 },
   sectionTitle: { fontSize: 11, letterSpacing: 1.2, marginHorizontal: 4 },
   rowGroup: { borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
-  row: { paddingHorizontal: 18, paddingVertical: 15, gap: 5 },
+  row: { paddingHorizontal: 18, paddingVertical: 8, gap: 3 },
   rowLabel: { fontSize: 12 },
   rowValue: { fontSize: 15, lineHeight: 22 },
   message: { paddingHorizontal: 24, paddingTop: 60, gap: 18 },

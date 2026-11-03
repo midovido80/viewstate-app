@@ -1,3 +1,4 @@
+import { validKitchens } from '@workspace/property-domain';
 import { orderPropertyAmenities } from '@/services/propertyAmenityOrder';
 import { PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import {
@@ -35,7 +36,15 @@ export function formatPropertyDetailValue(
   language: 'en' | 'ar',
   translate?: (key: string) => string,
 ): string {
-  if (field === 'apartmentLayouts' || field === 'floorApartmentCounts') {
+  if (field === 'kitchens') {
+    let rows: unknown; try { rows = typeof value === 'string' ? JSON.parse(value) : value; } catch { return ''; }
+    if (!validKitchens(rows)) return '';
+    const ar = language === 'ar';
+    if (!rows.length) return ar ? 'لا يوجد (0)' : 'None (0)';
+    const names: Record<string,string> = ar ? { regular:'عادي', american:'أمريكي', equipped:'مجهز', unequipped:'غير مجهز', private:'خاص', shared:'مشترك' } : { regular:'Regular', american:'American', equipped:'Equipped', unequipped:'Unequipped', private:'Private', shared:'Shared' };
+    return rows.map((item,i)=>`${ar?'مطبخ':'Kitchen'} ${i+1}: ${[item.layout,item.equipment,item.access].filter(Boolean).map(v=>names[v!]).join(' · ') || (ar?'غير محدد':'Not specified')}`).join('\n');
+  }
+  if (field === 'apartmentLayouts'  || field === 'floorApartmentCounts') {
     let rows: unknown;
     try { rows = typeof value === 'string' ? JSON.parse(value) : value; } catch { return ''; }
     if (!Array.isArray(rows)) return '';

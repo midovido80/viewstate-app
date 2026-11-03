@@ -164,7 +164,7 @@ test('whole-building Rent rows include saved catalog values once, preserving zer
   assert.equal(row(requirement, 'hasWaterfront').value, 'No');
   assert.equal(row(requirement, 'budget.minimum').value, '0 KWD');
   assert.equal(fields.includes('bedroomsMinimum'), false, 'whole buildings do not acquire apartment bedroom criteria');
-  assert.equal(row(requirement, 'preferredAreaIds').value, 'Salmiya → Hawalli');
+  assert.equal(row(requirement, 'preferredAreaIds').value, 'Salmiya — Hawalli');
   assert.deepEqual(requirement, before, 'building record remains unchanged by projection');
 });
 
@@ -193,7 +193,7 @@ test('Studio catalog preferences are shown once with localized labels; absent Re
     'apartmentSubtype', 'studioRoomCount', 'bathroomsMinimum', 'centralAC',
     'hasKitchen', 'hasHall', 'hasParking', 'builtUpAreaSquareMeters', 'furnishing',
     'swimmingPool', 'gym', 'seaView', 'rentalPeriodId', 'occupancy',
-    'preferredAreaMode', 'preferredAreaIds', 'budget.minimum', 'budget.maximum',
+    'preferredAreaMode', 'budget.minimum', 'budget.maximum',
   ]) assert.equal(english.filter(item => item.field === field).length, 1, `${field} appears once`);
   assert.equal(row(rent, 'studioRoomCount').value, '1');
   assert.equal(row(rent, 'bathroomsMinimum').value, '0');
@@ -206,7 +206,8 @@ test('Studio catalog preferences are shown once with localized labels; absent Re
   assert.equal(row(rent, 'hasKitchen', 'ar').value, 'لا');
   assert.equal(row(rent, 'builtUpAreaSquareMeters', 'ar').label, 'الحد الأدنى لمساحة الاستوديو (م²)');
   assert.equal(row(rent, 'builtUpAreaSquareMeters', 'ar').value, '0');
-  assert.equal(row(rent, 'preferredAreaIds').value, 'Not applicable — all Kuwait');
+  assert.equal(english.some(item => item.field === 'preferredAreaIds'), false);
+  assert.equal(row(rent, 'preferredAreaMode').value, 'All Kuwait');
   assert.equal(row(rent, 'swimmingPool').value, 'No');
   for (const hidden of ['driverRoom', 'preferredAmenities', 'preferredAmenityExclusions', 'notes']) {
     assert.equal(english.some(item => item.field === hidden), false, `${hidden} is hidden when it has no visible value`);

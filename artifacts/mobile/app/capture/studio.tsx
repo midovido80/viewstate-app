@@ -1,3 +1,5 @@
+import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
+import { KitchenFields } from '@/components/KitchenFields';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredStar, RequiredFormHint } from '@/components/RequiredForm';
@@ -30,7 +32,7 @@ import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import type { Property, PropertyAttachmentMetadata, SeekerRequirement, Transaction } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
-import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { KuwaitAreaSelector } from '@/components/KuwaitAreaSelector';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
@@ -211,6 +213,7 @@ export default function StudioCaptureRoute() {
     baseline: Property | null;
     message: string;
   } | null>(null);
+  const [kitchenDraftInvalid, setKitchenDraftInvalid] = useState(false);
   const [savedProperty, setSavedProperty] = useState<Property | null>(null);
   const [propertySourceConfirmed, setPropertySourceConfirmed] = useState(false);
   const [savedRequirement, setSavedRequirement] = useState<SeekerRequirement | null>(null);
@@ -665,6 +668,7 @@ export default function StudioCaptureRoute() {
   );
 
   const validate = () => {
+    if (kitchenDraftInvalid) { setError(language==='ar'?'صحح عدد المطابخ.':'Correct the kitchen count.'); return false; }
     const result = validateStudioForm(values);
     const next = new Map<string, StudioFormError>();
     result.errors.forEach(item => {
@@ -1240,7 +1244,7 @@ export default function StudioCaptureRoute() {
           ]} />
         </View>;
       case 'nearbyServices':
-        return <NearbyServicesSelector key={fieldId} values={values.nearbyServices ?? []} onChange={value => update('nearbyServices', value)} language={language} color={colors.foreground} fontFamily={fonts.semiBold} />;
+        return mode === 'offered' ? <NearbyServicesSelector key={fieldId} values={values.nearbyServices ?? []} onChange={value => update('nearbyServices', value)} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
       case 'description':
         return <View key={fieldId}>{textInput('description', catalogLabel(fieldId), { multiline: true })}</View>;
     }
@@ -1276,7 +1280,7 @@ export default function StudioCaptureRoute() {
               {renderCatalogField('transaction')}
             </PropertyFormCard>
             <PropertyFormCard title={language === 'ar' ? 'مواصفات الاستوديو' : 'Studio specifications'} icon="home">
-              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'parking', 'amenities', 'nearbyServices', 'description'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}
+              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'parking', 'amenities', 'nearbyServices', 'description', 'kitchen'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}
           {mode === 'offered' ? (
             <View style={styles.field} testID="studio-occupancy-field">
               <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'نوع السكن' : 'Occupancy'}</Text>
@@ -1284,7 +1288,7 @@ export default function StudioCaptureRoute() {
                 {(['family', 'bachelor', 'any'] as const).map(value => (
                   <ChoiceChip
                     key={value}
-                    label={({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] })[value][language === 'ar' ? 1 : 0]}
+                    label={({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], company_staff: ['Companies', 'شركات'], women: ['Women', 'سيدات'], mixed: ['Mixed', 'مختلط'], any: ['Any', 'الكل'] })[value][language === 'ar' ? 1 : 0]}
                     selected={values.occupancy === value}
                     onPress={() => update('occupancy', values.occupancy === value ? undefined : value)}
                     role="radio"
@@ -1295,13 +1299,15 @@ export default function StudioCaptureRoute() {
             </View>
           ) : null}
             </PropertyFormCard>
-            <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة' : 'Available features'} icon="check-square">{renderCatalogField('amenities')}</PropertyFormCard>
+            <PropertyFormCard title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">{renderCatalogField('amenities')}</PropertyFormCard>
             {renderCatalogField('nearbyServices')}
             <PropertyFormCard title={language === 'ar' ? 'ملاحظات إضافية' : 'Additional notes'} icon="file-text">
               {renderCatalogField('description')}
               {textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })}
             </PropertyFormCard>
-          </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => fieldId !== 'parking').map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
+          </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['parking','kitchen','nearbyServices'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
+            {mode==='wanted' && values.transaction==='rent' && <View style={styles.field}><Text style={[styles.label,labelStyle]}>{language==='ar'?'نوع السكن':'Occupancy'}</Text><ChoiceGrid>{(['family','bachelor','company_staff','women','mixed'] as const).map(value=><ChoiceChip key={value} label={t(`matching.occupancy.${value}`)} selected={values.occupancy===value} role="radio" onPress={()=>update('occupancy',values.occupancy===value?undefined:value)} />)}</ChoiceGrid></View>}
+            <PropertyFormCard title={language==='ar'?'المطابخ':'Kitchens'} icon="list"><KitchenFields scopeKey="studio-kitchens" value={values.kitchens} onInvalidChange={setKitchenDraftInvalid} onChange={value=>{ update('kitchens',value); if(value!==undefined) update('kitchen',mode==='offered'?'unknown':'not_important'); }} /></PropertyFormCard>
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>
@@ -1499,10 +1505,11 @@ export default function StudioCaptureRoute() {
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
       {mode === 'wanted' ? reviewItem(catalogLabel('transaction'), studioReviewIntent().label) : null}
-      {STUDIO_FORM_FIELD_ORDER[mode].map(fieldId => renderReviewCatalogField(fieldId))}
+      {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId=>fieldId!=='kitchen'||values.kitchens===undefined).map(fieldId => renderReviewCatalogField(fieldId))}
+      {values.kitchens!==undefined && reviewItem(language==='ar'?'المطابخ':'Kitchens',formatPropertyDetailValue('kitchens',values.kitchens,language))}
       {mode === 'offered' && values.occupancy ? reviewItem(
         language === 'ar' ? 'نوع السكن' : 'Occupancy',
-        ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0],
+        ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], company_staff: ['Companies', 'شركات'], women: ['Women', 'سيدات'], mixed: ['Mixed', 'مختلط'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0],
       ) : null}
       {mode === 'offered' && values.privateNotes
         ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes)
@@ -1521,8 +1528,9 @@ export default function StudioCaptureRoute() {
       price={values.price.trim() ? formatPrice(Number(toEnglishDigits(values.price).replace(/[٫,]/g, '.')), 'KWD', language) : undefined}
       priceLabel={language === 'ar' ? (values.transaction === 'sale' ? 'السعر' : 'الإيجار') : (values.transaction === 'sale' ? 'Price' : 'Rent')}
       cadence={values.transaction === 'rent' ? formatRentalCadence(values.rentalPeriodId, t) : undefined}>
-      {STUDIO_FORM_FIELD_ORDER[mode].filter(field => !['transaction', 'locationAreaId', 'price', 'rentalPeriodId', 'mapsLink'].includes(field)).map(fieldId => renderReviewCatalogField(fieldId))}
-      {values.occupancy ? reviewItem(language === 'ar' ? 'نوع السكن' : 'Occupancy', ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0]) : null}
+      {STUDIO_FORM_FIELD_ORDER[mode].filter(field => !['transaction', 'locationAreaId', 'price', 'rentalPeriodId', 'mapsLink'].includes(field) && (field!=='kitchen'||values.kitchens===undefined)).map(fieldId => renderReviewCatalogField(fieldId))}
+      {values.kitchens!==undefined && reviewItem(language==='ar'?'المطابخ':'Kitchens',formatPropertyDetailValue('kitchens',values.kitchens,language))}
+      {values.occupancy ? reviewItem(language === 'ar' ? 'نوع السكن' : 'Occupancy', ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], company_staff: ['Companies', 'شركات'], women: ['Women', 'سيدات'], mixed: ['Mixed', 'مختلط'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0]) : null}
       {values.privateNotes ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes) : null}
       {values.mapsLink ? reviewItem(language === 'ar' ? 'الموقع الدقيق' : 'Exact location', values.mapsLink) : null}
     </PropertyReview>
@@ -1584,6 +1592,7 @@ export default function StudioCaptureRoute() {
                 {mode === 'offered' ? renderStudioAttachments() : null}
               </>
             )}
+            {savedProperty && <Button title={language==='ar'?'مطابقة الآن':'Match now'} onPress={()=>router.push({pathname:'/matching',params:{propertyId:savedProperty.core.id}} as never)} testID="studio-property-match-now" />}
             {savedProperty && propertySourceConfirmed ? (
               <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                 <Button

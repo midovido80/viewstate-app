@@ -85,6 +85,7 @@ test('Only existing bounded catalogPreference meanings receive wanted mappings',
     hasPool: ['feature'],
     hasWaterfront: ['feature'],
     hasColdStorage: ['feature'],
+    hasGuardRoom: ['feature'],
     hasKitchen: ['feature'],
     hasHall: ['feature'],
     hasParking: ['feature'],
@@ -136,6 +137,7 @@ test('Requirement presentation and field allow-lists derive from Foundation meta
     'commercialActivity',
     'furnishing',
     'hasColdStorage',
+    'hasGuardRoom',
     'hasHall',
     'hasKitchen',
     'hasParking',
@@ -254,6 +256,6 @@ test('Shared core descriptors map only existing Property and Requirement paths',
 function expectedGlobalApproval(field: string): boolean {
   return !['hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'].includes(field) && [
     'apartmentSubtype', 'furnishing', 'intendedUse', 'commercialActivity',
-    'hasPool', 'hasWaterfront', 'hasColdStorage',
+    'hasPool', 'hasWaterfront', 'hasGuardRoom', 'hasColdStorage',
   ].includes(field);
 }

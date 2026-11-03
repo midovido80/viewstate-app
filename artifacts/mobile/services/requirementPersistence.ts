@@ -92,6 +92,7 @@ export interface RequirementRecoveryReport {
 }
 
 const knownRequirementKeys = new Set([
+  'kitchens', 'commercialServices', 'commercialActivity', 'propertyUse',
   'id', 'seekerId', 'purpose', 'propertyType', 'preferredAreaIds', 'preferredAreaMode',
   'budget', 'notes', 'bedroomsMinimum', 'bathroomsMinimum', 'centralAC',
   'preferredAmenities', 'preferredAmenityExclusions', 'catalogPreferences', 'preferredNearbyServices',

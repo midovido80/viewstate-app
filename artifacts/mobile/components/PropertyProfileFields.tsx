@@ -7,7 +7,7 @@ import { FORM_MULTI_FIELDS, type PropertyDetailField, type PropertyType } from '
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';
 import { COMMERCIAL_COMPLEX_CHOICES, grossAnnualRentalYield } from '@/services/commercialComplexSale';
-import { ChoiceGrid, ChoiceTile } from '@/components/ChoiceTile';
+import { ChoiceGrid, ChoiceTile } from '@/components/FormChoices';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useColors } from '@/hooks/useColors';
@@ -59,7 +59,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
     </View>;
   }
   function renderField(field: PropertyDetailField) {
-    if (!isPropertyProfileFieldVisible(field, propertyType, transaction, values) || ['floorUse', 'propertyUse'].includes(field)) return null;
+    if (!isPropertyProfileFieldVisible(field, propertyType, transaction, values) || ['floorUse', 'propertyUse', 'kitchens'].includes(field)) return null;
     if (field === 'apartmentLayouts' || field === 'floorApartmentCounts') return <View key={field}>{layoutRows(field)}</View>;
     const definition = getPropertyFormField(field);
     const choices = PROFILE_CHOICES[field] ?? COMMERCIAL_COMPLEX_CHOICES[field];
@@ -77,9 +77,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
       })}</ChoiceGrid></View>;
     }
     if (definition.control === 'numeric_quick_pick' || definition.control === 'count') {
-      const quickPickValues = field === 'shopCount' ? [1, 2, 3, 4] : field === 'commercialFloorCount' ? [1, 2] : field === 'elevatorCount' ? [0, 1, 2, 3, 4] : undefined;
-      // Commercial shop/floor limits are fixed choices, with no arbitrary "other" value.
-      if (field === 'shopCount' || field === 'commercialFloorCount') return <View key={field} style={{ gap: 8 }}><Text style={labelStyle}>{fieldLabel(field)}</Text><ChoiceGrid>{quickPickValues!.map(n => <ChoiceTile key={n} label={String(n)} selected={values[field] === String(n)} role="radio" onPress={() => onChange(field, String(n))} />)}</ChoiceGrid></View>;
+      const quickPickValues = field === 'shopCount' ? [1, 2, 3, 4] : field === 'commercialFloorCount' ? [1, 2] : field === 'floorCount' ? Array.from({ length: 12 }, (_, i) => i + 1) : field === 'privateParkingCount' || field === 'elevatorCount' ? [0,1,2,3,4,5,6,7,8,9,10] : undefined;
       return <NumericQuickPick key={field} testID={`profile-${field}`} scopeKey={`${recordScopeKey}:${field}`} label={fieldLabel(field)} value={values[field] ?? (field === 'apartmentCount' ? values.unitCount : '') ?? ''} quickPickValues={quickPickValues} requireExactValue onChangeText={text => onChange(field, text)} onPendingValidityChange={(_scope, invalid) => onInvalidQuickPickChange?.(field, recordScopeKey, invalid)} />;
     }
     return <View key={field} style={{ gap: 6 }}><Text style={labelStyle}>{fieldLabel(field)}</Text><TextInput value={values[field] ?? ''} accessibilityLabel={fieldLabel(field)} keyboardType={definition.control === 'decimal' ? 'decimal-pad' : 'default'} placeholder={field === 'availableFrom' ? 'YYYY-MM-DD' : undefined} style={inputStyle} onChangeText={text => {
@@ -100,6 +98,6 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
     <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field) && !['automaticNumberCount', 'kitchenAccess'].includes(field)).map(field => <RequiredField key={field} id={field}>{renderField(field)}</RequiredField>)}
       {yieldPercent !== undefined && <View><Text style={labelStyle}>{ar ? 'العائد السنوي الإجمالي قبل المصروفات' : 'Gross annual yield before expenses'}</Text><Text style={labelStyle}>{yieldPercent.toFixed(2)}%</Text></View>}
     </PropertyFormCard>
-    <PropertyFormCard title={ar ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>
+    <PropertyFormCard title={ar ? 'خدمات العقار' : 'Property services'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>
   </View>;
 }
