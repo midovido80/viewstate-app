@@ -7,6 +7,8 @@ export interface MatchingReturnSession {
   readonly engineVersion: typeof MATCH_ENGINE_VERSION;
   readonly createdAt: number;
   readonly scopeRequirementId?: string;
+  readonly scopePropertyId?: string;
+  readonly best?: boolean;
   readonly mode: 'saved' | 'quick';
   readonly layout?: MatchingResultsLayout;
   readonly quickRequirement?: SeekerRequirement;
@@ -34,5 +36,5 @@ export function withMatchingReturn(href: string, token?: string): string {
 export function matchingBackRoute(token?: string): string {
   const current = readMatchingReturn(token);
   if (!current) return '/properties';
-  return `/matching?returnSession=${encodeURIComponent(current.token)}${current.scopeRequirementId ? `&requirementId=${encodeURIComponent(current.scopeRequirementId)}` : ''}`;
+  return `/matching?returnSession=${encodeURIComponent(current.token)}${current.scopeRequirementId ? `&requirementId=${encodeURIComponent(current.scopeRequirementId)}` : ''}${current.scopePropertyId ? `&propertyId=${encodeURIComponent(current.scopePropertyId)}` : ''}${current.best ? '&best=1' : ''}`;
 }

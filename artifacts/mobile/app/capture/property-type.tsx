@@ -1,3 +1,4 @@
+import { CompactDropdown } from '@/components/FormChoices';
 import React, { useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,7 +7,7 @@ import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
-import { ChoiceCard as SelectCard, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceCard as SelectCard, ChoiceGrid } from '@/components/FormChoices';
 import { Button } from '@/components/Button';
 import { APARTMENT_SUBTYPES, PROPERTY_TYPES, type ApartmentSubtype, type Transaction } from '@workspace/property-domain';
 import { getPropertyTypeChoices, canonicalPropertyTypeChoice, restorePropertyTypeChoice, getPropertyTypeChoiceLabel, parseFloorUse, parsePropertySector, togglePropertySector, type PropertySectorFilter, type PropertyTypeChoice } from '@/services/propertySectorSelection';
@@ -66,7 +67,7 @@ export default function PropertyTypeScreen() {
   const propertyUse = sector === 'all' ? selectedPropertyUse : sector;
   const otherUseRequired = mode === 'offered' && propertyType === 'other_built_property' && !propertyUse;
   const [floorConfirmation, setFloorConfirmation] = useState<FloorTransitionProposal | null>(null);
-  const visibleTypes = getPropertyTypeChoices(sector);
+  const visibleTypes = getPropertyTypeChoices(sector, transaction);
   const selectedCanonical = propertyType ? canonicalPropertyTypeChoice(propertyType) : undefined;
   const isFloor = selectedCanonical?.propertyType === 'floor';
   const floorUse = selectedCanonical?.floorUse;
@@ -146,24 +147,9 @@ export default function PropertyTypeScreen() {
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {t('propertyType.title')}
         </Text>
-        <View style={[styles.sectors, { direction: isRTL ? 'rtl' : 'ltr', flexDirection: 'row' }]}>
-          {(['all', 'residential', 'commercial'] as const).map(value => (
-            <TouchableOpacity key={value} testID={`property-sector-${value}`} accessibilityRole="button" accessibilityState={{ selected: sector === value }} onPress={() => chooseSector(value)} style={[styles.sector, { backgroundColor: sector === value ? colors.primary : colors.card, borderColor: sector === value ? colors.primary : colors.border }]}>
-              <Text style={{ color: sector === value ? colors.primaryForeground : colors.foreground, fontFamily: fonts.semiBold }}>{value === 'all' ? (language === 'ar' ? 'الكل' : 'All') : value === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={{ gap: 12 }}>
+        {(['residential', 'commercial'] as const).map(group => <CompactDropdown key={group} label={group === 'residential' ? (language === 'ar' ? 'سكني' : 'Residential') : (language === 'ar' ? 'تجاري' : 'Commercial')} testID={`property-type-${group}`} options={getPropertyTypeChoices(group, transaction).map(type => ({ value: type, testID: `select-type-${type}`, label: getPropertyTypeChoiceLabel(type, language, t(`propertyType.${canonicalPropertyTypeChoice(type).propertyType}` as keyof Translations)), selected: propertyType === type && (sector === group || sector === 'all' && type !== 'other_built_property') }))} onSelect={value => { setSector(group); setSelectedPropertyUse(group); choosePropertyType(value as PropertyTypeChoice); router.setParams({ sector: group, propertyUse: group }); }} />)}
         </View>
-        <ChoiceGrid>
-        {visibleTypes.map(type => (
-          <SelectCard
-            key={type}
-            title={getPropertyTypeChoiceLabel(type, language, t(`propertyType.${canonicalPropertyTypeChoice(type).propertyType}` as keyof Translations))}
-            selected={propertyType === type}
-            onSelect={() => choosePropertyType(type)}
-            testID={`select-type-${type}`}
-          />
-        ))}
-        </ChoiceGrid>
         {mode === 'offered' && propertyType === 'other_built_property' && sector === 'all' ? (
           <View testID="property-other-use-selection" style={styles.floorChoices}>
             <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{language === 'ar' ? 'استخدام العقار' : 'Property use'}</Text>

@@ -24,6 +24,7 @@ export function formatMatchingBudget(requirement: Pick<import('@workspace/proper
 const labels: Record<string, [string, string]> = {
   automaticNumberCount: ['Number of PACI numbers', 'عدد الأرقام الآلية'],
   facilityCleaning: ['Facility cleaning', 'نظافة مرافق'],
+  kitchens: ['Kitchens', 'المطابخ'],
   kitchenAccess: ['Kitchen access', 'المطبخ خاص / مشترك'],
   'parking:private': ['Private parking', 'مواقف خاصة'],
   'parking:public': ['Public parking', 'مواقف عامة'],

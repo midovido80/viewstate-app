@@ -58,7 +58,7 @@ function ResultCard({ icon, title, subtitle, testID, onPress }: ResultCardProps)
       onPress={onPress}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${subtitle}`}
+      accessibilityLabel={`${title.replace(' · ', '\n')}, ${subtitle}`}
       testID={testID}
       style={[
         styles.card,
@@ -75,16 +75,14 @@ function ResultCard({ icon, title, subtitle, testID, onPress }: ResultCardProps)
       </View>
       <View style={styles.cardCopy}>
         <Text
-          numberOfLines={1}
           style={[
             styles.cardTitle,
             { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' },
           ]}
         >
-          {title}
+          {title.replace(' · ', '\n')}
         </Text>
         <Text
-          numberOfLines={2}
           style={[
             styles.cardSubtitle,
             { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' },
@@ -121,7 +119,7 @@ function requirementSubtitle(
     t(`propertyType.${requirement.propertyType}` as keyof Translations),
     getWantedApartmentSubtypeLabel(requirement, language),
     ...areaLabels,
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join('\n');
 }
 
 function matchReasonLabel(reason: SearchMatchReason, t: (key: keyof Translations) => string): string {
@@ -149,7 +147,7 @@ function propertySubtitle(
   return [
     getSearchablePublicPropertyDescription(property).trim(),
     matchReasonLabel(reason, t),
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join('\n');
 }
 
 export default function GlobalSearchScreen() {

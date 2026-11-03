@@ -273,30 +273,23 @@ test('BEHAVIOR: unsupported quick values cannot be converted into stored markers
   assert.throws(() => selectNumericQuickPick(6), /INVALID_NUMERIC_QUICK_PICK/);
 });
 
-test('SOURCE ASSERTION: production control commits six and shows input only after +6', async () => {
-  const source = await readFile('components/NumericQuickPick.tsx', 'utf8');
-  assert.match(source, /label="\+6"/);
-  assert.match(source, /openNumericQuickPickMore\(\)/);
-  assert.match(source, /onChangeText\(transition\.value\)/);
-  assert.match(source, /\{expanded \? \([\s\S]*testID=\{\`\$\{testID\}-exact-input\`\}[\s\S]*\) : null\}/);
-  assert.doesNotMatch(source, /Enter exact value|أدخل قيمة محددة|exact-open/);
-  assert.match(source, /accessibilityRole="alert"/);
-  assert.match(source, /minHeight: 44/);
+test('Numeric form dropdown keeps explicit blank and zero and opens manual entry without inventing a value', async () => {
+ const source=await readFile('components/NumericQuickPick.tsx','utf8');
+ assert.match(source, /<CompactDropdown/);
+ assert.match(source, /value: ''/);
+ assert.match(source, /عدد آخر/);
+ assert.match(source, /pending: value, expanded: true/);
+ assert.match(source, /testID=\{`\$\{testID\}-exact-input`\}/);
 });
 
-test('SOURCE ASSERTION: legacy demo counter uses the same +6 transition and supported chip catalog', async () => {
-  const capture = await readFile('app/capture/index.tsx', 'utf8');
-  assert.match(capture, /DEMO_NUMERIC_QUICK_PICK_VALUES\.map/);
-  assert.match(capture, /openNumericQuickPickMore\(\)/);
-  assert.match(capture, /setExact\(transition\.value\)[\s\S]*onChange\(Number\(transition\.value\)\)/);
-  assert.match(capture, /label="\+6"/);
-  assert.match(capture, /onPress=\{\(\) => \{ const selected = selectNumericQuickPick\(number, DEMO_NUMERIC_QUICK_PICK_VALUES\); setExpanded\(false\); setExact\(''\)/);
-  assert.doesNotMatch(capture, /Enter exact value|أدخل قيمة محددة/);
+test('Legacy capture counter delegates to the same exact numeric dropdown', async()=>{
+ const capture=await readFile('app/capture/index.tsx','utf8');
+ assert.match(capture, /function QuickCount/);assert.match(capture, /scopeKey=\{`capture:\$\{field\}`\}/);assert.match(capture,/onPendingValidityChange/);
 });
 
 test('SOURCE ASSERTION: only property floorNumber gets the extra zero quick pick', async () => {
   const source = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
-  assert.match(source, /quickPickValues=\{field === 'floorNumber' \? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined\}/);
+  assert.match(source, /quickPickValues=\{field === 'floorNumber' \? FLOOR_NUMBER_QUICK_PICK_VALUES : field === 'floorCount'/);
   const demo = await readFile('components/ModernPropertyForm.tsx', 'utf8');
   assert.match(demo, /quickPickValues=\{item\.id === 'floorNumber' \? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined\}/);
 });

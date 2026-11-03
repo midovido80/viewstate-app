@@ -68,7 +68,7 @@ type PersonLoadState = 'loading' | 'ready' | 'missing' | 'error';
 
 export default function PersonDetailScreen() {
   const { store } = useUserData();
-  const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string }>();
+  const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string; requirementSavedId?: string }>();
   const id = Array.isArray(params.personId) ? params.personId[0] : params.personId;
   const router = useRouter();
   const colors = useColors();
@@ -466,7 +466,7 @@ export default function PersonDetailScreen() {
                 style={[styles.countryButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 testID="person-edit-phone-country"
               >
-                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, writingDirection: 'ltr', textAlign: 'left' }}>
+                <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, writingDirection: 'ltr', direction: 'ltr', textAlign: isRTL ? 'right' : 'left' }}>
                   {selectedCountry.code} +{toEnglishDigits(selectedCountry.dialCode)}
                 </Text>
               </FieldSelect>
@@ -521,6 +521,7 @@ export default function PersonDetailScreen() {
                 <Text style={{ color: colors.success, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
               </View>
             ) : null}
+            {params.requirementSavedId && requirements.some(requirement=>requirement.id===params.requirementSavedId) && <Button title={language==='ar'?'مطابقة الآن':'Match now'} testID="person-saved-requirement-match" onPress={()=>router.push({pathname:'/matching',params:{requirementId:params.requirementSavedId}} as never)} />}
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 }}>
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -568,11 +569,11 @@ export default function PersonDetailScreen() {
                   : requirement.preferredAreaIds.map(areaId => {
                     const area = getAreaById(areaId);
                     return area ? (language === 'ar' ? area.ar : area.en) : (language === 'ar' ? 'منطقة غير معروفة' : 'Unknown area');
-                  }).join(' → ')}
+                  }).join(' — ')}
               </Text>
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.budget.minimum === undefined ? (language === 'ar' ? 'غير محدد' : 'Unspecified') : formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{requirement.budget.maximum === undefined ? (language === 'ar' ? 'غير محدد' : 'Unspecified') : formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>
-              {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
-              {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
+              {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
+              {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
 <ApprovedAction title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never)} testID={`requirement-view-${requirement.id}`}/><ApprovedAction title={t('requirements.find_matches')} variant="outline" onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} testID={`requirement-find-${requirement.id}`}/></View>
 <ApprovedAction title={t('requirements.edit')} onPress={() => router.push(canHydrateStudioRequirement(requirement) ? getStudioRequirementEditHref(requirement.id) as never : { pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={{ flex: 0 }} testID={`requirement-edit-${requirement.id}`}/>
@@ -779,7 +780,7 @@ const styles = StyleSheet.create({
   requirementActions: { flexWrap: 'wrap' },
   requirementAction: { flexGrow: 1, flexBasis: 120 },
   flex: { flex: 1 },
-  ltrText: { writingDirection: 'ltr', textAlign: 'left' },
+  ltrText: { writingDirection: 'ltr', direction: 'ltr', textAlign: 'left' },
   note: { padding: 14, borderRadius: 10, lineHeight: 22 },
   confirmation: { alignSelf: 'flex-start', maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   roleChoices: { paddingHorizontal: 20, paddingTop: 8 },

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type CatalogPreference, type FloorUse, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
-import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { getRequirementCatalogFields } from '@/services/requirementFieldMap';

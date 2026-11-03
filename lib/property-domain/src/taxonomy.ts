@@ -63,6 +63,7 @@ export type PropertyDetailField =
   | "hasCommercialShops"
   | "hasCommercialFloors"
   | "commercialFloorCount"
+  | "kitchens"
   | "hasGuardRoom"
   | "automaticNumberCount"
   | "hasFacilityCleaning"
@@ -163,6 +164,7 @@ export interface PropertyDetailFieldDefinition {
 
 /** The canonical domain applicability matrix for enrichment fields. */
 export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefinition[] = [
+  { field: "kitchens", appliesTo: ["apartment", "house", "villa", "chalet", "office", "shop", "floor", "other_built_property"] },
   { field: "buildingAgeBand", appliesTo: ["commercial_complex", "floor", "warehouse", "whole_building", "office", "shop", "other_built_property"], floorUses: ["commercial"] },
   { field: "parkingTypes", appliesTo: ["commercial_complex", "floor", "whole_building", "office", "shop", "other_built_property"], floorUses: ["commercial"] },
   { field: "privateParkingCount", appliesTo: ["commercial_complex", "floor", "whole_building", "office", "shop", "other_built_property"], floorUses: ["commercial"] },
@@ -247,7 +249,7 @@ export const PROPERTY_DETAIL_FIELD_DEFINITIONS: readonly PropertyDetailFieldDefi
   { field: "hasCommercialShops", appliesTo: ["whole_building"] },
   { field: "hasCommercialFloors", appliesTo: ["whole_building"] },
   { field: "commercialFloorCount", appliesTo: ["whole_building"] },
-  { field: "hasGuardRoom", appliesTo: ["whole_building"] },
+  { field: "hasGuardRoom", appliesTo: ["whole_building", "villa", "house", "chalet"] },
   { field: "hasCCTV", appliesTo: ["whole_building", "commercial_complex", "floor", "office", "other_built_property"], floorUses: ["commercial"] },
   { field: "hasLoadingArea", appliesTo: ["commercial_complex", "shop", "other_built_property"] },
   { field: "hasSharedBathrooms", appliesTo: ["commercial_complex"] },

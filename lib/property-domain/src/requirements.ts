@@ -1,3 +1,4 @@
+import { validKitchens, kitchensApply, type KitchenSpec } from './kitchens.ts';
 import { isCommercialRequirement, hasOfficeRequirementServices, commercialServiceErrors, cloneCommercialServices, type CommercialRequirementServices } from './commercialRequirements.ts';
 import type { FloorUse, LocationAreaId, PropertyType } from "./types.ts";
 import type { ResidentialAmenity } from "./types.ts";
@@ -16,7 +17,7 @@ import {
 export const REQUIREMENT_PURPOSES = ["rent", "buy"] as const;
 export type RequirementPurpose = typeof REQUIREMENT_PURPOSES[number];
 
-export const REQUIREMENT_OCCUPANCIES = ["family", "bachelor", "any"] as const;
+export const REQUIREMENT_OCCUPANCIES = ["family", "bachelor", "company_staff", "women", "mixed", "any"] as const;
 export type RequirementOccupancy = typeof REQUIREMENT_OCCUPANCIES[number];
 
 export const RENTAL_PERIOD_IDS = ["daily", "monthly", "yearly"] as const;
@@ -49,6 +50,7 @@ export type CatalogPreference =
   };
 
 export interface SeekerRequirementBase {
+  readonly kitchens?: readonly KitchenSpec[];
   readonly id: string;
   /** Missing until the broker links this request to a real Seeker Person. */
   readonly seekerId?: string;
@@ -143,6 +145,7 @@ const COMMON_SPEC_FIELDS = ["bedroomsMinimum", "bathroomsMinimum", "centralAC"] 
 const REQUIREMENT_TYPED_FIELDS = ["masterBedroomsMinimum", "driverRoom"] as const;
 
 const REQUIREMENT_FIELDS = new Set([
+  "kitchens",
   "commercialActivity", "commercialServices",
   "id",
   "seekerId",
@@ -176,7 +179,7 @@ const CATALOG_COUNT_FIELDS = new Set<PropertyDetailField>([
   "parkingSpaceCount", "livingRoomCount", "floorNumber",
 ]);
 const CATALOG_FEATURE_FIELDS = new Set<PropertyDetailField>([
-  "hasMaidRoom", "hasHeating", "hasBalcony", "hasLaundryRoom",
+  "hasGuardRoom", "hasMaidRoom", "hasHeating", "hasBalcony", "hasLaundryRoom",
   "hasSolarHeater", "hasElevator", "hasGarden", "hasSecurityGuard",
   "hasBBQArea", "hasPool", "hasWaterfront", "hasColdStorage",
   "hasKitchen", "hasHall", "hasParking", "hasSplitAC", "hasSharedPool", "hasSharedGym", "hasSeaView",
@@ -443,6 +446,7 @@ export function validateSeekerRequirement(
     }
   }
 
+  if (value.kitchens !== undefined && (!validKitchens(value.kitchens) || !kitchensApply(String(value.propertyType), value.floorUse ?? value.propertyUse))) issues.push(issue('invalid_requirement', ['kitchens'], 'Invalid kitchen preferences.'));
   if (value.catalogPreferences !== undefined) {
     if (!Array.isArray(value.catalogPreferences)) {
       issues.push(issue(
@@ -779,6 +783,7 @@ export function normalizeSeekerRequirement(
       currencyCode: validation.value.budget.currencyCode,
     },
     notes: validation.value.notes,
+    ...(validation.value.kitchens !== undefined ? { kitchens: validation.value.kitchens.map(item => ({...item})) } : {}),
     ...(validation.value.commercialActivity !== undefined ? { commercialActivity: validation.value.commercialActivity.trim() } : {}),
     ...(validation.value.commercialServices !== undefined ? { commercialServices: cloneCommercialServices(validation.value.commercialServices) } : {}),
     ...(validation.value.unspecifiedFields !== undefined ? { unspecifiedFields: [...validation.value.unspecifiedFields] } : {}),

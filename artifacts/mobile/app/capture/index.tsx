@@ -1,3 +1,4 @@
+import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RequiredField, RequiredFormProvider, RequiredFormHint, useRequiredForm } from '@/components/RequiredForm';
@@ -8,7 +9,7 @@ import { PropertyFormCard, PropertyAreaBlockRow, propertyFormInputStyle } from '
 import { isMissingPositiveAmount } from '@/services/screenInsets';
 import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
 import { formatPrice, formatRentalCadence } from '@/constants/market';
-import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile, ChoiceGrid } from '@/components/FormChoices';
 import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedActions';
 import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
@@ -1319,14 +1320,7 @@ function DemoSpecificationFields({ category, metadata, language, colors, fonts, 
   */);
 }
 function QuickCount({ field, value, decimal, colors, fonts, error, onValidity, onChange }: any) {
-  const [exact, setExact] = useState(value !== undefined && value > 5 ? String(value) : '');
-  const [expanded, setExpanded] = useState(value !== undefined && value > 5);
-  useEffect(() => {
-    const isExpanded = value !== undefined && value > 5;
-    setExpanded(isExpanded);
-    if (isExpanded) setExact(String(value));
-  }, [value]);
-  return <View><View style={styles.chips}>{DEMO_NUMERIC_QUICK_PICK_VALUES.map(number => <Choice key={number} testID={`capture-quick-${field}-${number}`} selected={value === number} label={String(number)} onPress={() => { const selected = selectNumericQuickPick(number, DEMO_NUMERIC_QUICK_PICK_VALUES); setExpanded(false); setExact(''); onValidity(field, false); onChange(Number(selected)); }} colors={colors} fonts={fonts} />)}<Choice testID={`capture-quick-${field}-more`} selected={expanded && value !== undefined && value >= 6} label="+6" onPress={() => { const transition = openNumericQuickPickMore(); setExpanded(transition.expanded); setExact(transition.value); onValidity(field, false); onChange(Number(transition.value)); }} colors={colors} fonts={fonts} /></View>{(expanded || value !== undefined && value >= 6) && <><TextInput testID={`capture-quick-${field}-exact`} value={exact} onChangeText={text => { setExact(text); if (text === '') { onValidity(field, false); onChange(undefined); return; } const number = parseDemoNumericInput(text, decimal); const valid = number !== null && number >= 6; onValidity(field, !valid); if (valid) onChange(number); }} keyboardType={decimal ? 'decimal-pad' : 'number-pad'} placeholder="6+" placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: error ? colors.destructive : colors.border, backgroundColor: colors.card }]} />{error ? <Text testID={`capture-quick-${field}-error`} style={{ color: colors.destructive, marginTop: 4 }}>{error}</Text> : null}</>}</View>;
+  return <NumericQuickPick scopeKey={`capture:${field}`} label="" testID={`capture-quick-${field}`} value={value===undefined?'':String(value)} quickPickValues={Array.from({length:field==='floorCount'?13:11},(_,i)=>i)} onPendingValidityChange={(_,invalid)=>onValidity(field,invalid)} onChangeText={text=>{if(!text){onChange(undefined);return;}const number=Number(text);if(Number.isSafeInteger(number)&&number>=0)onChange(number);}} />;
 }
 
 const styles = StyleSheet.create({

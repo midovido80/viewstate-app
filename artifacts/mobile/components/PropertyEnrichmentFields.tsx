@@ -4,7 +4,7 @@ import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities'
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { StyleSheet, Text, View } from 'react-native';
-import { ChoiceTile, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile, ChoiceGrid } from '@/components/FormChoices';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
@@ -68,7 +68,8 @@ export function PropertyEnrichmentFields({
   const definitions = applicableDefinitions.filter(definition =>
     !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field)
     &&
-    definition.field !== 'floorUse'
+    definition.field !== 'kitchens'
+    && definition.field !== 'floorUse'
     && (!hidePropertyUse || definition.field !== 'propertyUse')
     && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')
     && definition.field !== 'parkingSpaceCount'
@@ -106,7 +107,7 @@ export function PropertyEnrichmentFields({
           onPendingValidityChange={(sourceScopeKey, invalid) =>
             onInvalidQuickPickChange?.(field, sourceScopeKey, invalid)}
           testID={`enrich-${field}-quick-pick`}
-          quickPickValues={field === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined}
+          quickPickValues={field === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : field === 'floorCount' ? Array.from({length:12},(_,i)=>i+1) : field === 'parkingSpaceCount' ? [0,1,2,3,4,5,6,7,8,9,10] : undefined}
           requireExactValue={requireExactValue}
         />
       );
@@ -191,7 +192,7 @@ export function PropertyEnrichmentFields({
         );
       })}</PropertyFormCard>}
       {(applicableDefinitions.some(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount') || amenityRenderExtra) && (
-        <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
+        <PropertyFormCard title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
           <OrderedPropertyAmenities extra={amenityRenderExtra} entries={applicableDefinitions.filter(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount').map(definition => {
               const { field } = definition;
               if (field === 'parkingSpaceCount') return { field, details: true, content: <View>{definition.control !== 'numeric_quick_pick' && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[field][language === 'ar' ? 1 : 0]}</Text>}{renderFieldContent(definition)}</View> };

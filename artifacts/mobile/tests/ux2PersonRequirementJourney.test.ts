@@ -534,7 +534,7 @@ test('UX-2 competing edit is a non-retryable conflict and preserves the draft fo
   assert.match(route, /if \(window\.confirm\(message\)\) void openPersonDetails\(\)/);
   assert.match(route, /style: 'cancel'/);
   assert.match(route, /will discard them/);
-  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current \|\| kitchenDraftInvalid\}/);
   assert.doesNotMatch(route, /outcome\.status === 'edit_conflict'[\s\S]{0,180}setNotes\(/);
 });
 
@@ -659,7 +659,7 @@ test('UX-2 failed navigation offers navigation-only recovery and route displays 
   assert.equal(shouldRenderRequirementRecoveryControls(false, null), false);
   assert.equal(tryStartRequirementSave({ current: false }, true, false), false, 'dismissing the error cannot unlock a confirmed save');
   assert.match(route, /tryStartRequirementSave\(saveFlight, !!confirmedRequirement\.current, !!uncertainRequirement\.current, !!editConflictRequirement\.current\)/);
-  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current\}/);
+  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current \|\| kitchenDraftInvalid\}/);
   assert.equal(tryStartRequirementSave({ current: false }, false, false, true), false, 'an edit conflict also prevents another save');
   const saveStart = route.indexOf('const save = async () =>');
   assert.ok(route.indexOf('tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart) < route.indexOf('const result = candidate();', saveStart));

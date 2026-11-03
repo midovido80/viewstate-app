@@ -2460,7 +2460,8 @@ test('Approved Dynamic Details matrix including residential facts validates all 
     "hasLoadingArea"
   ]
 };
-  const expectedFields = (key: string) => [...(exactFields as Record<string, readonly string[]>)[key], ...(approvedFactExtensions[key] ?? [])].sort();
+  const additions = (key:string) => [...(['apartment','house','villa','chalet','office','shop','floor_commercial','floor_residential','other_built_property'].includes(key)?['kitchens']:[]), ...(['house','villa','chalet'].includes(key)?['hasGuardRoom']:[])];
+  const expectedFields = (key: string) => [...(exactFields as Record<string, readonly string[]>)[key], ...(approvedFactExtensions[key] ?? []), ...additions(key)].sort();
   const fieldsFor = (
     propertyType: Property['core']['propertyType'],
     floorUse?: 'residential' | 'commercial',
@@ -2485,10 +2486,10 @@ test('Approved Dynamic Details matrix including residential facts validates all 
   }
   assert.deepEqual(
     fieldsFor('apartment', undefined, 'studio'),
-    [...exactFields.apartment.filter(field => field !== 'masterBedroomCount'), 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'].sort(),
+    [...exactFields.apartment.filter(field => field !== 'masterBedroomCount'), 'kitchens', 'studioRoomCount', 'hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'].sort(),
     'Studio apartment adds only its scoped fields',
   );
-  assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential].sort());
+  assert.deepEqual(fieldsFor('floor', 'residential'), [...exactFields.floor_residential, 'kitchens'].sort());
   assert.deepEqual(fieldsFor('floor', 'commercial'), expectedFields('floor_commercial'));
   assert.deepEqual(fieldsFor('other_built_property', undefined, undefined, 'residential'),
     [...expectedFields('other_built_property'), 'bedroomCount', 'masterBedroomCount', 'occupancy', 'livingRoomCount', 'furnishing', 'hasMaidRoom', 'hasBalcony', 'hasLaundryRoom'].sort());

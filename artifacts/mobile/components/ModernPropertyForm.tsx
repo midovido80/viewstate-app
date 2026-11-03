@@ -1,3 +1,6 @@
+import { KitchenFields } from '@/components/KitchenFields';
+import { kitchensApply, validKitchens, type KitchenSpec } from '@workspace/property-domain';
+import { getBuiltPropertySector } from '@/services/propertySectorSelection';
 import { hasOfficeRequirementServices } from '@workspace/property-domain';
 import { CommercialOfferedServices } from '@/components/CommercialOfferedServices';
 import { TextInput } from '@/components/FormField';
@@ -11,7 +14,7 @@ import { parseDemoNumericInput } from '@/services/propertyDemoCatalog';
 import { ModernPropertyFields } from '@/components/ModernPropertyFields';
 import type { EnrichmentFieldValues } from '@/components/PropertyEnrichmentFields';
 import { isDemoFeatureSuppressed, isMappedTemplateField } from '@/services/propertyFactProjection';
-import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { FLOOR_NUMBER_QUICK_PICK_VALUES } from '@/services/numericQuickPick';
 import { WarehouseFields } from '@/components/WarehouseFields';
@@ -44,7 +47,7 @@ export interface ModernPropertyFormProps {
 function PropertyFormBody({ transaction, salePrice, recordScopeKey, propertyType, values, onChange, category, metadata, nearby, language, colors, fonts, onDemoChange, onNearbyChange, onInvalidQuickPickChange, requireExactValue = false, hideFloorUse = false, hidePropertyUse = false, hideApartmentSubtype = false }: ModernPropertyFormProps) {
   if (propertyType === 'warehouse') return <WarehouseFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} onInvalidQuickPickChange={onInvalidQuickPickChange} />;
   const hasExtraFields = category && (category.numericFields.some(item => !isMappedTemplateField(item.id)) || category.choices.some(choice => !isMappedTemplateField(choice.id)));
-  const nearbySection = onNearbyChange ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
+  const nearbySection = onNearbyChange && getBuiltPropertySector(propertyType, values.floorUse ?? values.propertyUse) === 'residential' ? <NearbyServicesSelector values={nearby} onChange={onNearbyChange} language={language} color={colors.foreground} fontFamily={fonts.semiBold} /> : null;
   if (propertyType === 'commercial_complex' && transaction === 'sale') return <View><CommercialComplexSaleFields recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
   if (isCommercialFloorSale(propertyType, values.floorUse, transaction)) return <View><CommercialComplexSaleFields profile="floor" recordScopeKey={recordScopeKey} values={values} onChange={onChange} salePrice={salePrice} onInvalidQuickPickChange={onInvalidQuickPickChange} />{nearbySection}</View>;
   const profile = getPropertyFormProfile(propertyType, transaction, values);
@@ -107,5 +110,7 @@ const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { mi
 
 
 export function ModernPropertyForm(props: ModernPropertyFormProps) {
-  return <View><PropertyFormBody {...props} />{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View>;
+  let kitchens: readonly KitchenSpec[] | undefined;
+  try { const parsed=JSON.parse(props.values.kitchens ?? 'null'); if (validKitchens(parsed)) kitchens=parsed; } catch { /* Validation retains invalid imported drafts. */ }
+  return <View><PropertyFormBody {...props} />{kitchensApply(props.propertyType,props.values.floorUse ?? props.values.propertyUse) && <PropertyFormCard title={props.language==='ar'?'المطابخ':'Kitchens'} icon="list"><KitchenFields value={kitchens} scopeKey={`${props.recordScopeKey}:kitchens`} commercial={getBuiltPropertySector(props.propertyType,props.values.floorUse ?? props.values.propertyUse)==='commercial'} onInvalidChange={invalid=>props.onInvalidQuickPickChange?.('kitchens',props.recordScopeKey,invalid)} onChange={value=>props.onChange('kitchens',value===undefined?'':JSON.stringify(value))} /></PropertyFormCard>}{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View>;
 }

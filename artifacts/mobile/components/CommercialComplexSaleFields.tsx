@@ -3,7 +3,7 @@ import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities'
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { Text, View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
-import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/ChoiceTile';
+import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
@@ -32,7 +32,7 @@ export function CommercialComplexSaleFields({ profile = 'complex', recordScopeKe
   const renderField = (field: PropertyDetailField) => {
     if (field === 'privateParkingCount' && !values.parkingTypes?.split(',').includes('private')) return null;
       const label = labelFor(field);
-      if (field === 'floorCount' || field === 'floorNumber' || field === 'bathroomCount') return <NumericQuickPick key={field} scopeKey={recordScopeKey} label={label} value={values[field] ?? ''} requireExactValue quickPickValues={field === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : undefined}
+      if (field === 'floorCount' || field === 'floorNumber' || field === 'bathroomCount') return <NumericQuickPick key={field} scopeKey={recordScopeKey} label={label} value={values[field] ?? ''} requireExactValue quickPickValues={field === 'floorNumber' ? FLOOR_NUMBER_QUICK_PICK_VALUES : Array.from({length:12},(_,i)=>i+1)}
         onChangeText={value => onChange(field, value)} onPendingValidityChange={(scope, invalid) => onInvalidQuickPickChange?.(field, scope, invalid)} testID={isFloor ? `commercial-floor-${field}` : 'complex-floorCount'} />;
       const options = isFloor && field === 'rentalOccupancy' ? COMMERCIAL_FLOOR_SALE_OCCUPANCY : COMMERCIAL_COMPLEX_CHOICES[field];
       return <View key={field} style={{ gap: 6 }}>
@@ -61,7 +61,7 @@ export function CommercialComplexSaleFields({ profile = 'complex', recordScopeKe
     <Text testID="complex-gross-yield" accessibilityLiveRegion="polite" style={{ ...labelStyle, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10 }}>{yieldPercent === undefined ? '—' : `${yieldPercent.toFixed(2)}%`}</Text>
     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'قبل المصروفات والصيانة والتمويل' : 'Before expenses, maintenance and financing'}</Text>
     </PropertyFormCard>
-    <PropertyFormCard title={language === 'ar' ? 'المزايا المتوفرة في العقار' : 'Available property features'} icon="check-square">
+    <PropertyFormCard title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
       <OrderedPropertyAmenities entries={[
         ...(isFloor ? COMMERCIAL_FLOOR_SALE_AMENITIES.filter(field => !['hasKitchen', 'hasFacilityCleaning'].includes(field)) : []).map(amenity => ({ field: amenity, content: <ChoiceChip key={amenity} optionId={amenity} label={labelFor(amenity)} selected={values[amenity] === 'true'} testID={`commercial-floor-${amenity}`} onPress={() => onChange(amenity, values[amenity] === 'true' ? '' : 'true')} /> })),
         { field: 'parkingTypes', details: true, content: <>{renderField('parkingTypes')}{renderField('privateParkingCount')}</> },

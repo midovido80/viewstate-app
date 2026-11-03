@@ -80,6 +80,7 @@ const stubSources = new Map<string, string>([
   `],
   ['@/components/CaptureHeader', "export const CaptureHeader = 'CaptureHeader';"],
   ['@/components/SelectCard', "export const SelectCard = 'SelectCard';"],
+  ['@/components/FormChoices', "export const CompactDropdown = 'CompactDropdown'; export const ChoiceCard = 'SelectCard'; export const ChoiceGrid = 'View';"],
   ['@/components/ChoiceTile', "export const ChoiceCard = 'SelectCard'; export const ChoiceGrid = 'View';"],
   ['@/components/Button', "export const Button = 'Button';"],
   ['@workspace/property-domain', `
@@ -164,6 +165,9 @@ function findByTestId(tree: unknown, testID: string): { props: Record<string, un
   if (!tree || typeof tree !== 'object') throw new Error(`Missing testID ${testID}`);
   const element = tree as { props?: Record<string, unknown> };
   if (element.props?.testID === testID) return element as { props: Record<string, unknown> };
+  const options = element.props?.options as {testID?: string; value:string; label:string; selected:boolean}[] | undefined;
+  const option = options?.find(item => item.testID === testID);
+  if (option) return {props:{...option, title:option.label,onSelect:()=> (element.props!.onSelect as (value:string)=>void)(option.value)}};
   const children = element.props?.children;
   for (const child of Array.isArray(children) ? children : [children]) {
     try {
@@ -442,23 +446,6 @@ test('production Offered Floor selection opens the existing floor form and prese
 });
 
 
-test('production sector filters toggle back to All and clear a hidden type', async () => {
-  const route = await import('../app/capture/property-type.tsx');
-  const harness = routeHarness({ mode: 'wanted', transaction: 'rent' });
-  let screen = renderRoute(route, harness);
-  assert.equal((findByTestId(screen, 'property-sector-all').props.accessibilityState as { selected: boolean }).selected, true);
-  (findByTestId(screen, 'select-type-villa').props.onSelect as () => void)();
-  screen = renderRoute(route, harness);
-  (findByTestId(screen, 'property-sector-commercial').props.onPress as () => void)();
-  screen = renderRoute(route, harness);
-  assert.throws(() => findByTestId(screen, 'select-type-villa'));
-  assert.throws(() => findByTestId(screen, 'select-type-duplex'));
-  assert.equal(findByTestId(screen, 'btn-next').props.disabled, true);
-  (findByTestId(screen, 'property-sector-commercial').props.onPress as () => void)();
-  screen = renderRoute(route, harness);
-  assert.equal((findByTestId(screen, 'property-sector-all').props.accessibilityState as { selected: boolean }).selected, true);
-  findByTestId(screen, 'select-type-duplex');
-});
 
 test('production Wanted Floor gets its use before the form for both transactions', async () => {
   const route = await import('../app/capture/property-type.tsx');
@@ -506,16 +493,6 @@ test('production selector restores the exact named Floor from canonical Back par
   }
 });
 
-test('production sector changes hide and clear the opposite named Floor', async () => {
-  const route = await import('../app/capture/property-type.tsx');
-  const harness = routeHarness({ mode: 'wanted', transaction: 'rent' });
-  (findByTestId(renderRoute(route, harness), 'select-type-residential_floor').props.onSelect as () => void)();
-  (findByTestId(renderRoute(route, harness), 'property-sector-commercial').props.onPress as () => void)();
-  const screen = renderRoute(route, harness);
-  assert.throws(() => findByTestId(screen, 'select-type-residential_floor'));
-  findByTestId(screen, 'select-type-commercial_floor');
-  assert.equal(findByTestId(screen, 'btn-next').props.disabled, true);
-});
 
 test('production direct Duplex bypasses the Apartment subtype page', async () => {
   const route = await import('../app/capture/property-type.tsx');
@@ -541,3 +518,18 @@ test('production sector Floor transition preserves the old draft until confirmat
   assert.equal(harness.captureDetails.mapsLink, 'https://example.test/map');
   assert.equal(harness.pushes[0].pathname, '/capture');
 });
+
+ test('both type dropdowns are available and commercial complex cannot be newly rented', async () => {
+ const route=await import('../app/capture/property-type.tsx');
+ for(const mode of ['offered','wanted']) {
+  const harness=routeHarness({mode,transaction:'rent'});const screen=renderRoute(route,harness);
+  assert.ok(findByTestId(screen,'property-type-residential'));
+  assert.ok(findByTestId(screen,'property-type-commercial'));
+  assert.throws(()=>findByTestId(screen,'select-type-commercial_complex'));
+  (findByTestId(screen,'select-type-villa').props.onSelect as ()=>void)();
+  (findByTestId(renderRoute(route,harness),'select-type-shop').props.onSelect as ()=>void)();
+  assert.equal(findByTestId(renderRoute(route,harness),'select-type-villa').props.selected,false);
+  assert.equal(findByTestId(renderRoute(route,harness),'select-type-shop').props.selected,true);
+ }
+ const sale=routeHarness({mode:'offered',transaction:'sale'});assert.ok(findByTestId(renderRoute(route,sale),'select-type-commercial_complex'));
+ });

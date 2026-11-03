@@ -3,20 +3,18 @@ import { RequiredLabelText } from '@/components/RequiredForm';
 import { propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { ChoiceChip } from '@/components/ChoiceChip';
+import { CompactDropdown } from '@/components/FormChoices';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import {
-  NUMERIC_QUICK_PICK_VALUES,
   createNumericQuickPickLocalState,
-  openNumericQuickPickMore,
   parseExactIntegerInput,
   reconcileNumericQuickPickScope,
   resolveExactIntegerInput,
-  selectNumericQuickPickState,
   synchronizeNumericQuickPickValue,
 } from '@/services/numericQuickPick';
 
+const FORM_COUNT_OPTIONS = [1,2,3,4,5,6,7,8,9,10] as const;
 export interface NumericQuickPickProps {
   readonly scopeKey: string;
   readonly label: string;
@@ -35,7 +33,7 @@ export function NumericQuickPick({
   onChangeText,
   onPendingValidityChange,
   testID,
-  quickPickValues = NUMERIC_QUICK_PICK_VALUES,
+  quickPickValues = FORM_COUNT_OPTIONS,
   requireExactValue = false,
 }: NumericQuickPickProps) {
   const colors = useColors();
@@ -58,8 +56,8 @@ export function NumericQuickPick({
   const exactInputLabel = language === 'ar' ? `${label}: قيمة دقيقة` : `${label}: exact value`;
   const invalidLabel = requireExactValue
     ? quickPickValues.includes(0)
-      ? language === 'ar' ? 'أدخل ٠ أو عددًا صحيحًا لا يقل عن ٦' : 'Enter 0 or a whole number of 6 or more'
-      : language === 'ar' ? 'أدخل عددًا صحيحًا لا يقل عن ٦' : 'Enter a whole number of 6 or more'
+      ? language === 'ar' ? 'أدخل عددًا صحيحًا غير سالب' : 'Enter a non-negative whole number'
+      : language === 'ar' ? 'أدخل عددًا صحيحًا غير سالب' : 'Enter a non-negative whole number'
     : language === 'ar' ? 'أدخل عددًا صحيحًا غير سالب' : 'Enter a non-negative whole number';
 
   const setValidity = (nextInvalid: boolean) => {
@@ -74,48 +72,26 @@ export function NumericQuickPick({
       <RequiredLabelText style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
         {label}
       </RequiredLabelText>
-      <View style={[styles.choices, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        {quickPickValues.map(option => (
-          <ChoiceChip
-            key={option}
-            label={String(option)}
-            selected={parsedValue.kind === 'valid' && parsedValue.value === option}
-            onPress={() => {
-              setLocalState(current => current.scopeKey === scopeKey
-                ? selectNumericQuickPickState(current, option, quickPickValues)
-                : current);
-              setValidity(false);
-              onChangeText(String(option));
-            }}
-            testID={`${testID}-${option}`}
-            role="radio"
-            style={styles.choice}
-          />
-        ))}
-        <ChoiceChip
-          label="+6"
-          accessibilityLabel={language === 'ar' ? 'قيمة مخصصة، ستة فأكثر' : 'Custom value, six or more'}
-          selected={expanded && parsedValue.kind === 'valid' && parsedValue.value >= 6}
-          onPress={() => {
-            const transition = openNumericQuickPickMore();
-            setLocalState(current => current.scopeKey === scopeKey
-              ? { ...current, pending: transition.value, expanded: transition.expanded, invalid: transition.invalid }
-              : current);
-            setValidity(false);
-            onChangeText(transition.value);
-          }}
-          testID={`${testID}-6-plus`}
-          role="button"
-          style={styles.choice}
-        />
-      </View>
+      <CompactDropdown testID={`${testID}-dropdown`} options={[
+        { value: '', label: language === 'ar' ? 'غير محدد' : 'Not specified', selected: value === '' && !expanded },
+        ...quickPickValues.map(option => ({ value: String(option), label: option === 0 ? (language === 'ar' ? 'لا يوجد (0)' : 'None (0)') : String(option), selected: !expanded && parsedValue.kind === 'valid' && parsedValue.value === option, testID: `${testID}-${option}` })),
+        { value: 'manual', label: language === 'ar' ? 'عدد آخر…' : 'Other number…', selected: expanded },
+      ]} onSelect={option => {
+        setValidity(false);
+        if (option === 'manual') {
+          setLocalState(current => ({ ...current, pending: value, expanded: true, invalid: false }));
+        } else {
+          setLocalState(current => ({ ...current, pending: option, expanded: false, invalid: false }));
+          onChangeText(option);
+        }
+      }} />
       {expanded ? (
         <>
           <TextInput
             invalid={invalid}
             value={pending}
             onChangeText={input => {
-              const transition = resolveExactIntegerInput(input, value, requireExactValue, quickPickValues);
+              const transition = resolveExactIntegerInput(input, value, false, quickPickValues);
               setLocalState(current => current.scopeKey === scopeKey
                 ? { ...current, pending: transition.pending, invalid: transition.invalid }
                 : current);

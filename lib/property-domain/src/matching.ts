@@ -1,3 +1,4 @@
+import { validKitchens, compareKitchens } from './kitchens.ts';
 import { isCommercialRequirement } from './commercialRequirements.ts';
 import type { Property } from "./types.ts";
 import type { SeekerRequirement } from "./requirements.ts";
@@ -118,6 +119,7 @@ export function matchingPropertyFacts(
     if (details[definition.field] !== undefined)
       facts[definition.field] = unwrap(details[definition.field]);
   }
+  if (validKitchens(facts.kitchens)) facts.hasKitchen = facts.kitchens.length > 0;
   // The approved physical area is distinct from land area. Missing does not mean zero.
   if (
     facts.builtUpAreaSquareMeters === undefined &&
@@ -479,6 +481,7 @@ export function evaluateMatch(
     for (const amenity of list ?? [])
       flexibleFeature(amenityFields[amenity], expected);
   }
+  if (requirement.kitchens !== undefined) add('kitchens', true, compareKitchens(requirement.kitchens, validKitchens(facts.kitchens) ? facts.kitchens : undefined), 4, 'exact');
   if (isCommercialRequirement(requirement.propertyType, requirement.floorUse, requirement.propertyUse)) {
     if (requirement.commercialActivity !== undefined) {
       // Literal recorded activity only; this does not determine licensing permission.
@@ -499,7 +502,11 @@ export function evaluateMatch(
       if (services.elevators !== undefined) flexibleFeature('hasElevator', services.elevators);
       if (services.bathrooms !== undefined) flexibleFeature(services.bathrooms === 'private' ? 'hasPrivateBathroom' : 'hasSharedBathrooms', true);
       // A legacy kitchen checkbox alone still says nothing about private/shared ownership.
-      if (services.kitchen !== undefined) add('kitchenAccess', services.kitchen, facts.hasKitchen === true ? facts.kitchenAccess : undefined, 4, 'exact');
+      if (services.kitchen !== undefined) {
+        const kitchens = validKitchens(facts.kitchens) ? facts.kitchens : undefined;
+        const access = kitchens ? kitchens.some(k => k.access === services.kitchen) ? services.kitchen : kitchens.some(k => k.access === undefined) ? undefined : false : facts.hasKitchen === true ? facts.kitchenAccess : undefined;
+        add('kitchenAccess', services.kitchen, access, 4, 'exact');
+      }
       for (const kind of services.parkingTypes ?? []) {
         const actual = Array.isArray(facts.parkingTypes) ? facts.parkingTypes.includes(kind) : undefined;
         add(`parking:${kind}`, true, actual, 4, 'exact');

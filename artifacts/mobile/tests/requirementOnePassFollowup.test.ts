@@ -40,7 +40,7 @@ test('Requirement enters its specifications page from explicit catalog context',
   assert.match(route, /useState\(startsAtSpecifications \? 3 : 0\)/);
   assert.match(route, /setStep\(startsAtSpecifications \? 3 : 0\)/);
   assert.match(route, /step === 3 && <View testID="requirement-core-step">[\s\S]*requirement-all-kuwait/);
-  assert.match(route, /step === 5 && <><Text style=\{styles\.heading\}>\{label\('Review'/);
+  assert.match(route, /step === 5 && <><Text style=\{(?:styles\.heading|\[styles\.heading,[^\n]*?\])\}>\{label\('Review'/);
   assert.match(route, /projectRequirementIntent\(\{ purpose \}, language\)\.label.*propertyType\.\$\{propertyType\}/);
   assert.match(route, /choiceReviewLines\(editableLeadingFields\)/);
   assert.match(route, /getWantedApartmentSubtypeLabel/);

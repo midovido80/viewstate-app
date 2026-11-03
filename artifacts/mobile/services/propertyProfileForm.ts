@@ -20,7 +20,7 @@ export function preserveHistoricalProfileFacts(baseline: Property, values: Recor
   const old = (baseline.typeDetails ?? {}) as unknown as Record<string, unknown>;
   const profile = getPropertyFormProfile(baseline.core.propertyType, baseline.activeOffer.transaction, values);
   if (!profile) return values;
-  const allowed = new Set<string>([...profile.fields, ...profile.amenities]);
+  const allowed = new Set<string>([...profile.fields, ...profile.amenities, 'kitchens']);
   for (const [field, value] of Object.entries(old)) if (field !== 'propertyType' && !allowed.has(field)) values[field] = value;
   return values;
 }

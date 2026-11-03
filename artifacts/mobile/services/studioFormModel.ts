@@ -1,3 +1,4 @@
+import { validKitchens, type KitchenSpec } from '@workspace/property-domain';
 import {
   createLiteralText,
   createPrivacyMetadata,
@@ -28,6 +29,7 @@ export type StudioWantedSelection = 'required' | 'not_important' | 'must_not_hav
 export type StudioSelection = StudioOfferedSelection | StudioWantedSelection;
 
 export interface StudioFormValues {
+  readonly kitchens?: readonly KitchenSpec[];
   readonly mode: StudioFormMode;
   readonly transaction: Transaction;
   readonly locationAreaId: string;
@@ -181,7 +183,7 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
   }
 
   if (values.mode === 'offered') {
-    if (values.occupancy !== undefined && !['family', 'bachelor', 'any'].includes(values.occupancy)) {
+    if (values.occupancy !== undefined && !['family', 'bachelor', 'company_staff', 'women', 'mixed', 'any'].includes(values.occupancy)) {
       errors.push(formError('occupancy', 'invalid_choice', 'Select Family, Bachelor, or Any.'));
     }
     if (!values.locationAreaId || getAreaById(values.locationAreaId) === undefined) {
@@ -267,6 +269,7 @@ export function validateStudioForm(values: StudioFormValues): StudioFormValidati
   if (Object.entries(values.amenitySelections ?? {}).some(([field, selection]) => !STUDIO_FEATURES.some(item => item.field === field) || !allowedSelections.includes(selection))) {
     errors.push(formError('amenitySelections', 'invalid_choice', 'Select an approved Studio amenity.'));
   }
+  if (values.kitchens !== undefined && !validKitchens(values.kitchens)) errors.push(formError('kitchens','invalid_choice','Invalid kitchen details.'));
   if (values.nearbyServices !== undefined && (!Array.isArray(values.nearbyServices) || values.nearbyServices.some(id => typeof id !== 'string' || !id.trim()) || new Set(values.nearbyServices).size !== values.nearbyServices.length)) {
     errors.push(formError('nearbyServices', 'invalid_choice', 'Nearby services must be unique identifiers.'));
   }
@@ -334,6 +337,7 @@ export function buildStudioProperty(
   };
   const details = {
     propertyType: 'apartment' as const,
+    ...(values.kitchens !== undefined ? { kitchens:values.kitchens.map(item=>({...item})) } : {}),
     apartmentSubtype: 'studio' as const,
     studioRoomCount: STUDIO_OPEN_ROOM_COUNT,
     ...Object.fromEntries(STUDIO_FEATURES.flatMap(item => { const value = booleanFromOffered(values.amenitySelections?.[item.field] ?? 'unknown'); return value === undefined ? [] : [[item.field, value]]; })),
@@ -423,6 +427,8 @@ export function buildStudioRequirement(
     budget: { minimum, maximum, currencyCode: 'KWD' },
     ...(values.budgetOpen ? { unspecifiedFields: ['budget' as const] } : {}),
     notes: values.description,
+    ...(values.kitchens !== undefined ? { kitchens: values.kitchens.map(item=>({...item})) } : {}),
+    ...(values.transaction==='rent' && values.occupancy!==undefined ? {occupancy:values.occupancy} : {}),
     preferredNearbyServices: [...(values.nearbyServices ?? [])],
     ...(values.amenitySelections?.hasCentralAC === 'required' ? { centralAC: true } : values.amenitySelections?.hasCentralAC === 'must_not_have' ? { centralAC: false } : {}),
     ...(STUDIO_FEATURES.some(item => 'amenity' in item && values.amenitySelections?.[item.field] === 'required') ? { preferredAmenities: STUDIO_FEATURES.flatMap(item => 'amenity' in item && values.amenitySelections?.[item.field] === 'required' ? [item.amenity] : []) } : {}),
@@ -483,6 +489,7 @@ export function readStudioProperty(property: Property): StudioFormValues {
     locationAreaId: property.core.locationArea.id,
     mapsLink: property.locationEnrichment?.mapsLink?.value ?? '',
     privateNotes: property.core.privateNotes?.value ?? '',
+    ...(details.kitchens !== undefined ? { kitchens:details.kitchens.map(item=>({...item})) } : {}),
     ...(details.occupancy !== undefined ? { occupancy: details.occupancy } : {}),
     price: String(transaction === 'sale'
       ? property.activeOffer.salePrice.amount
@@ -525,8 +532,7 @@ export function isStudioRequirement(requirement: SeekerRequirement): boolean {
     || requirement.floorUse !== undefined
     || requirement.driverRoom !== undefined) return false;
   if (requirement.purpose === 'rent'
-    && (requirement.occupancy !== undefined
-      || requirement.swimmingPool !== undefined
+    && (requirement.swimmingPool !== undefined
       || requirement.gym !== undefined
       || requirement.seaView !== undefined)) return false;
   const preferences = requirement.catalogPreferences ?? [];
@@ -606,6 +612,8 @@ export function readStudioRequirement(requirement: SeekerRequirement): StudioFor
       return [item.field, value === true ? 'required' : value === false ? 'must_not_have' : 'not_important'];
     })),
     nearbyServices: [...(requirement.preferredNearbyServices ?? [])],
+    ...(requirement.kitchens!==undefined?{kitchens:requirement.kitchens.map(item=>({...item}))}:{}),
+    ...(requirement.purpose==='rent'&&requirement.occupancy!==undefined?{occupancy:requirement.occupancy}:{}),
     description: requirement.notes,
     mapsLink: '',
   };

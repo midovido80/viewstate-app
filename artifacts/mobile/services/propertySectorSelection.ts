@@ -18,9 +18,9 @@ export function togglePropertySector(current: PropertySectorFilter, pressed: Pro
   return current === pressed ? 'all' : pressed;
 }
 
-export function getPropertyTypeChoices(sector: PropertySectorFilter): readonly PropertyTypeChoice[] {
+export function getPropertyTypeChoices(sector: PropertySectorFilter, transaction?: 'sale' | 'rent'): readonly PropertyTypeChoice[] {
   const choices = PROPERTY_TYPES.flatMap<PropertyTypeChoice>(type => type === 'apartment' ? [type, 'duplex' as const] : type === 'floor' ? ['residential_floor' as const, 'commercial_floor' as const] : [type]);
-  return choices.filter(type => sector === 'all' || (sector === 'residential' ? RESIDENTIAL : COMMERCIAL).includes(type));
+  return choices.filter(type => !(type === 'commercial_complex' && transaction === 'rent') && (sector === 'all' || (sector === 'residential' ? RESIDENTIAL : COMMERCIAL).includes(type)));
 }
 
 export function canonicalPropertyTypeChoice(choice: PropertyTypeChoice): { propertyType: PropertyType; apartmentSubtype?: 'duplex'; floorUse?: FloorUse } {

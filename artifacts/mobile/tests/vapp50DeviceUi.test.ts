@@ -195,7 +195,7 @@ test('SOURCE ASSERTION: Matching UI delegates to one versioned engine without da
   assert.match(grouped, /MatchingResultCard/);
   assert.doesNotMatch(grouped, /saveRequirement|updateRequirement|saveProperty|setItem|evaluateMatch|BrokerInitiatedMatching/);
   assert.match(source, /matching\.saved\.matchAllDescription/);
-  assert.match(source, /new BrokerInitiatedMatching\(store, candidateSource\)/);
+  assert.match(source, /new BrokerInitiatedMatching\(store, (?:requestedPropertyId|candidateSource)/);
   assert.match(source, /MATCH_ENGINE_VERSION/);
   assert.doesNotMatch(source, /saveRequirement|updateRequirement|saveProperty|setItem/);
 });

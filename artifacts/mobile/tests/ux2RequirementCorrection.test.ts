@@ -193,7 +193,7 @@ test('Requirement form renders the approved labels and one grouped amenity secti
   assert.match(source, /RENT_SERVICES\.filter\(service => service !== 'swimmingPool' \|\| !poolCatalogApplies\)/);
   assert.match(source, /amenityCatalogFields\.filter\(field => field !== 'hasPool'\)/);
   assert.match(source, /new Set\(\[\.\.\.amenities/);
-  assert.equal((source.match(/<Text style=\{styles\.heading\}>\{label\('Preferred amenities', 'المزايا المفضلة'\)\}/g) ?? []).length, 1);
+  assert.equal((source.match(/<Text style=\{(?:styles\.heading|\[styles\.heading,[^\n]*?\])\}>\{label\('Required services', 'الخدمات المطلوبة'\)\}/g) ?? []).length, 1);
   assert.ok(source.indexOf('fields={leadingFields}') < source.indexOf('testID="requirement-bedrooms-quick-pick"'));
   assert.ok(source.indexOf('testID="requirement-required-area"') < source.indexOf('fields={editableSpecificationFields}'));
   assert.ok(source.indexOf('fields={editableSpecificationFields}') < source.indexOf('testID="requirement-central-ac"'));

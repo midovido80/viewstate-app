@@ -51,7 +51,7 @@ export function shouldOpenExactEntry(
   const parsed = parseExactIntegerInput(value);
   return parsed.kind === 'invalid'
     || parsed.kind === 'valid'
-      && (parsed.value === 0 && !quickPickValues.includes(0) || parsed.value >= 6);
+      && !quickPickValues.includes(parsed.value);
 }
 
 export function createNumericQuickPickLocalState(

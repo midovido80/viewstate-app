@@ -1,3 +1,6 @@
+import { HomeQuickAdd } from '@/components/assistant/HomeQuickAdd';
+import { homeQuickRoute } from '@/services/assistantHome';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Tabs } from 'expo-router';
@@ -7,13 +10,16 @@ import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { NavigationIcon, type NavigationDestination } from './NavigationIcon';
 
 type Props = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
-const destinations: readonly NavigationDestination[] = ['index', 'matching', 'people', 'properties'];
+const destinations: readonly (NavigationDestination | 'quickAdd')[] = ['index', 'matching', 'quickAdd', 'people', 'properties'];
 /** Four equal real press targets. Keep navigation events/params and the hidden More route intact. */
 export function RaisedTabBar({ state, descriptors, navigation }: Props) {
-  const { isRTL, fonts } = useI18n(), colors = useColors(), insets = useScreenInsets();
+  const router = useRouter();
+  const { isRTL, fonts, language } = useI18n(), colors = useColors(), insets = useScreenInsets();
   return <View accessibilityRole="tablist" testID="raised-tab-bar" style={[styles.bar, { backgroundColor: colors.card, paddingBottom: insets.bottom, paddingLeft: Math.max(insets.left, 8), paddingRight: Math.max(insets.right, 8) }]}>
     <View {...(Platform.OS === 'web' ? { dir: 'ltr' as const } : {})} style={[styles.row, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
       {destinations.map(destination => {
+        if (destination === 'quickAdd') return <HomeQuickAdd key="quickAdd" compact label={language === 'ar' ? 'إضافة سريعة' : 'Quick add'} closeLabel={language === 'ar' ? 'إغلاق' : 'Close'} labels={language === 'ar' ? { person: 'شخص', property: 'عقار', import: 'استيراد', share: 'مشاركة', matching: 'مطابقة' } : { person: 'Person', property: 'Property', import: 'Import', share: 'Share', matching: 'Matching' }} onAction={action => { const href = homeQuickRoute(action); if (href) router.push(href as never); else router.navigate({ pathname: '/', params: { quickAction: action, quickActionKey: String(Date.now()) } } as never); }} />;
+
         const route = state.routes.find(item => item.name === destination);
         if (!route) return null;
         const { options } = descriptors[route.key];
