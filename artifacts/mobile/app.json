@@ -2,7 +2,7 @@
   "expo": {
     "name": "ViewState App",
     "slug": "viewstate-app",
-    "owner": "ahmedraafats-team",
+    "owner": "midovido80",
     "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -18,7 +18,7 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "com.viewstate.app",
+      "package": "com.midovido80.viewstateapp",
       "versionCode": 6,
       "softwareKeyboardLayoutMode": "resize",
       "blockedPermissions": [
@@ -82,7 +82,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "3658c438-6cec-44cf-82f0-b825613571de"
+        "projectId": "d6978e84-7f06-4074-a641-eef1f9b9021c"
       }
     }
   }
