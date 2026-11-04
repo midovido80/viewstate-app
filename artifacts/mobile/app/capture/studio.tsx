@@ -1,3 +1,4 @@
+import { matchingTarget } from '@/services/matchingScope';
 import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
 import { KitchenFields } from '@/components/KitchenFields';
 import { TextInput } from '@/components/FormField';
@@ -1592,7 +1593,7 @@ export default function StudioCaptureRoute() {
                 {mode === 'offered' ? renderStudioAttachments() : null}
               </>
             )}
-            {savedProperty && <Button title={language==='ar'?'مطابقة الآن':'Match now'} onPress={()=>router.push({pathname:'/matching',params:{propertyId:savedProperty.core.id}} as never)} testID="studio-property-match-now" />}
+            {savedProperty && <Button title={language==='ar'?'مطابقة الآن':'Match now'} onPress={()=>router.push(matchingTarget({ kind: 'property', id: savedProperty.core.id }) as never)} testID="studio-property-match-now" />}
             {savedProperty && propertySourceConfirmed ? (
               <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                 <Button

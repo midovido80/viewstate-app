@@ -1,3 +1,4 @@
+import { matchingTarget } from '@/services/matchingScope';
 import { TextInput, FieldSelect } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
@@ -521,7 +522,7 @@ export default function PersonDetailScreen() {
                 <Text style={{ color: colors.success, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{confirmation}</Text>
               </View>
             ) : null}
-            {params.requirementSavedId && requirements.some(requirement=>requirement.id===params.requirementSavedId) && <Button title={language==='ar'?'مطابقة الآن':'Match now'} testID="person-saved-requirement-match" onPress={()=>router.push({pathname:'/matching',params:{requirementId:params.requirementSavedId}} as never)} />}
+            {params.requirementSavedId && requirements.some(requirement=>requirement.id===params.requirementSavedId) && <Button title={language==='ar'?'مطابقة الآن':'Match now'} testID="person-saved-requirement-match" onPress={()=>router.push(matchingTarget({ kind: 'requirement', id: String(params.requirementSavedId) }) as never)} />}
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
             <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 }}>
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -575,7 +576,7 @@ export default function PersonDetailScreen() {
               {requirement.purpose === 'rent' && requirement.bedroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.bedroomsMinimum}+ {t('matching.bedrooms')}</Text> : null}
               {requirement.purpose === 'rent' && requirement.bathroomsMinimum !== undefined ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.bathroomsMinimum}+ {t('matching.bathrooms')}</Text> : null}
               <View style={[styles.secondaryActions, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
-<ApprovedAction title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never)} testID={`requirement-view-${requirement.id}`}/><ApprovedAction title={t('requirements.find_matches')} variant="outline" onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} testID={`requirement-find-${requirement.id}`}/></View>
+<ApprovedAction title={t('requirements.view')} onPress={() => router.push({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never)} testID={`requirement-view-${requirement.id}`}/><ApprovedAction title={t('requirements.find_matches')} variant="outline" onPress={() => router.push(matchingTarget({ kind: 'requirement', id: requirement.id }) as never)} testID={`requirement-find-${requirement.id}`}/></View>
 <ApprovedAction title={t('requirements.edit')} onPress={() => router.push(canHydrateStudioRequirement(requirement) ? getStudioRequirementEditHref(requirement.id) as never : { pathname: '/requirement/[requirementId]', params: { requirementId: requirement.id, seekerId: person.id } } as never)} variant="outline" style={{ flex: 0 }} testID={`requirement-edit-${requirement.id}`}/>
               </View>
               );

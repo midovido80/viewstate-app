@@ -1,3 +1,4 @@
+import { matchingTarget } from '@/services/matchingScope';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { projectPropertyFacts } from '@/services/propertyFactProjection';
 import { PropertySpecIcon } from '@/components/PropertySpecIcon';
@@ -195,7 +196,7 @@ export default function PropertiesScreen() {
           <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left', marginTop: 6 }}>
             {[requirement.bedroomsMinimum !== undefined ? `${language === 'ar' ? 'غرف' : 'Bedrooms'}: ${requirement.bedroomsMinimum}+` : '', requirement.bathroomsMinimum !== undefined ? `${language === 'ar' ? 'حمامات' : 'Bathrooms'}: ${requirement.bathroomsMinimum}+` : ''].filter(Boolean).join(' · ')}
           </Text>
-          <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} variant="outline" onPress={() => router.push({ pathname: '/matching', params: { requirementId: requirement.id } } as never)} testID={`request-match-${requirement.id}`} />
+          <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} variant="outline" onPress={() => router.push(matchingTarget({ kind: 'requirement', id: requirement.id }) as never)} testID={`request-match-${requirement.id}`} />
         </>}
         {item.kind === 'wanted' && !item.person ? (
           <View style={[styles.personTarget, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]} testID={`requirement-unassigned-${item.id}`}>

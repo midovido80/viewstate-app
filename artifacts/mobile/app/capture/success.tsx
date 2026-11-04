@@ -1,3 +1,4 @@
+import { matchingEntryHref } from '@/services/matchingScope';
 import { useRef } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -65,7 +66,7 @@ export default function SuccessScreen() {
         {t('summary.success_detail')}
       </Text>
       <View style={styles.spacer} />
-      {propertyCoreId && <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} onPress={() => navigateOnce(`/matching?propertyId=${encodeURIComponent(propertyCoreId)}`)} size="large" testID="property-match-now" />}
+      {propertyCoreId && <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} onPress={() => navigateOnce(matchingEntryHref({ kind: 'property', id: propertyCoreId }))} size="large" testID="property-match-now" />}
       {showCaptureFollowUp && propertyCoreId ? (
         <>
           <Button

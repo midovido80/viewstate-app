@@ -330,10 +330,11 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /MatchingResultsGroups/);
   assert.match(await readFile('components/MatchingResultsGroups.tsx', 'utf8'), /MatchingResultCard/);
   assert.match(screen, /QuickMatchingResults/);
-  assert.match(screen, /MATCH_ENGINE_VERSION/);
-  assert.match(screen, /new BrokerInitiatedMatching\(store, (?:requestedPropertyId|candidateSource)/);
-  assert.match(screen, /runMatchingForAllRequirements/);
-  assert.match(screen, /groupMatchAllResultsByPerson/);
+  const scopedRunner = await readFile('services/matchingScope.ts', 'utf8');
+  assert.match(scopedRunner, /MATCH_ENGINE_VERSION/);
+  assert.match(screen, /runSavedMatchingScope/);
+  assert.match(scopedRunner, /runMatchingForAllRequirements/);
+  assert.match(scopedRunner, /groupMatchAllResultsByPerson/);
   assert.match(screen, /runGenerationRef/);
   assert.match(screen, /store\.getProperty\(propertyId\)/);
   assert.match(
@@ -353,7 +354,7 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.match(screen, /router\.push\(\{ pathname: '\/property\/\[propertyCoreId\]', params: \{ propertyCoreId: propertyId, matchingReturn: token/);
 
   const explicitHandler = screen.indexOf('const runMatching = async (');
-  const firstExecution = screen.indexOf('.runForRequirement(');
+  const firstExecution = screen.indexOf('await runSavedMatchingScope(');
   assert.ok(explicitHandler >= 0 && firstExecution > explicitHandler);
   assert.doesNotMatch(
     screen,
@@ -362,15 +363,12 @@ test('wires the manual bilingual M5 tab and transient results without automatic 
   assert.doesNotMatch(screen, /\.sort\(/);
 });
 
-test('Person entry scopes execution to the requested Requirement without falling back to Match All', async () => {
+test('Saved-record entry delegates execution to the guarded scope runner', async () => {
   const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
-  assert.match(screen, /if \(requestedRequirementId \|\| requestedPropertyId \|\| best\) setMode\('saved'\)/);
-  assert.match(screen, /requirements\.filter\(item => item\.id === requestedRequirementId\)/);
-
-  const explicitHandler = screen.indexOf('const runMatching = async (');
-  const routeSelection = screen.indexOf("if (requestedRequirementId || requestedPropertyId || best) setMode('saved')");
-  const firstExecution = screen.indexOf('.runForRequirement(');
-  assert.ok(routeSelection >= 0 && explicitHandler > routeSelection && firstExecution > explicitHandler);
+  assert.match(screen, /resolveMatchingScope/);
+  assert.match(screen, /runSavedMatchingScope/);
+  assert.match(screen, /scope.kind === 'all' && <View style=\{\[styles.modeSwitch/);
+  assert.match(screen, /currentScopeRef.current === runScopeKey/);
 });
 
 test('Person Details keeps post-save feedback transient and uses classification actions', async () => {

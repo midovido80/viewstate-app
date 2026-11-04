@@ -1,3 +1,4 @@
+import { matchingTarget } from '@/services/matchingScope';
 import { useUserData } from '@/contexts/UserDataContext';
 import { matchingBackRoute, readMatchingReturn } from '@/services/matchingReturnSession';
 import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
@@ -281,7 +282,7 @@ export default function RequirementDetailsScreen() {
               ) : null}
             </View>
           ) : null}
-          <Button title={caption('Match now', 'مطابقة الآن')} onPress={() => router.push({ pathname: '/matching', params: { requirementId: record.id } } as never)} testID="requirement-match-now" />
+          <Button title={caption('Match now', 'مطابقة الآن')} onPress={() => router.push(matchingTarget({ kind: 'requirement', id: record.id }) as never)} testID="requirement-match-now" />
           {!postSave || record.seekerId ? (
             <Button title={t('requirements.edit')} onPress={edit} testID="requirement-details-edit" />
           ) : null}

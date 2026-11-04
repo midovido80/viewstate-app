@@ -1,7 +1,7 @@
+import { matchingTarget, resolveMatchingScope, matchingScopeKey, matchingRestoreFits, runSavedMatchingScope } from '@/services/matchingScope';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { selectHomeMatches } from '@/services/assistantHome';
 import { MatchingResultCard } from '@/components/MatchingResultCard';
-import { validateSeekerRequirement } from '@workspace/property-domain';
 import type { BrokerMatchingRunResult } from '@/services/brokerInitiatedMatching';
 import { QuickMatchingForm } from '@/components/QuickMatchingForm';
 import { QuickMatchingResults } from '@/components/QuickMatchingResults';
@@ -22,7 +22,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import {
-  MATCH_ENGINE_VERSION,
   type MatchingPolicy,
   type Property,
   type SeekerRequirement,
@@ -35,12 +34,6 @@ import { useI18n } from '@/contexts/I18nContext';
 
 import { MyPropertiesMatchingSource } from '@/services/myPropertiesMatchingSource';
 import {
-  BrokerInitiatedMatching,
-} from '@/services/brokerInitiatedMatching';
-import {
-  groupMatchAllResultsByPerson,
-  runMatchingForAllRequirements,
-  validMatchingRequirements,
   type MatchAllPersonGroup,
 } from '@/services/matchingUi';
 import type { Person } from '@/services/people';
@@ -55,7 +48,16 @@ function numberFromInput(value: string): number | undefined {
 
 export default function MatchingScreen() {
   const { store } = useUserData();
-  const { requirementId: requestedRequirementId, propertyId: requestedPropertyId, best, returnSession } = useLocalSearchParams<{ requirementId?: string; propertyId?: string; best?: string; returnSession?: string }>();
+  const params = useLocalSearchParams<{ scope?: string; entry?: string; requirementId?: string; propertyId?: string; best?: string; returnSession?: string }>();
+  const scope = resolveMatchingScope(params);
+  const scopeKey = JSON.stringify([matchingScopeKey(scope), params.entry ?? '']);
+  const requestedRequirementId = scope.kind === 'requirement' ? scope.id : undefined;
+  const requestedPropertyId = scope.kind === 'property' ? scope.id : undefined;
+  const best = scope.kind === 'best' ? '1' : undefined;
+  const returnSession = typeof params.returnSession === 'string' ? params.returnSession : undefined;
+  const scopedRecord = scope.kind === 'property' || scope.kind === 'requirement';
+  const currentScopeRef = useRef(scopeKey);
+  currentScopeRef.current = scopeKey;
   const colors = useColors();
   const { t, isRTL, language, fonts } = useI18n();
   const router = useRouter();
@@ -68,6 +70,7 @@ export default function MatchingScreen() {
   const [quickFilters, setQuickFilters] = useState<QuickMatchingFilters>(emptyQuickMatchingFilters);
   const [quickResults, setQuickResults] = useState<QuickPropertyMatch[] | null>(null);
   const [budgetText, setBudgetText] = useState({minimum:'',maximum:''});
+  const [resultScopeKey, setResultScopeKey] = useState('');
   const [matchAllGroups, setMatchAllGroups] = useState<MatchAllPersonGroup[] | null>(null);
   const [unlinkedRun, setUnlinkedRun] = useState<{ requirement: SeekerRequirement; run: BrokerMatchingRunResult } | null>(null);
   const [error, setError] = useState('');
@@ -79,6 +82,7 @@ export default function MatchingScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const scrollOffsetRef = useRef(0);
   const restoreOffsetRef = useRef<number | null>(null);
+  const lastEntryRef = useRef<string | undefined>(undefined);
   const openedReturnTokenRef = useRef<string | undefined>(undefined);
   const dismissedReturnTokenRef = useRef<string | undefined>(undefined);
   const [resultsLayout, setResultsLayout] = useState<MatchingResultsLayout>({ view: 'people' });
@@ -92,21 +96,25 @@ export default function MatchingScreen() {
       setQuickResults(null);
       setUnlinkedRun(null);
       setMatchAllGroups(null);
-      setError('');
-      const restore = readMatchingReturn(openedReturnTokenRef.current)
+      setError(scope.kind === 'invalid' ? (language === 'ar' ? 'تعذر تحديد سجل المطابقة. اختر مطابقة الكل أو افتح السجل من جديد.' : 'The matching record could not be identified. Choose Match all or reopen the record.') : '');
+      const freshEntry = params.entry !== lastEntryRef.current;
+      lastEntryRef.current = params.entry;
+      if (freshEntry && !returnSession) openedReturnTokenRef.current = undefined;
+      const savedRestore = readMatchingReturn(openedReturnTokenRef.current)
         ?? (returnSession !== dismissedReturnTokenRef.current ? readMatchingReturn(returnSession) : undefined);
+      const restore = matchingRestoreFits(scope, savedRestore) ? savedRestore : undefined;
       setPolicies(restore?.policies ?? {});
       setExcluded(restore?.excluded ?? {});
       Promise.all([store.getRequirements(), store.getPeople(), store.getProperties()])
         .then(([loadedRequirements, loadedPeople, loadedProperties]) => {
           if (!active) return;
-          setRequirements(requestedRequirementId ? loadedRequirements.filter(requirement => validateSeekerRequirement(requirement).ok) : validMatchingRequirements(loadedRequirements));
+          setRequirements(loadedRequirements);
           setPeople(loadedPeople);
           setProperties(loadedProperties);
           if (requestedRequirementId || requestedPropertyId || best || matchAllRequested.current) { setMode('saved'); setPendingRestore('requested'); matchAllRequested.current=false; }
-          if (requestedRequirementId || requestedPropertyId || best) setMode('saved');
+          if (scope.kind !== 'all') { setMode('saved'); setResultsLayout({ view: requestedPropertyId ? 'people' : 'properties' }); }
           if (restore) {
-            setMode(restore.mode);
+            setMode(scope.kind === 'all' ? restore.mode : 'saved');
             setResultsLayout(restore.layout ?? { view: 'people' });
             restoreOffsetRef.current = restore.scrollOffset;
             if (restore.quickFilters) {
@@ -124,13 +132,13 @@ export default function MatchingScreen() {
         active = false;
         runGenerationRef.current += 1;
       };
-    }, [requestedRequirementId, requestedPropertyId, best, returnSession, store, t]),
+    }, [scopeKey, returnSession, store, t]),
   );
 
   const clearRun = () => {
     openedReturnTokenRef.current = undefined;
     dismissedReturnTokenRef.current = returnSession;
-    setResultsLayout({ view: 'people' });
+    setResultsLayout({ view: requestedPropertyId ? 'people' : 'properties' });
     runGenerationRef.current += 1;
     setLoading(false);
     setQuickResults(null);
@@ -146,6 +154,8 @@ export default function MatchingScreen() {
 
   const runMatching = async (exclusions = excluded, refinements = policies) => {
     const generation = ++runGenerationRef.current;
+    const runScopeKey = scopeKey;
+    const isCurrent = () => runGenerationRef.current === generation && currentScopeRef.current === runScopeKey;
     setError('');
     setQuickResults(null);
     setUnlinkedRun(null);
@@ -153,25 +163,18 @@ export default function MatchingScreen() {
     setLoading(true);
     try {
       const candidateSource = new MyPropertiesMatchingSource(store);
-      let matching: BrokerInitiatedMatching;
 
-      if (mode === 'saved') {
-        matching = new BrokerInitiatedMatching(store, requestedPropertyId ? { getCandidates: async requirement => (await candidateSource.getCandidates(requirement)).filter(candidate => candidate.property.core.id === requestedPropertyId) } : candidateSource);
-        const selected = requestedRequirementId ? requirements.filter(item => item.id === requestedRequirementId) : requirements;
-        if (requestedRequirementId && selected.length !== 1) throw new Error('MATCHING_REQUIREMENT_NOT_FOUND');
-        const runs = await runMatchingForAllRequirements(
-          selected,
-          requirementId => matching.runForRequirement(requirementId, refinements[requirementId], exclusions[requirementId]),
-        );
-        if (runs.some(run => run.engineVersion !== MATCH_ENGINE_VERSION)) throw new Error('STALE_MATCH_ENGINE');
-        if (runGenerationRef.current === generation) {
-          let groups = groupMatchAllResultsByPerson(selected, people, runs);
+      if (mode === 'saved' || scope.kind !== 'all') {
+        const result = await runSavedMatchingScope({ scope, store, source: candidateSource, requirements, people, policies: refinements, excluded: exclusions });
+        if (isCurrent()) {
+          let groups = result.groups;
           if (best === '1') {
-            const top = selectHomeMatches(selected,people,runs);
+            const top = selectHomeMatches(result.selected, people, result.runs);
             const keys = new Set(top.map(item => JSON.stringify([item.result.requirementId,item.result.propertyId])));
-            groups = groups.map(group => ({ ...group, requirementGroups: group.requirementGroups.map(request => ({ ...request, matches: request.matches.filter(result => keys.has(JSON.stringify([result.requirementId,result.propertyId]))), needsConfirmation: [] })).filter(request => request.matches.length) })).filter(group => group.requirementGroups.length);
+            groups = groups.map(group => ({ ...group, requirementGroups: group.requirementGroups.map(request => ({ ...request, matches: request.matches.filter(item => keys.has(JSON.stringify([item.requirementId,item.propertyId]))), needsConfirmation: [] })).filter(request => request.matches.length) })).filter(group => group.requirementGroups.length);
           }
-          if (requestedRequirementId && selected[0] && !selected[0].seekerId) setUnlinkedRun({ requirement:selected[0],run:runs[0] });
+          setResultScopeKey(runScopeKey);
+          setUnlinkedRun(result.unlinked);
           setMatchAllGroups(groups);
         }
         return;
@@ -186,13 +189,13 @@ export default function MatchingScreen() {
         setError(language==='ar'?'أدخل ميزانية أكبر من صفر، ويجب ألا يقل الحد الأعلى عن الحد الأدنى.':'Use a positive budget; the maximum must not be below the minimum.'); return;
       }
       const candidates = await candidateSource.getCandidates();
-      const results = await runQuickMatching(filters, candidates, requirements, people, ()=>runGenerationRef.current===generation);
-      if (runGenerationRef.current===generation) { setQuickFilters(filters); setQuickResults(results); }
+      const results = await runQuickMatching(filters, candidates, requirements, people, ()=>isCurrent());
+      if (isCurrent()) { setQuickFilters(filters); setQuickResults(results); }
     } catch (runError) {
       console.error(runError);
-      if (runGenerationRef.current === generation) setError(t('matching.run_failed'));
+      if (isCurrent()) setError(runError instanceof Error && runError.message === 'MATCHING_PROPERTY_NOT_FOUND' ? (language === 'ar' ? 'تعذر العثور على العقار المحدد. لم تُشغّل المطابقة العامة.' : 'The selected property is unavailable. General matching was not run.') : runError instanceof Error && runError.message === 'MATCHING_REQUIREMENT_NOT_FOUND' ? (language === 'ar' ? 'تعذر العثور على الطلب المحدد. لم تُشغّل المطابقة العامة.' : 'The selected request is unavailable. General matching was not run.') : t('matching.run_failed'));
     } finally {
-      if (runGenerationRef.current === generation) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
@@ -242,7 +245,7 @@ export default function MatchingScreen() {
     }
   };
 
-  const resultGroups = matchAllGroups;
+  const resultGroups = resultScopeKey === scopeKey ? matchAllGroups : null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -261,7 +264,7 @@ export default function MatchingScreen() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
       >
-        {(requestedPropertyId || requestedRequirementId || best) && <Button title={language === 'ar' ? 'مطابقة الكل' : 'Match all'} onPress={() => { matchAllRequested.current=true; openedReturnTokenRef.current=undefined; dismissedReturnTokenRef.current=returnSession; router.setParams({ propertyId: undefined, requirementId: undefined, best: undefined, returnSession: undefined }); }} testID="matching-clear-scope" />}
+        {scope.kind !== 'all' && <Button title={language === 'ar' ? 'مطابقة الكل' : 'Match all'} onPress={() => { clearRun(); setMode('saved'); setPolicies({}); setExcluded({}); currentScopeRef.current = '__changing_scope__'; matchAllRequested.current=true; router.setParams(matchingTarget({ kind: 'all' }).params); }} testID="matching-clear-scope" />}
 
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={styles.headerCopy}>
@@ -271,7 +274,7 @@ export default function MatchingScreen() {
           </View>
         </View>
 
-        <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>
+        {scope.kind === 'all' && <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>
           <TouchableOpacity
             onPress={() => chooseMode('saved')}
             style={[styles.modeButton, mode === 'saved' ? { backgroundColor: colors.card } : null]}
@@ -294,17 +297,15 @@ export default function MatchingScreen() {
               {t('matching.mode.quick')}
             </Text>
           </TouchableOpacity>
-        </View>
+        </View>}
 
-        {mode === 'saved' ? (
+        {mode === 'saved' || scope.kind !== 'all' ? (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-              {requestedRequirementId ? (language === 'ar' ? 'أفضل ترشيحات هذا الطلب' : 'Best suggestions for this request') : t('matching.saved.matchAllTitle')}
+              {requestedPropertyId ? (language === 'ar' ? 'طلبات مناسبة لهذا العقار' : 'Client requests for this property') : requestedRequirementId ? (language === 'ar' ? 'عقارات مناسبة لهذا الطلب' : 'Properties for this request') : t('matching.saved.matchAllTitle')}
             </Text>
             <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-              {requirements.length
-                ? t('matching.saved.matchAllDescription')
-                : t('matching.saved.empty')}
+              {scopedRecord ? (language === 'ar' ? 'النتائج تخص السجل المحدد فقط. اضغط مطابقة الكل لعرض باقي السجلات.' : 'Results are limited to this record. Choose Match all to include other records.') : requirements.length ? t('matching.saved.matchAllDescription') : t('matching.saved.empty')}
             </Text>
           </View>
         ) : (
@@ -325,27 +326,28 @@ export default function MatchingScreen() {
         <Button
           title={loading
             ? t('matching.running')
-            : mode === 'saved' && !requestedRequirementId ? t('matching.runAll') : t('matching.run')}
+            : mode === 'saved' && scope.kind === 'all' ? t('matching.runAll') : t('matching.run')}
           onPress={() => void runMatching()}
           loading={loading}
-          disabled={loading}
+          disabled={loading || scope.kind === 'invalid'}
           style={styles.runButton}
           testID="matching-run"
         />
 
-        {unlinkedRun && <View style={styles.resultsSection} testID="matching-unlinked-request"><Text style={{ color: colors.foreground, textAlign:isRTL?'right':'left',fontFamily:fonts.semiBold }}>{language==='ar'?'مطابقات الطلب غير المرتبط بشخص':'Matches for the unlinked request'}</Text>{[...unlinkedRun.run.matches,...unlinkedRun.run.needsConfirmation].map((result,index)=><MatchingResultCard key={result.propertyId} rank={index+1} result={result} requirement={unlinkedRun.requirement} property={properties.find(property=>property.core.id===result.propertyId)} onPress={()=>void openMatchedProperty(result.propertyId)} onViewRequirement={()=>openMatchedRequest(unlinkedRun.requirement.id)} />)}{!unlinkedRun.run.matches.length&&!unlinkedRun.run.needsConfirmation.length&&<Text style={{textAlign:isRTL?'right':'left'}}>{language==='ar'?'لا توجد مطابقات مناسبة حاليًا':'No suitable matches yet'}</Text>}</View>}
+        {unlinkedRun && resultScopeKey === scopeKey && <View style={styles.resultsSection} testID="matching-unlinked-request"><Text style={{ color: colors.foreground, textAlign:isRTL?'right':'left',fontFamily:fonts.semiBold }}>{language==='ar'?'مطابقات الطلب غير المرتبط بشخص':'Matches for the unlinked request'}</Text>{[...unlinkedRun.run.matches,...unlinkedRun.run.needsConfirmation].map((result,index)=><MatchingResultCard key={result.propertyId} rank={index+1} result={result} requirement={unlinkedRun.requirement} property={properties.find(property=>property.core.id===result.propertyId)} onPress={()=>void openMatchedProperty(result.propertyId)} onViewRequirement={()=>openMatchedRequest(unlinkedRun.requirement.id)} />)}{!unlinkedRun.run.matches.length&&!unlinkedRun.run.needsConfirmation.length&&<Text style={{textAlign:isRTL?'right':'left'}}>{language==='ar'?'لا توجد مطابقات مناسبة حاليًا':'No suitable matches yet'}</Text>}</View>}
         {resultGroups && !unlinkedRun && <View style={styles.resultsSection} testID="matching-results">
           <View style={[styles.resultsHeader, { direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 19 }}>{t('matching.results.title')}</Text>
             <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button"><Text style={{ color: '#2563EB', fontFamily: fonts.semiBold }}>{t('matching.clear')}</Text></TouchableOpacity>
           </View>
+          {scopedRecord && !resultGroups.some(group => group.requirementGroups.some(request => request.matches.length || request.needsConfirmation.length)) && <Text testID="matching-scoped-empty" style={{ color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{requestedPropertyId ? (language === 'ar' ? 'لا توجد طلبات مناسبة لهذا العقار حاليًا.' : 'No suitable client requests for this property yet.') : (language === 'ar' ? 'لا توجد عقارات مناسبة لهذا الطلب حاليًا.' : 'No suitable properties for this request yet.')}</Text>}
           <MatchingResultsGroups groups={resultGroups} properties={properties} layout={resultsLayout} onLayoutChange={setResultsLayout} policies={policies} busy={loading}
             onRefine={refine} onReplace={replaceSuggestion} onOpenProperty={id => void openMatchedProperty(id)}
             onOpenPerson={openMatchedPerson}
             onOpenRequest={openMatchedRequest} />
           <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('matching.results.transient')}</Text>
         </View>}
-        {quickResults && <View style={styles.resultsSection}>
+        {quickResults && scope.kind === 'all' && <View style={styles.resultsSection}>
           <TouchableOpacity onPress={clearRun} accessibilityRole="button" testID="matching-clear-quick"><Text style={{color:'#245DF4',fontFamily:fonts.semiBold}}>{t('matching.clear')}</Text></TouchableOpacity>
           <QuickMatchingResults key={JSON.stringify(quickFilters)} results={quickResults} layout={resultsLayout} onLayoutChange={setResultsLayout} onOpenProperty={id=>void openMatchedProperty(id)} onOpenPerson={openMatchedPerson} onOpenRequest={openMatchedRequest} />
         </View>}
