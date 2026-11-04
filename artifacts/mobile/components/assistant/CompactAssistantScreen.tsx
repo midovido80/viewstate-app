@@ -2,7 +2,7 @@ import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Keyboard, Linking, Platform, Pressable, ScrollView, Switch, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,8 +27,10 @@ import { getRequirementCardSummary } from '@/services/cardSummaryPresentation';
 import type { AssistantCopyKey } from '@/services/dailyAssistantCopy';
 import { Action, AlertNote, AssistantField, AssistantSheet, AssistantText as Txt, CountBadge, useAssistantUI } from './ui';
 import { assistantTone as c, s } from './styles';
+import { AssistantClockPicker } from './AssistantClockPicker';
+import { parentFollowupSheet, type FollowupSheetMode, type TimeTarget } from '@/services/followupEditor';
 
-type Mode = 'editor' | 'detail' | 'outcome' | 'reschedule' | 'calendar' | 'people' | 'properties' | 'person' | 'property' | 'settings' | 'cancel' | 'actions' | 'matches' | 'allTasks' | 'notifications' | 'requirements' | 'share' | null;
+type Mode = FollowupSheetMode;
 type CalendarTarget = 'page' | 'editor' | 'reschedule' | 'next';
 const filters: TaskFilter[] = ['all', 'viewing', 'client', 'available', 'done', 'cancelled'];
 function blankDraft(date: string, kind: TaskKind = 'call'): FollowupDraft {
@@ -37,6 +39,10 @@ function blankDraft(date: string, kind: TaskKind = 'call'): FollowupDraft {
 function id() { return Crypto.randomUUID(); }
 /** Only web scroll containment is CSS. Native scroll containers use bounded layouts + nested scrolling. */
 const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'auto', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
+function IconButton({ label, name, onPress }: { label: string; name: React.ComponentProps<typeof Feather>['name']; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={s.iconButton}><Feather name={name} size={21} color={c.blue} /></Pressable>;
+}
+
 export default function CompactAssistantScreen() {
   const { store } = useUserData();
   const h = useDailyAssistant(), { language, setLanguage, t, isRTL } = useI18n();
@@ -78,19 +84,34 @@ export default function CompactAssistantScreen() {
   const calendarTarget = useRef<CalendarTarget>('page'), calendarBack = useRef<Mode>(null);
   const pickerBack = useRef<Mode>(null);
   const [pickerQuery, setPickerQuery] = useState(''), [recordId, setRecordId] = useState('');
-  const [preferences, setPreferences] = useState(h.state.settings);
+  const timeBack = useRef<Mode>(null), timeTarget = useRef<TimeTarget>('editor');
+  const [timeValue, setTimeValue] = useState(''), [timeRequired, setTimeRequired] = useState(false);
   const rows = selectFollowups(h.state, h.inventory, h.selectedDay, 'all', '', overdue, today);
   const overdueTasks = sortFollowups(h.state.tasks.filter(v => v.status === 'pending' && v.date < today));
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
   const listHeight = rows.length > 3 ? Math.min(height * .4, 264) : undefined;
   useEffect(() => { listRef.current?.scrollTo({ y: 0, animated: false }); }, [h.selectedDay, overdue]);
-  const dateLabel = (day: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) =>
-    new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-ca-gregory-nu-latn' : 'en-GB', { ...options, timeZone: ASSISTANT_TIME_ZONE }).format(new Date(day + 'T12:00:00Z'));
-  const timeLabel = (time: string) => time ? new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-nu-latn' : 'en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date('2026-01-01T' + time + ':00+03:00')) : C('allDay');
+  const dateLabel = useMemo(() => {
+    const cache = new Map<string, Intl.DateTimeFormat>();
+    return (day: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) => {
+      const key = JSON.stringify(options);
+      let formatter = cache.get(key);
+      if (!formatter) { formatter = new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-ca-gregory-nu-latn' : 'en-GB', { ...options, timeZone: ASSISTANT_TIME_ZONE }); cache.set(key, formatter); }
+      return formatter.format(new Date(day + 'T12:00:00Z'));
+    };
+  }, [language]);
+  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-nu-latn' : 'en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }), [language]);
+  const timeLabel = (time: string) => time ? timeFormatter.format(new Date('2026-01-01T' + time + ':00+03:00')) : C('allDay');
   const propertyTitle = (propertyId: string) => h.inventory.properties.find(p => p.id === propertyId)?.title ?? C('missingProperty');
   const personName = (task: Followup) => taskPersonName(task, h.inventory) || (task.personId ? C('missingPerson') : '');
   function chooseDay(day: string) { h.setSelectedDay(day); setOverdue(false); setQuery(''); }
-  function close() { if (h.busy) return; setMode(null); setFormError(''); setFieldError(''); }
+  function close() {
+    if (h.busy) return;
+    Keyboard.dismiss();
+    const parent = parentFollowupSheet(mode, calendarBack.current, pickerBack.current, timeBack.current);
+    setMode(parent);
+    if (!parent) { setFormError(''); setFieldError(''); }
+  }
   function openEditor(kind: TaskKind = 'call', task?: Followup, extra: Partial<FollowupDraft> = {}) {
     if (!h.ready || h.busy) return;
     setExpected(task ?? null); setDraft(task ? { ...task } : { ...blankDraft(h.selectedDay, kind), ...extra });
@@ -106,6 +127,7 @@ export default function CompactAssistantScreen() {
     setExpected(task); setNewDate(addDays(task.date < today ? today : task.date, 1)); setNewTime(task.time); setFormError(''); setMode('reschedule');
   }
   function openCalendar(target: CalendarTarget = 'page') {
+    Keyboard.dismiss();
     calendarTarget.current = target; calendarBack.current = mode;
     const day = target === 'editor' ? draft.date : target === 'reschedule' ? newDate : target === 'next' ? nextDate : h.selectedDay;
     setCalendarMonth(day.slice(0, 7) + '-01'); setMode('calendar');
@@ -114,7 +136,7 @@ export default function CompactAssistantScreen() {
     if (calendarTarget.current === 'page') { chooseDay(day); setDraft(blankDraft(day)); setMode('actions'); }
     else { if (calendarTarget.current === 'editor') setDraft(d => ({ ...d, date: day })); if (calendarTarget.current === 'reschedule') setNewDate(day); if (calendarTarget.current === 'next') setNextDate(day); setMode(calendarBack.current); }
   }
-  function openPicker(which: 'people' | 'properties') { pickerBack.current = mode; setPickerQuery(''); setMode(which); }
+  function openPicker(which: 'people' | 'properties') { Keyboard.dismiss(); pickerBack.current = mode; setPickerQuery(''); setMode(which); }
   async function pickRecord(which: 'people' | 'properties', targetId: string) {
     if (which === 'people') { setDraft(d => ({ ...d, personId: targetId, personName: '' })); setMode(pickerBack.current); return; }
     setDraft(d => ({ ...d, propertyId: targetId })); setMode(pickerBack.current);
@@ -162,19 +184,28 @@ export default function CompactAssistantScreen() {
     } catch { h.notify(C('contactError')); }
   }
   function linkedPreview(which: 'person' | 'property', targetId: string) { setRecordId(targetId); setMode(which); }
-  function IconButton({ label, name, onPress }: { label: string; name: React.ComponentProps<typeof Feather>['name']; onPress: () => void }) {
-    return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={s.iconButton}><Feather name={name} size={21} color={c.blue} /></Pressable>;
-  }
-  const Footer = ({ save, onPress }: { save: AssistantCopyKey; onPress: () => void }) => <>
+  const renderFooter = ({ save, onPress }: { save: AssistantCopyKey; onPress: () => void }) => <>
     <View style={s.grow}><Action label={h.busy ? C('saveBusy') : C(save)} onPress={onPress} tone="primary" disabled={h.busy || !h.ready} /></View>
     <Action label={C('cancel')} onPress={close} tone="danger" disabled={h.busy} />
   </>;
-  function DateControl({ value, target, label }: { value: string; target: CalendarTarget; label?: string }) {
+  function renderDateControl(value: string, target: CalendarTarget, label?: string) {
     return <View style={s.field}><Txt bold>{label ?? C('date')}</Txt><Action icon="calendar" label={dateLabel(value)} onPress={() => openCalendar(target)} tone="quiet" /></View>;
   }
-  function renderTimeControl({ value, onChange, required = false }: { value: string; onChange: (s: string) => void; required?: boolean }) {
-    return <AssistantField label={C('time') + (required ? '' : ' · ' + C('optional'))} value={value} onChangeText={onChange} placeholder="09:30" maxLength={5}
-      keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'} autoCorrect={false} autoCapitalize="none" error={fieldError === 'time' || fieldError === 'conflict' ? formError : undefined} style={{ textAlign: 'left', writingDirection: 'ltr' }} />;
+  function openTime(target: TimeTarget, value: string, required: boolean) {
+    Keyboard.dismiss(); timeBack.current = mode; timeTarget.current = target;
+    setTimeValue(value); setTimeRequired(required); setMode('time');
+  }
+  function confirmTime(time: string) {
+    if (timeTarget.current === 'editor') setDraft(d => ({ ...d, time }));
+    else if (timeTarget.current === 'reschedule') setNewTime(time);
+    else setNextTime(time);
+    setFieldError(''); setFormError(''); setMode(timeBack.current);
+  }
+  function renderTimeControl({ value, target, required = false }: { value: string; target: TimeTarget; required?: boolean }) {
+    return <View style={s.field}><Txt bold>{C('time') + (required ? '' : ' · ' + C('optional'))}</Txt>
+      <Action icon="clock" label={value ? timeLabel(value) : C('time')} onPress={() => openTime(target, value, required)} tone="quiet" />
+      {fieldError === 'time' || fieldError === 'conflict' ? <Txt color={c.red}>{formError}</Txt> : null}
+    </View>;
   }
   useEffect(() => {
     if (!params.quickAction || !h.ready) return;
@@ -204,24 +235,24 @@ export default function CompactAssistantScreen() {
       <Txt bold>{C('type')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{(['call', 'viewing', 'available', 'note'] as const).map(kind => <Pressable key={kind} accessibilityRole="button" accessibilityState={{ selected: draft.kind === kind }} disabled={!!expected?.history.length && expected.kind !== kind} onPress={() => setDraft(d => ({ ...d, kind }))} style={[s.choice, draft.kind === kind && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{C(kind)}</Txt></Pressable>)}</View>
       {!!expected?.history.length && <Txt muted size={12}>{C('editKindLocked')}</Txt>}
       <AssistantField label={C('title')} value={draft.title} onChangeText={title => setDraft(d => ({ ...d, title }))} placeholder={C('titlePlaceholder')} maxLength={140} error={fieldError === 'title' ? formError : undefined} />
-      <DateControl value={draft.date} target="editor" />
+      {renderDateControl(draft.date, 'editor')}
       <View style={s.field}><Txt bold>{C('person')}</Txt><Action label={h.inventory.people.find(p => p.id === draft.personId)?.name ?? C('pickPerson')} onPress={() => openPicker('people')} tone="quiet" /></View>
       {!draft.personId && <><AssistantField label={C('contactName') + ' · ' + C('optional')} value={draft.personName} onChangeText={personName => setDraft(d => ({ ...d, personName }))} maxLength={100} /><Txt muted size={12}>{C('customNameHint')}</Txt></>}
       <View style={s.field}><Txt bold>{C('property')}</Txt><Action label={draft.propertyId ? propertyTitle(draft.propertyId) : C('pickProperty')} onPress={() => openPicker('properties')} tone="quiet" /></View>
-      {renderTimeControl({ value: draft.time, onChange: time => setDraft(d => ({ ...d, time })), required: draft.kind === 'viewing' })}<Txt muted size={12}>{C(draft.kind === 'viewing' ? 'viewingRequiresTime' : 'allDayHint')}</Txt><Txt muted size={12}>{C('timeHint')}</Txt>
+      {renderTimeControl({ value: draft.time, target: 'editor', required: draft.kind === 'viewing' })}<Txt muted size={12}>{C(draft.kind === 'viewing' ? 'viewingRequiresTime' : 'allDayHint')}</Txt><Txt muted size={12}>{C('timeHint')}</Txt>
       {draft.kind === 'viewing' && <><Txt bold>{C('duration')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{[30, 45, 60, 90, 120].map(duration => <Pressable key={duration} accessibilityRole="button" accessibilityState={{ selected: draft.duration === duration }} onPress={() => setDraft(d => ({ ...d, duration }))} style={[s.choice, duration === draft.duration && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{duration + ' ' + C('minute')}</Txt></Pressable>)}</View></>}
       <AssistantField label={C('notes') + ' · ' + C('optional')} value={draft.notes} onChangeText={notes => setDraft(d => ({ ...d, notes }))} multiline maxLength={2000} placeholder={C('notesPlaceholder')} />
       {draft.kind === 'available' && <Txt muted>{C('propertyNote')}</Txt>}
-    </>; modalFooter = <Footer save="saveFollowup" onPress={() => void saveEditor()} />;
+    </>; modalFooter = renderFooter({ save: 'saveFollowup', onPress: () => void saveEditor() });
   } else if (mode === 'outcome' && expected) {
     modalTitle = C('recordOutcome'); modalBody = <><View style={s.noteBox}><Txt bold>{expected.title}</Txt></View><Txt bold>{C('outcome')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{OUTCOMES[expected.kind].map(value => <Pressable accessibilityRole="button" accessibilityState={{ selected: outcome === value }} key={value} onPress={() => setOutcome(value)} style={[s.choice, value === outcome && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{C(value)}</Txt></Pressable>)}</View>
       <AssistantField label={C('notes') + ' · ' + C('optional')} value={outcomeNotes} onChangeText={setOutcomeNotes} multiline maxLength={2000} />{expected.kind === 'available' && <Txt muted>{C('propertyNote')}</Txt>}
       <View style={[s.toggle, { flexDirection: row }]}><View style={s.grow}><Txt>{C('newFollowup')}</Txt></View><Switch accessibilityLabel={C('newFollowup')} value={nextEnabled} onValueChange={setNextEnabled} /></View>
-      {nextEnabled && <><DateControl value={nextDate} target="next" label={C('nextDate')} />{renderTimeControl({ value: nextTime, onChange: setNextTime })}<AssistantField label={C('nextStep')} value={nextTitle} onChangeText={setNextTitle} maxLength={140} /></>}
-    </>; modalFooter = <Footer save="saveOutcome" onPress={() => void saveOutcome()} />;
+      {nextEnabled && <>{renderDateControl(nextDate, 'next', C('nextDate'))}{renderTimeControl({ value: nextTime, target: 'next' })}<AssistantField label={C('nextStep')} value={nextTitle} onChangeText={setNextTitle} maxLength={140} /></>}
+    </>; modalFooter = renderFooter({ save: 'saveOutcome', onPress: () => void saveOutcome() });
   } else if (mode === 'reschedule' && expected) {
-    modalTitle = C('reschedule'); modalBody = <><Txt bold>{expected.title}</Txt><DateControl value={newDate} target="reschedule" />{renderTimeControl({ value: newTime, onChange: setNewTime, required: expected?.kind === 'viewing' })}<Txt muted>{C('timeHint')}</Txt></>;
-    modalFooter = <Footer save="saveNewDate" onPress={() => void saveReschedule()} />;
+    modalTitle = C('reschedule'); modalBody = <><Txt bold>{expected.title}</Txt>{renderDateControl(newDate, 'reschedule')}{renderTimeControl({ value: newTime, target: 'reschedule', required: expected?.kind === 'viewing' })}<Txt muted>{C('timeHint')}</Txt></>;
+    modalFooter = renderFooter({ save: 'saveNewDate', onPress: () => void saveReschedule() });
   } else if (mode === 'detail' && displayTask) {
     const task = displayTask;
     modalTitle = C('details'); modalBody = <><View style={s.noteBox}><Txt bold size={18}>{task.title}</Txt><Txt>{dateLabel(task.date) + ' · ' + timeLabel(task.time)}</Txt><Txt color={task.status === 'cancelled' ? c.red : task.status === 'done' ? c.green : c.muted}>{C(task.status === 'pending' ? task.kind : task.status === 'done' ? 'done' : 'cancelledFilter')}</Txt></View>
@@ -232,6 +263,9 @@ export default function CompactAssistantScreen() {
       <View style={[s.choiceRow, { flexDirection: row }]}>{task.status === 'pending' ? <><Action label={C('edit')} icon="edit-3" tone="quiet" onPress={() => openEditor(task.kind, task)} /><Action label={C('cancelTask')} tone="danger" onPress={() => { setExpected(task); setMode('cancel'); }} /></> : <Action label={C('restore')} tone="quiet" disabled={!h.ready || h.busy} onPress={() => void h.mutate((value, inventory) => changeTaskStatus(value, task, 'pending', inventory, new Date().toISOString()), C('restored')).then(ok => { if (ok) close(); })} />}</View>
       <Txt bold>{C('history')}</Txt>{task.history.length ? [...task.history].reverse().map((entry, i) => <View key={entry.at + i} style={s.noteBox}><Txt bold>{C(entry.outcome)}</Txt><Txt muted size={12}>{dateLabel(kuwaitDay(new Date(entry.at)))}</Txt>{!!entry.notes && <Txt>{entry.notes}</Txt>}</View>) : <Txt muted>{C('noHistory')}</Txt>}
     </>; if (task.status === 'pending') modalFooter = <><View style={s.grow}><Action label={C('recordOutcome')} tone="primary" onPress={() => openOutcome(task)} /></View><Action label={C('reschedule')} onPress={() => openReschedule(task)} tone="quiet" /></>;
+  } else if (mode === 'time') {
+    modalTitle = C('time');
+    modalBody = <AssistantClockPicker value={timeValue} optional={!timeRequired} onConfirm={confirmTime} onCancel={close} />;
   } else if (mode === 'calendar') {
     modalTitle = C('chooseDate'); const selected = calendarTarget.current === 'editor' ? draft.date : calendarTarget.current === 'reschedule' ? newDate : calendarTarget.current === 'next' ? nextDate : h.selectedDay;
     modalBody = <><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><IconButton label={C('previousMonth')} name={isRTL ? 'chevron-right' : 'chevron-left'} onPress={() => setCalendarMonth(d => shiftMonth(d, -1))} /><Txt bold size={18}>{dateLabel(calendarMonth, { month: 'long', year: 'numeric' })}</Txt><IconButton label={C('nextMonth')} name={isRTL ? 'chevron-left' : 'chevron-right'} onPress={() => setCalendarMonth(d => shiftMonth(d, 1))} /></View>
@@ -255,16 +289,13 @@ export default function CompactAssistantScreen() {
       <Txt bold color={a?.status === 'unavailable' ? c.red : a?.status === 'available' ? c.green : c.muted}>{C(a?.status === 'available' ? 'availableLabel' : a?.status === 'unavailable' ? 'unavailableLabel' : 'unknown')}</Txt><Txt muted>{C('lastAvailability') + ' · ' + (a ? dateLabel(kuwaitDay(new Date(a.at))) : C('noCheck'))}</Txt><Txt muted size={12}>{C('confirmationOnly')}</Txt><Txt bold>{C('linkedTasks')}</Txt>
       {sortFollowups(h.state.tasks.filter(v => v.propertyId === recordId && v.status === 'pending')).map(task => <Pressable key={task.id} style={s.pickerRow} onPress={() => openDetail(task)}><Txt>{task.title}</Txt><Txt muted size={12}>{dateLabel(task.date) + ' · ' + timeLabel(task.time)}</Txt></Pressable>)}</> : <AlertNote>{C('missingProperty')}</AlertNote>;
     modalFooter = <View style={s.grow}><Action label={C('addForProperty')} tone="primary" disabled={!p} onPress={() => openEditor('available', undefined, { propertyId: recordId, title: C('confirmProperty') })} /></View>;
-  } else if (mode === 'settings') {
-    modalTitle = C('settings'); modalBody = <><Txt muted>{C('settingsDescription')}</Txt><View style={[s.toggle, { flexDirection: row }]}><View style={s.grow}><Txt>{C('showOverdue')}</Txt></View><Switch accessibilityLabel={C('showOverdue')} value={preferences.showOverdue} onValueChange={showOverdue => setPreferences(p => ({ ...p, showOverdue }))} /></View><Txt muted>{C('localNote')}</Txt></>;
-    modalFooter = <Footer save="save" onPress={() => void h.mutate(value => ({ ...value, settings: { ...value.settings, showOverdue: preferences.showOverdue } }), C('settingsSaved')).then(ok => { if (ok) close(); })} />;
   } else if (mode === 'cancel' && expected) {
     modalTitle = C('cancelTask'); modalBody = <Txt>{C('cancelQuestion')}</Txt>;
     modalFooter = <><View style={s.grow}><Action label={C('confirmCancel')} tone="danger" disabled={h.busy || !h.ready} onPress={() => void h.mutate((value, inventory) => changeTaskStatus(value, expected, 'cancelled', inventory, new Date().toISOString()), C('cancelledNotice')).then(ok => { if (ok) close(); })} /></View><Action label={C('back')} onPress={() => setMode('detail')} tone="quiet" /></>;
   } else if (mode === 'actions') {
     modalTitle = C('homeActions'); modalBody = <>{([
       ['call', 'phone', 'addCall'], ['viewing', 'calendar', 'addViewing'], ['meeting', 'users', 'clientMeeting'], ['available', 'home', 'addCheck'], ['note', 'edit-3', 'addNote'],
-    ] as const).map(([kind, icon, label]) => <Action key={kind} label={C(label)} icon={icon} tone="quiet" disabled={!h.ready} onPress={() => openEditor(kind === 'meeting' ? 'note' : kind, undefined, kind === 'meeting' ? { title: C('clientMeeting') } : {})} />)}<Action label={C('settings')} icon="sliders" tone="quiet" disabled={!h.ready} onPress={() => { setPreferences(h.state.settings); setMode('settings'); }} /></>;
+    ] as const).map(([kind, icon, label]) => <Action key={kind} label={C(label)} icon={icon} tone="quiet" disabled={!h.ready} onPress={() => openEditor(kind === 'meeting' ? 'note' : kind, undefined, kind === 'meeting' ? { title: C('clientMeeting') } : {})} />)}</>;
   } else if (mode === 'notifications') {
     modalTitle = C('notifications'); modalBody = overdueTasks.length ? <>{overdueTasks.map(taskRow)}</> : <Txt muted>{C('noNotifications')}</Txt>;
   } else if (mode === 'allTasks') {
@@ -321,6 +352,6 @@ export default function CompactAssistantScreen() {
         ['properties', h.catalog.properties.length, C('properties')], ['people', h.catalog.people.length, t('people.title')], ['requirements', h.catalog.requirements.length, C('homeRequirements')],
       ].map(([key, count, label]) => <Pressable key={key} style={s.homeStat} accessibilityRole="button" disabled={!h.ready} onPress={() => key === 'requirements' ? setMode('requirements') : router.push(('/' + key) as never)}><Text style={[s.homeStatValue, { fontFamily: fonts.medium }]}>{h.ready ? count : '—'}</Text><Txt muted size={13}>{label}</Txt></Pressable>)}</View>
     </View></ScrollView>
-    {mode && <AssistantSheet title={modalTitle} onClose={close} busy={h.busy} footer={modalFooter}>{modalBody}{formError ? <AlertNote>{formError}</AlertNote> : null}{h.error ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}</AssistantSheet>}
+    {mode && <AssistantSheet expanded={['editor', 'outcome', 'reschedule', 'people', 'properties', 'time'].includes(mode) || (mode === 'calendar' && calendarBack.current !== null)} contentKey={mode} title={modalTitle} onClose={close} busy={h.busy} footer={modalFooter}>{modalBody}{formError ? <AlertNote>{formError}</AlertNote> : null}{h.error ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}</AssistantSheet>}
   </View>;
 }

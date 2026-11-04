@@ -5,6 +5,7 @@ import { AccountScreen, Note, useL } from '@/components/account/ui';
 import { AccountSection } from '@/components/account/AccountSection';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { PrivacySection, SharingSection, PermissionsSection } from '@/components/account/PrivacySection';
+import { FollowupSettingsSection } from '@/components/account/FollowupSettingsSection';
 import { SettingsSection, NotificationsSection } from '@/components/account/SettingsSection';
 import { DataSection, HelpSection, AboutSection, LegalSection } from '@/components/account/InfoSections';
 import { WelcomeSection, PhoneSection, ProviderSection } from '@/components/account/OnboardingSections';
@@ -24,6 +25,7 @@ export default function AccountSectionRoute() {
     case 'sharing': return <SharingSection />;
     case 'permissions': return <PermissionsSection />;
     case 'settings': return <SettingsSection />;
+    case 'followups': return <FollowupSettingsSection />;
     case 'notifications': return <NotificationsSection />;
     case 'data': return <DataSection />;
     case 'help': return <HelpSection />;
