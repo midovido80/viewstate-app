@@ -81,7 +81,7 @@ const messages: Record<LocalizableRequirementIssueCode, readonly [english: strin
   invalid_currency: ['A currency is required.', 'العملة مطلوبة.'],
   invalid_number: ['Enter a valid non-negative number.', 'أدخل رقماً صالحاً غير سالب.'],
   invalid_rent_field: ['Enter valid rent details.', 'أدخل تفاصيل إيجار صالحة.'],
-  master_bedroom_exceeds_bedrooms: ['Master bedrooms cannot exceed total bedrooms.', 'لا يمكن أن يتجاوز عدد غرف النوم الرئيسية إجمالي غرف النوم.'],
+  master_bedroom_exceeds_bedrooms: ['Master bedrooms cannot exceed total bedrooms.', 'لا يمكن أن يتجاوز عدد غرف ماستر إجمالي غرف النوم.'],
   invalid_occupancy: ['Choose a valid occupancy preference.', 'اختر تفضيل إشغال صالحاً.'],
   buy_rent_field_not_allowed: ['Rent-only fields are not allowed for Buy.', 'حقول الإيجار غير مسموحة لمتطلبات الشراء.'],
   invalid_amenity: ['Choose an approved amenity.', 'اختر ميزة معتمدة.'],

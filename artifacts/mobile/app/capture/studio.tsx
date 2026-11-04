@@ -823,7 +823,7 @@ export default function StudioCaptureRoute() {
       } else {
         const ownerId = baselineRequirement?.seekerId ?? (selectedPersonId || undefined);
         const candidate = buildStudioRequirement(
-          values,
+          { ...values, kitchens: undefined, kitchen: 'not_important' },
           baselineRequirement?.id ?? draftRequirementId.current,
           ownerId,
         );
@@ -1307,7 +1307,7 @@ export default function StudioCaptureRoute() {
             </PropertyFormCard>
           </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['parking','kitchen','nearbyServices'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
             {mode==='wanted' && values.transaction==='rent' && <View style={styles.field}><Text style={[styles.label,labelStyle]}>{language==='ar'?'نوع السكن':'Occupancy'}</Text><ChoiceGrid>{(['family','bachelor','company_staff','women','mixed'] as const).map(value=><ChoiceChip key={value} label={t(`matching.occupancy.${value}`)} selected={values.occupancy===value} role="radio" onPress={()=>update('occupancy',values.occupancy===value?undefined:value)} />)}</ChoiceGrid></View>}
-            <PropertyFormCard title={language==='ar'?'المطابخ':'Kitchens'} icon="list"><KitchenFields scopeKey="studio-kitchens" value={values.kitchens} onInvalidChange={setKitchenDraftInvalid} onChange={value=>{ update('kitchens',value); if(value!==undefined) update('kitchen',mode==='offered'?'unknown':'not_important'); }} /></PropertyFormCard>
+            {mode === 'offered' && <PropertyFormCard title={language==='ar'?'المطابخ':'Kitchens'} icon="list"><KitchenFields scopeKey="studio-kitchens" value={values.kitchens} onInvalidChange={setKitchenDraftInvalid} onChange={value=>{ update('kitchens',value); if(value!==undefined) update('kitchen','unknown'); }} /></PropertyFormCard>}
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>
@@ -1506,7 +1506,7 @@ export default function StudioCaptureRoute() {
       {reviewItem(t('studio.property_type'), `${t('propertyType.apartment')} · ${t('enrich.apartment_subtype.studio')}`)}
       {mode === 'wanted' ? reviewItem(catalogLabel('transaction'), studioReviewIntent().label) : null}
       {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId=>fieldId!=='kitchen'||values.kitchens===undefined).map(fieldId => renderReviewCatalogField(fieldId))}
-      {values.kitchens!==undefined && reviewItem(language==='ar'?'المطابخ':'Kitchens',formatPropertyDetailValue('kitchens',values.kitchens,language))}
+      {mode === 'offered' && values.kitchens!==undefined && reviewItem(language==='ar'?'المطابخ':'Kitchens',formatPropertyDetailValue('kitchens',values.kitchens,language))}
       {mode === 'offered' && values.occupancy ? reviewItem(
         language === 'ar' ? 'نوع السكن' : 'Occupancy',
         ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], company_staff: ['Companies', 'شركات'], women: ['Women', 'سيدات'], mixed: ['Mixed', 'مختلط'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0],
@@ -1528,8 +1528,8 @@ export default function StudioCaptureRoute() {
       price={values.price.trim() ? formatPrice(Number(toEnglishDigits(values.price).replace(/[٫,]/g, '.')), 'KWD', language) : undefined}
       priceLabel={language === 'ar' ? (values.transaction === 'sale' ? 'السعر' : 'الإيجار') : (values.transaction === 'sale' ? 'Price' : 'Rent')}
       cadence={values.transaction === 'rent' ? formatRentalCadence(values.rentalPeriodId, t) : undefined}>
-      {STUDIO_FORM_FIELD_ORDER[mode].filter(field => !['transaction', 'locationAreaId', 'price', 'rentalPeriodId', 'mapsLink'].includes(field) && (field!=='kitchen'||values.kitchens===undefined)).map(fieldId => renderReviewCatalogField(fieldId))}
-      {values.kitchens!==undefined && reviewItem(language==='ar'?'المطابخ':'Kitchens',formatPropertyDetailValue('kitchens',values.kitchens,language))}
+      {STUDIO_FORM_FIELD_ORDER[mode].filter(field => !['transaction', 'locationAreaId', 'price', 'rentalPeriodId', 'mapsLink', 'kitchen'].includes(field) && (field!=='kitchen'||values.kitchens===undefined)).map(fieldId => renderReviewCatalogField(fieldId))}
+      {mode === 'offered' && values.kitchens!==undefined && reviewItem(language==='ar'?'المطابخ':'Kitchens',formatPropertyDetailValue('kitchens',values.kitchens,language))}
       {values.occupancy ? reviewItem(language === 'ar' ? 'نوع السكن' : 'Occupancy', ({ family: ['Family', 'عائلات'], bachelor: ['Bachelor', 'عزاب'], company_staff: ['Companies', 'شركات'], women: ['Women', 'سيدات'], mixed: ['Mixed', 'مختلط'], any: ['Any', 'الكل'] })[values.occupancy][language === 'ar' ? 1 : 0]) : null}
       {values.privateNotes ? reviewItem(language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', values.privateNotes) : null}
       {values.mapsLink ? reviewItem(language === 'ar' ? 'الموقع الدقيق' : 'Exact location', values.mapsLink) : null}

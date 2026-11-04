@@ -538,8 +538,8 @@ test('Properties list distinguishes loading, empty inventory, and filtered no-ma
     screen,
     /loadResult\.errors\.properties[\s\S]*?loadResult\.errors\.requirements[\s\S]*?loadResult\.errors\.people[\s\S]*?loadResult\.errors\.sources[\s\S]*?loadResult\.errors\.links[\s\S]*?properties\.no_matches/,
   );
-  assert.match(screen, /rows\.length === 0 \? 'properties\.empty_all' : 'properties\.no_matches'/);
-  assert.match(messages, /'properties\.empty_all': 'No properties or Requirements saved yet\.'/);
-  assert.match(messages, /'properties\.no_matches': 'No properties or Requirements match this search or filter\.'/);
-  assert.match(messages, /'properties\.empty_all': 'لم يتم حفظ عقارات أو متطلبات بعد\.'/);
+  assert.match(screen, /inventoryRows\.length === 0 \? 'properties\.empty_all' : 'properties\.no_matches'/);
+  assert.match(messages, /'properties\.empty_all': 'No offered properties saved yet\.'/);
+  assert.match(messages, /'properties\.no_matches': 'No offered properties match this search or filter\.'/);
+  assert.match(messages, /'properties\.empty_all': 'لم يتم حفظ عقارات معروضة بعد\.'/);
 });

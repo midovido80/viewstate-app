@@ -55,7 +55,7 @@ test('a Person passes only when one linked activity satisfies the complete filte
   assert.equal(anyRecordIntentMatchesComposableFilter([], EMPTY_COMPOSABLE_RECORD_FILTER), true);
 });
 
-test('Properties and People screens expose the same combinable, accessible filter controls', async () => {
+test('Inventory tabs and People expose combinable, accessible filters', async () => {
   const [properties, people] = await Promise.all([
     readFile(resolveSourcePath('../app/(tabs)/properties.tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/(tabs)/people.tsx', import.meta.url), 'utf8'),
@@ -68,7 +68,7 @@ test('Properties and People screens expose the same combinable, accessible filte
     assert.match(source, /accessibilityRole=\{option\.key === 'all' \? 'button' : 'checkbox'\}/);
     assert.match(source, /aria-checked=\{option\.key === 'all' \? undefined : selected\}/);
   }
-  assert.match(properties, /filterOfferedWantedRows\(rows, filter, search, sector\)/);
+  assert.match(properties, /filterPropertyInventoryRows\(rows, inventoryTab, filter, search, sector\)/);
   assert.match(people, /filterPersonActivityLines/);
   assert.match(people, /!hasActivePeopleFilters \|\|/);
   assert.match(people, /visibleActivityByPerson\.get\(item\.id\)/);
@@ -207,5 +207,6 @@ test('People and Properties use the same contextual transaction-filter label', a
     readFile(resolveSourcePath('../app/(tabs)/people.tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/(tabs)/properties.tsx', import.meta.url), 'utf8'),
   ]);
-  for (const source of [people, properties]) assert.match(source, /getRecordTransactionFilterLabel\(option\.key, filter, language\)/);
+  assert.match(people, /getRecordTransactionFilterLabel\(option\.key, filter, language\)/);
+  assert.match(properties, /getRecordTransactionFilterLabel\(option\.key, transactionFilter, language\)/);
 });

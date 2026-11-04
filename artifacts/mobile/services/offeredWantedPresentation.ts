@@ -377,3 +377,14 @@ export function filterOfferedWantedRows(
     );
   });
 }
+/** Views of the same records, never copies: inventory defaults to offered stock only. */
+export type PropertyInventoryTab = 'properties' | 'requests';
+export function filterPropertyInventoryRows(
+  rows: readonly OfferedWantedRow[],
+  tab: PropertyInventoryTab,
+  filter: ComposableRecordFilter,
+  search = '',
+  sector: PropertySectorFilter = 'all',
+): OfferedWantedRow[] {
+  return filterOfferedWantedRows(rows.filter(row => row.kind === (tab === 'properties' ? 'offered' : 'wanted')), { ...filter, directions: [] }, search, sector);
+}

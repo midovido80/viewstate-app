@@ -18,24 +18,24 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { ChoiceTile as LegacyTile, ChoiceCard } from "./ChoiceTile";
 export { ChoiceCard };
+/** Services are direct, reversible toggles; descriptive single-choice groups retain their picker. */
 export function ChoiceTile(props: React.ComponentProps<typeof LegacyTile>) {
-  return props.role === "button" ? (
-    <LegacyTile {...props} />
-  ) : (
-    <CompactDropdown
-      label={props.label}
-      multiple
-      options={[
-        {
-          value: props.optionId ?? props.label,
-          label: props.label.replace(/^✓\s*/, ""),
-          selected: props.selected,
-          onPress: props.onPress,
-          testID: props.testID,
-        },
-      ]}
-    />
-  );
+  const { isRTL, fonts } = useI18n();
+  const colors = useColors();
+  if (props.role === "button") return <LegacyTile {...props} />;
+  const label = props.label.replace(/^✓\s*/, "");
+  return <Pressable testID={props.testID} onPress={props.onPress}
+    accessibilityRole={props.role ?? "checkbox"}
+    accessibilityLabel={props.accessibilityLabel ?? label}
+    accessibilityState={{ checked: !!props.selected }}
+    style={{ minHeight: 44, maxWidth: '100%', borderWidth: 1, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center',
+      backgroundColor: props.selected ? colors.primary : colors.card,
+      borderColor: props.selected ? colors.primary : colors.border }}>
+    <Text style={{ color: props.selected ? colors.primaryForeground : colors.foreground,
+      fontFamily: fonts.medium, fontSize: 14, lineHeight: 21,
+      textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }}>{label}</Text>
+  </Pressable>;
 }
 export interface DropdownOption {
   value: string;
@@ -205,13 +205,14 @@ export function ChoiceGrid({
   columns?: number;
   gap?: number;
 }) {
+  const { isRTL } = useI18n();
   const items = flatten(children),
     choices = items.filter(
       (item) => item.type === ChoiceTile || item.type === ChoiceCard,
     );
-  if (choices.length !== items.length || !choices.length)
+  if (choices.length !== items.length || !choices.length || choices.some(item => item.type === ChoiceTile && (item.props as any).role !== "radio"))
     return (
-      <View style={[style, { width: "100%", gap: 8 }]} testID={testID}>
+      <View style={[{ flexDirection: "row", flexWrap: "wrap", direction: isRTL ? "rtl" : "ltr" }, style, { width: "100%", gap: 8 }]} testID={testID}>
         {children}
       </View>
     );
