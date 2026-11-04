@@ -1,3 +1,4 @@
+import {readBusiness,sameBusiness,validateBusiness,type BusinessSnapshot} from './workspaceSnapshot';
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -83,6 +84,7 @@ export interface PropertyDeletionCapability {
 }
 
 interface KeyValueStorage {
+  removeItem?(key:string):Promise<void>;
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 }
@@ -190,6 +192,22 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
       parsePersonRow: row => this.parsePersonRow(row),
       runMutation: task => nativeMutations.enqueue(task),
     });
+  }
+
+  /** Sync adapter only: expected snapshot and all replacements share one SQLite transaction. */
+  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+    validateBusiness(next);if(!this.db)throw new Error('DB not initialized');
+    await nativeMutations.enqueue(async()=>{await this.db!.withTransactionAsync(async()=>{
+      if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
+      const db=this.db!;
+      await db.runAsync('DELETE FROM person_property_links');await db.runAsync('DELETE FROM property_sources');
+      await db.runAsync('DELETE FROM seeker_requirements');await db.runAsync('DELETE FROM properties');await db.runAsync('DELETE FROM people');
+      for(const p of next.people){await db.runAsync('INSERT INTO people (id,data,search_text) VALUES (?,?,?)',[p.id,JSON.stringify(p),getPersonSearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO person_creation_chronology (id,created_at) VALUES (?,?)',[p.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const p of next.properties){await db.runAsync('DELETE FROM deleted_property_ids WHERE id = ?',[p.core.id]);await db.runAsync('INSERT INTO properties (id,data,search_text) VALUES (?,?,?)',[p.core.id,JSON.stringify(p),getPropertySearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO property_creation_chronology (id,created_at) VALUES (?,?)',[p.core.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const r of next.requirements){await db.runAsync('INSERT INTO seeker_requirements (id,data) VALUES (?,?)',[r.id,JSON.stringify(r)]);await db.runAsync('INSERT OR IGNORE INTO requirement_creation_chronology (id,created_at) VALUES (?,?)',[r.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const l of next.links)await db.runAsync('INSERT INTO person_property_links (person_id,property_core_id) VALUES (?,?)',[l.personId,l.propertyCoreId]);
+      for(const source of next.sources)await db.runAsync('INSERT INTO property_sources (property_core_id,person_id,role) VALUES (?,?,?)',[source.propertyCoreId,source.personId,source.role]);
+    });});
   }
 
   async saveProperty(property: Property) {
@@ -798,6 +816,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   async init() {
+    await this.recoverWorkspace();
     if (!this.initialization) {
       const attempt = migrateStage01B1WebProperties(this.storage, this.KEY)
         .then(() => this.withChronologyMutationLock(() =>
@@ -867,6 +886,31 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     // may still safely perform its one-time migration because no writer can race it.
     if (!locks) return work();
     return locks.request('viewstate-chronology-mutation', { mode: 'exclusive' }, work);
+  }
+
+  async recoverWorkspace(){
+    const key='@viewstate_sync_web_journal_v1',raw=await this.storage.getItem(key);if(!raw)return;
+    const journal=JSON.parse(raw) as {version:number;rows:{key:string;before:string|null;after:string}[]};
+    if(journal.version!==1||!Array.isArray(journal.rows)||journal.rows.some(r=>![this.KEY,this.PEOPLE_KEY,this.PERSON_PROPERTY_LINKS_KEY,this.PROPERTY_SOURCES_KEY,WEB_REQUIREMENTS_KEY,this.DELETED_KEY].includes(r.key)))throw new Error('SYNC_JOURNAL_DAMAGED');
+    const values=await Promise.all(journal.rows.map(r=>this.storage.getItem(r.key)));
+    if(!values.every((v,i)=>v===journal.rows[i].after)){
+      if(!values.every((v,i)=>v===journal.rows[i].before||v===journal.rows[i].after))throw new Error('SYNC_JOURNAL_CONCURRENT_CHANGE');
+      for(const row of journal.rows){if(row.before===null&&this.storage.removeItem)await this.storage.removeItem(row.key);else await this.storage.setItem(row.key,row.before??(row.key===this.DELETED_KEY?'{"version":1,"ids":[]}':'[]'));}
+    }
+    await this.storage.setItem(key,'');
+  }
+  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+    validateBusiness(next);
+    await this.withChronologyMutationLock(()=>this.withPeopleMutationLock(()=>this.withMutationLock(async()=>{
+      await this.recoverWorkspace();if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
+      const deleted=[...await this.getDeletedIds()].filter(id=>!next.properties.some(p=>p.core.id===id));
+      const rows=await Promise.all([[this.KEY,next.properties],[this.PEOPLE_KEY,next.people],[WEB_REQUIREMENTS_KEY,next.requirements],[this.PERSON_PROPERTY_LINKS_KEY,next.links],[this.PROPERTY_SOURCES_KEY,next.sources],[this.DELETED_KEY,{version:1,ids:deleted}]].map(async([key,value])=>({key:key as string,before:await this.storage.getItem(key as string),after:JSON.stringify(value)})));
+      const journal=JSON.stringify({version:1,rows});await this.storage.setItem('@viewstate_sync_web_journal_v1',journal);
+      if(await this.storage.getItem('@viewstate_sync_web_journal_v1')!==journal)throw new Error('SYNC_JOURNAL_FAILED');
+      try{for(const row of rows)await this.storage.setItem(row.key,row.after);for(const row of rows)if(await this.storage.getItem(row.key)!==row.after)throw new Error('SYNC_LOCAL_WRITE_FAILED');}
+      catch(error){await this.recoverWorkspace();throw error;}
+      await this.storage.setItem('@viewstate_sync_web_journal_v1','');
+    })));
   }
 
   async saveProperty(property: Property) {

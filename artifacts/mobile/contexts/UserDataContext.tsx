@@ -18,7 +18,7 @@ import { Platform } from 'react-native';
 
 export type UserResources = ReturnType<typeof createAccountRepositoriesDevice>;
 const Context = createContext<ReturnType<typeof buildUserData> | null>(null);
-const legacy = { store, storage: AsyncStorage, draft, assistantRepository, matchNoticeRepository,
+const legacy = { subscribeSync: (_listener:()=>void)=>()=>{}, store, storage: AsyncStorage, draft, assistantRepository, matchNoticeRepository,
   recovery: { ...capture, ...edit, ...enrich, ...studio, ...deletion }, media: { ...media, access: undefined as import("@/services/accountMedia").MediaAccess | undefined } };
 
 export function buildUserData(resources: UserResources) {
@@ -72,7 +72,7 @@ export function buildUserData(resources: UserResources) {
       return media.openAttachment(...args);
     }) as typeof media.openAttachment,
   };
-  return { store: resources.store, storage, draft: createDraftRepository(storage),
+  return { subscribeSync: resources.subscribeSync, store: resources.store, storage, draft: createDraftRepository(storage),
     assistantRepository: resources.assistant, matchNoticeRepository: resources.notices, recovery, media: scopedMedia };
 }
 export function UserDataProvider({ value, children }: { value: ReturnType<typeof buildUserData>; children: React.ReactNode }) {

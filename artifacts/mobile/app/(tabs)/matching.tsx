@@ -1,3 +1,4 @@
+import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { selectHomeMatches } from '@/services/assistantHome';
 import { MatchingResultCard } from '@/components/MatchingResultCard';
 import { validateSeekerRequirement } from '@workspace/property-domain';
@@ -17,7 +18,7 @@ import {
   View,
   ScrollView,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import {

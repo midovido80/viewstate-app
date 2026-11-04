@@ -1,9 +1,10 @@
+import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';

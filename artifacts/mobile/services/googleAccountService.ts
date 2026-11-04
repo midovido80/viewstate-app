@@ -2,6 +2,10 @@ import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { assertAccountId, createAccountScope } from './accountScope';
 import { readAccountCallback, validateUserContactProfile, type UserContactProfile } from './googleAccountContract';
 
+export class AccountConnectionError extends Error { constructor(){super('ACCOUNT_CONNECTION_UNAVAILABLE');} }
+export function temporaryAuthFailure(error: unknown): boolean {
+ const e=error as {status?:number;name?:string};return !e?.status || e.status===408 || e.status===429 || e.status>=500 || e.name==='AuthRetryableFetchError';
+}
 export interface VerifiedGoogleAccount { userId: string; email: string; expiresAt: number }
 export interface GoogleAccountBrowser {
   readonly callback: string;
@@ -29,19 +33,22 @@ export function createGoogleAccountService(client: GoogleAccountPort, browser: G
   const assertEpoch = (expected: number) => { if (disposed || expected !== epoch) throw new Error('ACCOUNT_CHANGED'); };
   const readVerifiedAccount = async (): Promise<VerifiedGoogleAccount | null> => {
     const expected = epoch; assertEpoch(expected);
-    const sessionResult = await client.auth.getSession();
+    const sessionResult = await client.auth.getSession().catch(()=>{throw new AccountConnectionError();});
     assertEpoch(expected);
-    if (sessionResult.error) throw new Error('SESSION_READ_FAILED');
+    if (sessionResult.error) { if(temporaryAuthFailure(sessionResult.error)) throw new AccountConnectionError(); throw new Error('SESSION_READ_FAILED'); }
     const session = sessionResult.data.session;
     if (!session) return null;
     // The locally stored session supplies a token, never proof of identity.
-    const { data, error } = await client.auth.getUser(session.access_token);
+    const { data, error } = await client.auth.getUser(session.access_token).catch(error=>{if(temporaryAuthFailure(error))throw new AccountConnectionError();throw error;});
     assertEpoch(expected);
+    if (error && temporaryAuthFailure(error)) throw new AccountConnectionError();
     if (error || !data.user) throw new Error('SESSION_VERIFICATION_FAILED');
-    const current = await client.auth.getSession();
+    const current = await client.auth.getSession().catch(()=>{throw new AccountConnectionError();});
     assertEpoch(expected);
     if (current.error || current.data.session?.user.id !== session.user.id) throw new Error('ACCOUNT_CHANGED');
-    return verifiedGoogleIdentity(session, data.user, now());
+    const latest=current.data.session;
+    if(!latest)throw new Error('ACCOUNT_CHANGED');
+    return verifiedGoogleIdentity(latest, data.user, now());
   };
   const requireAccount = async () => {
     const account = await readVerifiedAccount();
@@ -61,6 +68,25 @@ export function createGoogleAccountService(client: GoogleAccountPort, browser: G
     if (error) throw new Error('CODE_EXCHANGE_FAILED');
     return requireAccount();
   };
+  function openLocalLease(account:VerifiedGoogleAccount,onRevoked:()=>void,verified:boolean){
+    const scope=createAccountScope(account.userId);let closed=false;let pending:Promise<boolean>|undefined;let scheduled:ReturnType<typeof setTimeout>|undefined;
+    let unsubscribe=()=>{};
+    const close=()=>{if(closed)return false;closed=true;scope.revoke();if(scheduled)clearTimeout(scheduled);unsubscribe();activeScopes.delete(revoke);return true;};
+    const revoke=()=>{if(close())onRevoked();};
+    const revalidate=():Promise<boolean>=>{
+      if(closed)return Promise.resolve(false);
+      if(pending)return pending;
+      pending=(async()=>{try{const latest=await requireAccount();if(closed)return false;if(latest.userId!==account.userId){revoke();return false;}Object.assign(account,latest);return true;}
+      catch(error){if(error instanceof AccountConnectionError)return false;revoke();return false;}finally{pending=undefined;}})();return pending;
+    };
+    const {data}=client.auth.onAuthStateChange((event,session)=>{
+      if(event==='SIGNED_OUT'||session&&session.user.id.toLowerCase()!==account.userId){revoke();return;}
+      if(event==='TOKEN_REFRESHED'&&!closed){if(scheduled)clearTimeout(scheduled);scheduled=setTimeout(()=>{scheduled=undefined;void revalidate();},0);}
+    });
+    unsubscribe=()=>data.subscription.unsubscribe();activeScopes.add(revoke);
+    if(closed){unsubscribe();activeScopes.delete(revoke);throw new Error('ACCOUNT_CHANGED');}
+    return {account,scope,close,revalidate,verifiedAtOpen:verified};
+  }
   return {
     readVerifiedAccount,
     completeCallback,
@@ -81,50 +107,10 @@ export function createGoogleAccountService(client: GoogleAccountPort, browser: G
         return { type: 'signed_in' as const, account: await completeCallback(result.url, data.flowId ?? undefined) };
       } finally { pendingLogin = false; }
     },
-    /** Acquire a lease only after online verification. Consumers must unmount on revoke. */
-    async openScope(onRevoked: () => void) {
-      const account = await requireAccount();
-      const scope = createAccountScope(account.userId);
-      let closed = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let refreshCheck: ReturnType<typeof setTimeout> | undefined;
-      let unsubscribe = () => undefined as void;
-      const dispose = () => {
-        if (closed) return false;
-        closed = true; scope.revoke();
-        if (timer) clearTimeout(timer);
-        if (refreshCheck) clearTimeout(refreshCheck);
-        unsubscribe(); activeScopes.delete(revoke);
-        return true;
-      };
-      const revoke = () => { if (dispose()) onRevoked(); };
-      const { data } = client.auth.onAuthStateChange((event, session) => {
-        // SDK event callbacks must not make awaited Supabase requests (auth lock).
-        if (event === 'SIGNED_OUT' || !session || session.user.id.toLowerCase() !== account.userId) { revoke(); return; }
-        if (event === 'TOKEN_REFRESHED' && !closed) {
-          if (refreshCheck) clearTimeout(refreshCheck);
-          refreshCheck = setTimeout(() => {
-            refreshCheck = undefined;
-            void requireAccount().then(latest => {
-              if (closed) return;
-              if (latest.userId !== account.userId) { revoke(); return; }
-              if (timer) clearTimeout(timer);
-              timer = setTimeout(revoke, Math.min(2147483647, Math.max(0, latest.expiresAt - now())));
-            }).catch(revoke);
-          }, 0);
-        }
-      });
-      unsubscribe = () => data.subscription.unsubscribe();
-      timer = setTimeout(revoke, Math.min(2147483647, Math.max(0, account.expiresAt - now())));
-      if (closed) { clearTimeout(timer); unsubscribe(); throw new Error('ACCOUNT_CHANGED'); }
-      activeScopes.add(revoke);
-      // Closes the subscribe-after-verify race when another tab/account changed.
-      try {
-        const latest = await requireAccount();
-        if (latest.userId !== account.userId) { revoke(); throw new Error('ACCOUNT_CHANGED'); }
-        scope.assertActive();
-      } catch (error) { revoke(); throw error; }
-      return { account, scope, close() { dispose(); } };
+    /** Online verification is mandatory for a new identity. An existing trusted device receipt can resume local data only. */
+    async openScope(onRevoked:()=>void){return openLocalLease(await requireAccount(),onRevoked,true);},
+    restoreLocalScope(account:VerifiedGoogleAccount,onRevoked:()=>void){
+      assertAccountId(account.userId);return openLocalLease(account,onRevoked,false);
     },
     async readProfile(): Promise<UserContactProfile | null> {
       const account = await requireAccount();

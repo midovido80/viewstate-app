@@ -23,7 +23,7 @@ function harness() {
   const port = {
     auth: {
       getSession: async () => ({ data: { session: current }, error: null }),
-      getUser: async (token: string) => { userReads++; assert.equal(token, 'fixture-token'); return { data: { user: serverUser }, error: serverFailure ? new Error('revoked') : null }; },
+      getUser: async (token: string) => { userReads++; assert.equal(token, 'fixture-token'); return { data: { user: serverUser }, error: serverFailure ? Object.assign(new Error('revoked'),{status:401}) : null }; },
       signInWithOAuth: async (options: unknown) => { assert.deepEqual(options, { provider: 'google', options: { redirectTo: callback, skipBrowserRedirect: true, scopes: 'openid email profile', queryParams: { prompt: 'select_account' } } }); return { data: { url: 'https://project.supabase.co/auth/v1/authorize' }, error: null }; },
       exchangeCodeForSession: async (code: string, options: unknown) => { exchanges++; assert.equal(code, 'fixture-code'); assert.deepEqual(options, { flowId: 'fixture_flow_123' }); return { data: { session: current }, error: null }; },
       signOut: async () => ({ error: signOutFailure ? new Error('network') : null }),
@@ -179,3 +179,22 @@ test('token refresh verifies outside the SDK callback and cannot keep a rejected
     assert.equal(revoked, 1); assert.throws(lease.scope.assertActive, /ACCOUNT_SCOPE_CLOSED/);
   } finally { lease.close(); service.dispose(); }
 });
+
+ test('returning after token expiry without a network preserves the local scope and revalidates later',async(t)=>{
+ const h=harness(),service=h.service();let revoked=0;const lease=await service.openScope(()=>{revoked++;});
+ const original=h.port.auth.getSession;h.port.auth.getSession=async()=>{throw new TypeError('Network request failed');};
+ t.mock.timers.enable({apis:['setTimeout']});t.mock.timers.tick(7200000);
+ lease.scope.assertActive();assert.equal(await lease.revalidate(),false);lease.scope.assertActive();assert.equal(revoked,0);
+ h.port.auth.getSession=original;assert.equal(await lease.revalidate(),true);lease.scope.assertActive();lease.close();t.mock.timers.reset();
+ });
+ test('trusted local restore opens no server request, retains isolation, and still revokes on explicit sign-out',async()=>{
+ const h=harness(),service=h.service();let revoked=0;
+ const lease=service.restoreLocalScope({userId:A,email:'fixture@example.test',expiresAt:now-3600000},()=>{revoked++;});
+ assert.equal(h.userReads,0);lease.scope.assertActive();await service.signOut();assert.equal(revoked,1);assert.throws(lease.scope.assertActive,/ACCOUNT_SCOPE_CLOSED/);
+ });
+ test('temporary server errors during token refresh cannot discard local work',async()=>{
+ const h=harness(),service=h.service();let revoked=0;const lease=await service.openScope(()=>revoked++);
+ const previous=h.port.auth.getUser;h.port.auth.getUser=async()=>({data:{user:null},error:Object.assign(new Error('unavailable'),{status:503})}) as never;
+ h.emit('TOKEN_REFRESHED',session());await new Promise(resolve=>setTimeout(resolve,10));lease.scope.assertActive();assert.equal(revoked,0);
+ h.port.auth.getUser=previous;assert.equal(await lease.revalidate(),true);lease.close();
+ });

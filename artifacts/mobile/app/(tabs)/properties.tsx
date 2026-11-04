@@ -1,3 +1,4 @@
+import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { projectPropertyFacts } from '@/services/propertyFactProjection';
 import { PropertySpecIcon } from '@/components/PropertySpecIcon';
 import { PropertyCover } from '@/components/PropertyCover';
@@ -6,7 +7,7 @@ import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, FlatList, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';

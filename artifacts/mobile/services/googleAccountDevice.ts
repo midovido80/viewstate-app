@@ -1,3 +1,4 @@
+import { createOfflineAccountCache, offlineOwnerMatches } from './offlineAccount';
 import 'react-native-url-polyfill/auto';
 import { createClient, processLock } from '@supabase/supabase-js';
 import { Platform, AppState } from 'react-native';
@@ -47,6 +48,8 @@ export async function createGoogleAccountDevice(config: GoogleAccountConfigurati
   const client = createClient(config.url, config.publishableKey, {
     auth: { storage, flowType: 'pkce', detectSessionInUrl: false, persistSession: true, autoRefreshToken: true, lock: processLock },
   });
+  let observedIdentity:string|null|undefined;
+  const identityObserver=client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')observedIdentity=null;else if(session)observedIdentity=session.user.id.toLowerCase();});
   const lifecycle = !web ? AppState.addEventListener('change', state => {
     if (state === 'active') client.auth.startAutoRefresh(); else client.auth.stopAutoRefresh();
   }) : null;
@@ -64,5 +67,13 @@ export async function createGoogleAccountDevice(config: GoogleAccountConfigurati
       return result.type === 'success' ? { type: 'success', url: result.url } : { type: 'cancelled' };
     },
   });
-  return { account, callback, dispose() { account.dispose(); lifecycle?.remove(); client.auth.stopAutoRefresh(); } };
+  const offline=createOfflineAccountCache(storage,`offline_${base.hostname.replace(/[^a-zA-Z0-9]/g,'_')}`);
+  return { account, client, offline, configuration:config, callback,
+    async restoreOffline(onRevoked:()=>void){
+      const cached=await offline.read();if(!cached)return null;
+      const raw=await storage.getItem(`sb-${base.hostname.split('.')[0]}-auth-token`);
+      if(!offlineOwnerMatches(cached,raw,observedIdentity))return null;
+      return {cached,lease:account.restoreLocalScope(cached.account,onRevoked)};
+    },
+    dispose() { account.dispose(); identityObserver.data.subscription.unsubscribe(); lifecycle?.remove(); client.auth.stopAutoRefresh(); } };
 }
