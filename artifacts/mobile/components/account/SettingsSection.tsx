@@ -18,6 +18,7 @@ export function SettingsSection() {
         <Row first icon="globe" title={L('اللغة', 'Language')} sub={language === 'ar' ? 'العربية — اضغط للتبديل إلى English' : 'English — tap to switch to العربية'} disabled={!canWrite || busy}
           onPress={() => void run(() => setAppLanguage(language === 'ar' ? 'en' : 'ar'))} testID="settings-language" />
         <Row icon="bell" title={L('الإشعارات', 'Notifications')} sub={L('تنبيهات المطابقة أثناء فتح التطبيق', 'Matching alerts while the app is open')} onPress={() => router.push('/account/notifications' as never)} />
+        <Row icon="calendar" title={L('إعدادات المتابعة', 'Follow-up settings')} sub={L('عرض المتابعات المتأخرة', 'Overdue follow-up display')} onPress={() => router.push('/account/followups' as never)} testID="settings-followups" />
         <ToggleRow title={L('تقليل الحركة', 'Reduce motion')} sub={L('يقلل حركة التنبيه وقائمة الإضافة وشاشات الحساب', 'Reduces alert, quick-add and account motion')} value={state.reducedMotion} disabled={!canWrite || busy} onChange={v => void run(() => setReducedMotion(v))} />
       </Card>
       <ErrorText>{error}</ErrorText>
