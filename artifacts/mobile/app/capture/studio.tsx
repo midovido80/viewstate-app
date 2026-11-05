@@ -1,3 +1,4 @@
+import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
 import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
 import { KitchenFields } from '@/components/KitchenFields';
@@ -125,13 +126,13 @@ export function getStudioEditBackTarget(
   requirementId?: string,
   seekerId?: string,
 ):
-  | { readonly pathname: '/requirement/[requirementId]'; readonly params: { readonly requirementId: string; readonly seekerId?: string } }
+  | { readonly pathname: '/requirement/view/[requirementId]'; readonly params: { readonly requirementId: string; readonly seekerId?: string } }
   | { readonly pathname: '/property/[propertyCoreId]'; readonly params: { readonly propertyCoreId: string } }
   | null {
   if (!editing) return null;
   if (mode === 'wanted' && requirementId) {
     return {
-      pathname: '/requirement/[requirementId]',
+      pathname: '/requirement/view/[requirementId]',
       params: seekerId ? { requirementId, seekerId } : { requirementId },
     };
   }
@@ -430,31 +431,17 @@ export default function StudioCaptureRoute() {
     baselineRequirement?.id ?? editRequirementId,
     baselineRequirement?.seekerId ?? selectedPersonId,
   );
-  const leaveStudio = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    const target = getEditBackTarget();
-    if (target) router.replace({ ...target, params: { ...target.params, ...(matchingReturn ? { matchingReturn } : {}) } } as never);
-  };
-  const handleHeaderBack = () => {
-    if (showingReview) returnToForm();
-    else leaveStudio();
-  };
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (step === 'review') {
-        returnToForm();
-        return true;
-      }
-      leaveStudio();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [baselineProperty, baselineRequirement, editPropertyId, editRequirementId, mode, returnToForm, router, selectedPersonId, step]);
+  const studioBackTarget = getEditBackTarget();
+  const persistStudio = useLocalFormDraft({
+    identity: `studio:${editPropertyId ?? editRequirementId ?? 'new'}:${modeParam ?? ''}:${routeTransaction ?? ''}:${seekerParam ?? ''}:${linkPersonId ?? ''}`,
+    value: { values, step, attachments, selectedPersonId, baselineProperty, baselineRequirement, propertyId: draftPropertyId.current, offerId: draftOfferId.current, requirementId: draftRequirementId.current },
+    ready: recordLoaded && !loading, complete: !!savedProperty || !!savedRequirement,
+    restore: saved => { setValues(saved.values); setStep(saved.step); setAttachments(saved.attachments); setSelectedPersonId(saved.selectedPersonId); setBaselineProperty(saved.baselineProperty); setBaselineRequirement(saved.baselineRequirement); draftPropertyId.current=saved.propertyId; draftOfferId.current=saved.offerId; draftRequirementId.current=saved.requirementId; preserveStagedFiles.current=true; },
+    onPersist: () => { preserveStagedFiles.current=true; },
+  });
+  const { back: handleHeaderBack, exit: studioExit } = useDraftBack({ persist: persistStudio, fallback: studioBackTarget ? { ...studioBackTarget, params: { ...studioBackTarget.params, ...(matchingReturn ? { matchingReturn } : {}) } } : { pathname: '/capture/property-type', params: { mode, transaction: values.transaction, ...(selectedPersonId ? { seekerId: selectedPersonId } : {}), ...(linkPersonId ? { linkPersonId } : {}) } }, completed: () => !!committedRequirement.current || !!savedProperty || !!savedRequirement,
+    step: () => { if (step === 'review' && !savedProperty && !savedRequirement) { returnToForm(); return true; } return false; },
+  });
 
   const areaTitle = (id: string) => {
     const area = getAreaById(id);
@@ -1562,6 +1549,7 @@ export default function StudioCaptureRoute() {
         </Text>
       </View>
       {mode === 'wanted' && <View testID="requirement-pinned-property-type" style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#EDF4FF', borderBottomWidth: 1, borderBottomColor: '#C6D8F1' }}><Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'العقار المطلوب: شقة · استوديو' : 'Required property: Apartment · Studio'}</Text></View>}
+      {!savedProperty && !savedRequirement && <Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" disabled={saving || !!uncertainRequirement.current || !!propertyRecovery} onPress={() => persistStudio.confirmDiscard(() => studioExit(() => router.canGoBack() ? router.back() : router.replace('/properties' as never)))} testID="studio-discard-draft" />}
       {loading ? (
         <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>
       ) : !recordLoaded ? (

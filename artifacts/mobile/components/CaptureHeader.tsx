@@ -1,3 +1,4 @@
+import { useDraftBack } from '@/hooks/useDraftBack';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { PropertyReviewProgress } from '@/components/PropertyReview';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
@@ -32,7 +33,8 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
   const colors = useColors();
   const router = useRouter();
   const { isRTL, t, fonts } = useI18n();
-  const { resetDraft } = useCapture();
+  const { resetDraft, persistCurrentCapture } = useCapture();
+  const { back: safeBack, exit: safeExit } = useDraftBack({ persist: persistCurrentCapture, fallback: '/' });
   const [cancelVisible, setCancelVisible] = useState(false);
   const [homeExit, setHomeExit] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -56,13 +58,11 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
 
   const handleBack = () => {
     if (onBack) onBack();
-    else router.back();
+    else safeBack();
   };
 
   const handleKeepDraftAndExit = () => {
-    setCancelVisible(false);
-    router.dismissAll();
-    if (homeExit) router.replace('/' as never);
+    safeExit(() => { setCancelVisible(false); router.dismissAll(); if (homeExit) router.replace('/' as never); });
   };
 
   const handleDiscard = async () => {
@@ -101,7 +101,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
           </View>
 
           <View style={styles.center}>
-            {showProgress && !review ? <TouchableOpacity onPress={() => { setHomeExit(true); setCancelVisible(true); }} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('home.title')} testID="capture-home"><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text></TouchableOpacity> : null}
+            {showProgress && !review ? <TouchableOpacity onPress={() => safeExit(() => router.replace('/' as never))} style={navigationButtonStyle} accessibilityRole="button" accessibilityLabel={t('home.title')} testID="capture-home"><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('home.title')}</Text></TouchableOpacity> : null}
             {(review || !showProgress) && title ? (
               <Text
                 numberOfLines={1}

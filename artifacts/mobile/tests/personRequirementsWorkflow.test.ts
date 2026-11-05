@@ -285,7 +285,7 @@ test('Person and Requirement navigation keep normal history and provide bounded 
     readFile('app/requirement/[requirementId].tsx', 'utf8'),
   ]);
 
-  assert.match(person, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\)/);
+  assert.match(person, /if \(router\.canGoBack\(\)\) router\.back\(\)/);
   assert.match(person, /router\.replace\('\/people' as never\)/);
   assert.match(person, /pathname: '\/requirement\/\[requirementId\]'[\s\S]*seekerId: person\.id/);
    assert.match(requirement, /router\.canGoBack\(\) \? router\.back\(\) : router\.replace\('\/people'/);

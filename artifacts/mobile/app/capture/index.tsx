@@ -1,3 +1,4 @@
+import { useDraftBack } from '@/hooks/useDraftBack';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
@@ -15,7 +16,7 @@ import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { ApartmentSubtype } from '@workspace/property-domain';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
-import { getCaptureBackAction } from '@/services/captureBackNavigation';
+import { getPropertyTypeSelectionRoute } from '@/services/propertyFormRoutes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -214,6 +215,7 @@ export default function CaptureWorkflow() {
   const requiredForm = useRequiredForm(propertyCompletionFields({ type: draft.propertyType ?? '', area: draft.locationAreaId, price: draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount, size: captureDetails.areaSquareMeters, values: { ...captureDetails, apartmentSubtype: draft.apartmentSubtype ?? captureDetails.apartmentSubtype }, basic: isBasicApartmentFollowUp }));
   const [block, setBlock] = useState(draft.block ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const captureCommitted = useRef(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
   const sourceLinkRecoveryRef = useRef<{
@@ -704,6 +706,7 @@ export default function CaptureWorkflow() {
     personId?: string,
     role?: PropertySourceRole,
   ) => {
+    captureCommitted.current=true;
     router.replace({
       pathname: '/capture/success',
       params: {
@@ -865,23 +868,8 @@ export default function CaptureWorkflow() {
     setDraftSaveStatus('saved');
   };
 
-  const handleBack = () => {
-    const action = getCaptureBackAction(stage, router.canGoBack(), {
-      mode: 'offered', transaction: draft.transaction, linkPersonId, sourceRole,
-    });
-    if (action.kind === 'edit') { setStage(2); return; }
-    if (action.kind === 'back') { router.back(); return; }
-    router.replace(action.route as never);
-  };
-  const goHome = async () => {
-    if (draftSaveStatus === 'saving' || submitting) return;
-    setDraftSaveStatus('saving');
-    try {
-      if (!await persistCurrentCapture()) { setDraftSaveStatus('error'); return; }
-      setDraftSaveStatus('saved');
-      router.replace('/' as never);
-    } catch { setDraftSaveStatus('error'); }
-  };
+  const { back: handleBack, exit: captureExit } = useDraftBack({ persist: persistCurrentCapture, completed: () => captureCommitted.current, fallback: getPropertyTypeSelectionRoute({ mode: 'offered', transaction: draft.transaction, linkPersonId, sourceRole }), step: () => { if (stage === 3) { setStage(2); return true; } return false; } });
+  const goHome = async () => { captureExit(() => router.replace('/' as never)); };
 
   const header = stage === 1 ? t('capture.progress.transaction')
     : stage === 2 ? t('capture.progress.review') : t('summary.title');

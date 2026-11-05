@@ -86,7 +86,7 @@ export default function RequirementDetailsScreen() {
   }, [id, attempt]));
 
   const matchingReturnToken = Array.isArray(params.matchingReturn) ? params.matchingReturn[0] : params.matchingReturn;
-  const back = () => readMatchingReturn(matchingReturnToken)
+  const back = () => router.canGoBack() ? router.back() : readMatchingReturn(matchingReturnToken)
     ? router.replace(matchingBackRoute(matchingReturnToken) as never)
     : record?.seekerId
     ? router.replace(`/person/${encodeURIComponent(record.seekerId)}` as never)

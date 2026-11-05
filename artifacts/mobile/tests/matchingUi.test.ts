@@ -630,7 +630,7 @@ test('View request carries matching return token and Back validates it before ow
   const screen = await readFile('app/(tabs)/matching.tsx', 'utf8');
   const details = await readFile('app/requirement/view/[requirementId].tsx', 'utf8');
   assert.ok(screen.includes('params: { requirementId, matchingReturn: token }'));
-  assert.ok(details.includes('const back = () => readMatchingReturn(matchingReturnToken)'));
+  assert.ok(details.includes('const back = () => router.canGoBack() ? router.back() : readMatchingReturn(matchingReturnToken)'));
   assert.ok(details.includes('router.replace(matchingBackRoute(matchingReturnToken) as never)'));
   assert.ok(details.includes(': record?.seekerId'));
 });

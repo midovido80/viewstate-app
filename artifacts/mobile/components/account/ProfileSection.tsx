@@ -1,55 +1,32 @@
+import { useLocalFormDraft, useDraftBack } from '@/hooks/useDraftBack';
 import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { GuestProfileForm } from './GuestProfileForm';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { AccountProfileForm } from './AccountProfileForm';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Platform, View } from 'react-native';
-import { Stack, useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import { View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
 import { chooseLocalProfilePhoto } from '@/services/accountDevice';
-import { AccountScreen, Avatar, Btn, Confirm, ErrorText, Field, Note, useCanWrite, useL } from './ui';
+import { AccountScreen, Avatar, Btn, ErrorText, Field, Note, useCanWrite, useL } from './ui';
 
-/** Local profile editor. Persists only on Save; Back with unsaved edits asks to keep editing or discard. */
+/** Back keeps a local draft; only Save updates the visible profile. */
 function LegacyProfileSection({ setup }: { setup?: boolean }) {
   const { state, saveProfile } = useAccountFoundation();
   const { canWrite, busy } = useCanWrite();
   const { L } = useL();
   const router = useRouter();
-  const navigation = useNavigation();
   const [name, setName] = useState(state.profile.name);
   const [company, setCompany] = useState(state.profile.company);
   const [photo, setPhoto] = useState(state.profile.photo);
   const [nameError, setNameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  const [pendingLeave, setPendingLeave] = useState<null | (() => void)>(null);
-  const allowLeave = useRef(false);
-  const dirty = name !== state.profile.name || company !== state.profile.company || photo !== state.profile.photo;
-  const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
-  const leave = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/more' as never);
-  }, [router]);
-  const back = useCallback(() => {
-    if (dirtyRef.current) setPendingLeave(() => leave);
-    else leave();
-  }, [leave]);
-
-  useFocusEffect(useCallback(() => {
-    if (Platform.OS !== 'android') return;
-    const listener = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!dirtyRef.current) return false;
-      back();
-      return true;
-    });
-    return () => listener.remove();
-  }, [back]));
-
-  useEffect(() => navigation.addListener('beforeRemove', e => {
-    if (allowLeave.current || !dirtyRef.current) return;
-    e.preventDefault();
-    setPendingLeave(() => () => navigation.dispatch(e.data.action));
-  }), [navigation]);
+  const committed = useRef(false);
+  const persist = useLocalFormDraft({ identity: 'profile:legacy', value: {name, company, photo}, completed: () => committed.current,
+    restore: saved => { setName(saved.name); setCompany(saved.company); setPhoto(saved.photo); } });
+  const { back, exit } = useDraftBack({ persist, fallback: '/(tabs)/more', completed: () => committed.current });
+  const leave = () => router.canGoBack() ? router.back() : router.replace('/(tabs)/more' as never);
 
   const pick = async () => {
     setError(null); setPicking(true);
@@ -63,7 +40,7 @@ function LegacyProfileSection({ setup }: { setup?: boolean }) {
     if (!name.trim()) { setNameError(L('الاسم مطلوب.', 'Name is required.')); return; }
     try {
       await saveProfile({ name, company, photo });
-      allowLeave.current = true;
+      committed.current = true; await persist();
       if (setup) router.replace('/(tabs)/more' as never); else leave();
     } catch { setError(L('لم يُحفظ الملف الشخصي على هذا الجهاز. تعديلاتك ما زالت هنا؛ حاول مرة أخرى.', 'Profile was not saved on this device. Your edits are still here; try again.')); }
   };
@@ -74,7 +51,7 @@ function LegacyProfileSection({ setup }: { setup?: boolean }) {
       title={setup ? L('خلّينا نتعرف عليك', 'A little about you') : L('الملف الشخصي', 'Personal profile')}
       subtitle={setup ? L('ملف محلي على هذا الجهاز فقط، بدون تسجيل دخول. الاسم فقط مطلوب.', 'A local profile on this device only, without sign-in. Only your name is required.') : L('يظهر في شاشة المزيد على هذا الجهاز فقط.', 'Shown on the More screen on this device only.')}
       footer={<Btn testID="profile-save" label={setup ? L('ابدأ استخدام ViewState', 'Start using ViewState') : L('حفظ التعديلات', 'Save changes')} onPress={() => void save()} busy={busy} disabled={!canWrite} />}>
-      <Stack.Screen options={{ gestureEnabled: !dirty }} />
+<Btn kind="quiet" label={L('إلغاء المسودة', 'Discard draft')} onPress={() => persist.confirmDiscard(() => exit(leave))} />
       <View style={{ alignItems: 'center', marginTop: 6 }}>
         <Avatar name={name} photo={photo} size={84} />
         <Btn kind="quiet" icon="image" label={photo ? L('تغيير الصورة', 'Change photo') : L('اختيار صورة من الجهاز', 'Choose photo from device')} onPress={() => void pick()} busy={picking} disabled={!canWrite} />
@@ -86,11 +63,7 @@ function LegacyProfileSection({ setup }: { setup?: boolean }) {
       <Field label={L('المكتب أو الشركة — اختياري', 'Office / company — optional')} value={company} maxLength={150} editable={canWrite} onChangeText={setCompany} testID="profile-company" />
       <ErrorText>{error}</ErrorText>
       <Note>{L('الصورة والاسم محفوظان محليًا فقط ولا يُرفعان لأي خادم. هذا ليس حسابًا موثّقًا.', 'Photo and name are stored locally only and never uploaded. This is not a verified account.')}</Note>
-      <Confirm visible={!!pendingLeave} title={L('تعديلات غير محفوظة', 'Unsaved changes')}
-        body={L('لم تُحفظ تعديلات الملف الشخصي. هل تريد تجاهلها؟', 'Your profile edits are not saved. Discard them?')}
-        confirmLabel={L('تجاهل التعديلات', 'Discard changes')} destructive cancelLabel={L('متابعة التعديل', 'Keep editing')}
-        onCancel={() => setPendingLeave(null)}
-        onConfirm={() => { const go = pendingLeave; allowLeave.current = true; setPendingLeave(null); go?.(); }} />
+
     </AccountScreen>
   );
 }
@@ -99,14 +72,24 @@ function RealProfileSection() {
   const account = useRealAccount()!;
   const { saveProfile } = useAccountFoundation();
   const router = useRouter();
+  const [snapshot, setSnapshot] = useState({ value: account.profile, photo: account.photo });
+  const [restored, setRestored] = useState(0); const committed = useRef(false);
+  const persist = useLocalFormDraft({ identity: `profile:${account.profile.user_id}`, value: snapshot, completed: () => committed.current,
+    restore: saved => { setSnapshot(saved); setRestored(n => n+1); } });
   const leave = () => router.canGoBack() ? router.back() : router.replace('/account' as never);
-  return <AccountProfileForm userId={account.profile.user_id} initial={account.profile} photo={account.photo} email={account.email} onCancel={leave}
-    onSave={async (value, photo) => { await account.saveContact(value, photo); await saveProfile({ name: value.display_name.trim(), company: value.company.trim(), photo }); leave(); }} />;
+  const { back, exit } = useDraftBack({ persist, fallback: '/account', completed: () => committed.current });
+  return <AccountProfileForm key={restored} userId={account.profile.user_id} initial={snapshot.value} photo={snapshot.photo} email={account.email} onCancel={back} onDiscard={() => persist.confirmDiscard(() => exit(leave))}
+    onDraftChange={(value, photo) => setSnapshot({ value: { ...value, user_id: account.profile.user_id }, photo })}
+    onSave={async (value, photo) => { await account.saveContact(value, photo); await saveProfile({ name: value.display_name.trim(), company: value.company.trim(), photo }); committed.current=true; await persist(); back(); }} />;
 }
 function GuestProfileSection() {
   const guest = useGuestAccount()!; const { state, saveProfile } = useAccountFoundation(); const router = useRouter();
+  const [snapshot,setSnapshot] = useState({ name: guest.identity.name, phone: guest.identity.phone });
+  const [restored,setRestored] = useState(0); const committed=useRef(false);
+  const persist=useLocalFormDraft({ identity: 'profile:guest', value: snapshot, completed: () => committed.current, restore: saved => { setSnapshot(saved); setRestored(n=>n+1); } });
   const leave = () => router.canGoBack() ? router.back() : router.replace('/account' as never);
-  return <GuestProfileForm name={guest.identity.name} phone={guest.identity.phone} onCancel={leave} onSave={async (name, phone) => { await guest.saveContact(name, phone); await saveProfile({ ...state.profile, name: name.trim() }); leave(); }} />;
+  const { back, exit }=useDraftBack({ persist, fallback: '/account', completed: () => committed.current });
+  return <GuestProfileForm key={restored} name={snapshot.name} phone={snapshot.phone} onDraftChange={(name,phone)=>setSnapshot({name,phone})} onCancel={back} onDiscard={() => persist.confirmDiscard(() => exit(leave))} onSave={async (name, phone) => { await guest.saveContact(name, phone); await saveProfile({ ...state.profile, name: name.trim() }); committed.current=true; await persist(); back(); }} />;
 }
 export function ProfileSection(props: { setup?: boolean }) {
   const account = useRealAccount(), guest = useGuestAccount();

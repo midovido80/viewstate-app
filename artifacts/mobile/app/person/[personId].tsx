@@ -1,3 +1,5 @@
+import { createFormSession } from '@/services/formSession';
+import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
 import { TextInput, FieldSelect } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
@@ -6,7 +8,7 @@ import { ApprovedAction, approvedNavigationStyle } from '@/components/ApprovedAc
 import { Feather } from '@expo/vector-icons';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -72,6 +74,7 @@ export default function PersonDetailScreen() {
   const params = useLocalSearchParams<{ personId?: string | string[]; saved?: string; requirementSaved?: string; requirementSavedId?: string }>();
   const id = Array.isArray(params.personId) ? params.personId[0] : params.personId;
   const router = useRouter();
+  const { storage: localDraftStorage } = useUserData();
   const colors = useColors();
   const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
@@ -131,18 +134,13 @@ export default function PersonDetailScreen() {
     return () => clearTimeout(timer);
   }, [language, params.requirementSaved, router]);
 
-  const navigateBack = () => {
-    if (mode === 'edit') {
-      setMode('detail');
-      return;
-    }
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/people' as never);
-  };
-
+  const activeRoute = useRef(true);
+  useFocusEffect(useCallback(() => { activeRoute.current = true; return () => { activeRoute.current = false; }; }, []));
+  const personEditCommitted = useRef(false);
+  const persistPersonEdit = useLocalFormDraft({ identity: `person:edit:${id ?? ''}`, value: { name, phone, phoneCountry, notes, classifications, baseline: person }, ready: mode === 'edit', completed: () => personEditCommitted.current,
+    restore: saved => { setName(saved.name); setPhone(saved.phone); setPhoneCountry(saved.phoneCountry); setNotes(saved.notes); setClassifications(saved.classifications); if (saved.baseline) setPerson(saved.baseline); } });
+  const { back: editBack } = useDraftBack({ enabled: mode === 'edit', persist: persistPersonEdit, fallback: '/people', localExit: () => setMode('detail'), step: () => false });
+  const navigateBack = () => { if (mode === 'edit') editBack(); else if (router.canGoBack()) router.back(); else router.replace('/people' as never); };
   const load = useCallback(async () => {
     setError('');
     setPerson(null);
@@ -188,6 +186,7 @@ export default function PersonDetailScreen() {
 
   const beginEdit = () => {
     if (!person) return;
+    personEditCommitted.current=false;
     setName(person.name);
     setPhone(person.displayPhone);
     setPhoneCountry(
@@ -218,6 +217,9 @@ export default function PersonDetailScreen() {
       const resolved = (await store.getPeople()).find(candidate =>
         candidate.normalizedPhone === replacement.normalizedPhone,
       ) ?? replacement;
+      personEditCommitted.current=true;
+      await createFormSession(localDraftStorage, `person:edit:${id ?? ''}`).clear();
+      if (!activeRoute.current) return;
       setPerson(resolved);
       setMode('detail');
       setConfirmation(language === 'ar' ? 'تم حفظ الشخص' : 'Person saved');
@@ -444,7 +446,7 @@ export default function PersonDetailScreen() {
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 12 }]}>
         <TouchableOpacity onPress={navigateBack} testID="person-detail-back" accessibilityRole="button" style={[approvedNavigationStyle, mode === 'edit' && { backgroundColor: colors.card }, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>
           <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color={mode === 'edit' ? CANCEL_ACTION_COLOR : '#FFFFFF'} />
-          <Text style={{ color: mode === 'edit' ? CANCEL_ACTION_COLOR : '#FFFFFF', fontFamily: fonts.semiBold }}>{t(mode === 'edit' ? 'capture.cancel' : 'capture.back')}</Text>
+          <Text style={{ color: mode === 'edit' ? CANCEL_ACTION_COLOR : '#FFFFFF', fontFamily: fonts.semiBold }}>{t('capture.back')}</Text>
         </TouchableOpacity>
         <Text numberOfLines={2} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{mode === 'edit' ? t('people.edit') : t('people.detail')}</Text>
         {mode === 'detail' ? <TouchableOpacity onPress={() => router.replace('/' as never)} testID="person-home" accessibilityRole="button" style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>
@@ -493,7 +495,7 @@ export default function PersonDetailScreen() {
               ))}
             </ChoiceGrid>
             <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} multiline style={[inputStyle, styles.notes]} testID="person-edit-notes" />
-            <Button title={t('people.save')} onPress={() => void save()} loading={busy} testID="person-edit-save" />
+            <Button title={t('people.save')} onPress={() => void save()} loading={busy} testID="person-edit-save" /><Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" disabled={busy} onPress={() => persistPersonEdit.confirmDiscard(() => setMode('detail'))} testID="person-edit-discard-draft" />
           </>
         ) : (
           <>

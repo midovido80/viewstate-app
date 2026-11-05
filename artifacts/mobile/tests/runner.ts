@@ -1,3 +1,4 @@
+import './unifiedBack.test.ts';
 import './localMatchAudioConfig.test';
 import './localMatchSound.test';
 import './matchNotifications.test';
@@ -380,7 +381,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(successSource, /navigationStartedRef/);
   assert.match(successSource, /navigateOnce/);
   assert.match(successSource, /getPropertySuccessRoutes/);
-  assert.match(successSource, /router\.push/);
+  assert.match(successSource, /router\.dismissAll\(\); router\.replace/);
   assert.doesNotMatch(successSource, /saveProperty|compareAndUpdate|savePropertyEnrichmentDraft|clearConfirmedPropertyEnrichmentDraft/);
   assert.match(enrichmentSource, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
   assert.match(detailSource, /visible=\{saveCompletionVisible && completionOrigin === 'enrichment' && property\?\.core\.id === id\}/);

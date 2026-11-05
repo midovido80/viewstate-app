@@ -173,7 +173,7 @@ test('deep-linked Studio edits fall back to their exact detail route without cha
   assert.deepEqual(
     targetFor('wanted' as never, true as never, undefined as never, requirementId as never, seekerId as never),
     {
-      pathname: '/requirement/[requirementId]',
+      pathname: '/requirement/view/[requirementId]',
       params: { requirementId, seekerId },
     },
   );
@@ -185,11 +185,11 @@ test('deep-linked Studio edits fall back to their exact detail route without cha
   assert.equal(targetFor('offered' as never, false as never, propertyId as never, undefined as never, undefined as never), null);
   assert.deepEqual(
     targetFor('wanted' as never, true as never, undefined as never, requirementId as never, undefined as never),
-    { pathname: '/requirement/[requirementId]', params: { requirementId } },
+    { pathname: '/requirement/view/[requirementId]', params: { requirementId } },
   );
 
   const screen = await source('../app/capture/studio.tsx');
-  assert.match(screen, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\);\s*return;\s*\}/);
-  assert.match(screen, /if \(showingReview\) returnToForm\(\);\s*else leaveStudio\(\);/);
-  assert.match(screen, /if \(step === 'review'\) \{\s*returnToForm\(\);\s*return true;\s*\}/);
+  assert.match(screen, /fallback: studioBackTarget \?/);
+  assert.match(screen, /useDraftBack\(\{ persist: persistStudio/);
+  assert.match(screen, /step === 'review' && !savedProperty && !savedRequirement/);
 });

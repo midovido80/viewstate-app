@@ -1,3 +1,4 @@
+import { useDraftBack } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
@@ -871,63 +872,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
-  const leaveEditor = () => {
-    if (!draft) {
-      setMode('detail');
-      router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
-      return;
-    }
-    if (!standardApartment || editDirty) {
-      setLeaveVisible(true);
-      return;
-    }
-    void (async () => {
-      await draftMutationFlight.current;
-      const latest = draftRef.current;
-      const latestIsDirty = Boolean(latest && propertyEditChoicesAreDirty(cleanChoicesRef.current, latest.choices));
-      if (latestIsDirty) {
-        setEditDirty(true);
-        setLeaveVisible(true);
-        return;
-      }
-      await flushPropertyEditDraftWrites();
-      const current = draftRef.current;
-      if (!current) return;
-      if (cleanExitOwnedUrisRef.current) {
-        try {
-          for (const uri of cleanExitOwnedUrisRef.current) await deleteOwnedAttachmentForCleanup(uri);
-        } catch {
-          setError(t('edit.recovery_cleanup'));
-          return;
-        }
-      } else {
-        const result = await discardPropertyEditDraftAndCleanupOwnedAttachments({
-          draft: current,
-          transientOwnedUris: newAttachmentUris,
-          discardDraft: candidate => discardPropertyEditDraft(candidate.propertyCoreId, candidate),
-          deleteAttachment: deleteOwnedAttachmentForCleanup,
-        });
-        if (result.status === 'conflict') {
-          setError(t('edit.draft_conflict'));
-          return;
-        }
-        if (result.status === 'cleanup_failed') {
-          cleanExitOwnedUrisRef.current = result.ownedUris;
-          setError(t('edit.recovery_cleanup'));
-          return;
-        }
-      }
-      cleanExitOwnedUrisRef.current = null;
-      setNewAttachmentUris([]);
-      setDraft(null);
-      draftRef.current = null;
-      cleanChoicesRef.current = null;
-      setEditDirty(false);
-      setMode('detail');
-      router.replace(withMatchingReturn(`/property/${encodeURIComponent(id!)}`, matchingReturnToken) as never);
-    })();
-  };
-
+  const { back: leaveEditor, exit: exitEditor } = useDraftBack({ enabled: mode === 'edit', persist: async () => {
+    const saved = await draftMutationFlight.current;
+    if (!saved) return false;
+    await flushPropertyEditDraftWrites();
+    return true;
+  }, fallback: withMatchingReturn(`/property/${encodeURIComponent(id ?? '')}`, matchingReturnToken) });
+  const backToOrigin = () => router.canGoBack() ? router.back() : router.replace(detailBackRoute as never);
   const discardEditDraft = async () => {
     const current = draftRef.current;
     if (!current || discarding) return;
@@ -1167,7 +1118,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         <Text style={{ color: colors.foreground, fontFamily: fonts.medium, textAlign: 'center' }}>{message}</Text>
         <Button
           title={t('capture.back')}
-          onPress={() => router.replace('/' as never)}
+          onPress={() => mode === 'edit' ? exitEditor(() => router.replace('/' as never)) : router.replace('/' as never)}
           variant="outline"
           testID="property-detail-back"
         />
@@ -1391,7 +1342,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <Text style={{ color: '#FFFFFF', fontFamily: fonts.semiBold, fontSize: 13 }}>{language === 'ar' ? 'الرئيسية' : 'Home'}</Text>
           </TouchableOpacity>
           <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, fontFamily: fonts.bold, fontSize: 17, color: colors.foreground, textAlign: 'center' }}>{detailsTitle}</Text>
-          <TouchableOpacity onPress={() => router.replace(detailBackRoute as never)} style={[approvedNavigationStyle, { flexDirection: 'row', gap: 4 }]} testID="property-detail-back" accessibilityRole="button">
+          <TouchableOpacity onPress={backToOrigin} style={[approvedNavigationStyle, { flexDirection: 'row', gap: 4 }]} testID="property-detail-back" accessibilityRole="button">
             <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
             <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" />
           </TouchableOpacity>
@@ -1404,7 +1355,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             </TouchableOpacity>
             <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }]}>{editTitle}</Text>
             <TouchableOpacity
-              onPress={() => router.replace('/' as never)}
+              onPress={() => mode === 'edit' ? exitEditor(() => router.replace('/' as never)) : router.replace('/' as never)}
               accessibilityRole="button"
               accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'}
               testID="property-home-action"
@@ -1855,7 +1806,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             ))}
             </LocationAttachmentCard>
-            <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" />
+            <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" /><Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" onPress={() => setLeaveVisible(true)} disabled={saving} testID="property-edit-discard-action" />
           </>
         ) : null}
       </ScrollView></View></RequiredFormProvider>
