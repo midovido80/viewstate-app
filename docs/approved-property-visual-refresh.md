@@ -17,7 +17,7 @@ Optional public `listingTitle` and rental-only `rentalAvailability` metadata are
 
 ## Verification and remaining acceptance
 
-The full local mobile selection passed: 979 tests, including nine new presentation/domain/persistence/search cases and a safe-area/keyboard/footer rendering case. Domain suites passed 29 tests. Mobile/domain typechecks and Android Metro export are checked separately; published GitHub Actions gates repeat on the final SHA. Typechecking and export are not visual or physical-device acceptance.
+The full local mobile selection passed: 980 tests, including ten new presentation/domain/persistence/search cases and a safe-area/keyboard/footer rendering case. Domain suites passed 29 tests. Mobile/domain typechecks and Android Metro export are checked separately; published GitHub Actions gates repeat on the final SHA. Typechecking and export are not visual or physical-device acceptance.
 
 No Chrome/Chromium runtime is available here. Pixel-level comparison, real Android keyboard/gesture/safe-area checks, and save/reopen with selected media remain Preview/device acceptance checks. No APK/EAS build, Replit refresh, merge or production ref update is part of this package. Recovery branch preserves the exact pre-change commit.
 

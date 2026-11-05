@@ -47,7 +47,8 @@ export function propertyVisualFacts(
         value: (unit ? String(Number(value.toFixed(2))) : String(value)) + unit,
       });
   };
-  const area = projection.areaSquareMeters ?? f.builtUpAreaSquareMeters;
+  const raw = (property.typeDetails ?? {}) as Record<string, unknown>;
+  const area = projection.areaSquareMeters ?? f.builtUpAreaSquareMeters ?? raw.builtUpAreaSquareMeters;
   if (!commercial)
     number(
       'bedrooms',
@@ -79,10 +80,11 @@ export function propertyVisualFacts(
       ar ? 'أرقام آلية' : 'Building IDs',
       f.automaticNumberCount,
     );
-  const raw = (property.typeDetails ?? {}) as Record<string, unknown>;
   const parkingCount =
     f.privateParkingCount ?? f.parkingSpaceCount ?? raw.parkingSpaceCount;
-  if (typeof parkingCount === 'number')
+  const sharedParking = Array.isArray(f.parkingTypes) && f.parkingTypes.some(value => value === 'public' || value === 'paid');
+  if (parkingCount === 0 && sharedParking) out.push({id:'parking',icon:'car',value:ar?'يوجد':'Yes',label:ar?'مواقف':'Parking'});
+  else if (typeof parkingCount === 'number')
     out.push({
       id: 'parking',
       icon: parkingCount === 0 ? 'car-off' : 'car',

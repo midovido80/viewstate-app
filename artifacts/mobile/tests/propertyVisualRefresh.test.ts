@@ -263,3 +263,8 @@ test('the public listing title is searchable without exposing private notes', ()
   const data={properties:[property],people:[],requirements:[]};
   assert.equal(searchGlobalData(data,'إطلالة بحرية').properties.length,1);
 });
+
+test('legacy canonical commercial area remains visible and public parking is not negated by zero private spaces',()=>{
+  const office:Property={...p,core:{...p.core,propertyType:'office'},areaSquareMeters:undefined,typeDetails:{propertyType:'office',builtUpAreaSquareMeters:180,bathroomCount:2,parkingTypes:['private','public'],privateParkingCount:0}};
+  const facts=propertyVisualFacts(office,'en');assert.equal(facts.find(f=>f.id==='area')?.value,'180 m²');assert.equal(facts.find(f=>f.id==='parking')?.icon,'car');assert.equal(facts.find(f=>f.id==='parking')?.value,'Yes');
+});
