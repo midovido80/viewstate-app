@@ -1,3 +1,6 @@
+import { Linking } from 'react-native';
+import { PropertyFactStrip, PropertyStatus } from '@/components/PropertyVisualSummary';
+import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
 import { useDraftBack } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
 import { TextInput } from '@/components/FormField';
@@ -182,6 +185,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [galleryResolutionError, setGalleryResolutionError] = useState('');
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'canonical' | 'legacy'>>({});
+  const [formPage,setFormPage]=useState<PropertyPage>(0);
   const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
   const editEntryConsumed = useRef(false);
   const studioEditForwardedId = useRef<string | null>(null);
@@ -872,7 +876,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     }
   };
 
-  const { back: leaveEditor, exit: exitEditor } = useDraftBack({ enabled: mode === 'edit', persist: async () => {
+  const { back: leaveEditor, exit: exitEditor } = useDraftBack({ enabled: mode === 'edit', step: () => { if(formPage>0){setFormPage((formPage-1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});return true;}return false; }, persist: async () => {
     const saved = await draftMutationFlight.current;
     if (!saved) return false;
     await flushPropertyEditDraftWrites();
@@ -939,11 +943,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setError(t('edit.draft_conflict'));
         return;
       }
-      if (requiredForm.validate(propertyCompletionFields({ type: currentDraft.baseline.core.propertyType, area: currentDraft.choices.locationAreaId, price: currentDraft.choices.priceAmount, size: currentDraft.choices.areaSquareMeters, values: currentDraft.choices.canonicalDetails ?? {} })).length) return;
+      if (requiredForm.validate(propertyCompletionFields({ type: currentDraft.baseline.core.propertyType, area: currentDraft.choices.locationAreaId, price: currentDraft.choices.priceAmount, size: currentDraft.choices.areaSquareMeters, values: currentDraft.choices.canonicalDetails ?? {} })).length) { setFormPage(0); return; }
       const mapsValidation = getPropertyEditMapsFieldError(currentDraft.choices.mapsLink ?? '', language);
       setMapsFieldError(mapsValidation);
-      if (mapsValidation) return;
+      if (mapsValidation) { setFormPage(2); return; }
       if (invalidQuickPickFields.size > 0) {
+        setFormPage(0);
         setError(t('errors.capture_incomplete'));
         return;
       }
@@ -1337,10 +1342,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       {mode === 'detail' ? (
         <View testID="property-approved-header" style={{ backgroundColor: colors.background, paddingHorizontal: 12, paddingVertical: 8, direction: 'ltr', flexDirection: isRTL ? 'row' : 'row-reverse', alignItems: 'center', gap: 8 }}>
-          <TouchableOpacity onPress={() => router.replace('/' as never)} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الرئيسية' : 'Home'} testID="property-home-action" style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]}>
-            <Feather name="home" size={18} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontFamily: fonts.semiBold, fontSize: 13 }}>{language === 'ar' ? 'الرئيسية' : 'Home'}</Text>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={handleEdit} accessibilityRole="button" accessibilityLabel={t('detail.edit')} testID="property-edit-action" style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}><Feather name="edit-2" size={20} color={colors.primary}/></TouchableOpacity>
           <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, fontFamily: fonts.bold, fontSize: 17, color: colors.foreground, textAlign: 'center' }}>{detailsTitle}</Text>
           <TouchableOpacity onPress={backToOrigin} style={[approvedNavigationStyle, { flexDirection: 'row', gap: 4 }]} testID="property-detail-back" accessibilityRole="button">
             <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
@@ -1351,7 +1353,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         <View style={styles.header}>
           <View style={[styles.headerMain, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             <TouchableOpacity onPress={leaveEditor} accessibilityRole="button" testID="property-detail-back" style={[styles.headerSide, approvedNavigationStyle]}>
-              <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{t('capture.back')}</Text>
+              <Text numberOfLines={1} style={{ color: navigationButtonTextStyle.color, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language==='ar'?'السابق':'Previous'}</Text>
             </TouchableOpacity>
             <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerTitle, { color: colors.foreground, fontFamily: fonts.bold, fontSize: 16 }]}>{editTitle}</Text>
             <TouchableOpacity
@@ -1370,7 +1372,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       )}
 
-      <RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><ScrollView ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16} removeClippedSubviews={false} style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
+      {mode==='edit' && <PropertyWizardProgress page={formPage} />}
+      <PropertyPageContext.Provider value={mode==='edit'?formPage:null}><RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><ScrollView ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16} removeClippedSubviews={false} style={{ flex: 1 }} contentContainerStyle={mode === 'detail' ? { paddingBottom: 12 } : styles.content} keyboardShouldPersistTaps="handled">
         {error ? <Text testID="property-edit-error" style={[styles.error, { color: colors.destructive, fontFamily: fonts.medium }]}>{error}</Text> : null}
         {pendingOperation && (recoveryStatus === 'retry_required' || recoveryStatus === 'update_failed') ? (
           <Button title={t('edit.retry_update')} onPress={() => void retryRecovery(true)} loading={saving} testID="property-update-retry" />
@@ -1452,59 +1455,33 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                   </View>
               </View>
             ) : null}
-              <View testID="property-identity-card" style={{ backgroundColor: '#FFFFFF', borderRadius: 19, padding: 16, borderWidth: 1, borderColor: '#DBE3EF', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-                  <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 21, lineHeight: 28, textAlign: isRTL ? 'right' : 'left' }}>{savedTypeLabel}</Text>
-                  <View style={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', backgroundColor: '#EFF6FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                    <Text style={{ color: propertyIntent.valid ? '#173F78' : colors.destructive, fontFamily: fonts.semiBold, fontSize: 13 }}>{propertyIntent.label}</Text>
-                  </View>
-                  <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
-                    <Feather name="map-pin" size={16} color="#173F78" />
-                    <Text testID="property-compact-location" style={{ flex: 1, color: '#173F78', fontFamily: fonts.medium, fontSize: 13, lineHeight: 19, textAlign: isRTL ? 'right' : 'left' }}>{compactLocation}</Text>
-                  </View>
-                </View>
-                {shownPrice !== undefined ? <View style={{ flexShrink: 1, maxWidth: '46%', gap: 3 }}>
-                  <Text testID="property-compact-price" style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 24, lineHeight: 31, textAlign: isRTL ? 'left' : 'right' }}>{formatPrice(shownPrice, 'KWD', language)}</Text>
-                  {propertyIntent.id === 'offered_rent' ? <Text testID="property-compact-cadence" style={{ color: '#64748B', fontFamily: fonts.medium, fontSize: 13, textAlign: isRTL ? 'left' : 'right' }}>{formatRentalCadence(shownRentalPeriodId, t)}</Text> : null}
-                </View> : null}
+              <View testID="property-identity-card" style={{gap:8,paddingVertical:8}}>
+                <PropertyStatus property={property}/>
+                <Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:23,lineHeight:30,textAlign:isRTL?'right':'left'}}>{property.listingTitle?.trim() || savedTypeLabel}</Text>
+                <View style={{flexDirection:isRTL?'row-reverse':'row',alignItems:'center',gap:5}}><Feather name="map-pin" size={15} color={colors.mutedForeground}/><Text testID="property-compact-location" style={{fontFamily:fonts.regular,color:colors.mutedForeground,fontSize:13}}>{compactLocation}</Text></View>
               </View>
-
-              <CompactPropertySpecs specs={compactSpecs} />
-
-              {(availableFeatures.length > 0 || featureSummaryDetails.length > 0) && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
-                <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'المزايا المتوفرة' : 'Available features'}</Text>
-                <ChoiceGrid columns={2} gap={6}>
-                  {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} compact />)}
-                </ChoiceGrid>
-                {featureSummaryDetails.length > 0 && <View testID="property-feature-details" style={{ gap: 6 }}>
-                  {featureSummaryDetails.map(item => <Text key={item.field} style={{ color: '#334155', fontFamily: fonts.medium, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{item.label}</Text>)}
-                </View>}
-              </View>}
-
-              {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
-                <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
-                <ChoiceGrid columns={3} gap={6}>
-                  {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} compact vertical />)}
-                </ChoiceGrid>
-              </View>}
-
+              <PropertyFactStrip property={property}/>
+              {shownPrice!==undefined && <View style={{flexDirection:isRTL?'row-reverse':'row',alignItems:'baseline',gap:8,paddingVertical:8}}><Text testID="property-compact-price" style={{fontFamily:fonts.bold,fontSize:26,color:colors.primary}}>{formatPrice(shownPrice,'KWD',language)}</Text>{propertyIntent.id==='offered_rent'&&<Text testID="property-compact-cadence" style={{fontFamily:fonts.regular,color:colors.mutedForeground}}>{formatRentalCadence(shownRentalPeriodId,t)}</Text>}</View>}
+              {descriptionText && <View style={{gap:8,paddingVertical:8}}><Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'عن العقار':'About the property'}</Text><Text style={{fontFamily:fonts.regular,color:colors.mutedForeground,fontSize:14,lineHeight:23,textAlign:isRTL?'right':'left'}}>{descriptionText}</Text></View>}
+              {galleryImages.length>0 && <View style={{gap:8}}><Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'معرض الصور':'Photo gallery'}</Text><View style={{flexDirection:isRTL?'row-reverse':'row',gap:8}}>{galleryImages.slice(0,3).map(img=><TouchableOpacity key={img.id} onPress={()=>void openPropertyAttachment(img)} accessibilityRole="button" accessibilityLabel={language==='ar'?'فتح الصورة':'Open photo'} style={{flex:1,height:80,borderRadius:10,overflow:'hidden'}}>{(Platform.OS!=='web'||galleryImageSources[img.id])&&<Image source={{uri:Platform.OS==='web'?galleryImageSources[img.id]:img.managedUri}} style={{width:'100%',height:'100%',resizeMode:'cover'}}/>}</TouchableOpacity>)}</View></View>}
+              <Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'الموقع':'Location'}</Text>
               <View testID="property-compact-source" style={{ backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#E2E8F0', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-                <Feather name="user" size={19} color="#173F78" />
-                <Text style={{ color: '#173F78', fontFamily: fonts.semiBold, fontSize: 13, maxWidth: '28%', textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
+                <Feather name="user" size={19} color="#203568" />
+                <Text style={{ color: '#203568', fontFamily: fonts.semiBold, fontSize: 13, maxWidth: '28%', textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   {sourcePerson ? <>
-                    <Text testID="property-source-person" style={{ color: '#173F78', fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
+                    <Text testID="property-source-person" style={{ color: '#203568', fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, textAlign: isRTL ? 'right' : 'left' }}>{sourcePerson.name}</Text>
                     <Text style={{ color: '#64748B', fontFamily: fonts.regular, fontSize: 11, textAlign: isRTL ? 'right' : 'left' }}>{t(`source.role.${source?.role}` as any)}</Text>
                   </> : <Text style={{ color: '#64748B', fontFamily: fonts.regular, fontSize: 13, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'غير مرتبط' : 'Not linked'}</Text>}
                 </View>
-                <TouchableOpacity onPress={() => void openSource()} accessibilityRole="button" accessibilityLabel={sourcePerson ? t('source.change') : t('source.choose')} testID="property-source-change" style={{ minHeight: 40, minWidth: 48, paddingHorizontal: 8, borderWidth: 1, borderColor: '#2474D6', borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: '#2474D6', fontFamily: fonts.semiBold, fontSize: 13 }}>{sourcePerson ? (language === 'ar' ? 'تغيير' : 'Change') : (language === 'ar' ? 'ربط' : 'Link')}</Text>
+                <TouchableOpacity onPress={() => void openSource()} accessibilityRole="button" accessibilityLabel={sourcePerson ? t('source.change') : t('source.choose')} testID="property-source-change" style={{ minHeight: 40, minWidth: 48, paddingHorizontal: 8, borderWidth: 1, borderColor: '#2854F4', borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#2854F4', fontFamily: fonts.semiBold, fontSize: 13 }}>{sourcePerson ? (language === 'ar' ? 'تغيير' : 'Change') : (language === 'ar' ? 'ربط' : 'Link')}</Text>
                 </TouchableOpacity>
                 {sourcePerson && <TouchableOpacity onPress={() => setSourceConfirmVisible(true)} accessibilityRole="button" accessibilityLabel={t('source.unlink')} testID="property-source-unlink" style={{ minHeight: 44, minWidth: 32, alignItems: 'center', justifyContent: 'center' }}><Feather name="link-2" size={18} color={colors.destructive} /></TouchableOpacity>}
               </View>
 
               {(detailMapsHref || property.locationEnrichment?.coordinates) ? (
-              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 10, padding: 0, borderWidth: 1, borderColor: '#2474D6' }}>
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 10, padding: 0, borderWidth: 1, borderColor: '#2854F4' }}>
                 {Platform.OS === 'web' ? detailMapsHref ? (
                   <a
                     href={detailMapsHref}
@@ -1512,10 +1489,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     rel="noopener noreferrer"
                     data-testid="property-maps-action"
                     aria-label={language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
-                    style={{ backgroundColor: '#FFFFFF', borderRadius: 10, minHeight: 40, padding: 8, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, color: '#2474D6', textDecoration: 'none' }}
+                    style={{ backgroundColor: '#FFFFFF', borderRadius: 10, minHeight: 40, padding: 8, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, color: '#2854F4', textDecoration: 'none' }}
                   >
-                    <Feather name="map" size={20} color="#2474D6" />
-                    <Text style={{ color: '#2474D6', fontFamily: fonts.bold, fontSize: 14 }}>
+                    <Feather name="map" size={20} color="#2854F4" />
+                    <Text style={{ color: '#2854F4', fontFamily: fonts.bold, fontSize: 14 }}>
                       {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
                     </Text>
                   </a>
@@ -1526,14 +1503,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                     accessibilityState={{ disabled: true }}
                     style={{ backgroundColor: '#FFFFFF', borderRadius: 10, minHeight: 40, padding: 8, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, opacity: 0.55 }}
                   >
-                    <Feather name="map" size={20} color="#2474D6" />
-                    <Text style={{ color: '#2474D6', fontFamily: fonts.bold, fontSize: 14 }}>
+                    <Feather name="map" size={20} color="#2854F4" />
+                    <Text style={{ color: '#2854F4', fontFamily: fonts.bold, fontSize: 14 }}>
                       {language === 'ar' ? 'عرض على الخريطة' : 'View on map'}
                     </Text>
                   </View>
                 ) : (
                   <TouchableOpacity onPress={openDetailMapsLink} accessibilityRole="button" testID="property-maps-action" style={{ minHeight: 40, direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
-                    <Feather name="map" size={20} color="#2474D6" /><Text style={{ color: '#2474D6', fontFamily: fonts.semiBold, fontSize: 14 }}>{language === 'ar' ? 'عرض على الخريطة' : 'View on map'}</Text>
+                    <Feather name="map" size={20} color="#2854F4" /><Text style={{ color: '#2854F4', fontFamily: fonts.semiBold, fontSize: 14 }}>{language === 'ar' ? 'عرض على الخريطة' : 'View on map'}</Text>
                   </TouchableOpacity>
                 )}
                 {mapsActionError ? (
@@ -1548,10 +1525,25 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
               ) : null}
 
-              {descriptionText ? <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 }}>
-                <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{t('enrich.description')}</Text>
-                <Text style={{ color: '#173F78', fontFamily: fonts.regular, fontSize: 14, lineHeight: 22, textAlign: isRTL ? 'right' : 'left' }}>{descriptionText}</Text>
-              </View> : null}
+              {(availableFeatures.length > 0 || featureSummaryDetails.length > 0) && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
+                <Text style={{ color: '#203568', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'خدمات العقار' : 'Property services'}</Text>
+                <ChoiceGrid columns={2} gap={6}>
+                  {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} compact />)}
+                </ChoiceGrid>
+                {featureSummaryDetails.length > 0 && <View testID="property-feature-details" style={{ gap: 6 }}>
+                  {featureSummaryDetails.map(item => <Text key={item.field} style={{ color: '#334155', fontFamily: fonts.medium, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{item.label}</Text>)}
+                </View>}
+              </View>}
+
+              {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
+                <Text style={{ color: '#203568', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
+                <ChoiceGrid columns={3} gap={6}>
+                  {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} compact vertical />)}
+                </ChoiceGrid>
+              </View>}
+
+              <CompactPropertySpecs specs={compactSpecs} />
+
 
 
             {otherFiles.length > 0 && (
@@ -1618,6 +1610,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             ) : null}
             <PropertyFormCard title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} icon="map-pin" testID="property-edit-basic-card">
+            <Text style={{fontFamily:fonts.semiBold,color:colors.foreground,textAlign:isRTL?'right':'left'}}>{language==='ar'?'عنوان العقار':'Property title'}</Text><TextInput value={choices.listingTitle ?? ''} maxLength={160} onChangeText={listingTitle=>updateChoices({listingTitle})} style={propertyFormInputStyle} testID="edit-listing-title" />
+            {shownTransaction==='rent' && <View><Text style={{fontFamily:fonts.semiBold,color:colors.foreground,textAlign:isRTL?'right':'left'}}>{language==='ar'?'حالة العرض':'Availability'}</Text><ChoiceGrid>{(['available','rented'] as const).map(status=><Choice key={status} selected={(choices.rentalAvailability??'available')===status} onPress={()=>updateChoices({rentalAvailability:status})} title={status==='rented'?(language==='ar'?'مؤجر':'Rented'):(language==='ar'?'معروض للإيجار':'Offered for rent')} testID={`edit-availability-${status}`} />)}</ChoiceGrid></View>}
+
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.type')}</Text>
             <Text testID="property-fixed-type" style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{savedTypeLabel}</Text>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.transaction')}</Text>
@@ -1705,7 +1700,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 });
               }}
             />
-            <PropertyFormCard title={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} icon="file-text">
+            <PropertyFormCard page={1} title={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} icon="file-text">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.description')}</Text>
             <TextInput
               value={choices.description ?? ''}
@@ -1806,10 +1801,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             ))}
             </LocationAttachmentCard>
-            <Button title={t('edit.save')} onPress={save} loading={saving} testID="property-edit-save" /><Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" onPress={() => setLeaveVisible(true)} disabled={saving} testID="property-edit-discard-action" />
+            <Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" onPress={() => setLeaveVisible(true)} disabled={saving} testID="property-edit-discard-action" />
           </>
         ) : null}
-      </ScrollView></View></RequiredFormProvider>
+      </ScrollView></View></RequiredFormProvider></PropertyPageContext.Provider>
+      {mode==='edit' && <PropertyWizardFooter page={formPage} previous={leaveEditor} busy={saving} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});}else void save();}} />}
 
       <Modal visible={areaOpen} animationType="slide" onRequestClose={() => setAreaOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -2173,26 +2169,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </Text>
             </TouchableOpacity>
           )}
-          {Platform.OS === 'web' ? (
-            <Link
-              href={withMatchingReturn(getPropertyEditRouteHref(property.core.id, offeredStudio), matchingReturnToken) as never}
-              testID="property-edit-action"
-              accessibilityRole="link"
-              style={{ ...approvedActionStyle, backgroundColor: colors.card, display: 'flex', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.primary, textDecorationLine: 'none' }}
-            >
-              <Feather name="edit-2" size={20} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontFamily: fonts.bold, fontSize: 16 }}>
-                {t('detail.edit')}
-              </Text>
-            </Link>
-          ) : (
-            <TouchableOpacity onPress={handleEdit} testID="property-edit-action" style={{ ...approvedActionStyle, backgroundColor: colors.card, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.primary }}>
-              <Feather name="edit-2" size={20} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontFamily: fonts.bold, fontSize: 16 }}>
-                {t('detail.edit')}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={language==='ar'?'اتصال بمصدر العقار':'Call property contact'} disabled={!sourcePerson?.normalizedPhone} onPress={()=>{if(sourcePerson?.normalizedPhone)void Linking.openURL(`tel:${sourcePerson.normalizedPhone}`);}} testID="property-call-action" style={{...approvedActionStyle,backgroundColor:colors.success,opacity:sourcePerson?.normalizedPhone?1:.5,flexDirection:isRTL?'row-reverse':'row',alignItems:'center',justifyContent:'center',gap:8}}><Feather name="phone" size={20} color="white"/><Text style={{fontFamily:fonts.bold,color:'white',fontSize:16}}>{language==='ar'?'اتصال':'Call'}</Text></TouchableOpacity>
         </View>
       )}
     </View>

@@ -55,6 +55,8 @@ export interface StudioFormValues {
   readonly parking: StudioSelection;
   readonly amenitySelections?: Readonly<Partial<Record<StudioFeatureField, StudioSelection>>>;
   readonly nearbyServices?: readonly string[];
+  readonly listingTitle?: string;
+  readonly rentalAvailability?: "available" | "rented";
   readonly description: string;
 }
 
@@ -110,6 +112,7 @@ export function createStudioFormValues(
     parking: mode === 'offered' ? 'unknown' : 'not_important',
     amenitySelections: Object.fromEntries(STUDIO_FEATURES.map(item => [item.field, mode === 'offered' ? 'unknown' : 'not_important'])),
     nearbyServices: [],
+    listingTitle: '',
     description: '',
   };
 }
@@ -320,7 +323,9 @@ export function buildStudioProperty(
   values: StudioFormValues,
   id: string,
   offerId: string,
+  previousKitchens?: readonly KitchenSpec[],
 ): Property {
+  if(values.kitchens && values.kitchens.length>3 && JSON.stringify(values.kitchens)!==JSON.stringify(previousKitchens)) throw Error('KITCHEN_COUNT_LIMIT');
   assertValidForm(values);
   if (values.mode !== 'offered') throw new Error('STUDIO_PROPERTY_REQUIRES_OFFERED_MODE');
   const price = parseNumericInput(values.price)!;
@@ -362,6 +367,9 @@ export function buildStudioProperty(
       : {}),
   };
   const property: Property = {
+    ...(values.listingTitle!==undefined ? {listingTitle:values.listingTitle.trim()} : {}),
+    ...(values.rentalAvailability ? {rentalAvailability:values.rentalAvailability} : {}),
+
     core,
     activeOffer: values.transaction === 'sale'
       ? { id: offerId, propertyCoreId: id, transaction: 'sale', salePrice: { amount: price, currencyCode: 'KWD' } }
@@ -508,6 +516,8 @@ export function readStudioProperty(property: Property): StudioFormValues {
     parking: details.hasParking === true ? 'yes' : details.hasParking === false ? 'no' : 'unknown',
     amenitySelections: Object.fromEntries(STUDIO_FEATURES.map(item => [item.field, details[item.field] === true ? 'yes' : details[item.field] === false ? 'no' : 'unknown'])),
     nearbyServices: [...(property.nearbyServices ?? [])],
+    listingTitle: property.listingTitle ?? '',
+    ...(property.rentalAvailability ? {rentalAvailability:property.rentalAvailability} : {}),
     description: property.core.description?.value ?? '',
   };
 }

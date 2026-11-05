@@ -31,6 +31,8 @@ export interface UpdateStorage {
 }
 
 export interface PropertyEditChoices {
+  listingTitle?: string;
+  rentalAvailability?: "available" | "rented";
   propertyType: PropertyType;
   transaction: Transaction;
   priceAmount?: number;
@@ -343,6 +345,8 @@ export function createEditDraft(baseline: Property, storage: UpdateStorage = Asy
           }
           : {}),
       },
+      listingTitle: baseline.listingTitle ?? '',
+      ...(baseline.rentalAvailability ? {rentalAvailability:baseline.rentalAvailability} : {}),
       description: baseline.core.description?.value ?? '',
       privateNotes: baseline.core.privateNotes?.value ?? '',
       paciNumber: baseline.locationEnrichment?.paciNumber?.value ?? '',
@@ -538,6 +542,13 @@ export function buildPropertyUpdateCandidate(
     };
     candidate.activeOffer.rentalPeriodId = rentalPeriodId;
   }
+  if (Object.prototype.hasOwnProperty.call(choices,'listingTitle')) {
+    if(choices.listingTitle?.trim()) candidate.listingTitle=choices.listingTitle.trim(); else delete candidate.listingTitle;
+  }
+  if(choices.rentalAvailability!==undefined) candidate.rentalAvailability=choices.rentalAvailability;
+  const nextKitchens=(candidate.typeDetails as Record<string,unknown> | undefined)?.kitchens;
+  const oldKitchens=(baseline.typeDetails as unknown as Record<string,unknown> | undefined)?.kitchens;
+  if(Array.isArray(nextKitchens)&&nextKitchens.length>3&&JSON.stringify(nextKitchens)!==JSON.stringify(oldKitchens)) throw Error('KITCHEN_COUNT_LIMIT');
   const validation = validateProperty(candidate as unknown as Property);
   if (!validation.ok) throw new Error(`DOMAIN_VALIDATION:${validation.issues.map(issue => issue.code).join(',')}`);
   return candidate as unknown as Property;

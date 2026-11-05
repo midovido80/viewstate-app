@@ -1,3 +1,4 @@
+import { useAppChrome } from '@/components/AppChrome';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -11,11 +12,12 @@ import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 const touchSize = Platform.OS === 'android' ? 48 : 44;
 
 export function PrimaryTabHeader({ title, compactSearch = false }: { title: string; compactSearch?: boolean }) {
+  const chrome=useAppChrome();
   const router = useRouter(), colors = useColors(), insets = useScreenInsets();
   const { t, isRTL, fonts, language } = useI18n(), notices = useMatchNotifications();
   const row = isRTL ? 'row-reverse' : 'row';
   return <View style={[styles.container, { backgroundColor: colors.card, paddingTop: insets.top }]}>
-    <View style={[styles.brandRow, { flexDirection: row }]}>
+    {!chrome && <View style={[styles.brandRow, { flexDirection: row }]}>
       <ViewStateBrand />
       <View style={{ flexDirection: row, gap: 4 }}>
         {compactSearch && <TouchableOpacity testID="global-search-open" accessibilityRole="button" accessibilityLabel={t('search.open')} onPress={() => router.push('/search' as never)} style={styles.tool}><Feather name="search" size={21} color={colors.text} /></TouchableOpacity>}
@@ -26,7 +28,7 @@ export function PrimaryTabHeader({ title, compactSearch = false }: { title: stri
         <TouchableOpacity accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)} style={styles.tool}><Feather name="settings" size={21} color={colors.text} /></TouchableOpacity>
       </View>
     </View>
-    <Text accessibilityRole="header" style={[styles.title, { color: colors.text, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
+    }<Text accessibilityRole="header" style={[styles.title, { color: colors.text, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
     {!compactSearch && <TouchableOpacity style={[styles.searchBar, { backgroundColor: colors.background, borderColor: colors.border, flexDirection: row }]} onPress={() => router.push('/search' as never)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t('search.open')} testID="global-search-open">
       <Feather name="search" size={18} color={colors.mutedForeground} /><Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 14, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{t('common.search')}</Text>
     </TouchableOpacity>}

@@ -99,6 +99,7 @@ export function projectDraftToProperty(
   }
 
   const property: Property = {
+    ...(draft.listingTitle?.trim() ? {listingTitle:draft.listingTitle.trim()} : {}),
     core,
     activeOffer,
     ...(typeDetails === undefined ? {} : { typeDetails }),

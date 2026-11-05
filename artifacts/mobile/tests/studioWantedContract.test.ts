@@ -36,7 +36,7 @@ test('PRODUCTION CONTRACT: Wanted excludes map and attachment UI while Offered r
   assert.ok(!STUDIO_FORM_FIELD_ORDER.wanted.includes('mapsLink'));
   assert.match(form, /mode === 'offered' \? renderExactLocationSection\(\) : null/);
   assert.match(form, /mode === 'offered' \? renderStudioAttachments\(\) : null/);
-  assert.match(studio, /renderReview\(\)\}\s*\{mode === 'offered' \? renderStudioAttachments\(\) : null\}/);
+  assert.match(studio, /const showingReview = mode !== 'offered'/);
   assert.doesNotMatch(form, /mode === 'wanted'[\s\S]{0,140}renderExactLocationSection\(\)/);
   assert.doesNotMatch(form, /mode === 'wanted'[\s\S]{0,140}renderStudioAttachments\(\)/);
 });

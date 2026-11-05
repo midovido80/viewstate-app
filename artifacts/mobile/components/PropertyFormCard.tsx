@@ -1,26 +1,27 @@
+import { PropertyPageSection, type PropertyPage } from '@/components/PropertyWizard';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';
 
 export const propertyFormInputStyle = {
-  minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14,
-  paddingVertical: 10, backgroundColor: '#FFFFFF', borderColor: '#CBD5E1',
-  color: '#173F78', fontSize: 16,
+  minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14,
+  paddingVertical: 8, backgroundColor: '#FFFFFF', borderColor: '#CBD5E1',
+  color: '#203568', fontSize: 16,
 } as const;
 
 /** Presentation only: callers retain field applicability, validation and persistence. */
-export function PropertyFormCard({ title, children, testID, icon = 'file-text' }: {
-  title: string; children: ReactNode; testID?: string; icon?: keyof typeof Feather.glyphMap;
+export function PropertyFormCard({ title, children, testID, icon = 'file-text', page = 0 }: {
+  title: string; children: ReactNode; testID?: string; icon?: keyof typeof Feather.glyphMap; page?: PropertyPage;
 }) {
   const { isRTL, fonts } = useI18n();
-  return <View testID={testID} style={styles.card}>
+  return <PropertyPageSection page={page}><View testID={testID} style={styles.card}>
     <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-      <Feather name={icon} size={20} color="#173F78" accessible={false} />
-      <Text accessibilityRole="header" style={{ flex: 1, color: '#173F78', fontFamily: fonts.bold, fontSize: 18, lineHeight: 26, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
+
+      <Text accessibilityRole="header" style={{ flex: 1, color: '#203568', fontFamily: fonts.bold, fontSize: 16, lineHeight: 24, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
     </View>
     {children}
-  </View>;
+  </View></PropertyPageSection>;
 }
 
 /** Area comes first in reading order. Keep both columns usable with enlarged system fonts. */
@@ -35,5 +36,5 @@ export function PropertyAreaBlockRow({ area, block }: { area: ReactNode; block?:
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 18, padding: 14, gap: 14, minWidth: 0 },
+  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 18, padding: 10, gap: 8, minWidth: 0 },
 });

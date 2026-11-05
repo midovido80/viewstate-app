@@ -49,7 +49,7 @@ test('STRUCTURAL: empty eligible-Person list offers the existing add flow and lo
   assert.match(emptyState, /testID="studio-add-person"/);
   assert.match(emptyState, /Add Wanted Studio/);
   assert.match(emptyState, /إضافة طلب استوديو/);
-  assert.match(studio, /const showingReview = step === 'review' && wantedIdentityReady/);
+  assert.match(studio, /const showingReview = mode !== 'offered' && step === 'review' && wantedIdentityReady/);
   assert.match(studio, /\{!showingReview \? renderForm\(\) :/);
 });
 

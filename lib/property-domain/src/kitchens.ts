@@ -1,5 +1,5 @@
 export interface KitchenSpec {
-  readonly layout?: "regular" | "american";
+  readonly layout?: "regular" | "american" | "preparatory";
   readonly equipment?: "equipped" | "unequipped";
   readonly access?: "private" | "shared";
 }
@@ -23,7 +23,7 @@ export function validKitchens(value: unknown): value is readonly KitchenSpec[] {
         !Array.isArray(item) &&
         Object.entries(item).every(([key, v]) =>
           key === "layout"
-            ? ["regular", "american"].includes(String(v))
+            ? ["regular", "american", "preparatory"].includes(String(v))
             : key === "equipment"
               ? ["equipped", "unequipped"].includes(String(v))
               : key === "access"
@@ -64,4 +64,9 @@ export function compareKitchens(
     return wanted.every((_, index) => visit(index, new Set()));
   };
   return canAssign(false) ? true : canAssign(true) ? undefined : false;
+}
+
+/** New selections have at most three kitchens. Read compatibility deliberately retains older records. */
+export function validKitchenSelection(value: unknown): value is readonly KitchenSpec[] {
+  return validKitchens(value) && value.length <= 3;
 }

@@ -1,3 +1,4 @@
+import { PropertyVisualCard } from '@/components/PropertyVisualSummary';
 import { matchingTarget } from '@/services/matchingScope';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { projectPropertyFacts } from '@/services/propertyFactProjection';
@@ -131,9 +132,9 @@ export default function PropertiesScreen() {
       <View
         style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
       >
-        <TouchableOpacity
+        {item.kind==='offered' ? <PropertyVisualCard property={item.property} title={[typeLabel,subtypeLabel].filter(Boolean).join(' · ')} area={areaLabel} price={priceLabel} onPress={()=>router.push(getOfferedWantedHref(item.kind,item.id) as never)} testID={`property-card-${item.id}`} /> : <TouchableOpacity
           onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
-          testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
+          testID={`requirement-card-${item.id}`}
           accessibilityRole="button"
           accessibilityLabel={`${badges.map(badge => badge.label).join(', ')}, ${areaLabel}`}
           style={{ flexDirection: 'row', gap: 12, alignItems: 'stretch' }}
@@ -163,11 +164,7 @@ export default function PropertiesScreen() {
                 </Text>
               </View>
             ))}
-            {isHighlighted ? (
-              <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
-              </View>
-            ) : null}
+
           </View>
         </View>
 
@@ -191,7 +188,12 @@ export default function PropertiesScreen() {
           ) : null}
         </View>
         </View>
-        </TouchableOpacity>
+        </TouchableOpacity>}
+        {isHighlighted ? (
+              <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
+              </View>
+            ) : null}
         {requirement && <>
           <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left', marginTop: 6 }}>
             {[requirement.bedroomsMinimum !== undefined ? `${language === 'ar' ? 'غرف' : 'Bedrooms'}: ${requirement.bedroomsMinimum}+` : '', requirement.bathroomsMinimum !== undefined ? `${language === 'ar' ? 'حمامات' : 'Bathrooms'}: ${requirement.bathroomsMinimum}+` : ''].filter(Boolean).join(' · ')}
@@ -446,8 +448,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: {
-    borderWidth: 1,
-    padding: 12,
+    borderWidth: 0,
+    padding: 0,
     marginBottom: 12,
     shadowColor: '#172C4D',
     shadowOpacity: 0.04,

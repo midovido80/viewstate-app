@@ -1,3 +1,4 @@
+import './propertyVisualRefresh.test.ts';
 import './unifiedBack.test.ts';
 import './localMatchAudioConfig.test';
 import './localMatchSound.test';
@@ -2145,11 +2146,12 @@ test('Task 6 static/source assertions: detail, monthly cadence, accessibility, b
     readFile(sourcePath('../app/capture/price.tsx'), 'utf8'),
     readFile(sourcePath('../app/capture/summary.tsx'), 'utf8'),
   ]);
-  assert.match(home, /testID=\{`\$\{item\.kind === 'offered' \? 'property' : 'requirement'\}-card-\$\{item\.id\}`\}/);
+  assert.match(home, /testID=\{`property-card-\$\{item\.id\}`\}/);
+  assert.match(home, /testID=\{`requirement-card-\$\{item\.id\}`\}/);
   assert.match(home, /accessibilityRole="button"/);
   assert.match(detail, /status === 'missing'/);
   assert.match(detail, /property-edit-action/);
-  assert.match(detail, /property-edit-save/);
+  assert.match(detail, /PropertyWizardFooter/);
   assert.match(detail, /testID="property-update-retry"/);
   assert.match(detail, /testID="property-update-cleanup-retry"/);
   assert.match(detail, /retryRecovery\(true\)/);

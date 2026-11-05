@@ -596,6 +596,8 @@ export function validateProperty(
   property: Property,
 ): ValidationResult<Property> {
   const issues: ValidationIssue[] = [];
+  if (property.listingTitle !== undefined && (typeof property.listingTitle !== "string" || property.listingTitle.length > 160)) issues.push(issue("invalid_physical_value", ["listingTitle"], "Listing title must be at most 160 characters."));
+  if (property.rentalAvailability !== undefined && !["available", "rented"].includes(property.rentalAvailability)) issues.push(issue("invalid_physical_value", ["rentalAvailability"], "Rental availability is invalid."));
   const coreResult = validatePropertyCore(property.core);
   const offerResult = validateOffer(property.activeOffer);
   const demoResult = validateDemoCapture(property.demoCapture);

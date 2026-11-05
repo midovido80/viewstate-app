@@ -303,6 +303,7 @@ function propertySearchFields(row: OfferedPropertyRow): FlexibleSearchField[] {
     ...(subtype === 'studio' ? [{ field: 'subtype', value: 'studio apartment' }] : []),
     ...recordIntentSearchValues(intent.id).map(value => ({ field: 'intent', value })),
     ...areaSearchFields(property.core.locationArea.id),
+    { field: 'description', value: property.listingTitle ?? '' },
     { field: 'description', value: safeDescription },
     ...personFields(row.personTargets ?? (row.person ? [row.person] : [])),
   ];

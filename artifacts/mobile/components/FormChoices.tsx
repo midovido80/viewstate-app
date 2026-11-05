@@ -50,12 +50,14 @@ export function CompactDropdown({
   options,
   onSelect,
   multiple = false,
+  inlineLabel = false,
   testID,
 }: {
   label?: string;
   options: readonly DropdownOption[];
   onSelect?: (value: string) => void;
   multiple?: boolean;
+  inlineLabel?: boolean;
   testID?: string;
 }) {
   const [open, setOpen] = useState(false),
@@ -72,9 +74,9 @@ export function CompactDropdown({
     lineHeight: 21,
   };
   return (
-    <View style={{ width: "100%", gap: 5 }}>
+    <View style={{ width: "100%", gap: 8, flexDirection: label && inlineLabel ? (isRTL ? "row-reverse" : "row") : "column", alignItems: label && inlineLabel ? "center" : undefined }}>
       {label && (
-        <Text style={[text, { fontFamily: fonts.semiBold }]}>{label}</Text>
+        <Text style={[text, { fontFamily: fonts.semiBold, flex: inlineLabel ? 2 : undefined }]}>{label}</Text>
       )}
       <Pressable
         testID={testID}
@@ -85,13 +87,14 @@ export function CompactDropdown({
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(true)}
         style={{
-          minHeight: 46,
+          minHeight: 44,
+          flex: label && inlineLabel ? 3 : undefined,
           borderWidth: 1,
           borderColor: colors.border,
           borderRadius: 10,
           backgroundColor: colors.card,
           paddingHorizontal: 12,
-          paddingVertical: 11,
+          paddingVertical: 8,
           flexDirection: isRTL ? "row-reverse" : "row",
           alignItems: "center",
           gap: 8,
@@ -148,8 +151,9 @@ export function CompactDropdown({
                     if (!multiple) setOpen(false);
                   }}
                   style={{
-                    minHeight: 46,
-                    paddingVertical: 11,
+                    minHeight: 44,
+          flex: label && inlineLabel ? 3 : undefined,
+                    paddingVertical: 8,
                     paddingHorizontal: 8,
                     borderBottomWidth: 1,
                     borderBottomColor: colors.border,

@@ -61,7 +61,7 @@ export function CommercialComplexSaleFields({ profile = 'complex', recordScopeKe
     <Text testID="complex-gross-yield" accessibilityLiveRegion="polite" style={{ ...labelStyle, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10 }}>{yieldPercent === undefined ? '—' : `${yieldPercent.toFixed(2)}%`}</Text>
     <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'قبل المصروفات والصيانة والتمويل' : 'Before expenses, maintenance and financing'}</Text>
     </PropertyFormCard>
-    <PropertyFormCard title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
+    <PropertyFormCard page={1} title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
       <OrderedPropertyAmenities entries={[
         ...(isFloor ? COMMERCIAL_FLOOR_SALE_AMENITIES.filter(field => !['hasKitchen', 'hasFacilityCleaning'].includes(field)) : []).map(amenity => ({ field: amenity, content: <ChoiceChip key={amenity} optionId={amenity} label={labelFor(amenity)} selected={values[amenity] === 'true'} testID={`commercial-floor-${amenity}`} onPress={() => onChange(amenity, values[amenity] === 'true' ? '' : 'true')} /> })),
         { field: 'parkingTypes', details: true, content: <>{renderField('parkingTypes')}{renderField('privateParkingCount')}</> },

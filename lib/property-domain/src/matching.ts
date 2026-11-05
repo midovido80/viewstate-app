@@ -6,7 +6,7 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
 import { projectPropertyProfileDetails } from "./formContracts.ts";
 
 /** One executable policy. Old score results are never accepted by the selector. */
-export const MATCH_ENGINE_VERSION = "shortlist-v7" as const;
+export const MATCH_ENGINE_VERSION = "shortlist-v8" as const;
 export const MATCHING_DEFAULT_POLICY = {
   maximumResults: 5,
   maximumDifferences: 2,
@@ -163,6 +163,7 @@ export function checkMatchEligibility(
 ): MatchEligibilityResult {
   const property = candidate.property;
   const reasons: string[] = [];
+  if (property.activeOffer.transaction === "rent" && property.rentalAvailability === "rented") reasons.push("rented");
   if (property.core.propertyType !== requirement.propertyType)
     reasons.push("property_type");
   if (

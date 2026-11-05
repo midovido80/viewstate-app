@@ -201,6 +201,7 @@ export function searchGlobalDataWithMatchReasons(data: GlobalSearchData, query: 
       ...(isOfferedStudio(property) ? [{ field: 'type' as const, value: 'studio' }] : []),
       ...recordIntentSearchValues(intent.id).map(value => ({ field: 'type' as const, value })),
       ...areaFields(property.core.locationArea.id).map(value => ({ field: 'area' as const, value })),
+      { field: 'description', value: property.listingTitle ?? '' },
       { field: 'description', value: searchableDescription(property) },
       ...linkedPersonFields(linkedPeople),
     ];

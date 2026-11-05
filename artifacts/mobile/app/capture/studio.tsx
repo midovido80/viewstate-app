@@ -1,3 +1,4 @@
+import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
 import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
 import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
@@ -196,6 +197,7 @@ export default function StudioCaptureRoute() {
       isTransaction(transactionParam) ? transactionParam : 'rent',
     ),
   );
+  const [formPage,setFormPage]=useState<PropertyPage>(0);
   const [step, setStep] = useState<'form' | 'review'>('form');
   const [baselineProperty, setBaselineProperty] = useState<Property | null>(null);
   const [baselineRequirement, setBaselineRequirement] = useState<SeekerRequirement | null>(null);
@@ -422,8 +424,8 @@ export default function StudioCaptureRoute() {
       && selectedPerson.id === selectedPersonId
       && selectedPerson.classifications.includes('seeker')
       && (!seekerParam || selectedPerson.id === seekerParam));
-  const showingReview = step === 'review' && wantedIdentityReady;
-  const propertyReview = showingReview && mode === 'offered' && !editing;
+  const showingReview = mode !== 'offered' && step === 'review' && wantedIdentityReady;
+  const propertyReview = false;
   const getEditBackTarget = () => getStudioEditBackTarget(
     mode,
     editing,
@@ -440,7 +442,7 @@ export default function StudioCaptureRoute() {
     onPersist: () => { preserveStagedFiles.current=true; },
   });
   const { back: handleHeaderBack, exit: studioExit } = useDraftBack({ persist: persistStudio, fallback: studioBackTarget ? { ...studioBackTarget, params: { ...studioBackTarget.params, ...(matchingReturn ? { matchingReturn } : {}) } } : { pathname: '/capture/property-type', params: { mode, transaction: values.transaction, ...(selectedPersonId ? { seekerId: selectedPersonId } : {}), ...(linkPersonId ? { linkPersonId } : {}) } }, completed: () => !!committedRequirement.current || !!savedProperty || !!savedRequirement,
-    step: () => { if (step === 'review' && !savedProperty && !savedRequirement) { returnToForm(); return true; } return false; },
+    step: () => { if(mode==='offered'&&formPage>0&&!savedProperty){setFormPage((formPage-1) as PropertyPage);scrollRef.current?.scrollTo({y:0,animated:false});return true;} if (step === 'review' && !savedProperty && !savedRequirement) { returnToForm(); return true; } return false; },
   });
 
   const areaTitle = (id: string) => {
@@ -672,6 +674,7 @@ export default function StudioCaptureRoute() {
       setPersonError(t('studio.person_missing'));
     } else if (!result.ok) {
       const firstIssue = result.errors[0];
+      if(mode==='offered') setFormPage(firstIssue?.field==='mapsLink'?2:firstIssue?.field==='description'?1:0);
       setError(firstIssue
         ? firstIssue.field === 'bathrooms' && getStudioBathroomConfirmationCase(values)
           ? (language === 'ar'
@@ -743,6 +746,7 @@ export default function StudioCaptureRoute() {
           values,
           baselineProperty?.core.id ?? draftPropertyId.current,
           baselineProperty?.activeOffer.id ?? draftOfferId.current,
+          baselineProperty?.typeDetails && 'kitchens' in baselineProperty.typeDetails ? baselineProperty.typeDetails.kitchens : undefined,
         );
         const candidateWithoutAttachments = baselineProperty
           ? prepareStudioPropertyEditCandidate(baselineProperty, built)
@@ -1262,13 +1266,13 @@ export default function StudioCaptureRoute() {
           ) : null}
           {mode === 'offered' ? <>
             <PropertyFormCard title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} icon="map-pin" testID="studio-basic-card">
-              {renderCatalogField('locationAreaId')}
+              <Text style={labelStyle}>{language==='ar'?'عنوان العقار':'Property title'}</Text><TextInput value={values.listingTitle??''} maxLength={160} onChangeText={value=>update('listingTitle',value)} style={[styles.input,propertyFormInputStyle]} testID="studio-listing-title" />{renderCatalogField('locationAreaId')}
               <RequiredFormHint />{renderCatalogField('price')}
               {renderCatalogField('rentalPeriodId')}
-              {renderCatalogField('transaction')}
+              {renderCatalogField('transaction')}{editing&&values.transaction==='rent'&&<View><Text style={labelStyle}>{language==='ar'?'حالة العرض':'Availability'}</Text><ChoiceGrid>{(['available','rented'] as const).map(status=><ChoiceChip key={status} label={status==='rented'?(language==='ar'?'مؤجر':'Rented'):(language==='ar'?'معروض للإيجار':'Offered for rent')} selected={(values.rentalAvailability??'available')===status} onPress={()=>update('rentalAvailability',status)} />)}</ChoiceGrid></View>}
             </PropertyFormCard>
             <PropertyFormCard title={language === 'ar' ? 'مواصفات الاستوديو' : 'Studio specifications'} icon="home">
-              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'parking', 'amenities', 'nearbyServices', 'description', 'kitchen'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}
+              {STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['locationAreaId', 'price', 'rentalPeriodId', 'transaction', 'mapsLink', 'parking', 'amenities', 'nearbyServices', 'description', 'kitchen'].includes(fieldId)).map(fieldId => <View key={fieldId}>{renderCatalogField(fieldId)}{fieldId==='bathrooms' && <KitchenFields scopeKey="studio-kitchens" value={values.kitchens} onInvalidChange={setKitchenDraftInvalid} onChange={value=>{update('kitchens',value);if(value!==undefined)update('kitchen','unknown');}} />}</View>)}
           {mode === 'offered' ? (
             <View style={styles.field} testID="studio-occupancy-field">
               <Text style={[styles.label, labelStyle]}>{language === 'ar' ? 'نوع السكن' : 'Occupancy'}</Text>
@@ -1287,15 +1291,15 @@ export default function StudioCaptureRoute() {
             </View>
           ) : null}
             </PropertyFormCard>
-            <PropertyFormCard title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">{renderCatalogField('amenities')}</PropertyFormCard>
+            <PropertyFormCard page={1} title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">{renderCatalogField('amenities')}</PropertyFormCard>
             {renderCatalogField('nearbyServices')}
-            <PropertyFormCard title={language === 'ar' ? 'ملاحظات إضافية' : 'Additional notes'} icon="file-text">
+            <PropertyFormCard page={1} title={language === 'ar' ? 'ملاحظات إضافية' : 'Additional notes'} icon="file-text">
               {renderCatalogField('description')}
               {textInput('privateNotes', language === 'ar' ? 'ملاحظات خاصة' : 'Private notes', { multiline: true })}
             </PropertyFormCard>
           </> : <PropertyFormCard title={language === 'ar' ? 'المتطلبات' : 'Requirements'} icon="search">{STUDIO_FORM_FIELD_ORDER[mode].filter(fieldId => !['parking','kitchen','nearbyServices'].includes(fieldId)).map(fieldId => renderCatalogField(fieldId))}</PropertyFormCard>}
             {mode==='wanted' && values.transaction==='rent' && <View style={styles.field}><Text style={[styles.label,labelStyle]}>{language==='ar'?'نوع السكن':'Occupancy'}</Text><ChoiceGrid>{(['family','bachelor','company_staff','women','mixed'] as const).map(value=><ChoiceChip key={value} label={t(`matching.occupancy.${value}`)} selected={values.occupancy===value} role="radio" onPress={()=>update('occupancy',values.occupancy===value?undefined:value)} />)}</ChoiceGrid></View>}
-            {mode === 'offered' && <PropertyFormCard title={language==='ar'?'المطابخ':'Kitchens'} icon="list"><KitchenFields scopeKey="studio-kitchens" value={values.kitchens} onInvalidChange={setKitchenDraftInvalid} onChange={value=>{ update('kitchens',value); if(value!==undefined) update('kitchen','unknown'); }} /></PropertyFormCard>}
+
           {mode === 'offered' ? renderExactLocationSection() : null}
           {mode === 'offered' ? renderStudioAttachments() : null}
         </>
@@ -1542,7 +1546,7 @@ export default function StudioCaptureRoute() {
           style={[styles.backButton, navigationButtonStyle]}
         >
           <Feather name={isRTL ? 'arrow-right' : 'arrow-left'} size={18} color={navigationButtonTextStyle.color} />
-          <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('studio.back')}</Text>
+          <Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{mode==='offered'?(language==='ar'?'السابق':'Previous'):t('studio.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
           {propertyReview ? (language === 'ar' ? 'مراجعة العقار' : 'Property review') : editing ? t('studio.edit_title') : t(mode === 'offered' ? 'studio.title.offered' : 'studio.title.wanted')}
@@ -1556,7 +1560,8 @@ export default function StudioCaptureRoute() {
         <View style={styles.loading}><Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{error || t('studio.load_failed')}</Text></View>
       ) : (
         <>
-          <KeyboardAwareScrollViewCompat
+          {mode==='offered' && !savedProperty && <PropertyWizardProgress page={formPage} />}
+          <PropertyPageContext.Provider value={mode==='offered'&&!savedProperty?formPage:null}><KeyboardAwareScrollViewCompat
             ref={scrollRef}
             style={styles.scroll}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: bottomInset + 28, gap: 16 }}
@@ -1574,13 +1579,15 @@ export default function StudioCaptureRoute() {
                 {error}
               </Text>
             ) : null}
+            {savedProperty && <Text style={{fontFamily:fonts.bold,fontSize:20,color:colors.success,textAlign:isRTL?'right':'left'}}>{language==='ar'?'تم حفظ العقار':'Property saved'}</Text>}
+            {!savedProperty && <>
             {!showingReview ? renderForm() : (
               <>
                 {!propertyReview && <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('studio.review')}</Text>}
                 {propertyReview ? renderPropertyReview() : renderReview()}
-                {mode === 'offered' ? renderStudioAttachments() : null}
               </>
             )}
+            </>}
             {savedProperty && <Button title={language==='ar'?'مطابقة الآن':'Match now'} onPress={()=>router.push(matchingTarget({ kind: 'property', id: savedProperty.core.id }) as never)} testID="studio-property-match-now" />}
             {savedProperty && propertySourceConfirmed ? (
               <View style={[styles.successActions, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
@@ -1654,7 +1661,7 @@ export default function StudioCaptureRoute() {
                 disabled={saving}
               />
             ) : null}
-            {!propertyReview && <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            {mode!=='offered' && !propertyReview && <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               {showingReview ? (
                 <Button title={t('studio.back')} onPress={returnToForm} disabled={saving} />
               ) : null}
@@ -1673,7 +1680,8 @@ export default function StudioCaptureRoute() {
                 />
               )}
             </View>}
-          </KeyboardAwareScrollViewCompat>
+          </KeyboardAwareScrollViewCompat></PropertyPageContext.Provider>
+          {mode==='offered'&&!savedProperty && <PropertyWizardFooter page={formPage} previous={handleHeaderBack} busy={saving||!recordLoaded} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);scrollRef.current?.scrollTo({y:0,animated:false});}else void doSave();}} />}
           {propertyReview && <PropertyReviewFooter title={saving ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : t('summary.submit')}
             onPress={() => void doSave()} loading={saving}
             disabled={saving || !!propertyRecovery || !!committedRequirement.current || !!savedProperty || !!savedRequirement} testID="studio-save" />}

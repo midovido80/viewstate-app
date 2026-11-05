@@ -43,7 +43,9 @@ test('Saved Property Details exposes Home in detail and edit headers while retai
   const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
   const homeActionCount = (source.match(/testID="property-home-action"/g) ?? []).length;
   const backActionCount = (source.match(/testID="property-detail-back"/g) ?? []).length;
-  assert.equal(homeActionCount, 2, 'one Home action belongs in each saved/detail and edit header');
+  assert.equal(homeActionCount, 1, 'editor retains Home; saved detail uses the reference Edit action');
+  assert.match(source, /property-call-action/);
+  assert.match(source, /property-edit-action/);
   assert.equal(backActionCount, 3, 'loading fallback, saved detail, and edit retain their Back actions');
   assert.match(source, /exitEditor\(\(\) => router\.replace/);
   assert.equal((source.match(/accessibilityLabel=\{language === 'ar' \? 'الرئيسية' : 'Home'\}/g) ?? []).length, homeActionCount);
@@ -64,7 +66,7 @@ test('Property Details uses the canonical intent label and never promotes an unk
     activeOffer: { transaction: 'sale' },
   } as unknown as Property, 'ar').label, 'معروض للبيع');
   assert.match(source, /const propertyIntent = projectPropertyIntent\(property, language\)/);
-  assert.match(source, /\{propertyIntent\.label\}/);
+  assert.match(source, /<PropertyStatus property=\{property\}/);
   assert.match(source, /propertyIntent\.id === 'offered_sale'[\s\S]*property\.activeOffer\.salePrice\.amount/);
   assert.match(source, /propertyIntent\.id === 'offered_rent'[\s\S]*property\.activeOffer\.rentalPrice\.amount/);
   assert.doesNotMatch(source, /t\(`transaction\.\$\{property\.activeOffer\.transaction\}`\)/);
