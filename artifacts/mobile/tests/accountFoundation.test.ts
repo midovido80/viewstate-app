@@ -150,10 +150,10 @@ test('onboarding never collects a fixed OTP or pretends to verify a provider', a
   assert.match(ui, /Real sign-in is not available yet/);
   assert.match(ui, /Continue without sign-in/);
 });
-test('profile has explicit native Back protection, dirty-gesture guard and deep-link fallback', async () => {
+test('profile uses shared draft Back protection and a deep-link fallback', async () => {
   const profile = await readFile(new URL('../components/account/ProfileSection.tsx', import.meta.url), 'utf8');
-  assert.match(profile, /BackHandler\.addEventListener\('hardwareBackPress'/);
-  assert.match(profile, /gestureEnabled: !dirty/);
+  assert.match(profile, /useDraftBack\(\{ persist/);
+  assert.match(profile, /useLocalFormDraft/);
   assert.match(profile, /onBack=\{back\}/);
   assert.match(profile, /router\.canGoBack\(\)/);
   assert.match(profile, /router\.replace\('\/\(tabs\)\/more'/);

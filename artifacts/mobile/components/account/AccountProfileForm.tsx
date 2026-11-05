@@ -1,5 +1,5 @@
 import { TextInput, FieldSelect } from '@/components/FormField';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,14 +9,15 @@ import { ACCOUNT_ROLE_LABELS } from '@/services/accountOnboarding';
 import { chooseLocalProfilePhoto } from '@/services/accountDevice';
 
 export type ContactInput = Omit<UserContactProfile, 'user_id'>;
-export function AccountProfileForm({ userId, initial, photo: initialPhoto = '', onSave, onCancel, email }: {
+export function AccountProfileForm({ userId, initial, photo: initialPhoto = '', onSave, onCancel, email, onDraftChange, onDiscard }: {
   userId: string; initial?: UserContactProfile | null; photo?: string; email: string;
-  onSave(value: ContactInput, photo: string): Promise<void>; onCancel?(): void;
+  onSave(value: ContactInput, photo: string): Promise<void>; onCancel?(): void; onDiscard?(): void; onDraftChange?(value: ContactInput, photo: string): void;
 }) {
   const { language, isRTL } = useI18n();
   const L = (ar: string, en: string) => language === 'ar' ? ar : en;
   const [value, setValue] = useState<ContactInput>(() => ({ display_name: initial?.display_name ?? '', phone: initial?.phone ?? '', company: initial?.company ?? '', classification: initial?.classification ?? '' as ContactInput['classification'], other_classification: initial?.other_classification ?? '' }));
   const [photo, setPhoto] = useState(initialPhoto);
+  useEffect(() => { onDraftChange?.(value, photo); }, [value, photo]);
   const [fields, setFields] = useState<readonly ProfileField[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -63,7 +64,7 @@ export function AccountProfileForm({ userId, initial, photo: initialPhoto = '', 
   };
   return <SafeAreaView style={s.safe} edges={['top', 'bottom']}><KeyboardAvoidingView style={s.safe} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={[s.content, { direction: isRTL ? 'rtl' : 'ltr' }]}>
-      <View style={s.top}><Text style={s.brand}>ViewState</Text>{onCancel ? <Pressable accessibilityRole="button" onPress={onCancel} disabled={busy} style={s.quiet}><Text style={s.red}>{L('إلغاء', 'Cancel')}</Text></Pressable> : null}</View>
+      <View style={s.top}><Text style={s.brand}>ViewState</Text>{onCancel ? <Pressable accessibilityRole="button" onPress={onCancel} disabled={busy} style={s.quiet}><Text style={s.red}>{onDraftChange ? L('رجوع', 'Back') : L('إلغاء', 'Cancel')}</Text></Pressable> : null}</View>{onDiscard ? <Pressable accessibilityRole="button" disabled={busy} onPress={onDiscard} style={s.quiet}><Text style={s.red}>{L('إلغاء المسودة', 'Discard draft')}</Text></Pressable> : null}
       <Text style={s.title}>{initial ? L('بياناتك الشخصية', 'Your personal details') : L('خلّينا نتعرف عليك', 'A little about you')}</Text>
       <Text style={s.description}>{L('أكمل بياناتك لبدء تنظيم عقاراتك وعملائك.', 'Complete your profile to start organizing properties and clients.')}</Text>
       <Text style={s.email}>{email}</Text>

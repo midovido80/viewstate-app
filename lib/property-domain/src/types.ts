@@ -460,6 +460,8 @@ export interface PropertySource {
 }
 
 export interface PropertyAdditiveMetadata {
+  readonly listingTitle?: string;
+  readonly rentalAvailability?: "available" | "rented";
   readonly locationEnrichment?: LocationEnrichmentMetadata;
   readonly attachments?: readonly PropertyAttachmentMetadata[];
   /** Selected nearby-service identifiers captured by the native Property flow. */
@@ -504,6 +506,7 @@ export interface Property extends PropertyAdditiveMetadata {
 }
 
 export interface PropertyDraft {
+  readonly listingTitle?: string;
   readonly propertyCoreId?: PropertyCoreId;
   readonly offerId?: OfferId;
   readonly propertyType?: PropertyType;

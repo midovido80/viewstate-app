@@ -35,7 +35,7 @@ test('Wanted specifications Back leaves the new flow; legacy editing keeps its l
   const ts = (await import('typescript')).default;
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   const start = source.indexOf('  const previousStep = () => {');
-  const end = source.indexOf('  const changeApartmentSubtype', start);
+  const end = source.indexOf('  const persistForm', start);
   assert.ok(start >= 0 && end > start);
   const compiled = ts.transpileModule(source.slice(start, end) + '\nreturn previousStep;', {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },

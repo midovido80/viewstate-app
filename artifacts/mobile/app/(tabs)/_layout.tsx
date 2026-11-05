@@ -13,6 +13,7 @@ function ClassicTabLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       tabBar={props => <RaisedTabBar {...props} />}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,

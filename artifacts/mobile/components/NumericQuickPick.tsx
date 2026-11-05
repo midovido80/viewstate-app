@@ -69,10 +69,10 @@ export function NumericQuickPick({
 
   return (
     <View style={styles.container} testID={testID}>
-      <RequiredLabelText style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
+      <View style={{flexDirection:isRTL?'row-reverse':'row',alignItems:'center',gap:10}}><View style={{flex:2}}><RequiredLabelText style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
         {label}
-      </RequiredLabelText>
-      <CompactDropdown testID={`${testID}-dropdown`} options={[
+      </RequiredLabelText></View>
+      <View style={{flex:3,minWidth:0}}><CompactDropdown testID={`${testID}-dropdown`} options={[
         { value: '', label: language === 'ar' ? 'غير محدد' : 'Not specified', selected: value === '' && !expanded },
         ...quickPickValues.map(option => ({ value: String(option), label: option === 0 ? (language === 'ar' ? 'لا يوجد (0)' : 'None (0)') : String(option), selected: !expanded && parsedValue.kind === 'valid' && parsedValue.value === option, testID: `${testID}-${option}` })),
         { value: 'manual', label: language === 'ar' ? 'عدد آخر…' : 'Other number…', selected: expanded },
@@ -85,7 +85,7 @@ export function NumericQuickPick({
           onChangeText(option);
         }
       }} />
-      {expanded ? (
+      </View></View>{expanded ? (
         <>
           <TextInput
             invalid={invalid}

@@ -1,13 +1,14 @@
 import { TextInput } from '@/components/FormField';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '@/contexts/I18nContext';
 import { validateGuestContact } from '@/services/guestAccount';
 import { accountScreenStyles as s } from './AccountProfileForm';
-export function GuestProfileForm({ name: initialName = '', phone: initialPhone = '', onSave, onCancel }: { name?: string; phone?: string; onSave(name: string, phone: string): Promise<void>; onCancel(): void }) {
+export function GuestProfileForm({ name: initialName = '', phone: initialPhone = '', onSave, onCancel, onDraftChange, onDiscard }: { name?: string; phone?: string; onSave(name: string, phone: string): Promise<void>; onCancel(): void; onDiscard?(): void; onDraftChange?(name: string, phone: string): void }) {
   const { language, isRTL } = useI18n(); const L = (ar: string, en: string) => language === 'ar' ? ar : en;
   const [name, setName] = useState(initialName), [phone, setPhone] = useState(initialPhone), [error, setError] = useState(''), [field, setField] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => { onDraftChange?.(name, phone); }, [name, phone]);
   const nameRef = useRef<TextInput>(null), phoneRef = useRef<TextInput>(null);
   const save = async () => {
     if (busy) return;
@@ -26,6 +27,6 @@ export function GuestProfileForm({ name: initialName = '', phone: initialPhone =
     <Text style={s.description}>{L('البيانات محلية وليست نسخة احتياطية سحابية. حذف التطبيق أو بيانات المتصفح قد يفقدها. يستطيع من يستخدم هذا الجهاز فتح مساحة الضيف.', 'Data is local, not a cloud backup. Uninstalling the app or clearing browser data may lose it. Anyone using this device can open its guest workspace.')}</Text>
     {error ? <Text accessibilityRole="alert" style={s.red}>{error}</Text> : null}
     <Pressable accessibilityRole="button" testID="guest-save" disabled={busy} style={s.primary} onPress={() => void save()}>{busy ? <ActivityIndicator color="white" /> : <Text style={s.primaryText}>{L('حفظ ومتابعة', 'Save and continue')}</Text>}</Pressable>
-    <Pressable accessibilityRole="button" disabled={busy} style={s.quiet} onPress={onCancel}><Text style={s.red}>{L('إلغاء', 'Cancel')}</Text></Pressable>
+    <Pressable accessibilityRole="button" disabled={busy} style={s.quiet} onPress={onCancel}><Text style={s.red}>{onDraftChange ? L('رجوع', 'Back') : L('إلغاء', 'Cancel')}</Text></Pressable>{onDiscard ? <Pressable accessibilityRole="button" disabled={busy} onPress={onDiscard} style={s.quiet}><Text style={s.red}>{L('إلغاء المسودة', 'Discard draft')}</Text></Pressable> : null}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }

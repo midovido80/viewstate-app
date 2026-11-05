@@ -303,6 +303,7 @@ function propertySearchFields(row: OfferedPropertyRow): FlexibleSearchField[] {
     ...(subtype === 'studio' ? [{ field: 'subtype', value: 'studio apartment' }] : []),
     ...recordIntentSearchValues(intent.id).map(value => ({ field: 'intent', value })),
     ...areaSearchFields(property.core.locationArea.id),
+    { field: 'description', value: property.listingTitle ?? '' },
     { field: 'description', value: safeDescription },
     ...personFields(row.personTargets ?? (row.person ? [row.person] : [])),
   ];
@@ -376,4 +377,15 @@ export function filterOfferedWantedRows(
       query,
     );
   });
+}
+/** Views of the same records, never copies: inventory defaults to offered stock only. */
+export type PropertyInventoryTab = 'properties' | 'requests';
+export function filterPropertyInventoryRows(
+  rows: readonly OfferedWantedRow[],
+  tab: PropertyInventoryTab,
+  filter: ComposableRecordFilter,
+  search = '',
+  sector: PropertySectorFilter = 'all',
+): OfferedWantedRow[] {
+  return filterOfferedWantedRows(rows.filter(row => row.kind === (tab === 'properties' ? 'offered' : 'wanted')), { ...filter, directions: [] }, search, sector);
 }

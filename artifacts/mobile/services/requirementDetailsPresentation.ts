@@ -115,8 +115,8 @@ export function getRequirementDetailsRows(
   if (['apartment', 'house', 'villa', 'chalet'].includes(requirement.propertyType)
     || requirement.propertyType === 'floor' && requirement.floorUse === 'residential') {
     add('specifications', 'bathroomsMinimum', label('Minimum bathrooms', 'الحد الأدنى للحمامات'), number(requirement.bathroomsMinimum, language));
-    if (!studio) add('specifications', 'masterBedroomsMinimum', label('Minimum master bedrooms', 'الحد الأدنى لغرف النوم الرئيسية'), number(requirement.masterBedroomsMinimum, language));
-    else if (requirement.masterBedroomsMinimum !== undefined) add('specifications', 'masterBedroomsMinimum', label('Minimum master bedrooms', 'الحد الأدنى لغرف النوم الرئيسية'), number(requirement.masterBedroomsMinimum, language));
+    if (!studio) add('specifications', 'masterBedroomsMinimum', label('Minimum master bedrooms', 'الحد الأدنى لغرف ماستر'), number(requirement.masterBedroomsMinimum, language));
+    else if (requirement.masterBedroomsMinimum !== undefined) add('specifications', 'masterBedroomsMinimum', label('Minimum master bedrooms', 'الحد الأدنى لغرف ماستر'), number(requirement.masterBedroomsMinimum, language));
     add('preferences', 'driverRoom', label('Driver room', 'غرفة سائق'),
       requirement.driverRoom === undefined ? unspecified(language) : yesNo(requirement.driverRoom, language));
     add('preferences', 'preferredAmenities', label('Preferred amenities', 'المزايا المفضلة'), list(requirement.preferredAmenities));

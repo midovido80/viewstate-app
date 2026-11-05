@@ -1,3 +1,4 @@
+import { resolveMatchingScope, matchingEntryHref } from './matchingScope';
 import type { QuickMatchingFilters } from './quickMatching';
 import type { MatchingResultsLayout } from '@/services/matchingGroups';
 import { MATCH_ENGINE_VERSION, type MatchingPolicy, type SeekerRequirement } from '@workspace/property-domain';
@@ -36,5 +37,9 @@ export function withMatchingReturn(href: string, token?: string): string {
 export function matchingBackRoute(token?: string): string {
   const current = readMatchingReturn(token);
   if (!current) return '/properties';
-  return `/matching?returnSession=${encodeURIComponent(current.token)}${current.scopeRequirementId ? `&requirementId=${encodeURIComponent(current.scopeRequirementId)}` : ''}${current.scopePropertyId ? `&propertyId=${encodeURIComponent(current.scopePropertyId)}` : ''}${current.best ? '&best=1' : ''}`;
+  const scope = resolveMatchingScope({ propertyId: current.scopePropertyId, requirementId: current.scopeRequirementId, best: current.best ? '1' : undefined });
+  if (scope.kind === 'invalid') return '/properties';
+  const target = new URLSearchParams(matchingEntryHref(scope).split('?')[1]);
+  target.delete('returnSession');
+  return `/matching?returnSession=${encodeURIComponent(current.token)}&${target.toString()}`;
 }

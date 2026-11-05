@@ -3,7 +3,7 @@ import test from 'node:test';
 import { registerHooks } from 'node:module';
 import { choiceTileWidth } from '../services/choicePresentation.ts';
 
-const state = { rtl: false, fontScale: 1, platform: 'web', capture: undefined as any, router: undefined as any, params: {} as any, width: 148, measured: undefined as number | undefined };
+const state = { dismissals: 0, rtl: false, fontScale: 1, platform: 'web', capture: undefined as any, router: undefined as any, params: {} as any, width: 148, measured: undefined as number | undefined };
 (globalThis as any).__choiceGridTest = state;
 const stubs = new Map([
   ['react', `
@@ -14,7 +14,8 @@ const stubs = new Map([
     export const useState = initial => [initial, value => { globalThis.__choiceGridTest.measured = value; }];
   `],
   ['react/jsx-runtime', `export const Fragment = 'Fragment'; export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx;`],
-  ['react-native', `export const useWindowDimensions = () => ({ width: 390, height: 844, fontScale: globalThis.__choiceGridTest.fontScale }); export const Platform = { get OS() { return globalThis.__choiceGridTest.platform; } }; export const ScrollView = 'ScrollView'; export const ActivityIndicator = 'ActivityIndicator'; export const View = 'View'; export const Text = 'Text'; export const TextInput = 'TextInput'; export const TouchableOpacity = 'TouchableOpacity'; export const StyleSheet = { create: value => value };`],
+  ['react-native', `export const useWindowDimensions = () => ({ width: 390, height: 844, fontScale: globalThis.__choiceGridTest.fontScale }); export const Platform = { get OS() { return globalThis.__choiceGridTest.platform; } }; export const Keyboard = {dismiss: () => globalThis.__choiceGridTest.dismissals++}; export const Pressable = 'Pressable'; export const ScrollView = 'ScrollView'; export const ActivityIndicator = 'ActivityIndicator'; export const View = 'View'; export const Text = 'Text'; export const TextInput = 'TextInput'; export const TouchableOpacity = 'TouchableOpacity'; export const StyleSheet = { create: value => value };`],
+  ['react-native-safe-area-context', `export const useSafeAreaInsets = () => ({top:32,bottom:36,left:0,right:0});`],
   ['@expo/vector-icons', `export const Feather = 'Feather';`],
   ['react-native-keyboard-controller', `export const KeyboardAwareScrollView = 'NativeKeyboardAwareScrollView';`],
   ['@/hooks/useScreenInsets', `export const useScreenInsets = () => ({ top: 32, bottom: 36, left: 0, right: 0 });`],
@@ -23,7 +24,7 @@ const stubs = new Map([
   ['@/contexts/CaptureContext', `export const useCapture = () => globalThis.__choiceGridTest.capture;`],
   ['expo-router', `export const useLocalSearchParams = () => globalThis.__choiceGridTest.params; export const useRouter = () => globalThis.__choiceGridTest.router;`],
 
-  ['@/hooks/useColors', `export const useColors = () => ({ card: '#fff', foreground: '#111', border: '#ddd', primary: '#1A56FF', background: '#F7F8FB', mutedForeground: '#64748B' });`],
+  ['@/hooks/useColors', `export const useColors = () => ({ card: '#fff', foreground: '#111', border: '#ddd', primary: '#1A56FF', accent: '#203568', background: '#F7F8FB', mutedForeground: '#64748B' });`],
   ['@/contexts/I18nContext', `export const useI18n = () => ({ isRTL: globalThis.__choiceGridTest.rtl, language: globalThis.__choiceGridTest.rtl ? 'ar' : 'en', fonts: { medium: 'medium', semiBold: 'bold', bold: 'bold' }, t: key => key });`],
   ['@workspace/property-domain', `export const APARTMENT_SUBTYPES = []; export const FURNISHING_VALUES = [];`],
   ['@/components/NumericQuickPick', `export const NumericQuickPick = 'NumericQuickPick';`],
@@ -126,7 +127,7 @@ test('Form cards do not add press handlers or alter their field controls', async
   const control = { type: 'TextInput', key: null, props: { value: '500', onChangeText: () => undefined } };
   const card = PropertyFormCard({ title: 'المواصفات', children: control });
   assert.equal(card.props.onPress, undefined);
-  assert.equal(card.props.children[1], control);
+  assert.equal(card.props.children.props.children[1], control);
 });
 
 
@@ -233,4 +234,20 @@ test('Standalone person actions keep a 48px nonshrinking hit target in both dire
     assert.equal(flatten(row.props.style).flex, 1);
     assert.equal(flatten(row.props.style).height, 56);
   }
+});
+
+
+test('three-page footer uses Previous, saves only on the last page, dismisses keyboard and respects bottom safe area', async () => {
+  const { PropertyWizardFooter } = await import('../components/PropertyWizard.tsx');
+  for (const rtl of [false,true]) for (const page of [0,1,2] as const) {
+    state.rtl=rtl; let previous=0,next=0;
+    const footer=PropertyWizardFooter({page,previous:()=>previous++,next:()=>next++});
+    assert.equal(footer.props.style.paddingBottom,36);
+    const buttons=elements(footer).filter(item=>item.type==='Pressable');
+    assert.equal(buttons.length,2);assert.equal(buttons[0].props.children.props.children,rtl?'السابق':'Previous');
+    assert.equal(buttons[1].props.children.props.children,page===2?(rtl?'حفظ العقار':'Save property'):(rtl?'التالي':'Next'));
+    const before=state.dismissals;buttons[0].props.onPress();buttons[1].props.onPress();assert.equal(previous,1);assert.equal(next,1);assert.equal(state.dismissals,before+2);
+    const busy=PropertyWizardFooter({page,previous:()=>{},next:()=>{},busy:true});assert.ok(elements(busy).filter(item=>item.type==='Pressable').every(item=>item.props.disabled));
+  }
+  state.rtl=false;
 });

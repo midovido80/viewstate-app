@@ -208,7 +208,7 @@ test("matching back restores both property scope and best-view scope", () => {
     scrollOffset: 20,
   });
   assert.match(matchingBackRoute(token), /propertyId=property/);
-  assert.match(matchingBackRoute(token), /best=1/);
+  assert.doesNotMatch(matchingBackRoute(token), /best=1/, 'record scope must not inherit the Home best filter');
 });
 
 test("new kitchen and occupancy fields survive a real web repository restart without quarantine", async () => {

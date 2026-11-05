@@ -1,3 +1,4 @@
+import { matchingTarget } from '@/services/matchingScope';
 import React, { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -43,7 +44,7 @@ export default function NotificationsScreen() {
           {notice.snoozedUntil && !notice.read && <Txt muted size={12}>{ar ? 'تم تأجيل التذكير لوقت لاحق أثناء فتح التطبيق.' : 'Reminder deferred until later while the app is open.'}</Txt>}
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             <Action label={ar ? 'مشاركة العقار' : 'Share property'} icon="share-2" tone="primary" disabled={busy || !match} onPress={() => void openShare(notice)} />
-            <Action label={ar ? 'عرض المقارنة' : 'View comparison'} icon="target" disabled={busy || !match} onPress={() => { void mark(notice.id, 'read'); router.push({ pathname: '/matching', params: { requirementId: match?.requirement.id } } as never); }} />
+            <Action label={ar ? 'عرض المقارنة' : 'View comparison'} icon="target" disabled={busy || !match} onPress={() => { void mark(notice.id, 'read'); match && router.push(matchingTarget({ kind: 'requirement', id: match.requirement.id }) as never); }} />
             {!notice.read && <Action label={ar ? 'تم الاطلاع' : 'Mark read'} icon="check" disabled={busy} onPress={() => void mark(notice.id, 'read')} />}
             {match && <Action label={ar ? 'ذكّرني بعد ساعة' : 'Remind in an hour'} icon="clock" disabled={busy} onPress={() => void mark(notice.id, 'snooze')} />}
           </View>

@@ -7,15 +7,15 @@
 const colors = {
   light: {
     text: '#172C4D',
-    tint: '#235AF3',
+    tint: '#2854F4',
 
-    background: '#F5F7FB',
+    background: '#F5F5FB',
     foreground: '#172C4D',
 
     card: '#FFFFFF',
     cardForeground: '#172C4D',
 
-    primary: '#235AF3',
+    primary: '#2854F4',
     primaryForeground: '#FFFFFF',
 
     turquoise: '#18B5A6',
@@ -26,7 +26,7 @@ const colors = {
     muted: '#E5E7EB',
     mutedForeground: '#62738D',
 
-    accent: '#173F78',
+    accent: '#203568',
     accentForeground: '#FFFFFF',
 
     destructive: '#D73C4A',

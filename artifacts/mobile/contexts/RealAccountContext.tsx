@@ -1,3 +1,4 @@
+import {WorkspaceConnection} from '@/components/account/WorkspaceConnection';
 import { WelcomeExperience as Welcome } from '@/components/account/WelcomeExperience';
 import { AccountEntryScreen } from '@/components/account/AccountEntryScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,7 +19,7 @@ import { UserDataProvider, buildUserData, type UserResources } from './UserDataC
 import { createGoogleAccountDevice } from '@/services/googleAccountDevice';
 import { createAccountRepositoriesDevice } from '@/services/accountRepositoriesDevice';
 import { accountEntryStage, ONBOARDING_SEEN_KEY } from '@/services/accountOnboarding';
-import type { UserContactProfile } from '@/services/googleAccountContract';
+import {validateUserContactProfile,type UserContactProfile} from '@/services/googleAccountContract';
 import { clearMatchingReturn } from '@/services/matchingReturnSession';
 import { stopMatchCue } from '@/services/matchNoticeDevice';
 import { AccountProfileForm, accountScreenStyles as s, type ContactInput } from '@/components/account/AccountProfileForm';
@@ -33,7 +34,7 @@ interface RealAccount { email: string; profile: UserContactProfile; photo: strin
 const Context = createContext<RealAccount | null>(null);
 export function useRealAccount() { return useContext(Context); }
 
-/** With configuration present, no app screen or device-global store mounts before verified onboarding. */
+/** New identities require online onboarding; a trusted owner-matched device receipt can reopen local work offline. */
 export function RealAccountGate({ children }: { children: React.ReactNode }) {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -74,21 +75,27 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
       if (!device.current) { const next = await createGoogleAccountDevice({ url, publishableKey }); if (!mounted.current || expected !== epoch.current) { next.dispose(); return; } device.current = next; }
       valid();
       if (Platform.OS === 'web' && window.location.pathname === '/auth/callback') {
-        try { await device.current.account.completeCallback(window.location.href); }
+        try { await device.current.account.completeCallback(window.location.href); await device.current.offline.forget(); }
         finally { window.history.replaceState(null, '', '/'); }
       }
       valid();
-      const verified = await device.current.account.readVerifiedAccount(); valid();
-      if (!verified) { setStage('signin'); if (login) { const result = await device.current.account.signIn(); valid(); if (result.type === 'signed_in') { checking.current = false; await bootstrap(); } } return; }
-      lease = await device.current.account.openScope(() => {
-        // No awaited auth request inside the SDK callback.
-        hideData();
-        if (mounted.current) { setStage('signin'); setError(L('انتهت الجلسة أو تغيّر الحساب. سجّل الدخول مرة أخرى.', 'Session ended or account changed. Sign in again.')); }
-      });
+      const revoked=()=>{
+        hideData();void device.current?.offline.forget().catch(()=>undefined);
+        if(mounted.current){setStage('signin');setError(L('يلزم تأكيد الحساب مجددًا. بيانات الجهاز محفوظة.','Account verification is required again. Device data is preserved.'));}
+      };
+      const restored=!login?await device.current.restoreOffline(revoked):null;valid();
+      const cached=restored?.cached;
+      if(restored){lease=restored.lease;}
+      else {
+        const verified=await device.current.account.readVerifiedAccount();valid();
+        if(!verified){setStage('signin');if(login){const result=await device.current.account.signIn();valid();if(result.type==='signed_in'){await device.current.offline.forget();checking.current=false;await bootstrap();}}return;}
+        lease=await device.current.account.openScope(revoked);
+      }
       valid();
       const resources = createAccountRepositoriesDevice(lease.scope);
       const settings = await resources.settings.load(); valid();
-      const profile = await device.current.account.readProfile(); valid();
+      const profile = cached?.profile ?? await device.current.account.readProfile(); valid();
+      if(profile&&!cached)await device.current.offline.remember(lease.account,profile);valid();
       const seen = await resources.storage.getItem(ONBOARDING_SEEN_KEY); valid();
       const owner: Active = { lease, resources, data: buildUserData(resources), profile, photo: settings.profile.photo, reducedMotion: settings.reducedMotion, id: expected };
       current.current = owner; setActive(owner);
@@ -143,7 +150,7 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   }, []);
   const signOut = async () => {
     hideData(); setStage('signin'); setError(''); setBusy(true);
-    try { await AsyncStorage.setItem(ENTRY_MODE_KEY, 'choice'); await device.current?.account.signOut(); }
+    try { await AsyncStorage.setItem(ENTRY_MODE_KEY, 'choice'); await device.current?.offline.forget(); await device.current?.account.signOut(); }
     catch { if (mounted.current) { setStage('error'); setError(L('تعذّر إنهاء جلسة الدخول. بيانات التطبيق مخفية؛ أعد محاولة تسجيل الخروج.', 'Could not end the sign-in session. App data is hidden; retry sign out.')); } }
     finally { if (mounted.current) setBusy(false); }
   };
@@ -208,7 +215,8 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
     const owner = current.current;
     if (!owner || !device.current) throw new Error('SIGN_IN_REQUIRED');
     assertCurrent(owner);
-    const profile = await device.current.account.saveProfile(input); assertCurrent(owner);
+    const profile=validateUserContactProfile(owner.lease.account.userId,input); assertCurrent(owner);
+    await device.current.offline.remember(owner.lease.account,profile,true);assertCurrent(owner);
     await owner.resources.settings.load(); assertCurrent(owner);
     await owner.resources.settings.update(state => ({ ...state, profile: { name: profile.display_name, company: profile.company, photo } })); assertCurrent(owner);
     const next = { ...owner, profile, photo };
@@ -231,7 +239,7 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   if (guest && stage === 'guest_ready') return <GuestAccountProvider value={{ identity: guest.identity, activate, saveContact: saveGuest }}><UserDataProvider value={guest.data}><React.Fragment key={'guest-' + guest.id}>{children}</React.Fragment></UserDataProvider></GuestAccountProvider>;
   if (active && stage === 'transfer') return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={[s.content, { justifyContent: 'center', direction: isRTL ? 'rtl' : 'ltr' }]}>
     <Text style={s.brand}>ViewState</Text><Text style={s.title}>{L('نقل بيانات الضيف إلى حسابك؟', 'Bring guest data into your account?')}</Text><Text style={s.email}>{active.lease.account.email}</Text>
-    <Text style={s.description}>{L('بموافقتك ننسخ عقاراتك وعملاءك وطلباتك والميديا والمسودات والمتابعات إلى مساحة هذا الحساب على الجهاز. نحتفظ بالأصل للاستعادة، ولا نرفع العقارات والميديا للسحابة. النسخة المنقولة ترتبط بهذا الحساب فقط.', 'With your consent, copy guest properties, clients, requirements, media, drafts and follow-ups into this account’s storage on this device. Originals are kept for recovery. Properties/media are not uploaded to the cloud. The transferred workspace is bound to this account only.')}</Text>
+    <Text style={s.description}>{L('بموافقتك ننسخ عقاراتك وعملاءك وطلباتك والميديا والمسودات والمتابعات إلى مساحة هذا الحساب على الجهاز. نحتفظ بالأصل للاستعادة، وتتم مزامنة بيانات العمل والمرفقات بشكل خاص داخل حسابك عند توفر الاتصال. النسخة المنقولة ترتبط بهذا الحساب فقط.', 'With your consent, copy guest properties, clients, requirements, media, drafts and follow-ups into this account’s storage on this device. Originals are kept for recovery. Work records and attachments sync privately within your account when a connection is available. The transferred workspace is bound to this account only.')}</Text>
     {error ? <Text accessibilityRole="alert" style={s.red}>{error}</Text> : null}
     <Pressable accessibilityRole="button" testID="guest-transfer-confirm" disabled={busy} style={s.primary} onPress={() => void completeActivation(true)}>{busy ? <ActivityIndicator color="white" /> : <Text style={s.primaryText}>{L('نعم، نقل بياناتي', 'Yes, bring my data')}</Text>}</Pressable>
     <Pressable accessibilityRole="button" disabled={busy} style={s.quiet} onPress={() => void completeActivation(false)}><Text style={s.link}>{L('لا، ابدأ بالحساب دون نقل', 'No, continue without importing')}</Text></Pressable>
@@ -239,7 +247,7 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   </ScrollView></SafeAreaView>;
   if (active && stage === 'profile') return <AccountProfileForm userId={active.lease.account.userId} email={active.lease.account.email} initial={active.profile ?? (pendingTransfer.current ? { user_id: active.lease.account.userId, display_name: pendingTransfer.current.name, phone: pendingTransfer.current.phone, company: '', classification: '' as UserContactProfile['classification'], other_classification: '' } : null)} photo={active.photo} onSave={saveContact} onCancel={() => void signOut()} />;
   if (active && stage === 'welcome') return <View style={{ flex: 1 }}><Welcome name={active.profile?.display_name} reducedMotion={active.reducedMotion} busy={busy} onDone={() => void finishWelcome()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
-  if (active?.profile && stage === 'ready') return <Context.Provider value={{ email: active.lease.account.email, profile: active.profile, photo: active.photo, assertActive: () => assertCurrent(active), saveContact, signOut }}><UserDataProvider value={active.data}><React.Fragment key={active.id}>{children}</React.Fragment></UserDataProvider></Context.Provider>;
+  if (active?.profile && stage === 'ready') return <Context.Provider value={{ email: active.lease.account.email, profile: active.profile, photo: active.photo, assertActive: () => assertCurrent(active), saveContact, signOut }}><UserDataProvider value={active.data}><View key={active.id} style={{flex:1}}><WorkspaceConnection resources={active.resources} device={device.current!} revalidate={active.lease.revalidate} /><View style={{flex:1}}>{children}</View></View></UserDataProvider></Context.Provider>;
   return <AccountEntryScreen checking={stage === 'checking'} failed={stage === 'error'} busy={busy} error={error}
     onGoogle={() => void signIn()} onGuest={() => void startGuest()} onRetry={() => void bootstrap(true)}
     onSignOut={device.current ? () => void signOut() : undefined}

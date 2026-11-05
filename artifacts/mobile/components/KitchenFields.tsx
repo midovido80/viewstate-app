@@ -1,9 +1,9 @@
 import { Text, View, useWindowDimensions } from "react-native";
 import type { KitchenSpec } from "@workspace/property-domain";
 import { CompactDropdown } from "./FormChoices";
-import { NumericQuickPick } from "./NumericQuickPick";
+
 import { useI18n } from "@/contexts/I18nContext";
-const COUNT_OPTIONS = [0, 1, 2, 3, 4, 5] as const;
+const COUNT_OPTIONS = [0, 1, 2, 3] as const;
 /** Count is array length; blank and explicit zero remain different. No defaults are invented. */
 export function KitchenFields({
   value,
@@ -38,32 +38,24 @@ export function KitchenFields({
     );
   }
   const count = (
-    <NumericQuickPick
+    <CompactDropdown
+      inlineLabel={value?.length !== 1}
       label={ar ? "عدد المطابخ" : "Kitchens"}
-      scopeKey={scopeKey}
-      value={value === undefined ? "" : String(value.length)}
-      quickPickValues={COUNT_OPTIONS}
+      options={COUNT_OPTIONS.map(n => ({value: String(n), label: n === 0 ? (ar ? 'لا يوجد (0)' : 'None (0)') : String(n), selected: value?.length === n}))}
       testID="kitchen-count"
-      onPendingValidityChange={(_, invalid) => onInvalidChange?.(invalid)}
-      onChangeText={(raw) => {
-        if (!raw) {
-          onChange(undefined);
-          return;
-        }
+      onSelect={(raw) => {
+        if (!raw) { onChange(undefined); onInvalidChange?.(false); return; }
         const count = Number(raw);
-        if (!Number.isSafeInteger(count) || count < 0) return;
-        // Guard array allocation on a malformed paste; the owning form blocks Save.
-        if (count > 1000) {
-          onInvalidChange?.(true);
-          return;
-        }
-        onChange(Array.from({ length: count }, (_, i) => value?.[i] ?? {}));
+        if (!Number.isInteger(count) || count < 0 || count > 3) { onInvalidChange?.(true); return; }
+        onInvalidChange?.(false);
+        onChange(Array.from({length: count}, (_, i) => value?.[i] ?? {}));
       }}
     />
   );
   const field = (index: number, key: keyof KitchenSpec) => (
     <View key={key} style={{ flex: 1, minWidth: 0 }}>
       <CompactDropdown
+        inlineLabel={!commercial && value?.length !== 1}
         label={
           key === "layout"
             ? ar
@@ -81,6 +73,7 @@ export function KitchenFields({
           ? [
               ["regular", ar ? "عادي" : "Regular"],
               ["american", ar ? "أمريكي" : "American"],
+              ["preparatory", ar ? "تحضيري" : "Preparatory"],
             ]
           : key === "equipment"
             ? [

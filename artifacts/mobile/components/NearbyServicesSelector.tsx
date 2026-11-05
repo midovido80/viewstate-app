@@ -11,7 +11,7 @@ export function NearbyServicesSelector({ values, onChange, language, color, font
   color: string;
   fontFamily: string;
 }) {
-  return <PropertyFormCard title={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} icon="map-pin" testID="nearby-services-section">
+  return <PropertyFormCard page={1} title={language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'} icon="map-pin" testID="nearby-services-section">
 
     <ChoiceGrid style={{ flexDirection: 'row', flexWrap: 'wrap', direction: language === 'ar' ? 'rtl' : 'ltr', gap: 8 }}>
       {(commercial ? COMMERCIAL_NEARBY_SERVICES : DEMO_NEARBY_SERVICES).map(item => <ChoiceChip key={item.id} optionId={item.id} label={item.label[language === 'ar' ? 1 : 0]} selected={values.includes(item.id)}

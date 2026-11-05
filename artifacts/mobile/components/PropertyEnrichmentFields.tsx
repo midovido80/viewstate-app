@@ -1,3 +1,4 @@
+import { KitchenSlot } from '@/components/PropertyWizard';
 import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
@@ -72,8 +73,7 @@ export function PropertyEnrichmentFields({
     && definition.field !== 'floorUse'
     && (!hidePropertyUse || definition.field !== 'propertyUse')
     && (!hideApartmentSubtype || definition.field !== 'apartmentSubtype')
-    && definition.field !== 'parkingSpaceCount'
-    && definition.group !== 'amenity'
+    && (definition.group !== 'amenity' || definition.field === 'parkingSpaceCount')
     && definition.field !== 'plotAreaSquareMeters'
     && definition.field !== 'builtUpAreaSquareMeters'
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
@@ -181,19 +181,19 @@ export function PropertyEnrichmentFields({
       {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">{ordered.map(definition => {
         const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
         return (
-          <RequiredField key={definition.field} id={definition.field}>
+          <View key={definition.field}><RequiredField id={definition.field}>
             {!usesResidentialQuickPick && (
               <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
                 {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
               </Text>
             )}
             {renderFieldContent(definition)}
-          </RequiredField>
+          </RequiredField>{definition.field === 'bathroomCount' && <KitchenSlot />}</View>
         );
       })}</PropertyFormCard>}
-      {(applicableDefinitions.some(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount') || amenityRenderExtra) && (
-        <PropertyFormCard title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
-          <OrderedPropertyAmenities extra={amenityRenderExtra} entries={applicableDefinitions.filter(definition => definition.group === 'amenity' || definition.field === 'parkingSpaceCount').map(definition => {
+      {(applicableDefinitions.some(definition => definition.group === 'amenity' && definition.field !== 'parkingSpaceCount') || amenityRenderExtra) && (
+        <PropertyFormCard page={1} title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
+          <OrderedPropertyAmenities extra={amenityRenderExtra} entries={applicableDefinitions.filter(definition => definition.group === 'amenity' && definition.field !== 'parkingSpaceCount').map(definition => {
               const { field } = definition;
               if (field === 'parkingSpaceCount') return { field, details: true, content: <View>{definition.control !== 'numeric_quick_pick' && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[field][language === 'ar' ? 1 : 0]}</Text>}{renderFieldContent(definition)}</View> };
               const value = values[field];

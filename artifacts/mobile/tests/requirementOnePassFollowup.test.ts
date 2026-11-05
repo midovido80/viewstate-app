@@ -54,7 +54,7 @@ test('Requirement Back revisits catalog choices while retaining the specificatio
   assert.match(route, /showCatalogBackControls && propertyType === 'apartment'/);
   assert.match(route, /changeApartmentSubtype/);
   assert.match(route, /setCatalog\(current => \[[\s\S]*getGenericRequirementApartmentSubtypePreference\(next\)/);
-  assert.match(route, /onPress=\{previousStep\}/);
+  assert.match(route, /onPress=\{formBack\}/);
   assert.match(route, /if \(startsAtSpecifications && step === 3\)[\s\S]*setStep\(1\)/);
   assert.match(route, /setBedrooms\(''\); setBathrooms\(''\)/, 'only an explicit incompatible type transition clears incompatible values');
 });

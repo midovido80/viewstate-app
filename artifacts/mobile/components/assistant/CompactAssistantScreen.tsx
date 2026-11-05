@@ -1,3 +1,6 @@
+import { useAppChrome } from '@/components/AppChrome';
+import { useLocalFormDraft } from '@/hooks/useDraftBack';
+import { matchingTarget } from '@/services/matchingScope';
 import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
@@ -38,6 +41,7 @@ function id() { return Crypto.randomUUID(); }
 /** Only web scroll containment is CSS. Native scroll containers use bounded layouts + nested scrolling. */
 const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'auto', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
 export default function CompactAssistantScreen() {
+  const chrome=useAppChrome();
   const { store } = useUserData();
   const h = useDailyAssistant(), { language, setLanguage, t, isRTL } = useI18n();
   const { state: account } = useAccountFoundation(), { row, align, fonts } = useAssistantUI();
@@ -79,6 +83,11 @@ export default function CompactAssistantScreen() {
   const pickerBack = useRef<Mode>(null);
   const [pickerQuery, setPickerQuery] = useState(''), [recordId, setRecordId] = useState('');
   const [preferences, setPreferences] = useState(h.state.settings);
+  const editorCommitted = useRef(false);
+  const parentMode = mode === 'calendar' ? calendarBack.current : mode === 'people' || mode === 'properties' ? pickerBack.current : mode;
+  const editorOpen = parentMode === 'editor' || parentMode === 'outcome' || parentMode === 'reschedule' || parentMode === 'settings';
+  const persistEditor = useLocalFormDraft({ identity: `followup:${parentMode}:${expected?.id ?? 'new'}`, value: { draft, expected, outcome, outcomeNotes, nextEnabled, nextDate, nextTime, nextTitle, newDate, newTime, preferences }, ready: editorOpen, completed: () => editorCommitted.current,
+    restore: saved => { setDraft(saved.draft); setExpected(saved.expected); setOutcome(saved.outcome); setOutcomeNotes(saved.outcomeNotes); setNextEnabled(saved.nextEnabled); setNextDate(saved.nextDate); setNextTime(saved.nextTime); setNextTitle(saved.nextTitle); setNewDate(saved.newDate); setNewTime(saved.newTime); setPreferences(saved.preferences); } });
   const rows = selectFollowups(h.state, h.inventory, h.selectedDay, 'all', '', overdue, today);
   const overdueTasks = sortFollowups(h.state.tasks.filter(v => v.status === 'pending' && v.date < today));
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
@@ -90,19 +99,22 @@ export default function CompactAssistantScreen() {
   const propertyTitle = (propertyId: string) => h.inventory.properties.find(p => p.id === propertyId)?.title ?? C('missingProperty');
   const personName = (task: Followup) => taskPersonName(task, h.inventory) || (task.personId ? C('missingPerson') : '');
   function chooseDay(day: string) { h.setSelectedDay(day); setOverdue(false); setQuery(''); }
-  function close() { if (h.busy) return; setMode(null); setFormError(''); setFieldError(''); }
+  function close() { if (h.busy) return; if (mode === 'editor' || mode === 'outcome' || mode === 'reschedule' || mode === 'settings') { void persistEditor().then(() => { setMode(mode === 'outcome' || mode === 'reschedule' ? 'detail' : null); setFormError(''); setFieldError(''); }).catch(() => h.notify(language === 'ar' ? 'لم تُحفظ المسودة. تعديلاتك ما زالت هنا؛ أعد المحاولة.' : 'Draft was not saved. Your entries are still here; retry.')); return; } if (mode === 'calendar' && calendarBack.current) { setMode(calendarBack.current); return; } if ((mode === 'people' || mode === 'properties') && pickerBack.current) { setMode(pickerBack.current); return; } if (mode === 'cancel') { setMode('detail'); return; } if (mode === 'person' || mode === 'property') { setMode('detail'); return; } setMode(null); setFormError(''); setFieldError(''); }
   function openEditor(kind: TaskKind = 'call', task?: Followup, extra: Partial<FollowupDraft> = {}) {
     if (!h.ready || h.busy) return;
+    editorCommitted.current = false;
     setExpected(task ?? null); setDraft(task ? { ...task } : { ...blankDraft(h.selectedDay, kind), ...extra });
     setFormError(''); setFieldError(''); h.clearError(); setMode('editor');
   }
   function openDetail(task: Followup) { setExpected(task); setFormError(''); setMode('detail'); }
   function openOutcome(task: Followup) {
     if (task.status !== 'pending') return;
+    editorCommitted.current = false;
     setExpected(task); setOutcome(OUTCOMES[task.kind][0]); setOutcomeNotes(''); setNextEnabled(false);
     setNextDate(addDays(today, 1)); setNextTime(''); setNextTitle(C('followupDefault')); setFormError(''); setMode('outcome');
   }
   function openReschedule(task: Followup) {
+    editorCommitted.current = false;
     setExpected(task); setNewDate(addDays(task.date < today ? today : task.date, 1)); setNewTime(task.time); setFormError(''); setMode('reschedule');
   }
   function openCalendar(target: CalendarTarget = 'page') {
@@ -131,7 +143,7 @@ export default function CompactAssistantScreen() {
     if (!validate(draft, expected?.id)) return;
     const at = new Date().toISOString(), newId = id();
     const saved = await h.mutate((value, inventory) => expected ? editFollowup(value, expected, draft, inventory, at) : createFollowup(value, draft, inventory, newId, at), C(expected ? 'updated' : 'newAdded'));
-    if (saved) { chooseDay(draft.date); close(); }
+    if (saved) { editorCommitted.current = true; await persistEditor(); chooseDay(draft.date); setMode(null); }
   }
   async function saveOutcome() {
     if (!expected) return;
@@ -142,12 +154,12 @@ export default function CompactAssistantScreen() {
       if (!validate(next.draft)) return;
     }
     const at = new Date().toISOString();
-    if (await h.mutate((value, inventory) => logOutcome(value, expected, outcome, outcomeNotes, at, inventory, next), C('outcomeSaved') + (next ? ' · ' + C('nextCreated') : ''))) close();
+    if (await h.mutate((value, inventory) => logOutcome(value, expected, outcome, outcomeNotes, at, inventory, next), C('outcomeSaved') + (next ? ' · ' + C('nextCreated') : ''))) { editorCommitted.current=true; await persistEditor(); setMode(null); }
   }
   async function saveReschedule() {
     if (!expected) return; const value = { ...expected, date: newDate, time: newTime };
     if (!validate(value, expected.id)) return;
-    if (await h.mutate((current, inventory) => editFollowup(current, expected, value, inventory, new Date().toISOString()), C('rescheduled'))) close();
+    if (await h.mutate((current, inventory) => editFollowup(current, expected, value, inventory, new Date().toISOString()), C('rescheduled'))) { editorCommitted.current=true; await persistEditor(); setMode(null); }
   }
   async function contact(task: Followup, whatsapp: boolean) {
     const p = h.catalog.people.find(p => p.id === task.personId);
@@ -167,7 +179,7 @@ export default function CompactAssistantScreen() {
   }
   const Footer = ({ save, onPress }: { save: AssistantCopyKey; onPress: () => void }) => <>
     <View style={s.grow}><Action label={h.busy ? C('saveBusy') : C(save)} onPress={onPress} tone="primary" disabled={h.busy || !h.ready} /></View>
-    <Action label={C('cancel')} onPress={close} tone="danger" disabled={h.busy} />
+    <Action label={C('back')} onPress={close} tone="quiet" disabled={h.busy} />
   </>;
   function DateControl({ value, target, label }: { value: string; target: CalendarTarget; label?: string }) {
     return <View style={s.field}><Txt bold>{label ?? C('date')}</Txt><Action icon="calendar" label={dateLabel(value)} onPress={() => openCalendar(target)} tone="quiet" /></View>;
@@ -212,7 +224,7 @@ export default function CompactAssistantScreen() {
       {draft.kind === 'viewing' && <><Txt bold>{C('duration')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{[30, 45, 60, 90, 120].map(duration => <Pressable key={duration} accessibilityRole="button" accessibilityState={{ selected: draft.duration === duration }} onPress={() => setDraft(d => ({ ...d, duration }))} style={[s.choice, duration === draft.duration && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{duration + ' ' + C('minute')}</Txt></Pressable>)}</View></>}
       <AssistantField label={C('notes') + ' · ' + C('optional')} value={draft.notes} onChangeText={notes => setDraft(d => ({ ...d, notes }))} multiline maxLength={2000} placeholder={C('notesPlaceholder')} />
       {draft.kind === 'available' && <Txt muted>{C('propertyNote')}</Txt>}
-    </>; modalFooter = <Footer save="saveFollowup" onPress={() => void saveEditor()} />;
+    </>; modalFooter = <><Footer save="saveFollowup" onPress={() => void saveEditor()} /><Action label={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} tone="danger" disabled={h.busy} onPress={() => persistEditor.confirmDiscard(() => setMode(null))} /></>;
   } else if (mode === 'outcome' && expected) {
     modalTitle = C('recordOutcome'); modalBody = <><View style={s.noteBox}><Txt bold>{expected.title}</Txt></View><Txt bold>{C('outcome')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{OUTCOMES[expected.kind].map(value => <Pressable accessibilityRole="button" accessibilityState={{ selected: outcome === value }} key={value} onPress={() => setOutcome(value)} style={[s.choice, value === outcome && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{C(value)}</Txt></Pressable>)}</View>
       <AssistantField label={C('notes') + ' · ' + C('optional')} value={outcomeNotes} onChangeText={setOutcomeNotes} multiline maxLength={2000} />{expected.kind === 'available' && <Txt muted>{C('propertyNote')}</Txt>}
@@ -257,14 +269,14 @@ export default function CompactAssistantScreen() {
     modalFooter = <View style={s.grow}><Action label={C('addForProperty')} tone="primary" disabled={!p} onPress={() => openEditor('available', undefined, { propertyId: recordId, title: C('confirmProperty') })} /></View>;
   } else if (mode === 'settings') {
     modalTitle = C('settings'); modalBody = <><Txt muted>{C('settingsDescription')}</Txt><View style={[s.toggle, { flexDirection: row }]}><View style={s.grow}><Txt>{C('showOverdue')}</Txt></View><Switch accessibilityLabel={C('showOverdue')} value={preferences.showOverdue} onValueChange={showOverdue => setPreferences(p => ({ ...p, showOverdue }))} /></View><Txt muted>{C('localNote')}</Txt></>;
-    modalFooter = <Footer save="save" onPress={() => void h.mutate(value => ({ ...value, settings: { ...value.settings, showOverdue: preferences.showOverdue } }), C('settingsSaved')).then(ok => { if (ok) close(); })} />;
+    modalFooter = <Footer save="save" onPress={() => void h.mutate(value => ({ ...value, settings: { ...value.settings, showOverdue: preferences.showOverdue } }), C('settingsSaved')).then(async ok => { if (ok) { editorCommitted.current=true; await persistEditor(); setMode(null); } })} />;
   } else if (mode === 'cancel' && expected) {
     modalTitle = C('cancelTask'); modalBody = <Txt>{C('cancelQuestion')}</Txt>;
     modalFooter = <><View style={s.grow}><Action label={C('confirmCancel')} tone="danger" disabled={h.busy || !h.ready} onPress={() => void h.mutate((value, inventory) => changeTaskStatus(value, expected, 'cancelled', inventory, new Date().toISOString()), C('cancelledNotice')).then(ok => { if (ok) close(); })} /></View><Action label={C('back')} onPress={() => setMode('detail')} tone="quiet" /></>;
   } else if (mode === 'actions') {
     modalTitle = C('homeActions'); modalBody = <>{([
       ['call', 'phone', 'addCall'], ['viewing', 'calendar', 'addViewing'], ['meeting', 'users', 'clientMeeting'], ['available', 'home', 'addCheck'], ['note', 'edit-3', 'addNote'],
-    ] as const).map(([kind, icon, label]) => <Action key={kind} label={C(label)} icon={icon} tone="quiet" disabled={!h.ready} onPress={() => openEditor(kind === 'meeting' ? 'note' : kind, undefined, kind === 'meeting' ? { title: C('clientMeeting') } : {})} />)}<Action label={C('settings')} icon="sliders" tone="quiet" disabled={!h.ready} onPress={() => { setPreferences(h.state.settings); setMode('settings'); }} /></>;
+    ] as const).map(([kind, icon, label]) => <Action key={kind} label={C(label)} icon={icon} tone="quiet" disabled={!h.ready} onPress={() => openEditor(kind === 'meeting' ? 'note' : kind, undefined, kind === 'meeting' ? { title: C('clientMeeting') } : {})} />)}<Action label={C('settings')} icon="sliders" tone="quiet" disabled={!h.ready} onPress={() => { editorCommitted.current=false; setPreferences(h.state.settings); setMode('settings'); }} /></>;
   } else if (mode === 'notifications') {
     modalTitle = C('notifications'); modalBody = overdueTasks.length ? <>{overdueTasks.map(taskRow)}</> : <Txt muted>{C('noNotifications')}</Txt>;
   } else if (mode === 'allTasks') {
@@ -286,21 +298,21 @@ export default function CompactAssistantScreen() {
       const key = JSON.stringify([item.person.id, item.result.propertyId]);
       return <MatchingResultCard key={key} rank={matches.items.indexOf(item) + 1} result={item.result} requirement={item.requirement} property={h.catalog.properties.find(p => p.core.id === item.result.propertyId)} personName={item.person.name} perspective={matchView} expanded={expandedMatch === key} onToggle={() => setExpandedMatch(expandedMatch === key ? null : key)} onPress={() => linkedPreview('property', item.result.propertyId)} onViewPerson={() => linkedPreview('person', item.person.id)} />;
     })}</View>)}{h.error && !h.ready ? <Txt color={c.red}>{C('loadError')}</Txt> : matches.status === 'loading' ? <ActivityIndicator color={c.blue} /> : matches.status === 'error' ? <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote> : !matches.items.length ? <Txt muted>{C('homeNoMatches')}</Txt> : null}</>;
-    modalFooter = <View style={s.grow}><Action label={C('allMatches')} tone="primary" onPress={() => { close(); router.push('/matching' as never); }} /></View>;
+    modalFooter = <View style={s.grow}><Action label={C('allMatches')} tone="primary" onPress={() => { close(); router.push(matchingTarget({ kind: 'all' }) as never); }} /></View>;
 
   }
   const best = matches.items[0], profileName = account.profile.name.trim(), greeting = profileName ? C(homeGreetingPeriod(h.now)) + ' ' + profileName : C('defaultName');
   return <View style={s.root}><ScrollView ref={pageRef} onScroll={event => { agendaGesture.current.page = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} nestedScrollEnabled testID="assistant-page-scroll" style={s.outer} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 14 }}>
-    <View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><ViewStateBrand /></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (notifications.historyReady ? notifications.unread : '—')} onPress={() => router.push('/notifications' as never)}><Feather name="bell" size={21} color={c.ink} />{notifications.historyReady && notifications.unread > 0 && <View style={s.homeBellBadge}><CountBadge count={notifications.unread} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)}><Feather name="settings" size={21} color={c.ink} /></Pressable></View></View></View>
+    {!chrome && (<View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><ViewStateBrand /></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (notifications.historyReady ? notifications.unread : '—')} onPress={() => router.push('/notifications' as never)}><Feather name="bell" size={21} color={c.ink} />{notifications.historyReady && notifications.unread > 0 && <View style={s.homeBellBadge}><CountBadge count={notifications.unread} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)}><Feather name="settings" size={21} color={c.ink} /></Pressable></View></View></View>)}
     <View style={s.homeContent}>
-      <View style={[s.helloRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.helloTitle, { fontFamily: fonts.bold, textAlign: align }]}>{greeting}</Text><Txt muted size={13}>{C('homeQuestion')}</Txt></View><View style={s.homeDateTools}><Txt bold size={13}>{dateLabel(today, { weekday: 'long' })}</Txt><Txt muted size={11}>{dateLabel(today, { day: 'numeric', month: 'short', year: 'numeric' })}</Txt><View style={[s.row, { flexDirection: row, gap: 0 }]}><IconButton label={C('calendar')} name="calendar" onPress={() => openCalendar()} /><IconButton label={C('homeActions')} name="more-vertical" onPress={() => setMode('actions')} /></View></View></View>
+      <View style={[s.helloRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.helloTitle, { fontFamily: fonts.bold, textAlign: align }]}>{greeting}</Text><Txt muted size={13}>{C('homeQuestion')}</Txt></View><View style={s.homeDateTools}><Txt bold size={13}>{dateLabel(today, { weekday: 'long' })}</Txt><Txt muted size={11}>{dateLabel(today, { day: 'numeric', month: 'short', year: 'numeric' })}</Txt></View></View>
       <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={C('homeSearch')} style={[s.homeSearch, { flexDirection: row }]} onPress={() => router.push('/search' as never)}><Feather name="search" size={19} color={c.blue} /><View style={s.grow}><Txt muted size={14}>{C('homeSearch')}</Txt></View></Pressable>
       {h.error && !mode ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}
       {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><View style={s.grow}><Txt color={c.red}>{h.notice}</Txt></View>{h.canUndo && <Action label={C('undo')} onPress={() => void h.undo()} tone="danger" disabled={h.busy} />}</View> : null}
       <View style={{ gap: 8 }} testID="home-compact-calendar"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><Txt bold>{dateLabel(h.selectedDay, { month: 'long', year: 'numeric' })}</Txt><Action label={C('calendar')} icon="calendar" tone="quiet" onPress={() => openCalendar()} /></View>
         <View style={{ flexDirection: row, gap: 4 }}>{Array.from({ length: 7 }, (_, i) => addDays(h.selectedDay, i - 3)).map(day => { const count = h.state.tasks.filter(task => task.date === day && task.status === 'pending').length; return <Pressable key={day} accessibilityRole="button" accessibilityLabel={dateLabel(day) + ' · ' + count} onPress={() => { chooseDay(day); setDraft(blankDraft(day)); setMode('actions'); }} style={{ flex: 1, alignItems: 'center', gap: 3, paddingVertical: 8, borderRadius: 10, backgroundColor: day === h.selectedDay ? '#EAF0FF' : '#FFFFFF' }}><Txt muted size={10}>{dateLabel(day, { weekday: 'short' })}</Txt><Txt bold>{Number(day.slice(-2))}</Txt>{count > 0 && <CountBadge count={count} />}</Pressable>; })}</View>
       </View>
-      <View style={s.homeMatchPanel} testID="home-best-matches"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><View style={s.grow}><Txt bold size={16}>{C('bestHomeMatches')}</Txt></View>{matches.status === 'ready' ? <CountBadge count={matches.items.length} /> : <ActivityIndicator color={c.blue} />}<Action label={language === 'ar' ? 'عرض' : 'View'} onPress={() => router.push({ pathname: '/matching', params: { best: '1' } } as never)} tone="secondary" disabled={matches.status !== 'ready'} /></View>{matches.status === 'error' && <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote>}</View>
+      <View style={s.homeMatchPanel} testID="home-best-matches"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><View style={s.grow}><Txt bold size={16}>{C('bestHomeMatches')}</Txt></View>{matches.status === 'ready' ? <CountBadge count={matches.items.length} /> : <ActivityIndicator color={c.blue} />}<Action label={language === 'ar' ? 'عرض' : 'View'} onPress={() => router.push(matchingTarget({ kind: 'best' }) as never)} tone="secondary" disabled={matches.status !== 'ready'} /></View>{matches.status === 'error' && <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote>}</View>
       <View style={[s.homeSectionBar, { flexDirection: row }]}><View style={[s.row, s.grow, { flexDirection: row }]}><Txt bold size={18}>{overdue ? C('overdueTitle') : h.selectedDay === today ? C('today') : dateLabel(h.selectedDay, { weekday: 'short', day: 'numeric', month: 'short' })}</Txt>{h.ready && <CountBadge count={rows.length} />}</View><Action label={C('allFollowups')} tone="quiet" onPress={() => { setQuery(''); setMode('allTasks'); }} disabled={!h.ready} /></View>
       {h.ready && h.state.settings.showOverdue && overdueTasks.length > 0 ? <View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><Feather name="alert-triangle" color={c.red} size={17} /><View style={s.grow}><Txt color={c.red} size={12}>{overdueTasks.length + ' ' + C('overdueNoun')}</Txt></View><Action label={C(overdue ? 'today' : 'review')} tone="danger" onPress={() => overdue ? chooseDay(today) : setOverdue(true)} /></View> : null}
       <View style={s.homeAgenda}><ScrollView nestedScrollEnabled scrollEnabled={rows.length > 3} ref={listRef}

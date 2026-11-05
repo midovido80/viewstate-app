@@ -41,7 +41,7 @@ export function formatPropertyDetailValue(
     if (!validKitchens(rows)) return '';
     const ar = language === 'ar';
     if (!rows.length) return ar ? 'لا يوجد (0)' : 'None (0)';
-    const names: Record<string,string> = ar ? { regular:'عادي', american:'أمريكي', equipped:'مجهز', unequipped:'غير مجهز', private:'خاص', shared:'مشترك' } : { regular:'Regular', american:'American', equipped:'Equipped', unequipped:'Unequipped', private:'Private', shared:'Shared' };
+    const names: Record<string,string> = ar ? { regular:'عادي', american:'أمريكي', preparatory:'تحضيري', equipped:'مجهز', unequipped:'غير مجهز', private:'خاص', shared:'مشترك' } : { regular:'Regular', american:'American', preparatory:'Preparatory', equipped:'Equipped', unequipped:'Unequipped', private:'Private', shared:'Shared' };
     return rows.map((item,i)=>`${ar?'مطبخ':'Kitchen'} ${i+1}: ${[item.layout,item.equipment,item.access].filter(Boolean).map(v=>names[v!]).join(' · ') || (ar?'غير محدد':'Not specified')}`).join('\n');
   }
   if (field === 'apartmentLayouts'  || field === 'floorApartmentCounts') {

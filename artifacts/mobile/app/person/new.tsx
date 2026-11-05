@@ -1,3 +1,6 @@
+import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { TextInput, FieldSelect } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
@@ -46,8 +49,14 @@ export default function NewPersonScreen() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const saveFlight = useRef(false);
-  const personId = useRef(generateDomainId()).current;
+  const personIdentity = useRef(generateDomainId());
+  const personId = personIdentity.current;
 
+  const activeRoute = useRef(true), committed = useRef(false);
+  useFocusEffect(useCallback(() => { activeRoute.current=true; return () => { activeRoute.current=false; }; }, []));
+  const persistPerson = useLocalFormDraft({ identity: `person:new:${returnRequirementId ?? ''}`, value: { name, phone, phoneCountry, notes, classifications, entryMode, draftIdentity: personIdentity.current }, complete: committed.current, completed: () => committed.current,
+    restore: saved => { setName(saved.name); setPhone(saved.phone); setPhoneCountry(saved.phoneCountry); setNotes(saved.notes); setClassifications(saved.classifications); setEntryMode(saved.entryMode); personIdentity.current=saved.draftIdentity; } });
+  const { back: personBack, exit: personExit } = useDraftBack({ persist: persistPerson, fallback: '/people', completed: () => committed.current });
   const toggle = (value: PersonClassification) => setClassifications(current => {
     const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
     return PERSON_CLASSIFICATIONS.filter(item => next.includes(item));
@@ -80,6 +89,9 @@ export default function NewPersonScreen() {
         classifications,
       });
       const resolved = await store.savePerson(person);
+      committed.current = true;
+      await persistPerson();
+      if (!activeRoute.current) return;
       if (returnRequirementId) {
         const requirement = await store.getRequirement(returnRequirementId);
         if (!requirement) throw new Error('RETURN_REQUIREMENT_NOT_FOUND');
@@ -91,6 +103,7 @@ export default function NewPersonScreen() {
         if (outcome.status !== 'linked' && outcome.status !== 'already_linked') {
           throw new Error('RETURN_REQUIREMENT_LINK_FAILED');
         }
+        if (!activeRoute.current) return;
         router.replace({
           pathname: '/requirement/view/[requirementId]',
           params: { requirementId: returnRequirementId },
@@ -121,8 +134,8 @@ export default function NewPersonScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <TouchableOpacity onPress={() => router.back()} testID="person-new-cancel" accessibilityRole="button">
-          <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>{t('capture.cancel')}</Text>
+        <TouchableOpacity onPress={personBack} testID="person-new-cancel" accessibilityRole="button">
+          <Text style={{ color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }}>{t('capture.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{t('people.add')}</Text>
         <View style={{ width: 45 }} />
@@ -166,7 +179,7 @@ export default function NewPersonScreen() {
         </View>
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />
         {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
-        <Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
+        <Button title={t('capture.discard')} variant="outline" disabled={saving} onPress={() => persistPerson.confirmDiscard(() => personExit(() => router.canGoBack() ? router.back() : router.replace('/people' as never)))} testID="person-discard-draft" /><Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
         </>
         )}
       </KeyboardAwareScrollViewCompat>
@@ -203,7 +216,7 @@ export default function NewPersonScreen() {
                 <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign }}>{country.code} +{country.dialCode}</Text>
               </TouchableOpacity>
             ))}
-            <Button title={t('capture.cancel')} onPress={() => setCountryOpen(false)} variant="outline" testID="country-picker-cancel" />
+            <Button title={t('capture.back')} onPress={() => setCountryOpen(false)} variant="outline" testID="country-picker-cancel" />
           </View>
         </View>
       </Modal>

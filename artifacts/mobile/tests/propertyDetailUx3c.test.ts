@@ -43,15 +43,13 @@ test('Saved Property Details exposes Home in detail and edit headers while retai
   const source = await readFile('app/property/[propertyCoreId].tsx', 'utf8');
   const homeActionCount = (source.match(/testID="property-home-action"/g) ?? []).length;
   const backActionCount = (source.match(/testID="property-detail-back"/g) ?? []).length;
-  assert.equal(homeActionCount, 2, 'one Home action belongs in each saved/detail and edit header');
+  assert.equal(homeActionCount, 1, 'editor retains Home; saved detail uses the reference Edit action');
+  assert.match(source, /property-call-action/);
+  assert.match(source, /property-edit-action/);
   assert.equal(backActionCount, 3, 'loading fallback, saved detail, and edit retain their Back actions');
-  assert.equal(
-    (source.match(/onPress=\{\(\) => router\.replace\('\/' as never\)\}/g) ?? []).length,
-    homeActionCount + 1,
-    'the third route action is the existing loading/missing-state Back fallback, not a duplicate Home',
-  );
+  assert.match(source, /exitEditor\(\(\) => router\.replace/);
   assert.equal((source.match(/accessibilityLabel=\{language === 'ar' \? 'الرئيسية' : 'Home'\}/g) ?? []).length, homeActionCount);
-  assert.match(source, /onPress=\{\(\) => router\.replace\(detailBackRoute as never\)\}/);
+  assert.match(source, /onPress=\{backToOrigin\}/);
   assert.match(source, /onPress=\{leaveEditor\}/);
 });
 
@@ -68,7 +66,7 @@ test('Property Details uses the canonical intent label and never promotes an unk
     activeOffer: { transaction: 'sale' },
   } as unknown as Property, 'ar').label, 'معروض للبيع');
   assert.match(source, /const propertyIntent = projectPropertyIntent\(property, language\)/);
-  assert.match(source, /\{propertyIntent\.label\}/);
+  assert.match(source, /<PropertyStatus property=\{property\}/);
   assert.match(source, /propertyIntent\.id === 'offered_sale'[\s\S]*property\.activeOffer\.salePrice\.amount/);
   assert.match(source, /propertyIntent\.id === 'offered_rent'[\s\S]*property\.activeOffer\.rentalPrice\.amount/);
   assert.doesNotMatch(source, /t\(`transaction\.\$\{property\.activeOffer\.transaction\}`\)/);
@@ -651,7 +649,8 @@ test('All property editors wire verified Maps opening, platform-specific attachm
   assert.match(source, /openStudioWebFilePicker\([\s\S]*accept: 'application\/pdf'/);
   assert.match(source, /Platform\.OS !== 'web' \|\| galleryImageSources\[attachment\.id\]/);
   assert.match(source, /propertyEditChoicesAreDirty\(cleanChoicesRef\.current, next\.choices\)/);
-  assert.match(source, /if \(!standardApartment \|\| editDirty\) \{\s*setLeaveVisible\(true\)/);
+  assert.match(source, /useDraftBack\(\{ enabled: mode === 'edit'/);
+  assert.match(source, /property-edit-discard/);
   assert.match(source, /testID=\"property-edit-maps-link-error\"/);
   assert.match(source, /persistAttachmentsThenDeleteRemoved/);
   assert.doesNotMatch(source, /if \(standardApartment && Platform\.OS === 'web'\)/);

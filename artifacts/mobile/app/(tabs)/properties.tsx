@@ -1,3 +1,6 @@
+import { PropertyVisualCard } from '@/components/PropertyVisualSummary';
+import { matchingTarget } from '@/services/matchingScope';
+import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { projectPropertyFacts } from '@/services/propertyFactProjection';
 import { PropertySpecIcon } from '@/components/PropertySpecIcon';
 import { PropertyCover } from '@/components/PropertyCover';
@@ -6,7 +9,7 @@ import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, FlatList, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
@@ -16,7 +19,8 @@ import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
-  filterOfferedWantedRows,
+  filterPropertyInventoryRows,
+  type PropertyInventoryTab,
   getOfferedWantedHref,
   createOfferedWantedLoadCoordinator,
   loadOfferedWantedPresentation,
@@ -38,8 +42,6 @@ import { togglePropertySector, type PropertySectorFilter } from '@/services/prop
 
 const PROPERTY_FILTER_OPTIONS = [
   { key: 'all' },
-  { key: 'offered', dimension: 'directions', value: 'offered' },
-  { key: 'wanted', dimension: 'directions', value: 'wanted' },
   { key: 'sale', dimension: 'transactions', value: 'sale' },
   { key: 'rent', dimension: 'transactions', value: 'rent' },
 ] as const;
@@ -58,6 +60,8 @@ export default function PropertiesScreen() {
 
   const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
   const [search, setSearch] = useState('');
+  const [inventoryTab, setInventoryTab] = useState<PropertyInventoryTab>('properties');
+  useEffect(() => { if (highlightedId) setInventoryTab('properties'); }, [highlightedId]);
   const [filter, setFilter] = useState<ComposableRecordFilter>(EMPTY_COMPOSABLE_RECORD_FILTER);
   const [sector, setSector] = useState<PropertySectorFilter>('all');
   const rows = loadResult?.rows ?? [];
@@ -81,7 +85,9 @@ export default function PropertiesScreen() {
     }, [highlightedId])
   );
 
-  const visibleRows = filterOfferedWantedRows(rows, filter, search, sector);
+  const transactionFilter = { ...filter, directions: [inventoryTab === 'properties' ? 'offered' as const : 'wanted' as const] };
+  const inventoryRows = rows.filter(row => row.kind === (inventoryTab === 'properties' ? 'offered' : 'wanted'));
+  const visibleRows = filterPropertyInventoryRows(rows, inventoryTab, filter, search, sector);
   const prioritizedRows = highlightedId
     ? [
       ...visibleRows.filter(row => row.kind === 'offered' && row.id === highlightedId),
@@ -126,15 +132,16 @@ export default function PropertiesScreen() {
       <View
         style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
       >
-        <TouchableOpacity
+        {item.kind==='offered' ? <PropertyVisualCard property={item.property} title={[typeLabel,subtypeLabel].filter(Boolean).join(' · ')} area={areaLabel} price={priceLabel} onPress={()=>router.push(getOfferedWantedHref(item.kind,item.id) as never)} testID={`property-card-${item.id}`} /> : <TouchableOpacity
           onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
-          testID={`${item.kind === 'offered' ? 'property' : 'requirement'}-card-${item.id}`}
+          testID={`requirement-card-${item.id}`}
           accessibilityRole="button"
           accessibilityLabel={`${badges.map(badge => badge.label).join(', ')}, ${areaLabel}`}
           style={{ flexDirection: 'row', gap: 12, alignItems: 'stretch' }}
         >
-        <PropertyCover property={property} label={typeLabel} style={{ width: 102, minHeight: 146, borderRadius: 13 }} />
+        {property && <PropertyCover property={property} label={typeLabel} style={{ width: 102, minHeight: 146, borderRadius: 13 }} />}
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+        {requirement && <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 17, textAlign: isRTL ? 'right' : 'left' }}>{item.person?.name ?? (language === 'ar' ? 'طلب غير مرتبط بشخص' : 'Unlinked request')}</Text>}
         <View style={[styles.cardHeader, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]}>
           <View
             style={{ flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr', alignItems: 'center', gap: 5, flexWrap: 'wrap', flex: 1 }}
@@ -157,11 +164,7 @@ export default function PropertiesScreen() {
                 </Text>
               </View>
             ))}
-            {isHighlighted ? (
-              <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
-              </View>
-            ) : null}
+
           </View>
         </View>
 
@@ -185,7 +188,18 @@ export default function PropertiesScreen() {
           ) : null}
         </View>
         </View>
-        </TouchableOpacity>
+        </TouchableOpacity>}
+        {isHighlighted ? (
+              <View testID={`property-just-saved-${item.id}`} style={{ backgroundColor: colors.accent + '1A', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ color: colors.accent, fontFamily: fonts.medium, fontSize: 12 }}>{t('properties.just_saved')}</Text>
+              </View>
+            ) : null}
+        {requirement && <>
+          <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left', marginTop: 6 }}>
+            {[requirement.bedroomsMinimum !== undefined ? `${language === 'ar' ? 'غرف' : 'Bedrooms'}: ${requirement.bedroomsMinimum}+` : '', requirement.bathroomsMinimum !== undefined ? `${language === 'ar' ? 'حمامات' : 'Bathrooms'}: ${requirement.bathroomsMinimum}+` : ''].filter(Boolean).join(' · ')}
+          </Text>
+          <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} variant="outline" onPress={() => router.push(matchingTarget({ kind: 'requirement', id: requirement.id }) as never)} testID={`request-match-${requirement.id}`} />
+        </>}
         {item.kind === 'wanted' && !item.person ? (
           <View style={[styles.personTarget, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]} testID={`requirement-unassigned-${item.id}`}>
             <Feather name="user-plus" size={14} color={colors.mutedForeground} />
@@ -238,6 +252,16 @@ export default function PropertiesScreen() {
         ) : null
       ) : null}
 
+      <View accessibilityRole="tablist" style={[styles.sectorFilters, { flexDirection: isRTL ? 'row-reverse' : 'row' }]} testID="property-inventory-tabs">
+        {(['properties', 'requests'] as const).map(tab => {
+          const selected = tab === inventoryTab;
+          return <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected }}
+            testID={`inventory-tab-${tab}`} onPress={() => { setInventoryTab(tab); listRef.current?.scrollToOffset({ offset: 0, animated: false }); }}
+            style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: selected ? colors.primary : colors.border }}>
+            <Text style={{ color: selected ? colors.primary : colors.mutedForeground, fontFamily: selected ? fonts.bold : fonts.medium }}>{tab === 'properties' ? (language === 'ar' ? 'العقارات' : 'Properties') : (language === 'ar' ? 'طلبات العملاء' : 'Client requests')}</Text>
+          </TouchableOpacity>;
+        })}
+      </View>
       <View style={styles.searchContainer}>
         <Feather
           name="search"
@@ -250,7 +274,7 @@ export default function PropertiesScreen() {
           onChangeText={query => {
             setSearch(query);
           }}
-          placeholder={t('properties.search')}
+          placeholder={inventoryTab === 'requests' ? (language === 'ar' ? 'ابحث بالاسم أو مواصفات الطلب…' : 'Search clients or requirements…') : (language === 'ar' ? 'ابحث في العقارات المعروضة…' : 'Search offered properties…')}
           placeholderTextColor={colors.mutedForeground}
           style={[
             styles.searchInput,
@@ -271,9 +295,7 @@ export default function PropertiesScreen() {
         {PROPERTY_FILTER_OPTIONS.map(option => {
           const selected = option.key === 'all'
             ? !hasActiveRecordFilters(filter) && sector === 'all'
-            : option.dimension === 'directions'
-              ? filter.directions.includes(option.value)
-              : filter.transactions.includes(option.value);
+            : filter.transactions.includes(option.value);
           return (
             <RaisedFilterButton
               key={option.key}
@@ -293,7 +315,7 @@ export default function PropertiesScreen() {
             >
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.9} maxFontSizeMultiplier={1.3} style={{ color: selected ? colors.background : colors.foreground, fontFamily: fonts.medium, fontSize: 12, lineHeight: 18 }}>
                 {option.key === 'sale' || option.key === 'rent'
-                  ? getRecordTransactionFilterLabel(option.key, filter, language)
+                  ? getRecordTransactionFilterLabel(option.key, transactionFilter, language)
                   : t(`properties.filter.${option.key}` as keyof Translations)}
               </Text>
             </RaisedFilterButton>
@@ -344,7 +366,7 @@ export default function PropertiesScreen() {
               <>
                 <Feather name="home" size={48} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
                 <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
-                  {t(rows.length === 0 ? 'properties.empty_all' : 'properties.no_matches')}
+                  {inventoryTab === 'requests' ? (language === 'ar' ? 'لا توجد طلبات تطابق البحث والفلاتر' : 'No client requests match these filters') : t(inventoryRows.length === 0 ? 'properties.empty_all' : 'properties.no_matches')}
                 </Text>
               </>
             )}
@@ -356,8 +378,8 @@ export default function PropertiesScreen() {
         bottom: insets.bottom + 16,
       }]}>
         <Button
-          title={t('properties.new')}
-        onPress={() => router.push('/capture/transaction' as any)}
+          title={inventoryTab === 'properties' ? t('properties.new') : (language === 'ar' ? 'إضافة طلب' : 'Add request')}
+          onPress={() => router.push({ pathname: '/capture/transaction', params: { mode: inventoryTab === 'properties' ? 'offered' : 'wanted' } } as never)}
           style={styles.fab}
           testID="btn-capture"
         />
@@ -426,8 +448,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: {
-    borderWidth: 1,
-    padding: 12,
+    borderWidth: 0,
+    padding: 0,
     marginBottom: 12,
     shadowColor: '#172C4D',
     shadowOpacity: 0.04,

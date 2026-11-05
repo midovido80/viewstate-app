@@ -1,3 +1,5 @@
+import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
+import { useDraftBack } from '@/hooks/useDraftBack';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
@@ -15,7 +17,7 @@ import { warehouseFieldVisible } from '@/services/warehouseForm';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import type { ApartmentSubtype } from '@workspace/property-domain';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
-import { getCaptureBackAction } from '@/services/captureBackNavigation';
+import { getPropertyTypeSelectionRoute } from '@/services/propertyFormRoutes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -214,6 +216,8 @@ export default function CaptureWorkflow() {
   const requiredForm = useRequiredForm(propertyCompletionFields({ type: draft.propertyType ?? '', area: draft.locationAreaId, price: draft.transaction === 'rent' ? draft.rentalPrice?.amount : draft.salePrice?.amount, size: captureDetails.areaSquareMeters, values: { ...captureDetails, apartmentSubtype: draft.apartmentSubtype ?? captureDetails.apartmentSubtype }, basic: isBasicApartmentFollowUp }));
   const [block, setBlock] = useState(draft.block ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const [formPage,setFormPage]=useState<PropertyPage>(0);
+  const captureCommitted = useRef(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
   const sourceLinkRecoveryRef = useRef<{
@@ -704,6 +708,7 @@ export default function CaptureWorkflow() {
     personId?: string,
     role?: PropertySourceRole,
   ) => {
+    captureCommitted.current=true;
     router.replace({
       pathname: '/capture/success',
       params: {
@@ -716,7 +721,7 @@ export default function CaptureWorkflow() {
   };
 
   const save = async () => {
-    if (requiredForm.validate().length) { setStage(2); return; }
+    if (requiredForm.validate().length) { setStage(2); setFormPage(0); return; }
     if (isStudioCaptureBlocked) return;
     if (saveFlight.current) return;
     saveFlight.current = true;
@@ -865,23 +870,8 @@ export default function CaptureWorkflow() {
     setDraftSaveStatus('saved');
   };
 
-  const handleBack = () => {
-    const action = getCaptureBackAction(stage, router.canGoBack(), {
-      mode: 'offered', transaction: draft.transaction, linkPersonId, sourceRole,
-    });
-    if (action.kind === 'edit') { setStage(2); return; }
-    if (action.kind === 'back') { router.back(); return; }
-    router.replace(action.route as never);
-  };
-  const goHome = async () => {
-    if (draftSaveStatus === 'saving' || submitting) return;
-    setDraftSaveStatus('saving');
-    try {
-      if (!await persistCurrentCapture()) { setDraftSaveStatus('error'); return; }
-      setDraftSaveStatus('saved');
-      router.replace('/' as never);
-    } catch { setDraftSaveStatus('error'); }
-  };
+  const { back: handleBack, exit: captureExit } = useDraftBack({ persist: persistCurrentCapture, completed: () => captureCommitted.current, fallback: getPropertyTypeSelectionRoute({ mode: 'offered', transaction: draft.transaction, linkPersonId, sourceRole }), step: () => { if(stage===2 && formPage>0){setFormPage((formPage-1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});return true;} if (stage === 3) { setStage(2); return true; } return false; } });
+  const goHome = async () => { captureExit(() => router.replace('/' as never)); };
 
   const header = stage === 1 ? t('capture.progress.transaction')
     : stage === 2 ? t('capture.progress.review') : t('summary.title');
@@ -894,7 +884,7 @@ export default function CaptureWorkflow() {
       <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
         <View style={[styles.headerRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <TouchableOpacity onPress={handleBack} style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]} testID="capture-form-back" accessibilityRole="button" accessibilityLabel={t('capture.back')}>
-            <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text>
+            <Feather name={isRTL ? 'chevron-right' : 'chevron-left'} size={18} color="#FFFFFF" /><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{stage===2?(language==='ar'?'السابق':'Previous'):t('capture.back')}</Text>
           </TouchableOpacity>
           <Text numberOfLines={2} style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>{stage === 3 ? (language === 'ar' ? 'مراجعة العقار' : 'Property review') : t('home.action.addProperty')}</Text>
           <TouchableOpacity onPress={() => void goHome()} style={[approvedNavigationStyle, { flexDirection: isRTL ? 'row-reverse' : 'row', gap: 4 }]} testID="capture-form-home" disabled={draftSaveStatus === 'saving' || submitting} accessibilityRole="button" accessibilityLabel={t('home.title')}>
@@ -905,7 +895,8 @@ export default function CaptureWorkflow() {
 
       </View>
 
-      <RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><ScrollView ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16}
+      {stage===2&&!isBasicApartmentFollowUp && <PropertyWizardProgress page={formPage} />}
+      <PropertyPageContext.Provider value={stage===2&&!isBasicApartmentFollowUp?formPage:null}><RequiredFormProvider value={requiredForm}><View ref={requiredForm.viewportRef} style={{ flex: 1, minHeight: 0 }}><ScrollView ref={requiredForm.scrollRef} onScroll={requiredForm.onScroll} scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: stage === 3 ? 24 : Math.max(insets.bottom, 20) + 96 }]}
       >
@@ -965,6 +956,7 @@ export default function CaptureWorkflow() {
         {stage === 2 && draft.propertyType && (
           <>
             <Section title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} colors={colors} fonts={fonts}>
+              <Text style={{fontFamily:fonts.semiBold,color:colors.foreground,textAlign:isRTL?'right':'left'}}>{language==='ar'?'عنوان العقار':'Property title'}</Text><TextInput value={draft.listingTitle ?? ''} maxLength={160} onChangeText={listingTitle=>updateDraft({listingTitle})} style={propertyFormInputStyle} testID="capture-listing-title" />
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{draft.transaction ? t(`transaction.${draft.transaction}` as keyof Translations) : ''}</Text>
               <RequiredFormHint /><PropertyAreaBlockRow area={<RequiredField id="locationAreaId">               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'المنطقة' : 'Area / Region'}</Text>
                <KuwaitAreaSelector
@@ -1054,10 +1046,10 @@ export default function CaptureWorkflow() {
                   return next;
                 })}
               />
-              {(commercialFloorSale || draft.propertyType === 'warehouse') && <View style={{ gap: 8, marginTop: 12 }}>
+              <PropertyPageSection page={1}>{(commercialFloorSale || draft.propertyType === 'warehouse') && <View style={{ gap: 8, marginTop: 12 }}>
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'الوصف' : 'Description'}</Text>
               <TextInput value={description} onChangeText={updateDescription} multiline placeholder={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} placeholderTextColor={colors.mutedForeground} style={[styles.input, propertyFormInputStyle, styles.textarea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} />
-              </View>}
+              </View>}</PropertyPageSection>
             </View>
             <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="capture-location-card">
               <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
@@ -1172,7 +1164,7 @@ export default function CaptureWorkflow() {
             )}
           </PropertyReview>
         )}
-      </ScrollView></View></RequiredFormProvider>
+      </ScrollView></View></RequiredFormProvider></PropertyPageContext.Provider>
       {stage === 2 && draftSaveStatus !== 'idle' && (
         <View
           testID={draftSaveStatus === 'saved' ? 'capture-draft-saved' : undefined}
@@ -1249,7 +1241,7 @@ export default function CaptureWorkflow() {
           </View>
         </View>
       </Modal>
-      {stage === 3 ? <PropertyReviewFooter title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" /> : (
+      {stage===2&&!isBasicApartmentFollowUp ? <PropertyWizardFooter page={formPage} previous={handleBack} busy={submitting} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});}else void save();}} /> : stage === 3 ? <PropertyReviewFooter title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" /> : (
       <View style={[styles.footer, { flexDirection: isRTL ? 'row' : 'row-reverse', backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage === 2 ? <ApprovedAction title={language === 'ar' ? 'حفظ مسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <ApprovedAction title={t('capture.back')} onPress={handleBack} variant="outline" testID="capture-back" />}
       {stage === 1 ? <ApprovedAction title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <ApprovedAction title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <ApprovedAction title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}

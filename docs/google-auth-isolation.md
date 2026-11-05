@@ -1,3 +1,5 @@
+> Updated behavior (2026-11-04): offline device receipts, non-revoking token expiry, and private work/media synchronization are implemented in [offline-workspace-sync.md](offline-workspace-sync.md). The earlier verification/limits below describe the original foundation revision.
+
 # Google account integration — onboarding and local isolation
 
 Guest entry and activation are now described in [local-guest-activation.md](local-guest-activation.md).

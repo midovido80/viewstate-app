@@ -230,7 +230,7 @@ export function BatchContactImportModal({
           : '';
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={resetAndClose}>
+    <Modal visible={visible} animationType="slide" onRequestClose={() => { if (saving || submissionGuard.isRunning()) return; if (stage === 'review') setStage('select'); else resetAndClose(); }}>
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold }]}>

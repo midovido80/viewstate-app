@@ -1,3 +1,4 @@
+import { KitchenSlotContext } from '@/components/PropertyWizard';
 import { KitchenFields } from '@/components/KitchenFields';
 import { kitchensApply, validKitchens, type KitchenSpec } from '@workspace/property-domain';
 import { getBuiltPropertySector } from '@/services/propertySectorSelection';
@@ -112,5 +113,6 @@ const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { mi
 export function ModernPropertyForm(props: ModernPropertyFormProps) {
   let kitchens: readonly KitchenSpec[] | undefined;
   try { const parsed=JSON.parse(props.values.kitchens ?? 'null'); if (validKitchens(parsed)) kitchens=parsed; } catch { /* Validation retains invalid imported drafts. */ }
-  return <View><PropertyFormBody {...props} />{kitchensApply(props.propertyType,props.values.floorUse ?? props.values.propertyUse) && <PropertyFormCard title={props.language==='ar'?'المطابخ':'Kitchens'} icon="list"><KitchenFields value={kitchens} scopeKey={`${props.recordScopeKey}:kitchens`} commercial={getBuiltPropertySector(props.propertyType,props.values.floorUse ?? props.values.propertyUse)==='commercial'} onInvalidChange={invalid=>props.onInvalidQuickPickChange?.('kitchens',props.recordScopeKey,invalid)} onChange={value=>props.onChange('kitchens',value===undefined?'':JSON.stringify(value))} /></PropertyFormCard>}{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View>;
+  const kitchenControls=kitchensApply(props.propertyType,props.values.floorUse ?? props.values.propertyUse) ? <KitchenFields value={kitchens} scopeKey={`${props.recordScopeKey}:kitchens`} commercial={getBuiltPropertySector(props.propertyType,props.values.floorUse ?? props.values.propertyUse)==='commercial'} onInvalidChange={invalid=>props.onInvalidQuickPickChange?.('kitchens',props.recordScopeKey,invalid)} onChange={value=>props.onChange('kitchens',value===undefined?'':JSON.stringify(value))} /> : null;
+  return <KitchenSlotContext.Provider value={kitchenControls}><View><PropertyFormBody {...props} />{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View></KitchenSlotContext.Provider>;
 }

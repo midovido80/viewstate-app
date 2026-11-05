@@ -1,3 +1,5 @@
+import { useDraftBack } from '@/hooks/useDraftBack';
+import { matchingEntryHref } from '@/services/matchingScope';
 import { useRef } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,11 +27,12 @@ export default function SuccessScreen() {
   const colors = useColors();
   const insets = useScreenInsets();
   const { t, isRTL, fonts, language } = useI18n();
+  const closeSavedFlow = (destination: string) => { router.dismissAll(); router.replace(destination as never); };
+  const { back: savedBack, exit: savedExit } = useDraftBack({ persist: async () => true, localExit: () => closeSavedFlow(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : propertyCoreId ? `/property/${encodeURIComponent(propertyCoreId)}` : '/properties') });
   const navigateOnce = (destination: string, replace = false) => {
     if (navigationStartedRef.current) return;
     navigationStartedRef.current = true;
-    if (replace) router.replace(destination as never);
-    else router.push(destination as never);
+    savedExit(() => closeSavedFlow(destination));
   };
   const destinations = getPropertySuccessRoutes(propertyCoreId);
   const showCaptureFollowUp = basicCaptureFollowUp === '1' || basicApartmentFollowUp === '1';
@@ -64,8 +67,8 @@ export default function SuccessScreen() {
       >
         {t('summary.success_detail')}
       </Text>
-      <View style={styles.spacer} />
-      {propertyCoreId && <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} onPress={() => navigateOnce(`/matching?propertyId=${encodeURIComponent(propertyCoreId)}`)} size="large" testID="property-match-now" />}
+      <Button title={t('capture.back')} onPress={savedBack} variant="outline" testID="saved-flow-back" /><View style={styles.spacer} />
+      {propertyCoreId && <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} onPress={() => navigateOnce(matchingEntryHref({ kind: 'property', id: propertyCoreId }))} size="large" testID="property-match-now" />}
       {showCaptureFollowUp && propertyCoreId ? (
         <>
           <Button

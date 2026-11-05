@@ -1,7 +1,7 @@
+import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 
 import type { Person } from '@/services/people';

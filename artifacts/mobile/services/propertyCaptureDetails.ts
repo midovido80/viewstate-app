@@ -200,6 +200,8 @@ export function buildPropertyWithCaptureDetails(
       ? rawDetails as unknown as Property['typeDetails']
       : undefined,
   };
+  const kitchenSelection=(candidate.typeDetails as unknown as Record<string,unknown> | undefined)?.kitchens;
+  if(strict&&Array.isArray(kitchenSelection)&&kitchenSelection.length>3) throw Error('KITCHEN_COUNT_LIMIT');
   const validation = validateProperty(candidate);
   if (!validation.ok) {
     if (!strict && validation.issues.every(issue => issue.code === 'required')) return baseline;

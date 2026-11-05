@@ -75,3 +75,9 @@ export function requirementCompletionFields(input: {
     { id: 'budget', valid: completedBudget(input.minimum, input.maximum, input.unspecified.includes('budget')) },
   ];
 }
+
+/** The empty count option is an explicit choice, distinct from an untouched required field. */
+export function withExplicitCountChoice<T extends string>(fields: readonly T[], field: T, value: string): T[] {
+  const others = fields.filter(id => id !== field);
+  return value.trim() ? others : [...others, field];
+}
