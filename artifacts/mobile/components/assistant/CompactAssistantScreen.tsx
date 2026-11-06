@@ -1,3 +1,4 @@
+import { NextHomeCanvas } from '@/components/next/NextHomeCanvas';
 import { useAppChrome } from '@/components/AppChrome';
 import { useLocalFormDraft } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
@@ -38,8 +39,6 @@ function blankDraft(date: string, kind: TaskKind = 'call'): FollowupDraft {
   return { kind, title: '', date, time: '', duration: 45, personId: '', personName: '', propertyId: '', notes: '' };
 }
 function id() { return Crypto.randomUUID(); }
-/** Only web scroll containment is CSS. Native scroll containers use bounded layouts + nested scrolling. */
-const containedWebScroll = Platform.OS === 'web' ? { overscrollBehaviorY: 'auto', touchAction: 'pan-y', scrollbarGutter: 'stable' } as ViewStyle : undefined;
 export default function CompactAssistantScreen() {
   const chrome=useAppChrome();
   const { store } = useUserData();
@@ -56,8 +55,6 @@ export default function CompactAssistantScreen() {
     openedFollowup.current = taskId; const task = h.state.tasks.find(t => t.id === taskId); if (task) { setExpected(task); setMode('detail'); } else h.notify(C('noSearch'));
     router.setParams({ followupId: undefined });
   }, [params.followupId, h.ready, h.state.tasks, C, router]);
-  const listRef = useRef<ScrollView>(null), pageRef = useRef<ScrollView>(null);
-  const agendaGesture = useRef({ y: 0, offset: 0, content: 0, viewport: 0, page: 0 });
   const [overdue, setOverdue] = useState(false);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>(null), [expected, setExpected] = useState<Followup | null>(null);
@@ -88,11 +85,8 @@ export default function CompactAssistantScreen() {
   const editorOpen = parentMode === 'editor' || parentMode === 'outcome' || parentMode === 'reschedule' || parentMode === 'settings';
   const persistEditor = useLocalFormDraft({ identity: `followup:${parentMode}:${expected?.id ?? 'new'}`, value: { draft, expected, outcome, outcomeNotes, nextEnabled, nextDate, nextTime, nextTitle, newDate, newTime, preferences }, ready: editorOpen, completed: () => editorCommitted.current,
     restore: saved => { setDraft(saved.draft); setExpected(saved.expected); setOutcome(saved.outcome); setOutcomeNotes(saved.outcomeNotes); setNextEnabled(saved.nextEnabled); setNextDate(saved.nextDate); setNextTime(saved.nextTime); setNextTitle(saved.nextTitle); setNewDate(saved.newDate); setNewTime(saved.newTime); setPreferences(saved.preferences); } });
-  const rows = selectFollowups(h.state, h.inventory, h.selectedDay, 'all', '', overdue, today);
   const overdueTasks = sortFollowups(h.state.tasks.filter(v => v.status === 'pending' && v.date < today));
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
-  const listHeight = rows.length > 3 ? Math.min(height * .4, 264) : undefined;
-  useEffect(() => { listRef.current?.scrollTo({ y: 0, animated: false }); }, [h.selectedDay, overdue]);
   const dateLabel = (day: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) =>
     new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-ca-gregory-nu-latn' : 'en-GB', { ...options, timeZone: ASSISTANT_TIME_ZONE }).format(new Date(day + 'T12:00:00Z'));
   const timeLabel = (time: string) => time ? new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-nu-latn' : 'en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date('2026-01-01T' + time + ':00+03:00')) : C('allDay');
@@ -206,7 +200,7 @@ export default function CompactAssistantScreen() {
         <Text style={[s.compactTaskTitle, { fontFamily: fonts.semiBold, textAlign: align }]} numberOfLines={2}>{task.title}</Text>
         {!!personName(task) && <Txt muted size={12}>{personName(task)}</Txt>}
       </Pressable>
-      <View style={s.compactTime}>{task.status === 'done' ? <Feather name="check-circle" size={18} color={c.green} /> : <Txt size={12} color={task.date < today ? c.red : c.muted}>{timeLabel(task.time)}</Txt>}{overdue && <Txt muted size={11}>{dateLabel(task.date, { day: 'numeric', month: 'short' })}</Txt>}</View>
+      <View style={s.compactTime}>{task.status === 'done' ? <Feather name="check-circle" size={18} color={c.green} /> : <Txt size={12} color={task.date < today ? c.red : c.muted}>{timeLabel(task.time)}</Txt>}{(overdue || task.date !== today) && <Txt muted size={11}>{dateLabel(task.date, { day: 'numeric', month: 'short' })}</Txt>}</View>
     </View>;
   }
   let modalTitle: string = '', modalBody: React.ReactNode = null, modalFooter: React.ReactNode = null;
@@ -301,38 +295,16 @@ export default function CompactAssistantScreen() {
     modalFooter = <View style={s.grow}><Action label={C('allMatches')} tone="primary" onPress={() => { close(); router.push(matchingTarget({ kind: 'all' }) as never); }} /></View>;
 
   }
-  const best = matches.items[0], profileName = account.profile.name.trim(), greeting = profileName ? C(homeGreetingPeriod(h.now)) + ' ' + profileName : C('defaultName');
-  return <View style={s.root}><ScrollView ref={pageRef} onScroll={event => { agendaGesture.current.page = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} nestedScrollEnabled testID="assistant-page-scroll" style={s.outer} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={{ paddingBottom: insets.bottom + 14 }}>
-    {!chrome && (<View testID="assistant-header" style={[s.homeHeader, { paddingTop: Platform.OS === 'web' ? actualInsets.top + 8 : insets.top }]}><View style={[s.homeHeaderInner, { flexDirection: row }]}><View style={[s.row, { flexDirection: row }]}><ViewStateBrand /></View><View style={[s.headerTools, { flexDirection: row }]}><Pressable style={s.language} accessibilityRole="button" accessibilityLabel={C('language')} onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}><Text style={[s.headerSmall, { fontFamily: fonts.medium }]}>{language === 'ar' ? 'EN' : 'عربي'}</Text></Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={C('notifications') + ' · ' + (notifications.historyReady ? notifications.unread : '—')} onPress={() => router.push('/notifications' as never)}><Feather name="bell" size={21} color={c.ink} />{notifications.historyReady && notifications.unread > 0 && <View style={s.homeBellBadge}><CountBadge count={notifications.unread} /></View>}</Pressable><Pressable style={s.iconButton} accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'الإعدادات والحساب' : 'Settings & account'} onPress={() => router.push('/account' as never)}><Feather name="settings" size={21} color={c.ink} /></Pressable></View></View></View>)}
-    <View style={s.homeContent}>
-      <View style={[s.helloRow, { flexDirection: row }]}><View style={s.grow}><Text accessibilityRole="header" style={[s.helloTitle, { fontFamily: fonts.bold, textAlign: align }]}>{greeting}</Text><Txt muted size={13}>{C('homeQuestion')}</Txt></View><View style={s.homeDateTools}><Txt bold size={13}>{dateLabel(today, { weekday: 'long' })}</Txt><Txt muted size={11}>{dateLabel(today, { day: 'numeric', month: 'short', year: 'numeric' })}</Txt></View></View>
-      <Pressable testID="global-search-open" accessibilityRole="button" accessibilityLabel={C('homeSearch')} style={[s.homeSearch, { flexDirection: row }]} onPress={() => router.push('/search' as never)}><Feather name="search" size={19} color={c.blue} /><View style={s.grow}><Txt muted size={14}>{C('homeSearch')}</Txt></View></Pressable>
-      {h.error && !mode ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}
-      {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><View style={s.grow}><Txt color={c.red}>{h.notice}</Txt></View>{h.canUndo && <Action label={C('undo')} onPress={() => void h.undo()} tone="danger" disabled={h.busy} />}</View> : null}
-      <View style={{ gap: 8 }} testID="home-compact-calendar"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><Txt bold>{dateLabel(h.selectedDay, { month: 'long', year: 'numeric' })}</Txt><Action label={C('calendar')} icon="calendar" tone="quiet" onPress={() => openCalendar()} /></View>
-        <View style={{ flexDirection: row, gap: 4 }}>{Array.from({ length: 7 }, (_, i) => addDays(h.selectedDay, i - 3)).map(day => { const count = h.state.tasks.filter(task => task.date === day && task.status === 'pending').length; return <Pressable key={day} accessibilityRole="button" accessibilityLabel={dateLabel(day) + ' · ' + count} onPress={() => { chooseDay(day); setDraft(blankDraft(day)); setMode('actions'); }} style={{ flex: 1, alignItems: 'center', gap: 3, paddingVertical: 8, borderRadius: 10, backgroundColor: day === h.selectedDay ? '#EAF0FF' : '#FFFFFF' }}><Txt muted size={10}>{dateLabel(day, { weekday: 'short' })}</Txt><Txt bold>{Number(day.slice(-2))}</Txt>{count > 0 && <CountBadge count={count} />}</Pressable>; })}</View>
-      </View>
-      <View style={s.homeMatchPanel} testID="home-best-matches"><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><View style={s.grow}><Txt bold size={16}>{C('bestHomeMatches')}</Txt></View>{matches.status === 'ready' ? <CountBadge count={matches.items.length} /> : <ActivityIndicator color={c.blue} />}<Action label={language === 'ar' ? 'عرض' : 'View'} onPress={() => router.push(matchingTarget({ kind: 'best' }) as never)} tone="secondary" disabled={matches.status !== 'ready'} /></View>{matches.status === 'error' && <AlertNote onRetry={matches.retry} retryLabel={C('retry')}>{C('homeMatchError')}</AlertNote>}</View>
-      <View style={[s.homeSectionBar, { flexDirection: row }]}><View style={[s.row, s.grow, { flexDirection: row }]}><Txt bold size={18}>{overdue ? C('overdueTitle') : h.selectedDay === today ? C('today') : dateLabel(h.selectedDay, { weekday: 'short', day: 'numeric', month: 'short' })}</Txt>{h.ready && <CountBadge count={rows.length} />}</View><Action label={C('allFollowups')} tone="quiet" onPress={() => { setQuery(''); setMode('allTasks'); }} disabled={!h.ready} /></View>
-      {h.ready && h.state.settings.showOverdue && overdueTasks.length > 0 ? <View style={[s.row, { flexDirection: row, flexWrap: 'wrap' }]}><Feather name="alert-triangle" color={c.red} size={17} /><View style={s.grow}><Txt color={c.red} size={12}>{overdueTasks.length + ' ' + C('overdueNoun')}</Txt></View><Action label={C(overdue ? 'today' : 'review')} tone="danger" onPress={() => overdue ? chooseDay(today) : setOverdue(true)} /></View> : null}
-      <View style={s.homeAgenda}><ScrollView nestedScrollEnabled scrollEnabled={rows.length > 3} ref={listRef}
-        onLayout={event => { agendaGesture.current.viewport=event.nativeEvent.layout.height; }}
-        onContentSizeChange={(_,content) => { agendaGesture.current.content=content; }}
-        onScroll={event=>{ agendaGesture.current.offset=event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
-        onTouchStart={event=>{ agendaGesture.current.y=event.nativeEvent.pageY; }}
-        onTouchMove={event=>{
-          if (Platform.OS==='web' || rows.length<=3) return;
-          const gesture=agendaGesture.current, delta=event.nativeEvent.pageY-gesture.y; gesture.y=event.nativeEvent.pageY;
-          if (delta>0 && gesture.offset<=1 || delta<0 && gesture.offset>=gesture.content-gesture.viewport-1) {
-            pageRef.current?.scrollTo({y:Math.max(0,gesture.page-delta),animated:false});
-          }
-        }} testID="assistant-task-list" accessibilityLabel={C('agendaDay')} bounces={false} overScrollMode="never" scrollsToTop={false} persistentScrollbar removeClippedSubviews={false} keyboardShouldPersistTaps="handled" style={[{ height: listHeight, flexGrow: 0 }, containedWebScroll]}>
-        {!h.ready ? <View style={s.empty}>{h.error ? <Txt color={c.red}>{C('loadError')}</Txt> : <ActivityIndicator color={c.blue} />}</View> : rows.length ? rows.map(taskRow) : <View style={s.empty}><Feather name="check-circle" color={c.blue} size={26} /><Txt bold>{C('noTasks')}</Txt><Action label={C('addFollowup')} onPress={() => openEditor()} /></View>}
-      </ScrollView></View>
-      <Txt bold size={18}>{C('homeOverview')}</Txt><View style={[s.homeOverview, { flexDirection: row }]}>{[
-        ['properties', h.catalog.properties.length, C('properties')], ['people', h.catalog.people.length, t('people.title')], ['requirements', h.catalog.requirements.length, C('homeRequirements')],
-      ].map(([key, count, label]) => <Pressable key={key} style={s.homeStat} accessibilityRole="button" disabled={!h.ready} onPress={() => key === 'requirements' ? setMode('requirements') : router.push(('/' + key) as never)}><Text style={[s.homeStatValue, { fontFamily: fonts.medium }]}>{h.ready ? count : '—'}</Text><Txt muted size={13}>{label}</Txt></Pressable>)}</View>
-    </View></ScrollView>
+  const upcoming = sortFollowups(h.state.tasks.filter(task => task.status === 'pending')).slice(0, 3);
+  return <View style={s.root}>
+    <NextHomeCanvas ready={h.ready} properties={h.catalog.properties} requirements={h.catalog.requirements} people={h.catalog.people}
+      date={dateLabel(today)} matches={matches.items.length} matchStatus={matches.status} retryMatches={matches.retry}
+      tasks={upcoming.map(taskRow)} taskCount={upcoming.length}
+      openTasks={() => { setQuery(''); setMode('allTasks'); }}
+      addTask={() => openEditor()} openCalendar={() => openCalendar()}
+      openRequests={() => setMode('requirements')}
+      notice={<>{h.error && !mode ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}
+        {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><View style={s.grow}><Txt color={c.red}>{h.notice}</Txt></View>{h.canUndo && <Action label={C('undo')} onPress={() => void h.undo()} tone="danger" disabled={h.busy} />}</View> : null}</>} />
     {mode && <AssistantSheet title={modalTitle} onClose={close} busy={h.busy} footer={modalFooter}>{modalBody}{formError ? <AlertNote>{formError}</AlertNote> : null}{h.error ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}</AssistantSheet>}
   </View>;
 }

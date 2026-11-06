@@ -16,7 +16,7 @@ export function PrimaryTabHeader({ title, compactSearch = false }: { title: stri
   const router = useRouter(), colors = useColors(), insets = useScreenInsets();
   const { t, isRTL, fonts, language } = useI18n(), notices = useMatchNotifications();
   const row = isRTL ? 'row-reverse' : 'row';
-  return <View style={[styles.container, { backgroundColor: colors.card, paddingTop: insets.top }]}>
+  return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
     {!chrome && <View style={[styles.brandRow, { flexDirection: row }]}>
       <ViewStateBrand />
       <View style={{ flexDirection: row, gap: 4 }}>
@@ -29,7 +29,7 @@ export function PrimaryTabHeader({ title, compactSearch = false }: { title: stri
       </View>
     </View>
     }<Text accessibilityRole="header" style={[styles.title, { color: colors.text, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
-    {!compactSearch && <TouchableOpacity style={[styles.searchBar, { backgroundColor: colors.background, borderColor: colors.border, flexDirection: row }]} onPress={() => router.push('/search' as never)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t('search.open')} testID="global-search-open">
+    {!chrome && !compactSearch && <TouchableOpacity style={[styles.searchBar, { backgroundColor: colors.background, borderColor: colors.border, flexDirection: row }]} onPress={() => router.push('/search' as never)} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={t('search.open')} testID="global-search-open">
       <Feather name="search" size={18} color={colors.mutedForeground} /><Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, fontSize: 14, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{t('common.search')}</Text>
     </TouchableOpacity>}
   </View>;

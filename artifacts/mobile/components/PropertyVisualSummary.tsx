@@ -9,6 +9,9 @@ import {
   propertyOfferStatus,
 } from '@/services/propertyVisualPresentation';
 import { PropertySpecIcon } from '@/components/PropertySpecIcon';
+import { nextDesign as n } from '@/constants/nextDesign';
+import { useRouter } from 'expo-router';
+import { matchingTarget } from '@/services/matchingScope';
 import { PropertyCover } from '@/components/PropertyCover';
 export function PropertyStatus({ property }: { property: Property }) {
   const { language, fonts } = useI18n(),
@@ -46,6 +49,10 @@ export function PropertyFactStrip({
       style={{
         flexDirection: isRTL ? 'row-reverse' : 'row',
         gap: compact ? 6 : 0,
+        flexWrap: compact ? 'nowrap' : 'wrap',
+        borderWidth: compact ? 0 : 1,
+        borderColor: n.border,
+        overflow: 'hidden',
         backgroundColor: compact ? 'transparent' : colors.card,
         borderRadius: 12,
         paddingVertical: compact ? 2 : 12,
@@ -54,7 +61,7 @@ export function PropertyFactStrip({
       {facts.map((f) => (
         <View
           key={f.id}
-          style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 4 }}
+          style={{ flex: compact ? 1 : undefined, width: compact ? undefined : '33.333%', minWidth: 0, minHeight: compact ? undefined : 90, padding: compact ? 0 : 10, borderWidth: compact ? 0 : 0.5, borderColor: n.border, alignItems: 'center', justifyContent: 'center', gap: 4 }}
         >
           <PropertySpecIcon
             name={f.icon}
@@ -103,73 +110,27 @@ export function PropertyVisualCard({
   onPress: () => void;
   testID: string;
 }) {
-  const { isRTL, fonts } = useI18n(),
-    colors = useColors();
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${area}, ${price}`}
-      onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        direction: 'ltr',
-        minHeight: 158,
-        borderRadius: 14,
-        overflow: 'hidden',
-        backgroundColor: colors.card,
-      }}
-    >
-      <PropertyCover
-        property={property}
-        label={title}
-        style={{ width: 108, minHeight: 158, borderRadius: 0 }}
-      />
-      <View style={{ flex: 1, minWidth: 0, padding: 10, gap: 6 }}>
-        <Text
-          style={{
-            fontFamily: fonts.bold,
-            color: colors.foreground,
-            fontSize: 15,
-            lineHeight: 21,
-            textAlign: isRTL ? 'right' : 'left',
-          }}
-        >
-          {property.listingTitle?.trim() || title}
-        </Text>
-        <View
-          style={{
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-          <Text
-            style={{
-              fontFamily: fonts.regular,
-              color: colors.mutedForeground,
-              fontSize: 12,
-              textAlign: isRTL ? 'right' : 'left',
-              flex: 1,
-            }}
-          >
-            {area}
-          </Text>
+  const { isRTL, fonts, language } = useI18n(), colors = useColors(), router = useRouter();
+  return <View style={{ backgroundColor: n.white, borderRadius: 16, overflow: 'hidden' }}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={`${title}, ${area}, ${price}`}
+      onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? .85 : 1 })}>
+      <View style={{ height: 184 }}>
+        <PropertyCover property={property} label={title} style={{ height: 184, width: '100%' }} />
+        <View style={{ position: 'absolute', top: 12, right: isRTL ? 12 : undefined, left: isRTL ? undefined : 12 }}><PropertyStatus property={property} /></View>
+      </View>
+      <View style={{ padding: 16, gap: 9 }}>
+        <Text style={{ fontFamily: fonts.regular, color: n.muted, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
+        <Text style={{ fontFamily: fonts.bold, color: n.ink, fontSize: 19, lineHeight: 27, textAlign: isRTL ? 'right' : 'left' }}>{property.listingTitle?.trim() || title}</Text>
+        <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
+          <Feather name="map-pin" size={14} color={n.muted} /><Text style={{ flex: 1, color: n.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: isRTL ? 'right' : 'left' }}>{area}</Text>
         </View>
+        <Text style={{ fontFamily: fonts.bold, color: colors.primary, fontSize: 21, textAlign: isRTL ? 'right' : 'left' }}>{price}</Text>
         <PropertyFactStrip property={property} compact />
-        <Text
-          style={{
-            fontFamily: fonts.bold,
-            color: colors.primary,
-            fontSize: 16,
-            textAlign: isRTL ? 'right' : 'left',
-          }}
-        >
-          {price}
-        </Text>
-        <PropertyStatus property={property} />
       </View>
     </Pressable>
-  );
+    <Pressable accessibilityRole="button" testID={`${testID}-match`} onPress={() => router.push(matchingTarget({ kind: 'property', id: property.core.id }) as never)}
+      style={{ paddingHorizontal: 16, minHeight: 48, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: n.border }}>
+      <Text style={{ color: n.blue, fontFamily: fonts.semiBold, fontSize: 14 }}>{language === 'ar' ? 'طلبات مناسبة لهذا العقار' : 'Matching requests for this property'}</Text><Feather name={isRTL ? 'chevron-left' : 'chevron-right'} color={n.blue} size={18} />
+    </Pressable>
+  </View>;
 }

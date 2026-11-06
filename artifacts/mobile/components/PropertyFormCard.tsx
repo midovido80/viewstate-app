@@ -6,7 +6,7 @@ import { useI18n } from '@/contexts/I18nContext';
 
 export const propertyFormInputStyle = {
   minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14,
-  paddingVertical: 8, backgroundColor: '#FFFFFF', borderColor: '#CBD5E1',
+  paddingVertical: 8, backgroundColor: '#FFFFFF', borderColor: '#DFE5EF',
   color: '#203568', fontSize: 16,
 } as const;
 
@@ -36,5 +36,5 @@ export function PropertyAreaBlockRow({ area, block }: { area: ReactNode; block?:
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 18, padding: 10, gap: 8, minWidth: 0 },
+  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 16, gap: 14, minWidth: 0 },
 });

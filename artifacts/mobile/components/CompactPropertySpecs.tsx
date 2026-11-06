@@ -25,5 +25,5 @@ export function CompactPropertySpecs({ specs }: { specs: readonly CompactPropert
 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
-  cell: { backgroundColor: '#F1F7FD', minHeight: 66, paddingHorizontal: 5, paddingVertical: 8, gap: 4, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#DFE8F2', flexGrow: 0, flexShrink: 0 },
+  cell: { backgroundColor: '#FFFFFF', minHeight: 80, paddingHorizontal: 5, paddingVertical: 8, gap: 4, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#DFE8F2', flexGrow: 0, flexShrink: 0 },
 });

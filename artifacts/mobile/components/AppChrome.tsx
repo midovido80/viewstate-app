@@ -17,6 +17,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
 import { useColors } from '@/hooks/useColors';
+import { nextDesign as n } from '@/constants/nextDesign';
 const ChromeContext = createContext(false);
 export const useAppChrome = () => useContext(ChromeContext);
 /** A persistent toolbar and local sheet: changing language never navigates away from an editor. */
@@ -44,14 +45,12 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       style={{
         width: 44,
         height: 44,
-        borderWidth: 1,
-        borderColor: colors.border,
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Feather name={icon} size={21} color={colors.foreground} />
+      <Feather name={icon} size={21} color="white" />
       {icon === 'bell' && notices.historyReady && notices.unread > 0 && (
         <Text
           style={{
@@ -77,7 +76,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           testID="app-global-toolbar"
           style={{
             paddingTop: insets.top,
-            backgroundColor: colors.card,
+            backgroundColor: n.blue,
             paddingHorizontal: 18,
             paddingBottom: 6,
             direction: 'ltr',
@@ -99,8 +98,17 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                 open('notifications'),
               )}
             </View>
-            <ViewStateBrand />
+            <ViewStateBrand inverse />
           </View>
+        </View>
+        <View style={{ backgroundColor: n.background, paddingHorizontal: 18, paddingVertical: 10 }}>
+          <Pressable testID="next-global-search" accessibilityRole="button"
+            accessibilityLabel={ar ? 'ابحث عن عقار، شخص، أو رقم هاتف' : 'Search a property, person or phone'}
+            onPress={() => router.push('/search' as never)}
+            style={{ minHeight: 44, borderRadius: 10, backgroundColor: n.white, borderWidth: 1, borderColor: n.border, paddingHorizontal: 12, flexDirection: ar ? 'row-reverse' : 'row', alignItems: 'center', gap: 9 }}>
+            <Feather name="search" size={18} color={n.muted} />
+            <Text style={{ flex: 1, color: n.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: ar ? 'right' : 'left' }}>{ar ? 'ابحث عن عقار، شخص، أو رقم هاتف' : 'Search a property, person or phone'}</Text>
+          </Pressable>
         </View>
         <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
           {children}

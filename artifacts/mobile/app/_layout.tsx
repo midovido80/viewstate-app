@@ -184,7 +184,7 @@ function ApplicationRoot({ fontsLoaded, fontError }: { fontsLoaded: boolean; fon
               <KeyboardProvider>
                 <AccountFoundationProvider>
                 <CaptureProvider><MatchNotificationsProvider>
-                  <StatusBar style="dark" backgroundColor={colors.light.background} />
+                  <StatusBar style="light" backgroundColor={colors.light.primary} />
                   <RootLayoutNav integrityStatus={initialization.integrityStatus} />
                 </MatchNotificationsProvider></CaptureProvider>
                 </AccountFoundationProvider>

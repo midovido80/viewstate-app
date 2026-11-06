@@ -52,3 +52,31 @@ test('Count dropdown offers unspecified first, real numbers and exact manual ent
  tree=render(NumericQuickPick,props());const input=nodes(tree).find(n=>n.type==='TextInput');assert.ok(input);input.props.onChangeText('40');assert.equal(value,'40');
  tree=render(NumericQuickPick,props());picker=nodes(tree).find(n=>n.type===CompactDropdown);picker.props.onSelect('');assert.equal(value,'');
 });
+
+test('Next numeric picker selects and closes in one tap; multi-select stays open until Done', async () => {
+ const {CompactDropdown}=await import('../components/FormChoices.tsx');
+ for (const rtl of [false,true]) {
+  env.rtl=rtl;env.states=[];let chosen='';
+  const props={label:rtl?'عدد الغرف':'Room count',options:[{value:'',label:'Not specified'},...Array.from({length:10},(_,i)=>({value:String(i+1),label:String(i+1)})),{value:'manual',label:'Other number'}],onSelect:(value:string)=>{chosen=value}};
+  let tree=render(CompactDropdown,props);
+  nodes(tree).find(n=>n.type==='Pressable' && n.props.accessibilityState?.expanded===false)!.props.onPress();
+  tree=render(CompactDropdown,props);
+  assert.equal(nodes(tree).find(n=>n.type==='Modal')!.props.visible,true);
+  const four=nodes(tree).find(n=>n.type==='Pressable' && nodes(n).some(t=>t.type==='Text' && t.props.children==='4'))!;
+  assert.equal(four.props.style.minHeight,48);
+  assert.equal(four.props.style.width,'22%');
+  four.props.onPress();assert.equal(chosen,'4');
+  tree=render(CompactDropdown,props);
+  assert.equal(nodes(tree).find(n=>n.type==='Modal')!.props.visible,false);
+  assert.equal(nodes(tree).some(n=>n.type==='Text' && ['Done','تم'].includes(n.props.children)),false);
+  env.states=[];
+  const multiProps={...props,multiple:true};
+  tree=render(CompactDropdown,multiProps);
+  nodes(tree).find(n=>n.type==='Pressable' && n.props.accessibilityState?.expanded===false)!.props.onPress();
+  tree=render(CompactDropdown,multiProps);
+  nodes(tree).find(n=>n.type==='Pressable' && n.props.accessibilityRole==='checkbox')!.props.onPress();
+  tree=render(CompactDropdown,multiProps);
+  assert.equal(nodes(tree).find(n=>n.type==='Modal')!.props.visible,true);
+  assert.ok(nodes(tree).some(n=>n.type==='Text' && ['Done','تم'].includes(n.props.children)));
+ }
+});

@@ -15,6 +15,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useI18n } from "@/contexts/I18nContext";
+import { isNumericChoiceSet, nextDesign as n } from '@/constants/nextDesign';
+import { Feather } from '@expo/vector-icons';
 import { useColors } from "@/hooks/useColors";
 import { ChoiceTile as LegacyTile, ChoiceCard } from "./ChoiceTile";
 export { ChoiceCard };
@@ -63,6 +65,7 @@ export function CompactDropdown({
   const [open, setOpen] = useState(false),
     { isRTL, language, fonts } = useI18n(),
     colors = useColors();
+  const numeric = !multiple && isNumericChoiceSet(options.map(option => option.value));
   const selected = options.filter((o) => o.selected),
     align = isRTL ? ("right" as const) : ("left" as const);
   const text = {
@@ -104,7 +107,7 @@ export function CompactDropdown({
           {selected.map((o) => o.label).join("، ") ||
             (language === "ar" ? "اختر…" : "Choose…")}
         </Text>
-        <Text style={{ color: colors.primary }}>⌄</Text>
+        <Feather name="chevron-down" size={16} color={n.muted} />
       </Pressable>
       <Modal
         visible={open}
@@ -128,6 +131,9 @@ export function CompactDropdown({
           />
           <View
             style={{
+              width: "100%",
+              maxWidth: 440,
+              alignSelf: "center",
               maxHeight: "75%",
               backgroundColor: colors.card,
               borderRadius: 16,
@@ -135,10 +141,11 @@ export function CompactDropdown({
               gap: 8,
             }}
           >
-            {label && (
-              <Text style={[text, { fontFamily: fonts.bold }]}>{label}</Text>
-            )}
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <Text accessibilityRole="header" style={[text, { fontFamily: fonts.bold, flex: 1 }]}>{label || (language === 'ar' ? 'اختر' : 'Choose')}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'إغلاق الاختيارات' : 'Close options'} onPress={() => setOpen(false)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Feather name="x" size={20} color={n.muted} /></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={numeric ? { flexDirection: isRTL ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 } : undefined}>
               {options.map((o) => (
                 <Pressable
                   key={o.value}
@@ -151,8 +158,13 @@ export function CompactDropdown({
                     if (!multiple) setOpen(false);
                   }}
                   style={{
-                    minHeight: 44,
-          flex: label && inlineLabel ? 3 : undefined,
+                    minHeight: 48,
+                    width: numeric ? /^\d+$/.test(o.value) ? '22%' : '100%' : '100%',
+                    flexGrow: numeric && /^\d+$/.test(o.value) ? 1 : 0,
+                    borderRadius: numeric ? 10 : 0,
+                    backgroundColor: o.selected ? n.soft : n.white,
+                    borderWidth: numeric ? 1 : 0,
+                    borderColor: o.selected ? n.blue : n.border,
                     paddingVertical: 8,
                     paddingHorizontal: 8,
                     borderBottomWidth: 1,
@@ -162,14 +174,12 @@ export function CompactDropdown({
                     alignItems: "center",
                   }}
                 >
-                  <Text style={[text, { flex: 1 }]}>{o.label}</Text>
-                  <Text style={{ color: colors.primary }}>
-                    {o.selected ? "✓" : ""}
-                  </Text>
+                  <Text style={[text, { flex: 1, textAlign: numeric ? "center" : align, fontFamily: o.selected ? fonts.semiBold : fonts.regular }]}>{o.label}</Text>
+                  {!numeric && <Text style={{ color: colors.primary }}>{o.selected ? "✓" : ""}</Text>}
                 </Pressable>
               ))}
             </ScrollView>
-            <Pressable
+            {multiple && <Pressable
               accessibilityRole="button"
               onPress={() => setOpen(false)}
               style={{
@@ -181,7 +191,7 @@ export function CompactDropdown({
               <Text style={[text, { color: "white", textAlign: "center" }]}>
                 {language === "ar" ? "تم" : "Done"}
               </Text>
-            </Pressable>
+            </Pressable>}
           </View>
         </View>
       </Modal>

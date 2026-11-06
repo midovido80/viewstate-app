@@ -130,7 +130,7 @@ export default function PropertiesScreen() {
 
     return (
       <View
-        style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius }]}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius, padding: item.kind === 'offered' ? 0 : 16 }]}
       >
         {item.kind==='offered' ? <PropertyVisualCard property={item.property} title={[typeLabel,subtypeLabel].filter(Boolean).join(' · ')} area={areaLabel} price={priceLabel} onPress={()=>router.push(getOfferedWantedHref(item.kind,item.id) as never)} testID={`property-card-${item.id}`} /> : <TouchableOpacity
           onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}

@@ -389,7 +389,7 @@ test('REGRESSION: capture success check uses success green with a contrasting fo
   assert.match(success, /backgroundColor: colors\.success/);
   assert.match(success, /<Feather name="check" size=\{42\} color=\{colors\.primaryForeground\}/);
   assert.doesNotMatch(success, /backgroundColor: colors\.accent/);
-  assert.match(palette, /success: '#128B64'/);
+  assert.match(palette, /success: '#087F5B'/);
   assert.match(palette, /primaryForeground: '#FFFFFF'/);
 });
 

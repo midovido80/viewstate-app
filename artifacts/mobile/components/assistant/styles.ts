@@ -1,9 +1,9 @@
 import { Platform, StyleSheet } from 'react-native';
 /** Presentation-only tokens: the approved demo can be restyled without replacing its state/commands. */
 export const assistantTone = {
-  background: '#F5F7FB', paper: '#FFFFFF', ink: '#172C4D', navy: '#142D50', blue: '#235AF3',
-  muted: '#62738D', line: '#DBE3EF', pale: '#EAF0FF', person: '#A65014',
-  red: '#D73C4A', redBg: '#FFF0F1', green: '#128B64', greenBg: '#EAF6EF', neutral: '#EDF1F5',
+  background: '#F5F7FC', paper: '#FFFFFF', ink: '#1B2940', navy: '#18355C', blue: '#2454ED',
+  muted: '#607086', line: '#DFE5EF', pale: '#EDF2FF', person: '#A65014',
+  red: '#D73C4A', redBg: '#FFF0F1', green: '#087F5B', greenBg: '#EAF6EF', neutral: '#EDF1F5',
 };
 const c = assistantTone;
 const touchSize = Platform.OS === 'android' ? 48 : 44;
