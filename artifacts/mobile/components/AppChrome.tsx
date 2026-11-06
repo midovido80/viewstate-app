@@ -105,7 +105,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           <Pressable testID="next-global-search" accessibilityRole="button"
             accessibilityLabel={ar ? 'ابحث عن عقار، شخص، أو رقم هاتف' : 'Search a property, person or phone'}
             onPress={() => router.push('/search' as never)}
-            style={{ minHeight: 44, borderRadius: 10, backgroundColor: n.white, borderWidth: 1, borderColor: n.border, paddingHorizontal: 12, flexDirection: ar ? 'row-reverse' : 'row', alignItems: 'center', gap: 9 }}>
+            style={{ minHeight: 44, borderRadius: 10, backgroundColor: n.white, borderWidth: 1, borderColor: n.border, paddingHorizontal: 12, direction: 'ltr', flexDirection: ar ? 'row-reverse' : 'row', alignItems: 'center', gap: 9 }}>
             <Feather name="search" size={18} color={n.muted} />
             <Text style={{ flex: 1, color: n.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: ar ? 'right' : 'left' }}>{ar ? 'ابحث عن عقار، شخص، أو رقم هاتف' : 'Search a property, person or phone'}</Text>
           </Pressable>

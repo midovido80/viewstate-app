@@ -116,7 +116,11 @@ export function NextHomeCanvas({
       </View>
       {notice}
       <View
-        style={{ flexDirection: fontScale > 1.4 ? "column" : row, gap: 10 }}
+        style={{
+          direction: "ltr",
+          flexDirection: fontScale > 1.4 ? "column" : row,
+          gap: 10,
+        }}
         testID="next-home-primary-tasks"
       >
         {[
@@ -180,6 +184,7 @@ export function NextHomeCanvas({
       <View style={{ gap: 8 }}>
         <View
           style={{
+            direction: "ltr",
             flexDirection: row,
             alignItems: "center",
             justifyContent: "space-between",
@@ -230,6 +235,7 @@ export function NextHomeCanvas({
                     style={{
                       padding: 14,
                       gap: 12,
+                      direction: "ltr",
                       flexDirection: row,
                       alignItems: "center",
                       minHeight: 88,
@@ -313,6 +319,7 @@ export function NextHomeCanvas({
         ) : (
           <View
             style={{
+              direction: "ltr",
               flexDirection: row,
               alignItems: "center",
               justifyContent: "space-between",
@@ -334,6 +341,7 @@ export function NextHomeCanvas({
       <View style={{ gap: 8 }}>
         <View
           style={{
+            direction: "ltr",
             flexDirection: row,
             alignItems: "center",
             justifyContent: "space-between",
@@ -375,6 +383,7 @@ export function NextHomeCanvas({
             padding: 14,
             borderRadius: 12,
             backgroundColor: n.soft,
+            direction: "ltr",
             flexDirection: row,
             alignItems: "center",
             gap: 9,
@@ -392,7 +401,7 @@ export function NextHomeCanvas({
           />
         </Pressable>
       </View>
-      <View style={{ flexDirection: row, gap: 6 }}>
+      <View style={{ direction: "ltr", flexDirection: row, gap: 6 }}>
         {[
           [
             properties.length,

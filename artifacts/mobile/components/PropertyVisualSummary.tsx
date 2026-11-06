@@ -47,7 +47,7 @@ export function PropertyFactStrip({
     <View
       testID="property-visual-facts"
       style={{
-        flexDirection: isRTL ? 'row-reverse' : 'row',
+        direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row',
         gap: compact ? 6 : 0,
         flexWrap: compact ? 'nowrap' : 'wrap',
         borderWidth: compact ? 0 : 1,
@@ -121,7 +121,7 @@ export function PropertyVisualCard({
       <View style={{ padding: 16, gap: 9 }}>
         <Text style={{ fontFamily: fonts.regular, color: n.muted, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
         <Text style={{ fontFamily: fonts.bold, color: n.ink, fontSize: 19, lineHeight: 27, textAlign: isRTL ? 'right' : 'left' }}>{property.listingTitle?.trim() || title}</Text>
-        <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
+        <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 5 }}>
           <Feather name="map-pin" size={14} color={n.muted} /><Text style={{ flex: 1, color: n.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: isRTL ? 'right' : 'left' }}>{area}</Text>
         </View>
         <Text style={{ fontFamily: fonts.bold, color: colors.primary, fontSize: 21, textAlign: isRTL ? 'right' : 'left' }}>{price}</Text>
@@ -129,7 +129,7 @@ export function PropertyVisualCard({
       </View>
     </Pressable>
     <Pressable accessibilityRole="button" testID={`${testID}-match`} onPress={() => router.push(matchingTarget({ kind: 'property', id: property.core.id }) as never)}
-      style={{ paddingHorizontal: 16, minHeight: 48, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: n.border }}>
+      style={{ paddingHorizontal: 16, minHeight: 48, direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: n.border }}>
       <Text style={{ color: n.blue, fontFamily: fonts.semiBold, fontSize: 14 }}>{language === 'ar' ? 'طلبات مناسبة لهذا العقار' : 'Matching requests for this property'}</Text><Feather name={isRTL ? 'chevron-left' : 'chevron-right'} color={n.blue} size={18} />
     </Pressable>
   </View>;

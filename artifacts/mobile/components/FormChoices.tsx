@@ -77,7 +77,7 @@ export function CompactDropdown({
     lineHeight: 21,
   };
   return (
-    <View style={{ width: "100%", gap: 8, flexDirection: label && inlineLabel ? (isRTL ? "row-reverse" : "row") : "column", alignItems: label && inlineLabel ? "center" : undefined }}>
+    <View style={{ width: "100%", gap: 8, direction: "ltr", flexDirection: label && inlineLabel ? (isRTL ? "row-reverse" : "row") : "column", alignItems: label && inlineLabel ? "center" : undefined }}>
       {label && (
         <Text style={[text, { fontFamily: fonts.semiBold, flex: inlineLabel ? 2 : undefined }]}>{label}</Text>
       )}
@@ -98,7 +98,7 @@ export function CompactDropdown({
           backgroundColor: colors.card,
           paddingHorizontal: 12,
           paddingVertical: 8,
-          flexDirection: isRTL ? "row-reverse" : "row",
+          direction: "ltr", flexDirection: isRTL ? "row-reverse" : "row",
           alignItems: "center",
           gap: 8,
         }}
@@ -141,11 +141,11 @@ export function CompactDropdown({
               gap: 8,
             }}
           >
-            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <Text accessibilityRole="header" style={[text, { fontFamily: fonts.bold, flex: 1 }]}>{label || (language === 'ar' ? 'اختر' : 'Choose')}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'إغلاق الاختيارات' : 'Close options'} onPress={() => setOpen(false)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Feather name="x" size={20} color={n.muted} /></Pressable>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={numeric ? { flexDirection: isRTL ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 } : undefined}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={numeric ? { direction: "ltr", flexDirection: isRTL ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 } : undefined}>
               {options.map((o) => (
                 <Pressable
                   key={o.value}
@@ -169,7 +169,7 @@ export function CompactDropdown({
                     paddingHorizontal: 8,
                     borderBottomWidth: 1,
                     borderBottomColor: colors.border,
-                    flexDirection: isRTL ? "row-reverse" : "row",
+                    direction: "ltr", flexDirection: isRTL ? "row-reverse" : "row",
                     gap: 10,
                     alignItems: "center",
                   }}
