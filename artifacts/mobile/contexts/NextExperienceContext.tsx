@@ -52,7 +52,10 @@ function useNextState() {
       const current = generation.current;
       try {
         const value = await repository.update(mutation);
-        if (current === generation.current) setState(value);
+        if (current === generation.current) {
+          setState(value);
+          setError(false);
+        }
         return true;
       } catch {
         if (current === generation.current) setError(true);
