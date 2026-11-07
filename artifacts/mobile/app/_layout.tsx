@@ -1,3 +1,4 @@
+import { NextExperienceProvider } from '@/contexts/NextExperienceContext';
 import { AppChrome } from '@/components/AppChrome';
 import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -82,9 +83,12 @@ function RootLayoutNav({
           </Text>
         </View>
       ) : null}
-      <AppChrome><Stack screenOptions={{ headerBackTitle: 'Back' }}>
+      <NextExperienceProvider><AppChrome><Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="next-recent" options={{ headerShown: false }} />
+        <Stack.Screen name="next-guide" options={{ headerShown: false }} />
+        <Stack.Screen name="intake" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="account" options={{ headerShown: false }} />
@@ -97,7 +101,7 @@ function RootLayoutNav({
         <Stack.Screen name="property/[propertyCoreId]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
-      </Stack></AppChrome>
+      </Stack></AppChrome></NextExperienceProvider>
     </View>
   );
 }

@@ -1,3 +1,4 @@
+import { nextDesign as n } from '@/constants/nextDesign';
 import { TextInput } from '@/components/FormField';
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, Switch, ActivityIndicator, Image, ScrollView, Platform, KeyboardAvoidingView, type TextInputProps } from 'react-native';
@@ -28,11 +29,11 @@ export function AccountHeader({ title, onBack, root }: { title: string; onBack?:
   const colors = useColors(); const insets = useScreenInsets(); const router = useRouter();
   const { L, isRTL, fonts, row } = useL();
   return (
-    <View style={[s.header, { backgroundColor: colors.accent, paddingTop: insets.top + 6, flexDirection: row }]}>
+    <View style={[s.header, { backgroundColor: n.background, paddingTop: insets.top + 6, direction: 'ltr', flexDirection: row }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={root ? L('الرئيسية', 'Home') : L('رجوع', 'Back')} onPress={root ? () => router.replace('/') : onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/account' as never)))} style={s.iconBtn} testID="account-back">
-        <Feather name={root ? 'home' : isRTL ? 'chevron-right' : 'chevron-left'} size={24} color="#FFFFFF" />
+        <Feather name={root ? 'home' : isRTL ? 'chevron-right' : 'chevron-left'} size={22} color={n.navy} />
       </Pressable>
-      <Text numberOfLines={1} style={[s.headerTitle, { fontFamily: fonts.bold }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[s.headerTitle, { fontFamily: fonts.bold, color: n.ink, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
       <View style={s.iconBtnSpacer} />
     </View>
   );
@@ -41,11 +42,10 @@ export function AccountHeader({ title, onBack, root }: { title: string; onBack?:
 export function AccountScreen({ title, subtitle, children, onBack, footer }: { title: string; subtitle?: string; children: React.ReactNode; onBack?: () => void; footer?: React.ReactNode }) {
   const colors = useColors(); const insets = useScreenInsets(); const { fonts, align } = useL();
   return (
-    <View style={{ flex: 1, backgroundColor: tone.paper }}>
+    <View style={{ flex: 1, backgroundColor: n.background }}>
       <AccountHeader title={title} onBack={onBack} />
       <ReadyBanner />
-      <KeyboardAwareScrollViewCompat bottomOffset={24} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, paddingBottom: footer ? 24 : insets.bottom + 24 }}>
-        <Text style={[s.h2, { color: colors.accent, fontFamily: fonts.bold, textAlign: align }]}>{title}</Text>
+      <KeyboardAwareScrollViewCompat bottomOffset={24} keyboardShouldPersistTaps="handled" contentContainerStyle={{ width: '100%', maxWidth: 760, alignSelf: 'center', padding: 18, paddingBottom: footer ? 24 : insets.bottom + 24 }}>
         {subtitle ? <Text style={[s.sub, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: align }]}>{subtitle}</Text> : null}
         {children}
       </KeyboardAwareScrollViewCompat>

@@ -1,4 +1,4 @@
-import { KitchenSlot } from '@/components/PropertyWizard';
+import { BathroomKitchenRow, KitchenSlot } from '@/components/PropertyWizard';
 import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
@@ -180,16 +180,13 @@ export function PropertyEnrichmentFields({
     <View style={styles.wrap}>
       {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">{ordered.map(definition => {
         const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
-        return (
-          <View key={definition.field}><RequiredField id={definition.field}>
-            {!usesResidentialQuickPick && (
-              <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
-                {propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}
-              </Text>
-            )}
-            {renderFieldContent(definition)}
-          </RequiredField>{definition.field === 'bathroomCount' && <KitchenSlot />}</View>
-        );
+        const control = <RequiredField id={definition.field}>
+          {!usesResidentialQuickPick && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}</Text>}
+          {renderFieldContent(definition)}
+        </RequiredField>;
+        return <View key={definition.field}>{definition.field === 'bathroomCount'
+          ? <><BathroomKitchenRow>{control}</BathroomKitchenRow><KitchenSlot /></>
+          : control}</View>;
       })}</PropertyFormCard>}
       {(applicableDefinitions.some(definition => definition.group === 'amenity' && definition.field !== 'parkingSpaceCount') || amenityRenderExtra) && (
         <PropertyFormCard page={1} title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">

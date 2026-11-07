@@ -11,7 +11,9 @@ export function KitchenFields({
   commercial = false,
   scopeKey,
   onInvalidChange,
+  part = "all",
 }: {
+  part?: "all" | "count" | "details";
   value?: readonly KitchenSpec[];
   onChange: (value: readonly KitchenSpec[] | undefined) => void;
   commercial?: boolean;
@@ -39,23 +41,34 @@ export function KitchenFields({
   }
   const count = (
     <CompactDropdown
-      inlineLabel={value?.length !== 1}
+      inlineLabel={false}
       label={ar ? "عدد المطابخ" : "Kitchens"}
-      options={COUNT_OPTIONS.map(n => ({value: String(n), label: n === 0 ? (ar ? 'لا يوجد (0)' : 'None (0)') : String(n), selected: value?.length === n}))}
+      options={COUNT_OPTIONS.map((n) => ({
+        value: String(n),
+        label: n === 0 ? (ar ? "لا يوجد (0)" : "None (0)") : String(n),
+        selected: value?.length === n,
+      }))}
       testID="kitchen-count"
       onSelect={(raw) => {
-        if (!raw) { onChange(undefined); onInvalidChange?.(false); return; }
+        if (!raw) {
+          onChange(undefined);
+          onInvalidChange?.(false);
+          return;
+        }
         const count = Number(raw);
-        if (!Number.isInteger(count) || count < 0 || count > 3) { onInvalidChange?.(true); return; }
+        if (!Number.isInteger(count) || count < 0 || count > 3) {
+          onInvalidChange?.(true);
+          return;
+        }
         onInvalidChange?.(false);
-        onChange(Array.from({length: count}, (_, i) => value?.[i] ?? {}));
+        onChange(Array.from({ length: count }, (_, i) => value?.[i] ?? {}));
       }}
     />
   );
   const field = (index: number, key: keyof KitchenSpec) => (
     <View key={key} style={{ flex: 1, minWidth: 0 }}>
       <CompactDropdown
-        inlineLabel={!commercial && value?.length !== 1}
+        inlineLabel={false}
         label={
           key === "layout"
             ? ar
@@ -93,39 +106,28 @@ export function KitchenFields({
       />
     </View>
   );
+  if (part === "count") return count;
   return (
-    <View style={{ gap: 8 }}>
-      {value?.length === 1 ? (
-        <>
-          <View style={row}>
-            <View style={{ flex: 1, minWidth: 0 }}>{count}</View>
-            {field(0, "layout")}
-            {field(0, "equipment")}
+    <View style={{ gap: 12 }}>
+      {part === "all" ? count : null}
+      {value?.map((_, index) => (
+        <View key={index} style={{ gap: 8 }}>
+          <Text
+            style={{
+              textAlign: isRTL ? "right" : "left",
+              fontFamily: fonts.semiBold,
+              color: "#18355C",
+            }}
+          >
+            {ar ? `المطبخ ${index + 1}` : `Kitchen ${index + 1}`}
+          </Text>
+          <View style={[row, { direction: "ltr", gap: 12 }]}>
+            {field(index, "layout")}
+            {field(index, "equipment")}
           </View>
-          {commercial && field(0, "access")}
-        </>
-      ) : (
-        <>
-          {count}
-          {value?.map((_, index) => (
-            <View key={index} style={{ gap: 5 }}>
-              <Text
-                style={{
-                  textAlign: isRTL ? "right" : "left",
-                  fontFamily: fonts.semiBold,
-                }}
-              >
-                {ar ? `المطبخ ${index + 1}` : `Kitchen ${index + 1}`}
-              </Text>
-              <View style={row}>
-                {field(index, "layout")}
-                {field(index, "equipment")}
-                {commercial && field(index, "access")}
-              </View>
-            </View>
-          ))}
-        </>
-      )}
+          {commercial ? field(index, "access") : null}
+        </View>
+      ))}
     </View>
   );
 }

@@ -1,6 +1,7 @@
-import { KitchenSlotContext } from '@/components/PropertyWizard';
+import { showsNextKitchenFields } from '@/services/nextFormPresentation';
+import { KitchenCountContext, KitchenSlotContext } from '@/components/PropertyWizard';
 import { KitchenFields } from '@/components/KitchenFields';
-import { kitchensApply, validKitchens, type KitchenSpec } from '@workspace/property-domain';
+import { validKitchens, type KitchenSpec } from '@workspace/property-domain';
 import { getBuiltPropertySector } from '@/services/propertySectorSelection';
 import { hasOfficeRequirementServices } from '@workspace/property-domain';
 import { CommercialOfferedServices } from '@/components/CommercialOfferedServices';
@@ -113,6 +114,7 @@ const styles = StyleSheet.create({ demo: { gap: 10, marginTop: 12 }, input: { mi
 export function ModernPropertyForm(props: ModernPropertyFormProps) {
   let kitchens: readonly KitchenSpec[] | undefined;
   try { const parsed=JSON.parse(props.values.kitchens ?? 'null'); if (validKitchens(parsed)) kitchens=parsed; } catch { /* Validation retains invalid imported drafts. */ }
-  const kitchenControls=kitchensApply(props.propertyType,props.values.floorUse ?? props.values.propertyUse) ? <KitchenFields value={kitchens} scopeKey={`${props.recordScopeKey}:kitchens`} commercial={getBuiltPropertySector(props.propertyType,props.values.floorUse ?? props.values.propertyUse)==='commercial'} onInvalidChange={invalid=>props.onInvalidQuickPickChange?.('kitchens',props.recordScopeKey,invalid)} onChange={value=>props.onChange('kitchens',value===undefined?'':JSON.stringify(value))} /> : null;
-  return <KitchenSlotContext.Provider value={kitchenControls}><View><PropertyFormBody {...props} />{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View></KitchenSlotContext.Provider>;
+  const applicable = showsNextKitchenFields(props.propertyType, props.values.apartmentSubtype, props.values.floorUse ?? props.values.propertyUse);
+  const controls = (part: 'count' | 'details') => applicable ? <KitchenFields part={part} value={kitchens} scopeKey={`${props.recordScopeKey}:kitchens`} commercial={getBuiltPropertySector(props.propertyType,props.values.floorUse ?? props.values.propertyUse)==='commercial'} onInvalidChange={invalid=>props.onInvalidQuickPickChange?.('kitchens',props.recordScopeKey,invalid)} onChange={value=>props.onChange('kitchens',value===undefined?'':JSON.stringify(value))} /> : null;
+  return <KitchenCountContext.Provider value={controls('count')}><KitchenSlotContext.Provider value={controls('details')}><View><PropertyFormBody {...props} />{hasOfficeRequirementServices(props.propertyType, props.values.floorUse as 'commercial' | 'residential' | undefined) && <CommercialOfferedServices recordScopeKey={props.recordScopeKey} values={props.values} onChange={props.onChange} onInvalidChange={props.onInvalidQuickPickChange} />}</View></KitchenSlotContext.Provider></KitchenCountContext.Provider>;
 }

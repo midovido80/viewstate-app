@@ -60,15 +60,17 @@ export default function CompactAssistantScreen() {
   const [mode, setMode] = useState<Mode>(null), [expected, setExpected] = useState<Followup | null>(null);
   const [draft, setDraft] = useState<FollowupDraft>(() => blankDraft(today));
   const handoff = useRef('');
+  const [handoffScope, setHandoffScope] = useState('');
   useEffect(() => {
     const personId = params.followupPersonId, propertyId = params.followupPropertyId;
-    if (!personId || !propertyId || !h.ready) { if (!personId && !propertyId) handoff.current = ''; return; }
+    if ((!personId && !propertyId) || !h.ready) { if (!personId && !propertyId) handoff.current = ''; return; }
     const key = JSON.stringify([personId, propertyId]); if (handoff.current === key) return;
-    handoff.current = key;
+    handoff.current = key; setHandoffScope(key);
     const person = h.catalog.people.find(p => p.id === personId), property = h.catalog.properties.find(p => p.core.id === propertyId);
     router.setParams({ followupPersonId: undefined, followupPropertyId: undefined });
-    if (!person || !property) { h.notify(language === 'ar' ? 'الشخص أو العقار غير متاح.' : 'Person or property unavailable.'); return; }
-    setExpected(null); setDraft({ ...blankDraft(kuwaitDay(new Date()), 'call'), personId, propertyId, title: language === 'ar' ? `متابعة العقار مع ${person.name}` : `Follow up on property with ${person.name}` });
+    if (personId && !person || propertyId && !property) { h.notify(language === 'ar' ? 'الشخص أو العقار غير متاح.' : 'Person or property unavailable.'); return; }
+    editorCommitted.current = false;
+    setExpected(null); setDraft({ ...blankDraft(kuwaitDay(new Date()), 'call'), personId: personId ?? '', propertyId: propertyId ?? '', title: person ? (language === 'ar' ? `متابعة مع ${person.name}` : `Follow up with ${person.name}`) : (language === 'ar' ? 'متابعة العقار' : 'Property follow-up') });
     setFormError(''); setFieldError(''); setMode('editor');
   }, [params.followupPersonId, params.followupPropertyId, h.ready, h.catalog, language, router]);
   const [formError, setFormError] = useState(''), [fieldError, setFieldError] = useState('');
@@ -83,7 +85,7 @@ export default function CompactAssistantScreen() {
   const editorCommitted = useRef(false);
   const parentMode = mode === 'calendar' ? calendarBack.current : mode === 'people' || mode === 'properties' ? pickerBack.current : mode;
   const editorOpen = parentMode === 'editor' || parentMode === 'outcome' || parentMode === 'reschedule' || parentMode === 'settings';
-  const persistEditor = useLocalFormDraft({ identity: `followup:${parentMode}:${expected?.id ?? 'new'}`, value: { draft, expected, outcome, outcomeNotes, nextEnabled, nextDate, nextTime, nextTitle, newDate, newTime, preferences }, ready: editorOpen, completed: () => editorCommitted.current,
+  const persistEditor = useLocalFormDraft({ identity: `followup:${parentMode}:${expected?.id ?? (handoffScope || 'new')}`, value: { draft, expected, outcome, outcomeNotes, nextEnabled, nextDate, nextTime, nextTitle, newDate, newTime, preferences }, ready: editorOpen, completed: () => editorCommitted.current,
     restore: saved => { setDraft(saved.draft); setExpected(saved.expected); setOutcome(saved.outcome); setOutcomeNotes(saved.outcomeNotes); setNextEnabled(saved.nextEnabled); setNextDate(saved.nextDate); setNextTime(saved.nextTime); setNextTitle(saved.nextTitle); setNewDate(saved.newDate); setNewTime(saved.newTime); setPreferences(saved.preferences); } });
   const overdueTasks = sortFollowups(h.state.tasks.filter(v => v.status === 'pending' && v.date < today));
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
@@ -96,19 +98,19 @@ export default function CompactAssistantScreen() {
   function close() { if (h.busy) return; if (mode === 'editor' || mode === 'outcome' || mode === 'reschedule' || mode === 'settings') { void persistEditor().then(() => { setMode(mode === 'outcome' || mode === 'reschedule' ? 'detail' : null); setFormError(''); setFieldError(''); }).catch(() => h.notify(language === 'ar' ? 'لم تُحفظ المسودة. تعديلاتك ما زالت هنا؛ أعد المحاولة.' : 'Draft was not saved. Your entries are still here; retry.')); return; } if (mode === 'calendar' && calendarBack.current) { setMode(calendarBack.current); return; } if ((mode === 'people' || mode === 'properties') && pickerBack.current) { setMode(pickerBack.current); return; } if (mode === 'cancel') { setMode('detail'); return; } if (mode === 'person' || mode === 'property') { setMode('detail'); return; } setMode(null); setFormError(''); setFieldError(''); }
   function openEditor(kind: TaskKind = 'call', task?: Followup, extra: Partial<FollowupDraft> = {}) {
     if (!h.ready || h.busy) return;
-    editorCommitted.current = false;
+    editorCommitted.current = false; setHandoffScope('');
     setExpected(task ?? null); setDraft(task ? { ...task } : { ...blankDraft(h.selectedDay, kind), ...extra });
     setFormError(''); setFieldError(''); h.clearError(); setMode('editor');
   }
   function openDetail(task: Followup) { setExpected(task); setFormError(''); setMode('detail'); }
   function openOutcome(task: Followup) {
     if (task.status !== 'pending') return;
-    editorCommitted.current = false;
+    editorCommitted.current = false; setHandoffScope('');
     setExpected(task); setOutcome(OUTCOMES[task.kind][0]); setOutcomeNotes(''); setNextEnabled(false);
     setNextDate(addDays(today, 1)); setNextTime(''); setNextTitle(C('followupDefault')); setFormError(''); setMode('outcome');
   }
   function openReschedule(task: Followup) {
-    editorCommitted.current = false;
+    editorCommitted.current = false; setHandoffScope('');
     setExpected(task); setNewDate(addDays(task.date < today ? today : task.date, 1)); setNewTime(task.time); setFormError(''); setMode('reschedule');
   }
   function openCalendar(target: CalendarTarget = 'page') {
@@ -184,7 +186,8 @@ export default function CompactAssistantScreen() {
   }
   useEffect(() => {
     if (!params.quickAction || !h.ready) return;
-    quickAction(params.quickAction as HomeQuickAction);
+    if(params.quickAction === 'calendar') openCalendar();
+    else quickAction(params.quickAction as HomeQuickAction);
     router.setParams({ quickAction: undefined, quickActionKey: undefined });
   }, [params.quickAction, params.quickActionKey, h.ready]);
   function quickAction(action: HomeQuickAction) {

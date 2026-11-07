@@ -90,14 +90,15 @@ export default function PropertyShareScreen() {
   const account = useRealAccount(), guest = useGuestAccount();
   const signature = (include: boolean) => account ? accountShareSignature(account.profile, include, language) : include && guest ? '\n\n' + [language === 'ar' ? 'للتواصل' : 'Contact', guest.identity.name, guest.identity.phone].filter(Boolean).join('\n') : '';
   const [includeMyDetails, setIncludeMyDetails] = useState(false);
-  const params = useLocalSearchParams<{ propertyCoreId?: string | string[]; matchNoticeId?: string }>();
+  const params = useLocalSearchParams<{ propertyCoreId?: string | string[]; matchNoticeId?: string; recipientId?: string }>();
   const rawId = params.propertyCoreId;
+  const recipientId = typeof params.recipientId === 'string' ? params.recipientId : undefined;
   const noticeId = typeof params.matchNoticeId === 'string' ? params.matchNoticeId : undefined;
   const notifications = useMatchNotifications(), notificationsRef = useRef(notifications); notificationsRef.current = notifications;
   const [recipient, setRecipient] = useState<{ id: string; name: string } | null>(null);
-  const [matchReady, setMatchReady] = useState(!noticeId);
+  const [matchReady, setMatchReady] = useState(!noticeId && !recipientId);
   const [followupPrompt, setFollowupPrompt] = useState(false);
-  const [shareFormat, setShareFormat] = useState<'viewstate' | 'message'>(noticeId ? 'viewstate' : 'message');
+  const [shareFormat, setShareFormat] = useState<'viewstate' | 'message'>(noticeId || recipientId ? 'viewstate' : 'message');
   const shareFlight = useRef(false);
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const router = useRouter(); const colors = useColors(); const insets = useScreenInsets(); const { t, language, fonts, isRTL } = useI18n();
@@ -108,14 +109,20 @@ export default function PropertyShareScreen() {
   const [sharing, setSharing] = useState(false);
   const shareT = (key: string) => t(key as any);
   useEffect(() => {
-    let active = true; setMatchReady(!noticeId); setRecipient(null);
+    let active = true; setMatchReady(!noticeId && !recipientId); setRecipient(null);
     if (noticeId) void notificationsRef.current.resolve(noticeId).then(({ match }) => {
       if (!active) return;
       if (match.result.propertyId !== id) throw new Error('MATCH_PROPERTY_MISMATCH');
       setRecipient({ id: match.person.id, name: match.person.name }); setMatchReady(true);
     }).catch(() => { if (active) setError(language === 'ar' ? 'تعذر تأكيد المطابقة؛ ارجع للإشعارات وحدّثها.' : 'Match could not be confirmed. Return to Notifications and refresh.'); });
+    if (!noticeId && recipientId) void store.getPeople().then(people => {
+      if (!active) return;
+      const person = people.find(person => person.id === recipientId);
+      if (!person) throw Error('RECIPIENT_UNAVAILABLE');
+      setRecipient({ id: person.id, name: person.name }); setMatchReady(true);
+    }).catch(() => { if (active) setError(language === 'ar' ? 'تعذر تحميل العميل. ارجع للمطابقة وأعد المحاولة.' : 'The client could not load. Return to Matching and retry.'); });
     return () => { active = false; };
-  }, [id, noticeId, language]);
+  }, [id, noticeId, recipientId, language, store]);
 
   useEffect(() => { if (id) store.getProperty(id).then(value => { if (!value) throw new Error('missing'); setProperty(value); setSelection(createPropertyShareSelection(value)); }).catch(() => setError(t('edit.not_found'))); }, [id, t]);
   useEffect(() => {
@@ -243,6 +250,14 @@ export default function PropertyShareScreen() {
     <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('capture.back')} testID="share-back" style={navigationButtonStyle}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text accessibilityRole="header" style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.share')}</Text><View /></View>
     <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
       {recipient && <Text style={{ color: '#173F78', fontFamily: fonts.semiBold }}>{language === 'ar' ? `مشاركة مقترح للعميل: ${recipient.name}` : `Share a suggestion for: ${recipient.name}`}</Text>}
+      <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 16, gap: 8 }}>
+      <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.preview')}</Text>
+      <Text selectable testID="share-preview" style={[styles.preview, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{preview?.text || (previewResult.failed ? t('share.preview_unavailable') : t('share.select_content'))}</Text>
+        {selectedAttachments.length ? <View testID="share-preview-attachments" style={styles.selectedAttachments}>
+          <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }}>{shareT('share.attachments_selected').replace('{count}', toEnglishDigits(String(selectedAttachments.length)))}</Text>
+          {selectedAttachments.map(item => <Text key={item.id} style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left', writingDirection: 'ltr' }}>{toEnglishDigits(item.originalName)}</Text>)}
+        </View> : null}
+      </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         <Action label="ViewState" icon="file-text" tone={shareFormat === 'viewstate' ? 'primary' : 'secondary'} onPress={() => setShareFormat('viewstate')} disabled={sharing} testID="share-viewstate-card" />
         <Action label={language === 'ar' ? 'تطبيقات الهاتف' : 'Phone apps'} icon="share-2" tone={shareFormat === 'message' ? 'primary' : 'secondary'} onPress={() => setShareFormat('message')} disabled={sharing} testID="share-phone-apps" />
@@ -258,12 +273,6 @@ export default function PropertyShareScreen() {
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive')}</Text>
       {sensitive.filter(([, , exists]) => exists).map(([name, label]) => <CheckRow disabled={sharing} key={name} checked={selection[name]} title={label} onPress={() => toggleSensitive(name)} testID={`share-${name}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
        {contacts.length ? <><Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{shareT('share.contacts')}</Text>{contacts.map(contact => <CheckRow disabled={sharing} key={contact.id} checked={selection.personContactIds.includes(contact.id)} title={contact.name} subtitle={toEnglishDigits(contact.displayPhone)} onPress={() => toggleContact(contact.id)} testID={`share-contact-${contact.id}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}</> : null}
-      <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.preview')}</Text>
-      <Text selectable testID="share-preview" style={[styles.preview, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{preview?.text || (previewResult.failed ? t('share.preview_unavailable') : t('share.select_content'))}</Text>
-        {selectedAttachments.length ? <View testID="share-preview-attachments" style={styles.selectedAttachments}>
-          <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }}>{shareT('share.attachments_selected').replace('{count}', toEnglishDigits(String(selectedAttachments.length)))}</Text>
-          {selectedAttachments.map(item => <Text key={item.id} style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left', writingDirection: 'ltr' }}>{toEnglishDigits(item.originalName)}</Text>)}
-        </View> : null}
         {Platform.OS === 'android' && !noticeId ? <>
            <Button title={shareT('share.whatsapp')} testID="share-whatsapp" disabled={!hasShareableContent || sharing || !matchReady} variant="whatsapp" onPress={() => { if (!preview || !hasShareableContent || sharing) return; if (preview.attachmentIds.length) { setError(shareT('share.attachments_system_only')); return; } setError(''); void openAndroidPropertyShareCompose(preview.text).catch(() => setError(shareT('share.whatsapp_unavailable'))); }} />
         </> : null}
@@ -283,4 +292,4 @@ export default function PropertyShareScreen() {
     </AssistantSheet>}
   </View>;
 }
-const styles = StyleSheet.create({ container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { minHeight: 56, justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18 }, content: { padding: 18, gap: 8 }, heading: { fontSize: 17, marginTop: 10 }, note: { lineHeight: 19 }, row: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, alignItems: 'center', gap: 10 }, checkIndicator: { width: 22, height: 22, borderWidth: 1, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }, rowLabel: { flex: 1 }, rowSubtitle: { marginTop: 2 }, preview: { borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 90 }, selectedAttachments: { gap: 3 } });
+const styles = StyleSheet.create({ container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { minHeight: 56, justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18 }, content: { padding: 18, gap: 12, width: '100%', maxWidth: 760, alignSelf: 'center' }, heading: { fontSize: 17, marginTop: 10 }, note: { lineHeight: 19 }, row: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, alignItems: 'center', gap: 10 }, checkIndicator: { width: 22, height: 22, borderWidth: 1, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }, rowLabel: { flex: 1 }, rowSubtitle: { marginTop: 2 }, preview: { paddingVertical: 8, minHeight: 90, lineHeight: 24 }, selectedAttachments: { gap: 3 } });

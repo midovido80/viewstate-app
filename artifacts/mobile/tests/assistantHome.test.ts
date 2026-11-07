@@ -12,7 +12,7 @@ const result = (propertyId: string, score: number, requirementId = request().id)
 const run = (matches: MatchResult[], requirementId = request().id): BrokerMatchingRunResult => ({ engineVersion: MATCH_ENGINE_VERSION, requirementId, evaluatedCandidateCount: matches.length, matches, needsConfirmation: [] });
 test('Home quick actions use the existing canonical forms and leave sharing/import to explicit flows', () => {
   assert.equal(homeQuickRoute('property'), '/capture/transaction'); assert.equal(homeQuickRoute('person'), '/person/new'); assert.equal(homeQuickRoute('matching'), '/matching');
-  assert.equal(homeQuickRoute('share'), null); assert.equal(homeQuickRoute('import'), null);
+  assert.equal(homeQuickRoute('share'), null); assert.equal(homeQuickRoute('import'), '/person/new?entry=import');
 });
 test('Home top five retain highest scores, deduplicate person/property across requirements, and exclude stale or unresolved matches', () => {
   const a = request(), b = request('22222222-2222-4222-8222-222222222222'), c = request('33333333-3333-4333-8333-333333333333', 'two');

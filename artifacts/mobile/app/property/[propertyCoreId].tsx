@@ -1,3 +1,4 @@
+import { NextReadChips } from '@/components/next/NextSurfaces';
 import { Linking } from 'react-native';
 import { PropertyFactStrip, PropertyStatus } from '@/components/PropertyVisualSummary';
 import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
@@ -1460,11 +1461,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:23,lineHeight:30,textAlign:isRTL?'right':'left'}}>{property.listingTitle?.trim() || savedTypeLabel}</Text>
                 <View style={{flexDirection:isRTL?'row-reverse':'row',alignItems:'center',gap:5}}><Feather name="map-pin" size={15} color={colors.mutedForeground}/><Text testID="property-compact-location" style={{fontFamily:fonts.regular,color:colors.mutedForeground,fontSize:13}}>{compactLocation}</Text></View>
               </View>
-              <PropertyFactStrip property={property}/>
               {shownPrice!==undefined && <View style={{flexDirection:isRTL?'row-reverse':'row',alignItems:'baseline',gap:8,paddingVertical:8}}><Text testID="property-compact-price" style={{fontFamily:fonts.bold,fontSize:26,color:colors.primary}}>{formatPrice(shownPrice,'KWD',language)}</Text>{propertyIntent.id==='offered_rent'&&<Text testID="property-compact-cadence" style={{fontFamily:fonts.regular,color:colors.mutedForeground}}>{formatRentalCadence(shownRentalPeriodId,t)}</Text>}</View>}
+              <PropertyFactStrip property={property}/>
               {descriptionText && <View style={{gap:8,paddingVertical:8}}><Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'عن العقار':'About the property'}</Text><Text style={{fontFamily:fonts.regular,color:colors.mutedForeground,fontSize:14,lineHeight:23,textAlign:isRTL?'right':'left'}}>{descriptionText}</Text></View>}
               {galleryImages.length>0 && <View style={{gap:8}}><Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'معرض الصور':'Photo gallery'}</Text><View style={{flexDirection:isRTL?'row-reverse':'row',gap:8}}>{galleryImages.slice(0,3).map(img=><TouchableOpacity key={img.id} onPress={()=>void openPropertyAttachment(img)} accessibilityRole="button" accessibilityLabel={language==='ar'?'فتح الصورة':'Open photo'} style={{flex:1,height:80,borderRadius:10,overflow:'hidden'}}>{(Platform.OS!=='web'||galleryImageSources[img.id])&&<Image source={{uri:Platform.OS==='web'?galleryImageSources[img.id]:img.managedUri}} style={{width:'100%',height:'100%',resizeMode:'cover'}}/>}</TouchableOpacity>)}</View></View>}
-              <Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'الموقع':'Location'}</Text>
+              <Text style={{fontFamily:fonts.bold,color:colors.foreground,fontSize:17,textAlign:isRTL?'right':'left'}}>{language==='ar'?'مصدر العرض':'Offer source'}</Text>
               <View testID="property-compact-source" style={{ backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#E2E8F0', direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
                 <Feather name="user" size={19} color="#203568" />
                 <Text style={{ color: '#203568', fontFamily: fonts.semiBold, fontSize: 13, maxWidth: '28%', textAlign: isRTL ? 'right' : 'left' }}>{t('source.title')}</Text>
@@ -1527,9 +1528,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
               {(availableFeatures.length > 0 || featureSummaryDetails.length > 0) && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
                 <Text style={{ color: '#203568', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'خدمات العقار' : 'Property services'}</Text>
-                <ChoiceGrid columns={2} gap={6}>
-                  {availableFeatures.map(feat => <ChoiceFact key={feat} label={feat} compact />)}
-                </ChoiceGrid>
+                <NextReadChips values={availableFeatures.map(label => ({ label }))} />
                 {featureSummaryDetails.length > 0 && <View testID="property-feature-details" style={{ gap: 6 }}>
                   {featureSummaryDetails.map(item => <Text key={item.field} style={{ color: '#334155', fontFamily: fonts.medium, fontSize: 12, textAlign: isRTL ? 'right' : 'left' }}>{item.label}</Text>)}
                 </View>}
@@ -1537,12 +1536,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
 
               {property.core.propertyType !== 'warehouse' && nearbyServicesTextList.length > 0 && <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 9, borderWidth: 1, borderColor: '#E2E8F0', gap: 7 }}>
                 <Text style={{ color: '#203568', fontFamily: fonts.bold, fontSize: 15, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'الخدمات القريبة' : 'Nearby services'}</Text>
-                <ChoiceGrid columns={3} gap={6}>
-                  {nearbyServicesTextList.map(srv => <ChoiceFact key={srv} label={srv} compact vertical />)}
-                </ChoiceGrid>
+                <NextReadChips values={nearbyServicesTextList.map(label => ({ label }))} />
               </View>}
 
               <CompactPropertySpecs specs={compactSpecs} />
+              <ApprovedAction title={language === 'ar' ? 'إضافة متابعة للعقار' : 'Add property follow-up'} variant="outline" icon="calendar" layout="block" testID="property-add-followup" onPress={() => router.push({ pathname: '/', params: { followupPropertyId: property.core.id } } as never)} />
 
 
 

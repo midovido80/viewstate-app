@@ -232,7 +232,8 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                     >
                       {ar ? 'كل إعدادات الحساب' : 'All account settings'}
                     </Text>
-                  </Pressable>
+                  </Pressable>                  <Pressable accessibilityRole="button" onPress={() => { setSheet(null); router.push('/next-guide' as never); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: ar ? 'right' : 'left' }}>{ar ? 'دليل البداية' : 'Getting started'}</Text></Pressable>
+
                 </>
               ) : (
                 <>

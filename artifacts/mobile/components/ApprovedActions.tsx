@@ -20,7 +20,7 @@ export const approvedActionRowStyle = { flexDirection: 'row', gap: 12, alignItem
 export function ApprovedAction({ title, onPress, variant = 'primary', disabled = false, loading = false, testID, icon, style, layout = 'row' }: {
   title: string; onPress: () => void; variant?: 'primary' | 'outline' | 'green' | 'danger';
   disabled?: boolean; loading?: boolean; testID?: string; style?: ViewStyle; layout?: 'row' | 'block';
-  icon?: 'share-2' | 'edit-2' | 'phone' | 'message-circle' | 'plus' | 'link' | 'repeat' | 'search' | 'file-text' | 'trash-2';
+  icon?: 'share-2' | 'edit-2' | 'phone' | 'message-circle' | 'plus' | 'link' | 'repeat' | 'search' | 'file-text' | 'trash-2' | 'calendar';
 }) {
   const colors = useColors();
   const { fonts, isRTL } = useI18n();

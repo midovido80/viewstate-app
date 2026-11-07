@@ -1,3 +1,4 @@
+import { NextReadChips } from '@/components/next/NextSurfaces';
 import { matchingTarget } from '@/services/matchingScope';
 import { useUserData } from '@/contexts/UserDataContext';
 import { matchingBackRoute, readMatchingReturn } from '@/services/matchingReturnSession';
@@ -239,16 +240,14 @@ export default function RequirementDetailsScreen() {
                   {sectionLabels[section]}
                 </Text>
                 {section === 'preferences' ? <View style={{ gap: 12 }}>
-                  <ChoiceGrid>
-                    {group.filter(row => row.field !== 'preferredNearbyServices').flatMap(row =>
-                      row.field === 'preferredAmenities'
-                        ? row.value.split(language === 'ar' ? '، ' : ', ').map((value, index) => <ChoiceFact key={`${row.field}:${index}`} testID={index === 0 ? `requirement-details-row-${row.field}` : undefined} label={value} />)
-                        : [<ChoiceFact key={row.field} testID={`requirement-details-row-${row.field}`} label={`${row.label} · ${row.value}`} />]
-                    )}
-                  </ChoiceGrid>
+                  <NextReadChips values={group.filter(row => row.field !== 'preferredNearbyServices').flatMap(row =>
+                    row.field === 'preferredAmenities'
+                      ? row.value.split(language === 'ar' ? '، ' : ', ').map((label, index) => ({ label, testID: index === 0 ? `requirement-details-row-${row.field}` : undefined }))
+                      : [{ label: `${row.label} · ${row.value}`, testID: `requirement-details-row-${row.field}` }]
+                  )} />
                   {group.filter(row => row.field === 'preferredNearbyServices').map(row => <View key={row.field} testID={`requirement-details-row-${row.field}`} style={{ gap: 8 }}>
                     <Text style={{ color: colors.accent, fontFamily: fonts.semiBold, textAlign: align }}>{row.label}</Text>
-                    <ChoiceGrid>{row.value.split(' · ').map(value => <ChoiceFact key={value} label={value} />)}</ChoiceGrid>
+                    <NextReadChips values={row.value.split(' · ').map(label => ({ label }))} />
                   </View>)}
                 </View> : <View style={[styles.rowGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   {group.map((row, index) => (

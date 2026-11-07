@@ -27,13 +27,13 @@ import { linkRequirementToSeeker } from '@/services/requirementOwnership';
 export default function NewPersonScreen() {
   const { store } = useUserData();
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnRequirementId?: string | string[] }>();
+  const params = useLocalSearchParams<{ returnRequirementId?: string | string[]; entry?: string }>();
   const returnRequirementId = Array.isArray(params.returnRequirementId)
     ? params.returnRequirementId[0]
     : params.returnRequirementId;
   const colors = useColors();
   const insets = useScreenInsets();
-  const { t, isRTL, fonts } = useI18n();
+  const { t, isRTL, fonts, language } = useI18n();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>('KW');
@@ -141,6 +141,7 @@ export default function NewPersonScreen() {
         <View style={{ width: 45 }} />
       </View>
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" bottomOffset={60}>
+        {params.entry === 'import' ? <Text style={{color: colors.mutedForeground, fontFamily: fonts.regular, textAlign, lineHeight: 23}}>{language === 'ar' ? 'اختر تصنيفًا واحدًا ثم اضغط استيراد جهة اتصال. ستراجع الأسماء والأرقام قبل حفظها.' : 'Choose one role, then Import contacts. Review names and phone numbers before saving.'}</Text> : null}
         <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t('people.classifications')}</Text>
         <ChoiceGrid style={styles.choicesWrap}>
           {PERSON_CLASSIFICATIONS.map(value => (
@@ -154,6 +155,7 @@ export default function NewPersonScreen() {
             />
           ))}
         </ChoiceGrid>
+        {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
         {classifications.length > 0 && entryMode === 'choose' ? (
           <View style={styles.entryChoices}>
             <Button title={t('people.manual_entry')} onPress={() => setEntryMode('manual')} testID="person-manual-entry" />
@@ -178,7 +180,7 @@ export default function NewPersonScreen() {
           <TextInput value={phone} onChangeText={setPhone} placeholder={t('people.phone')} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" style={[inputStyle, styles.phoneInput]} testID="person-phone" />
         </View>
         <TextInput value={notes} onChangeText={setNotes} placeholder={t('people.notes')} placeholderTextColor={colors.mutedForeground} multiline style={[inputStyle, styles.notes]} testID="person-notes" />
-        {error ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }} testID="person-form-error">{error}</Text> : null}
+
         <Button title={t('capture.discard')} variant="outline" disabled={saving} onPress={() => persistPerson.confirmDiscard(() => personExit(() => router.canGoBack() ? router.back() : router.replace('/people' as never)))} testID="person-discard-draft" /><Button title={t('people.save')} onPress={() => void save()} loading={saving} testID="person-save" />
         </>
         )}

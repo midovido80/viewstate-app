@@ -80,3 +80,27 @@ test('Next numeric picker selects and closes in one tap; multi-select stays open
   assert.ok(nodes(tree).some(n=>n.type==='Text' && ['Done','تم'].includes(n.props.children)));
  }
 });
+
+test('paired kitchen count preserves each kitchen and keeps details separate in AR and EN', async () => {
+ const { KitchenFields } = await import('../components/KitchenFields.tsx');
+ const { CompactDropdown } = await import('../components/FormChoices.tsx');
+ for (const rtl of [false, true]) {
+  env.rtl = rtl; env.states = [];
+  let value: any = [{layout:'american', equipment:'equipped'}, {layout:'regular', access:'shared'}];
+  const props = () => ({value, scopeKey:'kitchens', commercial:true, onChange:(next:any)=>{value=next;}});
+  let count = render(KitchenFields, {...props(), part:'count'});
+  const dropdown = nodes(count).find(n => n.type === CompactDropdown)!;
+  assert.deepEqual(dropdown.props.options.map((o:any)=>o.value),['0','1','2','3']);
+  dropdown.props.onSelect('3');
+  assert.equal(value.length,3);assert.equal(value[0].layout,'american');assert.equal(value[1].access,'shared');assert.deepEqual(value[2],{});
+  const details = render(KitchenFields, {...props(), part:'details'});
+  assert.equal(nodes(details).some(n=>n.props.testID==='kitchen-count'), false);
+  assert.equal(nodes(details).filter(n=>n.type===CompactDropdown).length,9);
+  const residential = render(KitchenFields, {...props(), commercial:false, part:'details'});
+  assert.equal(nodes(residential).filter(n=>n.type===CompactDropdown).length,6);
+  assert.deepEqual(value[1],{layout:'regular',access:'shared'},'presentation must not silently strip a legacy value');
+  count = render(KitchenFields, {...props(), part:'count'});
+  nodes(count).find(n=>n.type===CompactDropdown)!.props.onSelect('0');assert.deepEqual(value,[]);
+  nodes(count).find(n=>n.type===CompactDropdown)!.props.onSelect('');assert.equal(value,undefined);
+ }
+});

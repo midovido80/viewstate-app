@@ -37,6 +37,8 @@ export function MatchingResultsGroups({
   onOpenProperty,
   onOpenPerson,
   onOpenRequest,
+  onShareProperty,
+  onFollowup,
   quick = false,
 }: {
   groups: readonly MatchAllPersonGroup[];
@@ -50,6 +52,8 @@ export function MatchingResultsGroups({
   onOpenProperty: (id: string) => void;
   onOpenPerson?: (id: string) => void;
   onOpenRequest?: (id: string) => void;
+  onShareProperty?: (propertyId: string, personId: string) => void;
+  onFollowup?: (propertyId: string, personId: string) => void;
   quick?: boolean;
 }) {
   const { language, isRTL, fonts, t } = useI18n();
@@ -101,6 +105,8 @@ export function MatchingResultsGroups({
         }
         busy={busy}
         onPress={() => onOpenProperty(pair.result.propertyId)}
+        onShare={onShareProperty ? () => onShareProperty(pair.result.propertyId, personId) : undefined}
+        onFollowup={onFollowup ? () => onFollowup(pair.result.propertyId, personId) : undefined}
         onViewPerson={onOpenPerson ? () => onOpenPerson(personId) : undefined}
         onViewRequirement={
           onOpenRequest ? () => onOpenRequest(pair.requirement.id) : undefined

@@ -1,4 +1,4 @@
-import { KitchenSlot } from '@/components/PropertyWizard';
+import { BathroomKitchenRow, KitchenSlot } from '@/components/PropertyWizard';
 import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
@@ -96,7 +96,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
   ];
   const yieldPercent = transaction === 'sale' && propertyType === 'whole_building' ? grossAnnualRentalYield(salePrice, values.monthlyIncome?.trim() ? Number(values.monthlyIncome) : undefined) : undefined;
   return <View style={{ gap: 12 }}>
-    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field) && !['automaticNumberCount', 'kitchenAccess'].includes(field)).map(field => <View key={field}><RequiredField id={field}>{renderField(field)}</RequiredField>{field === 'bathroomCount' && <KitchenSlot />}</View>)}
+    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field) && !['automaticNumberCount', 'kitchenAccess'].includes(field)).map(field => <View key={field}>{field === 'bathroomCount' ? <><BathroomKitchenRow><RequiredField id={field}>{renderField(field)}</RequiredField></BathroomKitchenRow><KitchenSlot /></> : <RequiredField id={field}>{renderField(field)}</RequiredField>}</View>)}
       {yieldPercent !== undefined && <View><Text style={labelStyle}>{ar ? 'العائد السنوي الإجمالي قبل المصروفات' : 'Gross annual yield before expenses'}</Text><Text style={labelStyle}>{yieldPercent.toFixed(2)}%</Text></View>}
     </PropertyFormCard>
     <PropertyFormCard page={1} title={ar ? 'خدمات العقار' : 'Property services'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>

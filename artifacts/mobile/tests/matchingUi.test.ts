@@ -465,6 +465,11 @@ test('cards and refinements handle repeated taps in both languages without chang
       assert.equal(opens, 2); assert.equal(replacements, 2);
       assert.equal(buttons[0].props.title, ar ? 'عرض العقار' : 'View property');
       assert.equal(buttons[1].props.title, ar ? 'اقتراح عقار آخر' : 'Suggest another property');
+      let shares = 0, followups = 0;
+      const nextActions = elements(MatchingResultCard({ result, rank: 1, property: p, requirement: r.value, onPress: () => opens++, onShare: () => shares++, onFollowup: () => followups++ }));
+      nextActions.find(item => item.props.testID === `matching-share-${r.value.id}-${result.propertyId}`)!.props.onPress();
+      nextActions.find(item => item.props.testID === `matching-followup-${r.value.id}-${result.propertyId}`)!.props.onPress();
+      assert.equal(shares, 1); assert.equal(followups, 1); assert.equal(JSON.stringify([r.value, p]), before);
       // The collapsed overview must expose a real difference or missing information,
       // without accidentally turning unknown evidence into a green success.
       const stricter = { ...r.value, bedroomsMinimum: 3 };

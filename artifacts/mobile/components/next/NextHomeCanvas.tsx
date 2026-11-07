@@ -1,3 +1,5 @@
+import { NextFirstUse } from "./NextFirstUse";
+import { NextRecentWork } from "./NextRecentWork";
 import React from "react";
 import {
   ActivityIndicator,
@@ -14,8 +16,6 @@ import type { Person } from "@/services/people";
 import { useI18n } from "@/contexts/I18nContext";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { nextDesign as n } from "@/constants/nextDesign";
-import { PropertyCover } from "@/components/PropertyCover";
-import { getPropertyCardSummary } from "@/services/cardSummaryPresentation";
 import { formatPrice, formatRentalPrice } from "@/constants/market";
 import { matchingTarget } from "@/services/matchingScope";
 
@@ -114,6 +114,7 @@ export function NextHomeCanvas({
             : "Save the offer, record the request, and find what fits."}
         </Text>
       </View>
+      <NextFirstUse />
       {notice}
       <View
         style={{
@@ -181,111 +182,37 @@ export function NextHomeCanvas({
           </Pressable>
         ))}
       </View>
-      <View style={{ gap: 8 }}>
-        <View
-          style={{
-            direction: "ltr",
-            flexDirection: row,
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
-          }}
-        >
-          <Text accessibilityRole="header" style={heading}>
-            {ar ? "عروضك المحفوظة" : "Your saved offers"}
-          </Text>
-          {action(ar ? "عرض الكل" : "View all", () =>
-            router.push("/properties" as never),
-          )}
-        </View>
-        <View
-          style={{
-            backgroundColor: n.white,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: n.border,
-            overflow: "hidden",
-          }}
-        >
-          {!ready ? (
-            <ActivityIndicator style={{ padding: 22 }} color={n.blue} />
-          ) : properties.length ? (
-            properties
-              .slice(-3)
-              .reverse()
-              .map((property) => {
-                const summary = getPropertyCardSummary(property, {
-                  language,
-                  translate: t,
-                  formatPrice: (amount, currency) =>
-                    formatPrice(amount, currency, language),
-                  formatRentalPrice: (amount, currency, period) =>
-                    formatRentalPrice(amount, currency, period, language, t),
-                });
-                return (
-                  <Pressable
-                    key={property.core.id}
-                    accessibilityRole="button"
-                    testID={`next-home-property-${property.core.id}`}
-                    onPress={() =>
-                      router.push(
-                        `/property/${encodeURIComponent(property.core.id)}` as never,
-                      )
-                    }
-                    style={{
-                      padding: 14,
-                      gap: 12,
-                      direction: "ltr",
-                      flexDirection: row,
-                      alignItems: "center",
-                      minHeight: 88,
-                      borderBottomWidth: 1,
-                      borderBottomColor: n.border,
-                    }}
-                  >
-                    <PropertyCover
-                      property={property}
-                      style={{ width: 64, height: 58, borderRadius: 10 }}
-                    />
-                    <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                      <Text
-                        style={{
-                          ...text,
-                          fontFamily: fonts.semiBold,
-                          fontSize: 15,
-                        }}
-                      >
-                        {property.listingTitle?.trim() ||
-                          summary.subtypeLabel ||
-                          summary.typeLabel}
-                      </Text>
-                      <Text style={small}>{summary.areaLabel}</Text>
-                    </View>
-                    <Feather
-                      name={ar ? "chevron-left" : "chevron-right"}
-                      color={n.muted}
-                      size={19}
-                    />
-                  </Pressable>
-                );
-              })
-          ) : (
-            <View style={{ padding: 20, gap: 8 }}>
-              <Text style={heading}>
-                {ar ? "ابدأ بأول عرض وصلك" : "Start with your first offer"}
-              </Text>
-              <Text style={small}>
-                {ar
-                  ? "احفظ الأساسيات الآن، وأكمل التفاصيل لاحقًا."
-                  : "Save the basics now. Add the details later."}
-              </Text>
-              {action(ar ? "إضافة عقار" : "Add property", () =>
-                router.push("/capture/transaction?mode=offered" as never),
-              )}
-            </View>
-          )}
-        </View>
-      </View>
+      <Pressable
+        testID="next-paste-message"
+        accessibilityRole="button"
+        onPress={() => router.push("/intake" as never)}
+        style={{
+          direction: "ltr",
+          flexDirection: row,
+          alignItems: "center",
+          gap: 10,
+          borderWidth: 1,
+          borderColor: n.border,
+          borderStyle: "dashed",
+          borderRadius: 12,
+          padding: 14,
+          minHeight: 48,
+        }}
+      >
+        <Feather name="clipboard" size={19} color={n.muted} />
+        <Text style={{ ...text, flex: 1, fontSize: 14 }}>
+          {ar ? "لصق رسالة عقارية" : "Paste a property message"}
+        </Text>
+        <Text style={small}>
+          {ar ? "راجع قبل الحفظ" : "Review before saving"}
+        </Text>
+      </Pressable>
+      <NextRecentWork
+        loading={!ready}
+        properties={properties}
+        people={people}
+        requirements={requirements}
+      />
       <View
         testID="home-best-matches"
         style={{

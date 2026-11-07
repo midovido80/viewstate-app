@@ -1,3 +1,4 @@
+import { NextFieldPair } from '@/components/next/NextSurfaces';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { createContext, useContext } from 'react';
 import { Keyboard, Pressable, Text, View } from 'react-native';
@@ -5,6 +6,11 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 export type PropertyPage = 0 | 1 | 2;
 export const PropertyPageContext = createContext<PropertyPage | null>(null);
+export const KitchenCountContext = createContext<React.ReactNode>(null);
+export function BathroomKitchenRow({ children }: { children: React.ReactNode }) {
+  const count = useContext(KitchenCountContext);
+  return count ? <NextFieldPair first={children} second={count} /> : <>{children}</>;
+}
 export const KitchenSlotContext = createContext<React.ReactNode>(null);
 /** Keep controls mounted: page navigation must not reset pending numeric input or media state. */
 export function PropertyPageSection({

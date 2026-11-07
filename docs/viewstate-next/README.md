@@ -1,6 +1,6 @@
 # ViewState Next — isolated native migration
 
-Status: first foundation package, **not complete demo parity**.
+Status: native foundation plus the second workflow/presentation package. **Full visual parity and device acceptance remain unverified.**
 
 ## Approved boundary
 
@@ -25,28 +25,41 @@ Status: first foundation package, **not complete demo parity**.
 | Forms                   | Roomier grouped cards and compact numeric grids, one-tap single selection                                               | Exact original options/callbacks, unspecified/manual values, service toggle chips, multi-select confirmation, validation, drafts and save contracts |
 | Web export prerequisite | Register SQLite `.wasm` assets with Metro                                                                               | Existing web/native storage choice; no fallback bypass of secure browser locks                                                                      |
 
-Home says **saved offers**, rather than claiming an interaction history that is not yet tracked. Its matching count is the current existing top-five shortlist, not an invented total count. Pending follow-ups are shown in original date/time order, including overdue items with their dates; there is no nested scroll to trap the page.
+Home now distinguishes actual **recently worked on** records from its **saved offers** fallback. Recent work stores only record kind, ID and visit time, resolves against the active account catalog, omits removed records, and retains at most 12 entries. First-use acknowledgement and recent-work writes are serialized and confirmed by readback; corrupt state is retained with a retry state. Its matching count is the current existing top-five shortlist, not an invented total count. Pending follow-ups are shown in original date/time order, including overdue items with their dates; there is no nested scroll to trap the page.
 
-## Remaining migration / acceptance
+## Second package implemented
 
-This commit is a reviewable beginning, not a final replacement build:
+| Surface                | Native implementation                                                                                                         | Retained behavior                                                                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First use and help     | Dismissible introduction, four-step guide, guide available from global settings                                               | No forced route replacement or sample-data injection; acknowledgement is local to the active workspace                                                                        |
+| Recent work            | Actual property/person/request visits, full history page, honest saved-offer fallback                                         | Active account catalog and managed cover access; loading, empty, error and retry states                                                                                       |
+| Offer message capture  | Paste/review, explicit type/transaction/title, original form handoff                                                          | Raw message is a never-share private note. No inferred price/services, no replacement of any existing capture, retained entry on failure, save confirmation before navigation |
+| Property details       | Price before facts, compact service/nearby chips, correct source heading, follow-up entry                                     | Every original fact, gallery/file access, maps, source management, scoped matching and edit routes                                                                            |
+| People and requests    | Requests before linked offers, quieter profile, compact request detail chips, direct person follow-up                         | Original person roles, ownership, linking/unlinking, phone LTR, request edit and matching                                                                                     |
+| Matching               | Quieter cards plus real property-share and linked follow-up actions                                                           | Original scores, unknowns, differences, full comparison, original saved-record scope and Match all                                                                            |
+| Sharing                | Approved-content preview before controls; explicit selected recipient loaded from the current account                         | Original privacy allowlists, opt-in source/location/contacts, attachment selection and actual system share. Opening share is not delivery                                     |
+| Forms                  | Bathroom/kitchen count pairing, labels above numeric controls, two-column kitchen details, large-text stacking                | Original control owners and validation; numeric/manual semantics, per-kitchen values, original Studio form                                                                    |
+| Kitchen applicability  | House/villa/chalet/duplex, office/commercial floor controls                                                                   | Legacy apartment/shop/residential-floor kitchen values still round-trip without deletion; no domain migration                                                                 |
+| Settings/notifications | Shared calm header, one title, consistent content width; local language sheet retained                                        | Existing account, notification, backup, restore and privacy commands                                                                                                          |
+| Contact import         | Home import opens the existing person/import entry, explains role selection, shows classification errors in either entry mode | Actual contacts permission and reviewed batch workflow; browser unavailability remains explicit                                                                               |
 
-1. Compare each original residential/commercial property and client requirement form against the reference; finish row grouping, kitchen/bathroom placement and newly approved applicability without removing legacy read compatibility.
-2. Align all person/request detail, matching explanations/actions, share preview, settings/notification and calendar surfaces with the reference while retaining their real commands and permissions.
-3. Implement the approved paste-and-review flow using the original capture contracts; no fake import action or alternate storage engine.
-4. Add the short first-use guidance and recently-worked-on behavior with account-scoped state.
-5. Exercise complete fictional offer → client request → scoped comparison → privacy preview → follow-up → edit/reload journeys in secure Replit Preview, AR and EN, small/large text and Android Back.
-6. Founder acceptance, final functional review, then separately authorize package identity/Google setup and APK build.
+The message-capture entry currently supports **offered records**, with explicit original standard-apartment/duplex and other generic property form routes. It does **not** parse free text automatically, route a message into a client requirement, or substitute for the original Studio entry. These are remaining functional differences from the simplified reference, not completed features. Message intake has its own local form session; a resumed original capture blocks transfer instead of being overwritten.
 
-No claim of device acceptance or complete visual parity is made for this first package. The native app's existing broader form matrix is authoritative over the simplified demo forms.
+Direct follow-up entry validates each supplied person/property against the current catalog. Person-only and property-only entries open the original editor; entries linked to a particular record use a separate draft scope rather than restoring an unrelated generic follow-up draft.
 
-## Verification
+## Verification and remaining acceptance
 
-- Mobile selection: **981 passing, 0 failing**, including original form/matching/persistence suites and a new numeric picker interaction test (single selection closes; multi-selection remains open; AR/EN).
-- Domain matching: **29 passing**, domain contract script passed.
-- Mobile typecheck and standalone domain typecheck passed.
-- Expo web export and Android Metro/Hermes bundle export passed. These are JavaScript bundle checks, not an APK build. The retained local dependency tree needed `NODE_PATH` pointing at its existing pnpm hoisted modules for Babel; no dependency or lockfile was changed.
-- Local browser reached the real guest entry but could not open guest storage in the managed HTTP preview. Existing account adapters require secure browser locks; no insecure fallback or authentication change was introduced. Full screen-by-screen browser acceptance remains for the new secure Replit Preview.
-- CI runs on `work/viewstate-next-*` using the existing critical/advisory jobs. Verify the actual final SHA's run before acceptance.
+- Mobile TypeScript and property-domain TypeScript checks; complete mobile test suite and domain matching suite.
+- New tests cover real route history, bounded/deduplicated recent work, corrupt/future state retention, concurrent repository writes, unconfirmed-save retry, capture overwrite prevention, private-message exclusion from the original share preview, approved kitchen visibility and legacy round-trips, kitchen count/detail separation, and real matching callbacks in AR/EN.
+- Expo web and Android JavaScript/Hermes exports. An Android bundle export is **not** an APK or a device test.
+- The managed local HTTP Preview loads the login/guest screen, but guest workspace setup fails with “Could not open guest storage. Data is preserved; retry.” No auth/storage safeguards were weakened. Therefore the new authenticated/guest application screens have **not** passed an end-to-end browser or screenshot acceptance in this environment.
 
-The Metro asset setup follows Expo's SDK 54 SQLite web instructions: https://docs.expo.dev/versions/v54.0.0/sdk/sqlite/#web-setup
+Still required:
+
+1. Secure Replit Preview or device QA: fictional offer → request → scoped comparison → selected-content share preview → follow-up → edit/reload, AR/EN, long values, keyboard and large text.
+2. Complete the remaining message-intake parity described above and compare every residential/commercial form against the original catalog and approved reference. In particular, do not infer “shared bathroom” from a false private-bathroom boolean; an explicit new field needs its own persistence contract.
+3. Review all final page spacing, calendar/notification surfaces and navigation against the approved reference. Existing native routes and actions are retained; this package is not evidence of pixel-identical parity.
+4. Android system Back, background/resume and authenticated offline/reconnect sync tests.
+5. Founder acceptance, then separately authorize package identity/Google setup and APK creation.
+
+Main/pilot, account/backend configuration, EAS identity/signing and deployment remain outside this work package.

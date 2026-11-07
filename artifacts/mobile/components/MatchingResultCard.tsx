@@ -1,3 +1,4 @@
+import { nextDesign as n } from '@/constants/nextDesign';
 import { PropertyCover } from "@/components/PropertyCover";
 import { MatchScoreRing } from "@/components/MatchScoreRing";
 import { useState } from "react";
@@ -94,6 +95,8 @@ export function MatchingResultCard({
   onViewRequirement,
   onViewPerson,
   onReplace,
+  onShare,
+  onFollowup,
   busy,
   perspective = "people",
   personRequestIndex,
@@ -109,6 +112,8 @@ export function MatchingResultCard({
   onViewRequirement?: () => void;
   onViewPerson?: () => void;
   onReplace?: () => void;
+  onShare?: () => void;
+  onFollowup?: () => void;
   busy?: boolean;
   perspective?: "people" | "properties";
   personRequestIndex?: number;
@@ -155,8 +160,8 @@ export function MatchingResultCard({
       testID={`matching-result-${result.propertyId}`}
       style={{
         borderWidth: 1,
-        borderColor: "#DBE3EF",
-        borderRadius: 19,
+        borderColor: n.border,
+        borderRadius: 16,
         shadowColor: "#172C4D",
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.04,
@@ -180,7 +185,7 @@ export function MatchingResultCard({
         style={{
           padding: 12,
           gap: 8,
-          backgroundColor: personHeading ? "#FFF4E8" : "#FFFFFF",
+          backgroundColor: n.white,
         }}
       >
         <View style={{ direction: 'ltr', flexDirection: rowDirection, gap: 12, alignItems: 'center' }}>
@@ -246,12 +251,12 @@ export function MatchingResultCard({
         </View>
         {expanded && property && <View testID="matching-property-client-pair" style={{ direction: 'ltr', flexDirection: rowDirection, borderWidth: 1, borderColor: '#E3EAF5', borderRadius: 13, overflow: 'hidden' }}>
           <View style={{ flex: 1, minWidth: 0, padding: 10, gap: 7 }}>
-            <PropertyCover property={property} style={{ height: 86, borderRadius: 10 }} />
+            <PropertyCover property={property} style={{ height: 70, borderRadius: 10 }} />
             <Text style={{ ...text, color: '#172C4D', fontFamily: fonts.semiBold, fontSize: 13 }} numberOfLines={2}>{getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}`))}</Text>
             <Text style={{ ...text, color: '#62738D', fontSize: 12 }}>{area?.[language] ?? '—'}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0, padding: 10, gap: 7, borderStartWidth: 1, borderColor: '#E3EAF5' }}>
-            <View style={{ height: 86, borderRadius: 10, backgroundColor: '#EAF0FF', alignItems: 'center', justifyContent: 'center' }}><Feather name="user" size={34} color="#7592BE" /></View>
+            <View style={{ height: 48, borderRadius: 10, backgroundColor: n.soft, alignItems: 'center', justifyContent: 'center' }}><Feather name="user" size={22} color={n.blue} /></View>
             <Text style={{ ...text, color: '#B45309', fontFamily: fonts.semiBold, fontSize: 13 }} numberOfLines={2}>{personName || (ar ? 'طلب مطابقة' : 'Matching request')}</Text>
             <Text style={{ ...text, color: '#62738D', fontSize: 12 }}>{formatMatchingBudget(requirement, language)}</Text>
           </View>
@@ -523,6 +528,10 @@ export function MatchingResultCard({
               />
             )}
           </View>
+          {(onShare || onFollowup) && <View style={{ direction: 'ltr', flexDirection: rowDirection, flexWrap: 'wrap', gap: 10 }}>
+            {onShare ? <Button title={ar ? 'مشاركة العقار' : 'Share property'} onPress={onShare} disabled={busy} variant="outline" style={{ flexGrow: 1, minHeight: 48 }} testID={`matching-share-${requirement.id}-${result.propertyId}`} /> : null}
+            {onFollowup ? <Button title={ar ? 'إضافة متابعة' : 'Add follow-up'} onPress={onFollowup} disabled={busy} variant="outline" style={{ flexGrow: 1, minHeight: 48 }} testID={`matching-followup-${requirement.id}-${result.propertyId}`} /> : null}
+          </View>}
           {onReplace && (
             <Button
               title={ar ? "اقتراح عقار آخر" : "Suggest another property"}

@@ -343,6 +343,8 @@ export default function MatchingScreen() {
           {scopedRecord && !resultGroups.some(group => group.requirementGroups.some(request => request.matches.length || request.needsConfirmation.length)) && <Text testID="matching-scoped-empty" style={{ color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{requestedPropertyId ? (language === 'ar' ? 'لا توجد طلبات مناسبة لهذا العقار حاليًا.' : 'No suitable client requests for this property yet.') : (language === 'ar' ? 'لا توجد عقارات مناسبة لهذا الطلب حاليًا.' : 'No suitable properties for this request yet.')}</Text>}
           <MatchingResultsGroups groups={resultGroups} properties={properties} layout={resultsLayout} onLayoutChange={setResultsLayout} policies={policies} busy={loading}
             onRefine={refine} onReplace={replaceSuggestion} onOpenProperty={id => void openMatchedProperty(id)}
+            onShareProperty={(propertyId, personId) => router.push({ pathname: '/property/[propertyCoreId]/share', params: { propertyCoreId: propertyId, recipientId: personId } } as never)}
+            onFollowup={(propertyId, personId) => router.push({ pathname: '/', params: { followupPersonId: personId, followupPropertyId: propertyId } } as never)}
             onOpenPerson={openMatchedPerson}
             onOpenRequest={openMatchedRequest} />
           <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('matching.results.transient')}</Text>
