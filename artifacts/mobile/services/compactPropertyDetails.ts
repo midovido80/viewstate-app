@@ -13,6 +13,14 @@ export interface PropertyDisplayFact {
 }
 
 const order = ['studioRoomCount', 'bedroomCount', 'masterBedroomCount', 'bathroomCount', 'livingRoomCount', 'parkingSpaceCount', 'floorNumber', 'areaSquareMeters', 'builtUpAreaSquareMeters', 'furnishing', 'occupancy'];
+const buildingOrder = ['housingTypes', 'floorCount', 'apartmentCount', 'apartmentsPerFloor', 'roomsPerUnit', 'bathroomsPerUnit', 'parkingSpaceCount', 'furnishing', 'buildingAgeBand', 'hasBasement'];
+const buildingLabels: Record<string, readonly [string, string]> = {
+  housingTypes: ['Building suitability', 'نوع العمارة'],
+  floorCount: ['Floors', 'عدد الأدوار'], apartmentCount: ['Total apartments', 'إجمالي عدد الشقق'],
+  apartmentsPerFloor: ['Apartments per floor', 'عدد الشقق في الدور'],
+  roomsPerUnit: ['Rooms per apartment', 'الغرف في الشقة'], bathroomsPerUnit: ['Bathrooms per apartment', 'الحمامات في الشقة'],
+};
+
 const labels: Record<string, readonly [string, string]> = {
   bedroomCount: ['Bedrooms', 'غرف النوم'], masterBedroomCount: ['Master bedrooms', 'غرف ماستر'], bathroomCount: ['Bathrooms', 'حمامات'],
   livingRoomCount: ['Halls', 'صالات'], parkingSpaceCount: ['Parking', 'مواقف'], floorNumber: ['Floor', 'الطابق'],
@@ -20,7 +28,7 @@ const labels: Record<string, readonly [string, string]> = {
 };
 function iconFor(field: string): PropertySpecIconName {
   if (field === 'masterBedroomCount') return 'master-bedroom';
-  if (/bedroom|studioRoom/i.test(field)) return 'bed-outline';
+  if (/bedroom|studioRoom|^roomsPerUnit$/i.test(field)) return 'bed-outline';
   if (/bathroom/i.test(field)) return 'shower';
   if (/livingRoom|hasHall|furnishing/i.test(field)) return 'sofa-outline';
   if (/parking/i.test(field)) return 'car';
@@ -42,9 +50,17 @@ export function compactPropertySpecs(facts: readonly PropertyDisplayFact[], lang
     if (seen.has(fact.fieldId)) return [];
     seen.add(fact.fieldId);
     const value = typeof fact.value === 'boolean' ? (language === 'ar' ? fact.value ? 'نعم' : 'لا' : fact.value ? 'Yes' : 'No') : String(fact.value);
-    return [{ fieldId: fact.fieldId, label: labels[fact.fieldId]?.[language === 'ar' ? 1 : 0] ?? fact.label, value, icon: iconFor(fact.fieldId) }];
+    const label = (propertyType === 'whole_building' ? buildingLabels[fact.fieldId] : undefined)?.[language === 'ar' ? 1 : 0] ?? labels[fact.fieldId]?.[language === 'ar' ? 1 : 0] ?? fact.label;
+    return [{ fieldId: fact.fieldId, label, value: propertyType === 'whole_building' && fact.fieldId === 'housingTypes' ? (language === 'ar' ? `عمارة ${value}` : `${value} building`) : value, icon: iconFor(fact.fieldId) }];
   }).sort((a, b) => {
-    const rank = (id: string) => { const index = order.indexOf(id); return index < 0 ? order.length : index; };
+    const rank = (id: string) => { const priority = propertyType === 'whole_building' ? buildingOrder : order; const index = priority.indexOf(id); return index < 0 ? priority.length : index; };
     return rank(a.fieldId) - rank(b.fieldId);
   });
+}
+
+/** Layout only: the centered area retains its original label/unit and is rendered once. */
+export function compactSpecificationLayout(specs: readonly CompactPropertySpec[], propertyType?: string) {
+  const columns: 2 | 3 = propertyType === 'whole_building' ? 2 : 3;
+  const area = columns === 2 ? specs.find(spec => spec.fieldId === 'areaSquareMeters') ?? specs.find(spec => spec.fieldId === 'builtUpAreaSquareMeters') : undefined;
+  return {columns, area, cells: specs.filter(spec => spec !== area)};
 }

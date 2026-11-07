@@ -1562,7 +1562,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
                 <NextReadChips values={nearbyServicesTextList.map(label => ({ label }))} />
               </View>}
 
-              <CompactPropertySpecs specs={compactSpecs} />
+              <CompactPropertySpecs specs={compactSpecs} propertyType={property.core.propertyType} />
               <ApprovedAction title={language === 'ar' ? 'إضافة متابعة للعقار' : 'Add property follow-up'} variant="outline" icon="calendar" layout="block" testID="property-add-followup" onPress={() => router.push({ pathname: '/', params: { followupPropertyId: property.core.id } } as never)} />
 
 

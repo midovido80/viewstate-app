@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { choiceTileWidth } from '../services/choicePresentation.ts';
-import { compactPropertySpecs, type PropertyDisplayFact } from '../services/compactPropertyDetails.ts';
+import { compactSpecificationLayout, compactPropertySpecs, type PropertyDisplayFact } from '../services/compactPropertyDetails.ts';
 
 const fact = (fieldId: string, value: PropertyDisplayFact['value']): PropertyDisplayFact => ({ fieldId, value, label: fieldId });
 
@@ -48,4 +48,33 @@ test('Three-column specifications and nearby services fit narrow screens with eq
     assert.equal(choiceTileWidth(width, 3, 0)! * 3, width);
     assert.ok(Math.abs(choiceTileWidth(width, 3, 6)! * 3 + 12 - width) < 0.001);
   }
+});
+
+
+test('Whole building uses approved two-column priority below a single centered area in Arabic and English', () => {
+  const facts = [fact('furnishing', 'Unfurnished'), fact('apartmentCount', 32), fact('housingTypes', 'شركات / موظفون'), fact('areaSquareMeters', '800 م²'), fact('bathroomsPerUnit', 2), fact('roomsPerUnit', 3), fact('apartmentsPerFloor', 4), fact('floorCount', 8), fact('buildingAgeBand', '6–12'), fact('sameApartmentLayout', true)];
+  const before = JSON.stringify(facts);
+  for (const language of ['ar', 'en'] as const) {
+    const specs = compactPropertySpecs(facts, language, 'whole_building');
+    const layout = compactSpecificationLayout(specs, 'whole_building');
+    assert.equal(layout.columns, 2);
+    assert.equal(layout.area?.value, '800 م²');
+    assert.deepEqual(layout.cells.slice(0, 6).map(cell => cell.fieldId), ['housingTypes', 'floorCount', 'apartmentCount', 'apartmentsPerFloor', 'roomsPerUnit', 'bathroomsPerUnit']);
+    assert.equal(layout.cells.some(cell => cell.fieldId === 'areaSquareMeters'), false);
+    if (language === 'ar') assert.equal(layout.cells[0].value, 'عمارة شركات / موظفون');
+    assert.equal(layout.cells.find(cell => cell.fieldId === 'roomsPerUnit')?.icon, 'bed-outline');
+    assert.equal(layout.cells.find(cell => cell.fieldId === 'bathroomsPerUnit')?.icon, 'shower');
+  }
+  assert.equal(JSON.stringify(facts), before);
+});
+
+test('Building area fallback preserves the precise area label, while other property layouts stay three-column', () => {
+  const specs = compactPropertySpecs([fact('builtUpAreaSquareMeters', '900 m²'), fact('floorCount', 0)], 'en', 'whole_building');
+  assert.equal(compactSpecificationLayout(specs, 'whole_building').area?.fieldId, 'builtUpAreaSquareMeters');
+  assert.equal(compactSpecificationLayout(specs, 'whole_building').cells[0].value, '0');
+  const emptyArea = compactSpecificationLayout(compactPropertySpecs([fact('areaSquareMeters', undefined), fact('apartmentCount', 0)], 'ar', 'whole_building'), 'whole_building');
+  assert.equal(emptyArea.area, undefined);
+  assert.equal(emptyArea.cells[0].value, '0');
+  assert.equal(compactSpecificationLayout(specs, 'apartment').columns, 3);
+  assert.equal(compactSpecificationLayout(specs, 'apartment').area, undefined);
 });
