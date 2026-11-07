@@ -43,11 +43,13 @@ export function PropertyWizardFooter({
   previous,
   next,
   busy = false,
+  message,
 }: {
   page: PropertyPage;
   previous: () => void;
   next: () => void;
   busy?: boolean;
+  message?: string;
 }) {
   const insets = useSafeAreaInsets();
   const { language, fonts } = useI18n(),
@@ -60,11 +62,12 @@ export function PropertyWizardFooter({
         backgroundColor: colors.card,
         padding: 12,
         paddingBottom: Math.max(insets.bottom, 12),
-        flexDirection: ar ? 'row-reverse' : 'row',
+        flexDirection: 'column',
         gap: 10,
       }}
     >
-      {[
+      {message ? <Text selectable accessibilityRole="alert" testID="property-wizard-message" style={{color: colors.destructive, fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, textAlign: ar ? 'right' : 'left'}}>{message}</Text> : null}
+      <View style={{direction:'ltr',flexDirection:ar?'row-reverse':'row',gap:10}}>{[
         {
           id: 'previous',
           label: ar ? 'السابق' : 'Previous',
@@ -108,7 +111,7 @@ export function PropertyWizardFooter({
             {item.label}
           </Text>
         </Pressable>
-      ))}
+      ))}</View>
     </View>
   );
 }

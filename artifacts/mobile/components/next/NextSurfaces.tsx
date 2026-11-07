@@ -198,7 +198,7 @@ export function NextFieldPair({
 }) {
   const { isRTL } = useI18n(),
     { fontScale, width } = useWindowDimensions();
-  const stacked = fontScale > 1.4 || width < 350;
+  const stacked = fontScale > 1.35 || width < 320;
   return (
     <View
       style={{

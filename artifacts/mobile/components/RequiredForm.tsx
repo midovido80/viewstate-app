@@ -38,10 +38,10 @@ export function useRequiredForm(fields: readonly CompletionField[]) {
     fields, attempted, scrollRef, viewportRef,
     onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => { offset.current = event.nativeEvent.contentOffset.y; },
     register: (id: string, view: View | null) => { targets.current[id] = view; if (view && pending.current === id) focus(id); },
-    validate: (snapshot: readonly CompletionField[] = fields) => {
+    validate: (snapshot: readonly CompletionField[] = fields, options: { focus?: boolean } = {}) => {
       setAttempted(true);
       const missing = missingCompletionFields(snapshot);
-      if (missing.length) { AccessibilityInfo.announceForAccessibility('Required fields / حقول مطلوبة'); focus(missing[0]); }
+      if (missing.length) { AccessibilityInfo.announceForAccessibility('Required fields / حقول مطلوبة'); if (options.focus !== false) focus(missing[0]); }
       return missing;
     },
     focus,

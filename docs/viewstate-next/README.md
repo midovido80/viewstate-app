@@ -47,6 +47,10 @@ The message-capture entry currently supports **offered records**, with explicit 
 
 Direct follow-up entry validates each supplied person/property against the current catalog. Person-only and property-only entries open the original editor; entries linked to a particular record use a separate draft scope rather than restoring an unrelated generic follow-up draft.
 
+## Property form follow-up
+
+The reference-alignment and save-feedback package is documented in [forms-review-20261107.md](forms-review-20261107.md): two-column original fields, compact housing selection, field-specific save feedback, and type-based Home headings. It includes a browser component screenshot and original storage save/reopen regression tests.
+
 ## Verification and remaining acceptance
 
 - Mobile TypeScript and property-domain TypeScript checks; complete mobile test suite and domain matching suite.

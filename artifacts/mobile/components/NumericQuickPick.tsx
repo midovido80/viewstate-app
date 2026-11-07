@@ -72,7 +72,7 @@ export function NumericQuickPick({
       <View style={{gap:8}}><View><RequiredLabelText style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
         {label}
       </RequiredLabelText></View>
-      <View style={{minWidth:0}}><CompactDropdown testID={`${testID}-dropdown`} options={[
+      <View style={{minWidth:0}}><CompactDropdown title={label} testID={`${testID}-dropdown`} options={[
         { value: '', label: language === 'ar' ? 'غير محدد' : 'Not specified', selected: value === '' && !expanded },
         ...quickPickValues.map(option => ({ value: String(option), label: option === 0 ? (language === 'ar' ? 'لا يوجد (0)' : 'None (0)') : String(option), selected: !expanded && parsedValue.kind === 'valid' && parsedValue.value === option, testID: `${testID}-${option}` })),
         { value: 'manual', label: language === 'ar' ? 'عدد آخر…' : 'Other number…', selected: expanded },

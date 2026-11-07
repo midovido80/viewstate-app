@@ -1681,7 +1681,7 @@ export default function StudioCaptureRoute() {
               )}
             </View>}
           </KeyboardAwareScrollViewCompat></PropertyPageContext.Provider>
-          {mode==='offered'&&!savedProperty && <PropertyWizardFooter page={formPage} previous={handleHeaderBack} busy={saving||!recordLoaded} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);scrollRef.current?.scrollTo({y:0,animated:false});}else void doSave();}} />}
+          {mode==='offered'&&!savedProperty && <PropertyWizardFooter page={formPage} previous={handleHeaderBack} busy={saving||!recordLoaded} message={error || undefined} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);scrollRef.current?.scrollTo({y:0,animated:false});}else void doSave();}} />}
           {propertyReview && <PropertyReviewFooter title={saving ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : t('summary.submit')}
             onPress={() => void doSave()} loading={saving}
             disabled={saving || !!propertyRecovery || !!committedRequirement.current || !!savedProperty || !!savedRequirement} testID="studio-save" />}

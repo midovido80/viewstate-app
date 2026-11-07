@@ -1,9 +1,12 @@
-import { BathroomKitchenRow, KitchenSlot } from '@/components/PropertyWizard';
+import { NextFieldPair as BathroomKitchenRow } from '@/components/next/NextSurfaces';
+import { PropertyFieldGrid, type PropertyGridField } from '@/components/PropertyFieldGrid';
+import { KitchenCountContext, KitchenSlot } from '@/components/PropertyWizard';
 import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
+import { useContext } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ChoiceTile, ChoiceGrid } from '@/components/FormChoices';
 import { useColors } from '@/hooks/useColors';
@@ -64,6 +67,7 @@ export function PropertyEnrichmentFields({
 }) {
   const colors = useColors();
   const { language, isRTL, fonts, t } = useI18n();
+  const kitchenCount = useContext(KitchenCountContext);
   const floorUse = values.floorUse;
   const applicableDefinitions = getApplicablePropertyFormFields(propertyType, floorUse as 'residential' | 'commercial' | undefined, values.apartmentSubtype as ApartmentSubtype | undefined, values.propertyUse as 'residential' | 'commercial' | undefined).filter(definition => !(propertyType === 'floor' && floorUse === 'commercial' && ['hasBalcony', 'hasElevator', 'hasSecurityGuard', 'hasKitchen', 'hasPrivateEntrance', 'hasAccessibleEntrance'].includes(definition.field)) && !['buildingAgeBand', 'hasBasement', 'streetPosition', 'parkingTypes', 'privateParkingCount', 'hasMortgage', 'rentalOccupancy', 'monthlyIncome'].includes(definition.field));
   const definitions = applicableDefinitions.filter(definition =>
@@ -79,8 +83,8 @@ export function PropertyEnrichmentFields({
     && (!definition.floorUses || propertyType !== 'floor' || !!floorUse && definition.floorUses.includes(floorUse as 'residential' | 'commercial'))
   );
   const specificationOrder: PropertyDetailField[] = [
-    'propertyUse', 'apartmentSubtype', 'bedroomCount', 'masterBedroomCount', 'bathroomCount',
-    'floorNumber', 'parkingSpaceCount', 'livingRoomCount', 'furnishing', 'occupancy',
+    'propertyUse', 'apartmentSubtype', 'bedroomCount', ...(kitchenCount ? ['masterBedroomCount', 'bathroomCount'] as PropertyDetailField[] : ['bathroomCount', 'masterBedroomCount'] as PropertyDetailField[]),
+    'floorNumber', 'occupancy', 'furnishing', 'parkingSpaceCount', 'livingRoomCount',
   ];
   const rank = (field: PropertyDetailField) => {
     const index = specificationOrder.indexOf(field);
@@ -178,16 +182,19 @@ export function PropertyEnrichmentFields({
 
   return (
     <View style={styles.wrap}>
-      {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">{ordered.map(definition => {
-        const usesResidentialQuickPick = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
-        const control = <RequiredField id={definition.field}>
-          {!usesResidentialQuickPick && <Text style={[styles.label, { color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}</Text>}
-          {renderFieldContent(definition)}
-        </RequiredField>;
-        return <View key={definition.field}>{definition.field === 'bathroomCount'
-          ? <><BathroomKitchenRow>{control}</BathroomKitchenRow><KitchenSlot /></>
-          : control}</View>;
-      })}</PropertyFormCard>}
+      {ordered.length > 0 && <PropertyFormCard title={language === 'ar' ? 'مواصفات العقار' : 'Property specifications'} icon="home">
+        <PropertyFieldGrid items={ordered.flatMap<PropertyGridField>(definition => {
+          const numeric = definition.control === 'numeric_quick_pick' && (isPropertyNumericQuickPickSurface(propertyType, floorUse) || definition.field === 'masterBedroomCount' || definition.field === 'bedroomCount');
+          const control = <RequiredField id={definition.field}>
+            {!numeric && <Text style={[styles.label, { color: '#18355C', fontFamily: fonts.semiBold, fontSize: 14, lineHeight: 21, textAlign: isRTL ? 'right' : 'left' }]}>{propertyDetailLabels[definition.field][language === 'ar' ? 1 : 0]}</Text>}
+            {renderFieldContent(definition)}
+          </RequiredField>;
+          return definition.field === 'bathroomCount' && kitchenCount
+            ? [{ id: definition.field, content: <BathroomKitchenRow first={control} second={kitchenCount} />, fullWidth: true }]
+            : [{ id: definition.field, content: control }];
+        })} />
+        <KitchenSlot />
+      </PropertyFormCard>}
       {(applicableDefinitions.some(definition => definition.group === 'amenity' && definition.field !== 'parkingSpaceCount') || amenityRenderExtra) && (
         <PropertyFormCard page={1} title={language === 'ar' ? 'خدمات العقار' : 'Property services'} icon="check-square">
           <OrderedPropertyAmenities extra={amenityRenderExtra} entries={applicableDefinitions.filter(definition => definition.group === 'amenity' && definition.field !== 'parkingSpaceCount').map(definition => {

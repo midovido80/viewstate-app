@@ -1,3 +1,6 @@
+import { usePropertyWizardValidation } from '@/hooks/usePropertyWizardValidation';
+import { propertyCompletionNotice } from '@/services/propertyFormLayout';
+import { missingCompletionFields } from '@/services/requiredMatchingFields';
 import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
 import { useDraftBack } from '@/hooks/useDraftBack';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
@@ -217,6 +220,7 @@ export default function CaptureWorkflow() {
   const [block, setBlock] = useState(draft.block ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [formPage,setFormPage]=useState<PropertyPage>(0);
+  const validateWizard = usePropertyWizardValidation(requiredForm, formPage, setFormPage);
   const captureCommitted = useRef(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveFlight = useRef(false);
@@ -721,7 +725,7 @@ export default function CaptureWorkflow() {
   };
 
   const save = async () => {
-    if (requiredForm.validate().length) { setStage(2); setFormPage(0); return; }
+    if (validateWizard().length) { setStage(2); return; }
     if (isStudioCaptureBlocked) return;
     if (saveFlight.current) return;
     saveFlight.current = true;
@@ -1241,7 +1245,7 @@ export default function CaptureWorkflow() {
           </View>
         </View>
       </Modal>
-      {stage===2&&!isBasicApartmentFollowUp ? <PropertyWizardFooter page={formPage} previous={handleBack} busy={submitting} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});}else void save();}} /> : stage === 3 ? <PropertyReviewFooter title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" /> : (
+      {stage===2&&!isBasicApartmentFollowUp ? <PropertyWizardFooter page={formPage} previous={handleBack} busy={submitting} message={saveError || (requiredForm.attempted ? propertyCompletionNotice(missingCompletionFields(requiredForm.fields), language) : undefined)} next={()=>{if(formPage<2){if(formPage===0&&validateWizard().length)return;setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});}else void save();}} /> : stage === 3 ? <PropertyReviewFooter title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" /> : (
       <View style={[styles.footer, { flexDirection: isRTL ? 'row' : 'row-reverse', backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         {stage === 2 ? <ApprovedAction title={language === 'ar' ? 'حفظ مسودة' : 'Save Draft'} onPress={saveDraft} variant="outline" loading={draftSaveStatus === 'saving'} disabled={draftSaveStatus === 'saving'} testID="capture-save-draft" /> : <ApprovedAction title={t('capture.back')} onPress={handleBack} variant="outline" testID="capture-back" />}
       {stage === 1 ? <ApprovedAction title={t('capture.next')} onPress={() => draft.transaction && draft.propertyType && (!demoCategory || draft.transaction === demoCategory.transaction) ? setStage(2) : Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'))} disabled={isStudioCaptureBlocked || !draft.transaction || !draft.propertyType || Boolean(demoCategory && draft.transaction !== demoCategory.transaction)} testID="capture-next" /> : stage === 2 ? <ApprovedAction title={language === 'ar' ? 'معاينة' : 'Preview'} onPress={openPreview} disabled={isStudioCaptureBlocked} testID="capture-preview" /> : <ApprovedAction title={t('summary.submit')} onPress={save} loading={submitting} disabled={isStudioCaptureBlocked} testID="capture-save-property" />}

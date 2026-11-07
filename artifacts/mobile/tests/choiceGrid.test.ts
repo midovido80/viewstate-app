@@ -115,7 +115,7 @@ test('Area and Block stay in reading order, share a row, and stack for enlarged 
     assert.equal(row.props.style.flexDirection, rtl ? 'row-reverse' : 'row');
     assert.equal(row.props.children[0].props.children, 'area-control');
     assert.equal(row.props.children[1].props.children, 'block-control');
-    assert.equal(row.props.children[0].props.style.flex, 2);
+    assert.equal(row.props.children[0].props.style.flex, 1);
     state.fontScale = 1.6;
     assert.equal(PropertyAreaBlockRow({ area: 'area', block: 'block' }).props.style.flexDirection, 'column');
   }

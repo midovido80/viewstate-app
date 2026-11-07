@@ -1,11 +1,15 @@
+import { FieldValidationContext } from '@/components/FormField';
+import { fieldSurface } from '@/constants/formFields';
 import React, {
   Children,
   Fragment,
   isValidElement,
   useState,
+  useContext,
   type ReactNode,
 } from "react";
 import {
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -53,9 +57,11 @@ export function CompactDropdown({
   onSelect,
   multiple = false,
   inlineLabel = false,
+  title,
   testID,
 }: {
   label?: string;
+  title?: string;
   options: readonly DropdownOption[];
   onSelect?: (value: string) => void;
   multiple?: boolean;
@@ -65,6 +71,7 @@ export function CompactDropdown({
   const [open, setOpen] = useState(false),
     { isRTL, language, fonts } = useI18n(),
     colors = useColors();
+  const invalid = useContext(FieldValidationContext);
   const numeric = !multiple && isNumericChoiceSet(options.map(option => option.value));
   const selected = options.filter((o) => o.selected),
     align = isRTL ? ("right" as const) : ("left" as const);
@@ -73,8 +80,8 @@ export function CompactDropdown({
     fontFamily: fonts.regular,
     textAlign: align,
     writingDirection: isRTL ? ("rtl" as const) : ("ltr" as const),
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 24,
   };
   return (
     <View style={{ width: "100%", gap: 8, direction: "ltr", flexDirection: label && inlineLabel ? (isRTL ? "row-reverse" : "row") : "column", alignItems: label && inlineLabel ? "center" : undefined }}>
@@ -85,23 +92,18 @@ export function CompactDropdown({
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={
-          label ?? (language === "ar" ? "الاختيارات" : "Options")
+          label ?? title ?? (language === "ar" ? "الاختيارات" : "Options")
         }
         accessibilityState={{ expanded: open }}
-        onPress={() => setOpen(true)}
-        style={{
-          minHeight: 44,
+        onPress={() => { Keyboard.dismiss(); setOpen(true); }}
+        style={({ pressed }) => ({
+          ...fieldSurface({ active: open || pressed, invalid: !!invalid }),
+          minHeight: 48,
           flex: label && inlineLabel ? 3 : undefined,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 10,
-          backgroundColor: colors.card,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          direction: "ltr", flexDirection: isRTL ? "row-reverse" : "row",
-          alignItems: "center",
-          gap: 8,
-        }}
+          paddingHorizontal: 12, paddingVertical: 10,
+          direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row',
+          alignItems: 'center', gap: 8,
+        })}
       >
         <Text style={[text, { flex: 1 }]}>
           {selected.map((o) => o.label).join("، ") ||
@@ -112,7 +114,7 @@ export function CompactDropdown({
       <Modal
         visible={open}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setOpen(false)}
       >
         <View
@@ -142,7 +144,7 @@ export function CompactDropdown({
             }}
           >
             <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <Text accessibilityRole="header" style={[text, { fontFamily: fonts.bold, flex: 1 }]}>{label || (language === 'ar' ? 'اختر' : 'Choose')}</Text>
+              <Text accessibilityRole="header" style={[text, { fontFamily: fonts.bold, flex: 1 }]}>{label || title || (language === 'ar' ? 'اختر' : 'Choose')}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={language === 'ar' ? 'إغلاق الاختيارات' : 'Close options'} onPress={() => setOpen(false)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Feather name="x" size={20} color={n.muted} /></Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={numeric ? { direction: "ltr", flexDirection: isRTL ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 } : undefined}>

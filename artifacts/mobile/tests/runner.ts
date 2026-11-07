@@ -414,7 +414,7 @@ test('Synthetic enrichment route preserves the bounded post-save entry points an
   assert.match(enrichmentSource, /completion=enrichment/);
   assert.match(fieldSource, /getApplicablePropertyFormFields/);
   assert.match(catalogSource, /PROPERTY_DETAIL_FIELD_DEFINITIONS\.map/);
-  assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.map'));
+  assert.ok(fieldSource.indexOf("field === 'floorUse'") < fieldSource.indexOf('ordered.flatMap'));
   assert.match(fieldSource, /FURNISHING_VALUES/);
   assert.match(fieldSource, /enrich\.furnishing\./);
   assert.match(detailPresentationSource, /hasHeating[\s\S]*hasBBQArea/);

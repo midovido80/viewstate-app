@@ -1,7 +1,7 @@
 /** Approved field states. These tokens deliberately do not recolor cards or action buttons. */
 export const formFieldColors = {
-  background: '#FFFFFF', border: '#8290A4', text: '#173F78', placeholder: '#66758A',
-  activeBackground: '#E4EBF4', activeBorder: '#245DF4',
+  background: '#FFFFFF', border: '#ADBFDF', text: '#18355C', placeholder: '#66758A',
+  activeBackground: '#F3F6FF', activeBorder: '#2454ED',
   errorBackground: '#FFF1F0', errorBorder: '#D92D20',
   disabledBackground: '#EEF1F5', disabledBorder: '#A4ADBA',
 } as const;
@@ -12,7 +12,7 @@ export function isFieldErrorBorder(color: unknown): boolean {
 }
 export function fieldSurface({ active = false, invalid = false, disabled = false } = {}) {
   return {
-    borderWidth: 1.5,
+    borderWidth: 1,
     outlineWidth: 0,
     outlineStyle: 'solid',
     borderRadius: 12,

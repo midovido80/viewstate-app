@@ -1,3 +1,6 @@
+import { usePropertyWizardValidation } from '@/hooks/usePropertyWizardValidation';
+import { propertyCompletionNotice } from '@/services/propertyFormLayout';
+import { missingCompletionFields } from '@/services/requiredMatchingFields';
 import { NextReadChips } from '@/components/next/NextSurfaces';
 import { Linking } from 'react-native';
 import { PropertyFactStrip, PropertyStatus } from '@/components/PropertyVisualSummary';
@@ -925,11 +928,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   };
 
   const requiredForm = useRequiredForm(propertyCompletionFields({ type: draft?.baseline.core.propertyType ?? '', area: draft?.choices.locationAreaId, price: draft?.choices.priceAmount, size: draft?.choices.areaSquareMeters, values: draft?.choices.canonicalDetails ?? {} }));
+  const validateWizard = usePropertyWizardValidation(requiredForm, formPage, setFormPage);
 
   const save = async () => {
     setPriceAttempted(true);
     if (!draft || saving || saveFlight.current) return;
-    if (requiredForm.validate().length) return;
     saveFlight.current = true;
     setSaving(true);
     setError('');
@@ -944,10 +947,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         setError(t('edit.draft_conflict'));
         return;
       }
-      if (requiredForm.validate(propertyCompletionFields({ type: currentDraft.baseline.core.propertyType, area: currentDraft.choices.locationAreaId, price: currentDraft.choices.priceAmount, size: currentDraft.choices.areaSquareMeters, values: currentDraft.choices.canonicalDetails ?? {} })).length) { setFormPage(0); return; }
+      if (validateWizard(propertyCompletionFields({ type: currentDraft.baseline.core.propertyType, area: currentDraft.choices.locationAreaId, price: currentDraft.choices.priceAmount, size: currentDraft.choices.areaSquareMeters, values: currentDraft.choices.canonicalDetails ?? {} })).length) { setFormPage(0); return; }
       const mapsValidation = getPropertyEditMapsFieldError(currentDraft.choices.mapsLink ?? '', language);
       setMapsFieldError(mapsValidation);
-      if (mapsValidation) { setFormPage(2); return; }
+      if (mapsValidation) { setError(mapsValidation); setFormPage(2); return; }
       if (invalidQuickPickFields.size > 0) {
         setFormPage(0);
         setError(t('errors.capture_incomplete'));
@@ -1803,7 +1806,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           </>
         ) : null}
       </ScrollView></View></RequiredFormProvider></PropertyPageContext.Provider>
-      {mode==='edit' && <PropertyWizardFooter page={formPage} previous={leaveEditor} busy={saving} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});}else void save();}} />}
+      {mode==='edit' && <PropertyWizardFooter page={formPage} previous={leaveEditor} busy={saving} message={error || (requiredForm.attempted ? propertyCompletionNotice(missingCompletionFields(requiredForm.fields), language) : undefined)} next={()=>{if(formPage===2){void save();return;} void draftMutationFlight.current.then(ok=>{if(!ok){setError(t('edit.draft_conflict'));return;}const latest=draftRef.current;if(!latest)return;if(formPage===0 && validateWizard(propertyCompletionFields({type:latest.baseline.core.propertyType,area:latest.choices.locationAreaId,price:latest.choices.priceAmount,size:latest.choices.areaSquareMeters,values:latest.choices.canonicalDetails??{}})).length)return;setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});});}} />}
 
       <Modal visible={areaOpen} animationType="slide" onRequestClose={() => setAreaOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>

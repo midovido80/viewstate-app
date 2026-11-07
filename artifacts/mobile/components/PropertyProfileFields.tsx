@@ -1,4 +1,6 @@
-import { BathroomKitchenRow, KitchenSlot } from '@/components/PropertyWizard';
+import { PropertyFieldGrid } from '@/components/PropertyFieldGrid';
+import { useContext } from 'react';
+import { BathroomKitchenRow, KitchenCountContext, KitchenSlot } from '@/components/PropertyWizard';
 import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
@@ -8,7 +10,7 @@ import { FORM_MULTI_FIELDS, type PropertyDetailField, type PropertyType } from '
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';
 import { COMMERCIAL_COMPLEX_CHOICES, grossAnnualRentalYield } from '@/services/commercialComplexSale';
-import { ChoiceGrid, ChoiceTile } from '@/components/FormChoices';
+import { CompactDropdown, ChoiceGrid, ChoiceTile } from '@/components/FormChoices';
 import { NumericQuickPick } from '@/components/NumericQuickPick';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useColors } from '@/hooks/useColors';
@@ -21,6 +23,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
   onInvalidQuickPickChange?: (field: PropertyDetailField, scope: string, invalid: boolean) => void;
 }) {
   const colors = useColors();
+  const kitchenCount = useContext(KitchenCountContext);
   const { language, fonts, isRTL } = useI18n();
   const ar = language === 'ar';
   const profile = getPropertyFormProfile(propertyType, transaction, values);
@@ -66,6 +69,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
     const choices = PROFILE_CHOICES[field] ?? COMMERCIAL_COMPLEX_CHOICES[field];
     const boolean = definition.control === 'boolean';
     const multi = (FORM_MULTI_FIELDS as readonly string[]).includes(field);
+    if (choices && multi && field === 'housingTypes') return <CompactDropdown key={field} label={fieldLabel(field)} multiple testID={`profile-${field}`} options={choices.map(([id,en,arabic]) => ({value:id,label:ar?arabic:en,selected:values[field]?.split(',').includes(id)===true,onPress:()=>{const current=values[field]?.split(',').filter(Boolean)??[];onChange(field,(current.includes(id)?current.filter(v=>v!==id):[...current,id]).join(','));}}))} />;
     if (choices || boolean) {
       const options = choices ?? [['true', 'Exists', 'يوجد'], ['false', 'Does not exist', 'لا يوجد']];
       const yesNo = field === 'sameApartmentLayout' || field === 'sameApartmentsPerFloor' || field === 'hasBasement' || field === 'hasMortgage';
@@ -96,7 +100,7 @@ export function PropertyProfileFields({ propertyType, transaction, values, onCha
   ];
   const yieldPercent = transaction === 'sale' && propertyType === 'whole_building' ? grossAnnualRentalYield(salePrice, values.monthlyIncome?.trim() ? Number(values.monthlyIncome) : undefined) : undefined;
   return <View style={{ gap: 12 }}>
-    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home">{profile.fields.filter(field => !groupedFields.has(field) && !['automaticNumberCount', 'kitchenAccess'].includes(field)).map(field => <View key={field}>{field === 'bathroomCount' ? <><BathroomKitchenRow><RequiredField id={field}>{renderField(field)}</RequiredField></BathroomKitchenRow><KitchenSlot /></> : <RequiredField id={field}>{renderField(field)}</RequiredField>}</View>)}
+    <PropertyFormCard title={ar ? 'مواصفات العقار' : 'Property specifications'} icon="home"><PropertyFieldGrid items={profile.fields.filter(field => !groupedFields.has(field) && !['automaticNumberCount', 'kitchenAccess', 'floorUse', 'propertyUse', 'kitchens'].includes(field) && isPropertyProfileFieldVisible(field, propertyType, transaction, values)).map(field => ({ id: field, fullWidth: ['apartmentLayouts', 'floorApartmentCounts', 'sameApartmentLayout', 'sameApartmentsPerFloor'].includes(field) || field === 'bathroomCount' && !!kitchenCount, content: field === 'bathroomCount' && kitchenCount ? <BathroomKitchenRow><RequiredField id={field}>{renderField(field)}</RequiredField></BathroomKitchenRow> : <RequiredField id={field}>{renderField(field)}</RequiredField> }))} /><KitchenSlot />
       {yieldPercent !== undefined && <View><Text style={labelStyle}>{ar ? 'العائد السنوي الإجمالي قبل المصروفات' : 'Gross annual yield before expenses'}</Text><Text style={labelStyle}>{yieldPercent.toFixed(2)}%</Text></View>}
     </PropertyFormCard>
     <PropertyFormCard page={1} title={ar ? 'خدمات العقار' : 'Property services'} icon="check-square"><OrderedPropertyAmenities entries={amenityEntries} /></PropertyFormCard>

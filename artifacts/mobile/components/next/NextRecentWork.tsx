@@ -1,3 +1,4 @@
+import { compactPropertyLabel } from "@/services/compactPropertyLabel";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -48,9 +49,11 @@ export function NextRecentWork({
             {
               key: "property:" + item.id,
               property: p,
-              title:
-                p.listingTitle?.trim() ||
+              title: compactPropertyLabel(
+                p,
+                language,
                 t(`propertyType.${p.core.propertyType}`),
+              ),
               sub: getAreaById(p.core.locationArea.id)?.[language] || "",
               href: "/property/" + encodeURIComponent(item.id),
             },
@@ -94,9 +97,11 @@ export function NextRecentWork({
           .map((p) => ({
             key: "property:" + p.core.id,
             property: p,
-            title:
-              p.listingTitle?.trim() ||
+            title: compactPropertyLabel(
+              p,
+              language,
               t(`propertyType.${p.core.propertyType}`),
+            ),
             sub: getAreaById(p.core.locationArea.id)?.[language] || "",
             href: "/property/" + encodeURIComponent(p.core.id),
           }))

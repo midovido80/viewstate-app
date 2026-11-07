@@ -15,11 +15,11 @@ const mocks = new Map([
  export const useRef=value=>({current:value}); export const useEffect=()=>{}; export const forwardRef=x=>x;
  `],
  ['react/jsx-runtime', `export const Fragment='Fragment';export const jsx=(type,props)=>({type,props});export const jsxs=jsx;`],
- ['react-native', `export const Modal='Modal',Pressable='Pressable',ScrollView='ScrollView',Text='Text',View='View',TextInput='TextInput',TouchableOpacity='TouchableOpacity';export const StyleSheet={create:x=>x};export const useWindowDimensions=()=>({width:390,fontScale:1});`],
+ ['react-native', `export const Modal='Modal',Pressable='Pressable',ScrollView='ScrollView',Text='Text',View='View',TextInput='TextInput',TouchableOpacity='TouchableOpacity';export const Keyboard={dismiss:()=>{}};export const StyleSheet={create:x=>x};export const useWindowDimensions=()=>({width:390,fontScale:1});`],
  ['@expo/vector-icons', `export const Feather='Feather';`],
  ['@/hooks/useColors', `export const useColors=()=>({primary:'#2455EE',primaryForeground:'#FFFFFF',card:'#FFFFFF',foreground:'#173F78',border:'#CBD5E1'});`],
  ['@/contexts/I18nContext', `export const useI18n=()=>({isRTL:globalThis.__formFeedback.rtl,language:globalThis.__formFeedback.rtl?'ar':'en',fonts:{regular:'regular',medium:'medium',semiBold:'bold'}});`],
- ['@/components/FormField', `export const TextInput='TextInput';`],
+ ['@/components/FormField', `export const TextInput='TextInput';export const FieldValidationContext={};`],
  ['@/components/RequiredForm', `export const RequiredLabelText='RequiredLabelText';`],
  ['@/components/PropertyFormCard', `export const propertyFormInputStyle={};`],
 ]);
