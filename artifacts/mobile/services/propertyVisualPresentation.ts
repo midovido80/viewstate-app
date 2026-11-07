@@ -132,8 +132,14 @@ export function propertyOfferStatus(property: Property, language: 'ar' | 'en') {
       background: '#ECEFF4',
       color: '#62738D',
     };
-  const ar = language === 'ar',
-    rented =
+  const ar = language === 'ar';
+  if (property.marketingStatus === 'paused' || property.marketingStatus === 'sold') return {
+    rented: false,
+    label: property.marketingStatus === 'sold' ? (ar ? 'مباع' : 'Sold') : (ar ? 'متوقف تسويقه' : 'Marketing paused'),
+    background: property.marketingStatus === 'sold' ? '#FDE9ED' : '#FFF2D7',
+    color: property.marketingStatus === 'sold' ? '#B32943' : '#865911',
+  };
+  const rented =
       property.activeOffer.transaction === 'rent' &&
       property.rentalAvailability === 'rented';
   return {

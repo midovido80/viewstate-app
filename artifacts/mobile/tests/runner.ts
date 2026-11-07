@@ -2327,7 +2327,7 @@ test('Deletion source keeps cancellation inert and safeguards privacy-minimal', 
   assert.match(detail, /result\.status !== 'deleted'/);
   assert.match(sqliteInitialization, /CREATE TABLE IF NOT EXISTS deleted_property_ids/);
   assert.match(persistence, /private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1'/);
-  assert.match(persistence, /canPermanentlyDelete\(\) \{\s+return false;/);
+  assert.match(persistence, /canPermanentlyDelete\(\) \{\s+return this.lockManager !== null;/);
   assert.match(persistence, /private async getAllRaw/);
   assert.match(persistence, /all\.filter\(property => !deletedIds\.has\(property\.core\.id\)\)/);
   const webDeletionMethods = persistence.slice(
@@ -2335,7 +2335,8 @@ test('Deletion source keeps cancellation inert and safeguards privacy-minimal', 
     persistence.indexOf('async getPropertyInventory()', persistence.indexOf('export class WebStore')),
   );
   assert.match(webDeletionMethods, /return \{ status: 'unsupported' \}/);
-  assert.doesNotMatch(webDeletionMethods, /setItem|withMutationLock|getAllRaw/);
+  assert.match(webDeletionMethods, /await this.replaceWorkspace\(before/);
+  assert.match(webDeletionMethods, /deletedPropertyIds/);
   assert.match(coordinator, /cooperatingWritersConfirmed/);
   assert.match(coordinator, /WebStore is unavailable regardless/);
   assert.doesNotMatch(coordinator, /rentalPrice|salePrice|locationArea|description|privateNotes/);
@@ -3242,8 +3243,8 @@ test('Completed mobile batch source contracts remain localized, keyboard-safe, a
 
   // EN/AR action labels are user-facing translations, including destructive
   // deletion and the unified WhatsApp destination.
-  assert.match(translations, /'detail\.delete': 'Delete'/);
-  assert.match(translations, /'detail\.delete': 'حذف'/);
+  assert.match(translations, /'detail\.delete': 'Delete property permanently'/);
+  assert.match(translations, /'detail\.delete': 'حذف العقار نهائيًا'/);
   assert.match(translations, /'share\.whatsapp': 'WhatsApp'/);
   assert.match(translations, /'share\.whatsapp': 'واتساب'/);
   assert.doesNotMatch(translations, /share\.whatsapp_business/);

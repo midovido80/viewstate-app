@@ -12,11 +12,12 @@ import {
   propertyEditDraftKey,
   type UpdateStorage,
 } from '@/services/propertyUpdateRecovery';
+import { queuePropertyDeletionCleanup } from './propertyDeletionCleanup';
 import { SingleFlight } from '@/services/serialTaskQueue';
 
 const deletes = new SingleFlight();
 
-async function assertNoPendingEvidence(
+export async function assertNoPendingPropertyEvidence(
   targets: ReadonlySet<string>,
   storage: RecoveryStorage & UpdateStorage,
 ): Promise<void> {
@@ -45,10 +46,11 @@ export async function deleteSavedProperty(options: {
 }): Promise<CoordinatedDeletionResult> {
   const run = await deletes.run(async () => {
     try {
-      await assertNoPendingEvidence(
+      await assertNoPendingPropertyEvidence(
         new Set([options.expected.core.id]),
         options.evidenceStorage ?? AsyncStorage,
       );
+      await queuePropertyDeletionCleanup(options.expected, options.evidenceStorage ?? AsyncStorage);
       return await options.store.deleteProperty(options.expected);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -79,7 +81,7 @@ export async function deleteSavedPropertySnapshot(options: {
   const run = await deletes.run(async () => {
     try {
       const targets = new Set(options.snapshot.map(property => property.core.id));
-      await assertNoPendingEvidence(targets, options.evidenceStorage ?? AsyncStorage);
+      await assertNoPendingPropertyEvidence(targets, options.evidenceStorage ?? AsyncStorage);
       return await options.store.deletePropertiesSnapshot(options.snapshot, {
         cooperatingWritersConfirmed: true,
       });

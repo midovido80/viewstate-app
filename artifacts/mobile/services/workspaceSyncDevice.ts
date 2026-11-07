@@ -1,3 +1,4 @@
+import { queuePropertyDeletionCleanup } from "./propertyDeletionCleanup";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import * as FileSystem from "expo-file-system";
@@ -203,6 +204,8 @@ export function createWorkspaceSyncDevice(
             throw new Error("SYNC_LOCAL_CHANGED");
           if (stableSync(expected) === stableSync(next)) return;
           const changed = fromBusinessRecords(decoded, beforeAssistant);
+          const removed = new Set(changed.data.deletedPropertyIds ?? []);
+          for (const property of current.properties) if (removed.has(property.core.id)) await queuePropertyDeletionCleanup(property, access.storage);
           const journal = JSON.stringify({
             version: 1,
             before: current,

@@ -21,6 +21,7 @@ import {
 } from "./dailyAssistant";
 import { stableSync, type SyncRecords } from "./workspaceSync";
 export interface BusinessSnapshot {
+  deletedPropertyIds?: string[];
   properties: Property[];
   people: Person[];
   requirements: SeekerRequirement[];
@@ -46,7 +47,8 @@ export async function readBusiness(
   ).filter((s): s is PropertySource => s !== null);
   if (store.getIntegrityStatus().hasUnreadableRecords)
     throw new Error("SYNC_UNREADABLE_LOCAL_DATA");
-  return { properties, people, requirements, links, sources };
+  const deletedPropertyIds = await store.getDeletedPropertyIds?.() ?? [];
+  return { properties, people, requirements, links, sources, ...(deletedPropertyIds.length ? {deletedPropertyIds} : {}) };
 }
 export function validateBusiness(data: BusinessSnapshot) {
   if (
@@ -62,6 +64,8 @@ export function validateBusiness(data: BusinessSnapshot) {
     requests = new Set<string>(),
     sources = new Set<string>(),
     links = new Set<string>();
+  const deleted = new Set(data.deletedPropertyIds ?? []);
+  if (deleted.size !== (data.deletedPropertyIds ?? []).length || [...deleted].some(id => typeof id !== "string" || !id || id.length > 500)) throw new Error("SYNC_INVALID_DELETION");
   for (const p of data.people) {
     assertValidPerson(p);
     if (people.has(p.id) || phones.has(p.normalizedPhone))
@@ -70,7 +74,7 @@ export function validateBusiness(data: BusinessSnapshot) {
     phones.add(p.normalizedPhone);
   }
   for (const p of data.properties) {
-    if (!validateProperty(p).ok || properties.has(p.core.id))
+    if (!validateProperty(p).ok || properties.has(p.core.id) || deleted.has(p.core.id))
       throw new Error("SYNC_INVALID_PROPERTY");
     properties.add(p.core.id);
   }
@@ -112,6 +116,7 @@ export function businessRecords(
   assistant: AssistantState,
 ): SyncRecords {
   const out: SyncRecords = {};
+  for (const id of data.deletedPropertyIds ?? []) out[`property/${id}`] = {version: 1, deleted: true};
   for (const p of data.properties) out[`property/${p.core.id}`] = p;
   for (const p of data.people) out[`person/${p.id}`] = p;
   for (const r of data.requirements) out[`requirement/${r.id}`] = r;
@@ -157,7 +162,9 @@ export function fromBusinessRecords(
       ["__proto__", "constructor", "prototype"].includes(id)
     )
       throw new Error("SYNC_INVALID_RECORD_ID");
-    if (kind === "property") {
+    if (kind === "property" && (value as {deleted?:unknown})?.deleted === true && (value as {version?:unknown})?.version === 1 && Object.keys(value as object).length === 2) {
+      (data.deletedPropertyIds ??= []).push(id);
+    } else if (kind === "property") {
       const p = value as Property;
       if (p.core?.id !== id) throw new Error("SYNC_ID_MISMATCH");
       data.properties.push(p);
@@ -198,6 +205,7 @@ export function fromBusinessRecords(
 }
 export function sameBusiness(a: BusinessSnapshot, b: BusinessSnapshot) {
   const sort = (d: BusinessSnapshot) => ({
+    deletedPropertyIds: [...(d.deletedPropertyIds ?? [])].sort(),
     properties: [...d.properties].sort((a, b) =>
       a.core.id.localeCompare(b.core.id),
     ),

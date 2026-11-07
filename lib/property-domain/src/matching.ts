@@ -163,6 +163,7 @@ export function checkMatchEligibility(
 ): MatchEligibilityResult {
   const property = candidate.property;
   const reasons: string[] = [];
+  if (property.marketingStatus === "paused" || property.marketingStatus === "sold") reasons.push(property.marketingStatus);
   if (property.activeOffer.transaction === "rent" && property.rentalAvailability === "rented") reasons.push("rented");
   if (property.core.propertyType !== requirement.propertyType)
     reasons.push("property_type");

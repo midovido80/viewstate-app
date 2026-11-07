@@ -462,6 +462,8 @@ export interface PropertySource {
 export interface PropertyAdditiveMetadata {
   readonly listingTitle?: string;
   readonly rentalAvailability?: "available" | "rented";
+  /** Retained listings that must not participate in active matching. */
+  readonly marketingStatus?: "active" | "paused" | "sold";
   readonly locationEnrichment?: LocationEnrichmentMetadata;
   readonly attachments?: readonly PropertyAttachmentMetadata[];
   /** Selected nearby-service identifiers captured by the native Property flow. */

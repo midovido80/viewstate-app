@@ -35,6 +35,27 @@ export function mergeWorkspace(
   local: SyncRecords,
   remote: SyncRecords,
 ) {
+  // Permanent deletion is monotonic across devices, including a stale remote edit
+  // or a first sync with no local base. Keep ID-only fences in the private workspace.
+  const deleted = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]
+    .filter(key => key.startsWith("property/") && [base, local, remote].some(records => {
+      const value = records[key] as {deleted?: unknown; version?: unknown} | undefined;
+      return value?.deleted === true && value.version === 1 && Object.keys(value).length === 2;
+    })).map(key => key.slice("property/".length)));
+  const clean = (input: SyncRecords): SyncRecords => {
+    const next = {...input};
+    for (const id of deleted) {
+      delete next[`property/${id}`]; delete next[`source/${id}`]; delete next[`availability/${id}`];
+      next[`property/${id}`] = {version: 1, deleted: true};
+    }
+    const removedTasks = new Set(Object.entries(input).filter(([key,value]) => key.startsWith("task/") && deleted.has((value as {propertyId?:string})?.propertyId ?? "")).map(([key]) => key.slice("task/".length)));
+    for (const [key,value] of Object.entries(next)) {
+      const record = value as {propertyId?: string; propertyCoreId?: string; taskId?: string} | null;
+      if ((key.startsWith("link/") && deleted.has(record?.propertyCoreId ?? "")) || (key.startsWith("task/") && deleted.has(record?.propertyId ?? "")) || (key.startsWith("contact/") && removedTasks.has(record?.taskId ?? ""))) delete next[key];
+    }
+    return next;
+  };
+  base = clean(base); local = clean(local); remote = clean(remote);
   const records: SyncRecords = {},
     conflicts: SyncConflict[] = [];
   for (const key of new Set([

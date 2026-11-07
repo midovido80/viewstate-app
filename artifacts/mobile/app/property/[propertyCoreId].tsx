@@ -1,3 +1,4 @@
+import { changeListingStatus, listingStatus, type ListingStatus } from '@/services/propertyLifecycle';
 import { usePropertyWizardValidation } from '@/hooks/usePropertyWizardValidation';
 import { propertyCompletionNotice } from '@/services/propertyFormLayout';
 import { missingCompletionFields } from '@/services/requiredMatchingFields';
@@ -124,7 +125,7 @@ function readNumericDetail(value: unknown): number | undefined {
 }
 
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
-  const { store, recovery: { createEditDraft, deleteSavedProperty, clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, discardPropertyEditDraft, executePropertyUpdateRecovery, loadPropertyEditDraft, loadPropertyUpdateOperation, persistPropertyUpdateOperation, savePropertyEditDraft }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, openAttachment } } = useUserData();
+  const { store, storage, recovery: { createEditDraft, deleteSavedProperty, clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, discardPropertyEditDraft, executePropertyUpdateRecovery, loadPropertyEditDraft, loadPropertyUpdateOperation, persistPropertyUpdateOperation, savePropertyEditDraft }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, openAttachment } } = useUserData();
   const { propertyCoreId, edit, completion, matchingReturn } = useLocalSearchParams<{
     propertyCoreId?: string | string[];
     edit?: string | string[];
@@ -172,6 +173,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [recoveryStatus, setRecoveryStatus] = useState<PropertyUpdateRecoveryResult['status'] | null>(null);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [source, setSource] = useState<PropertySource | null>(null);
   const [sourcePerson, setSourcePerson] = useState<Person | null>(null);
   const [sourcePeople, setSourcePeople] = useState<Person[]>([]);
@@ -1091,6 +1094,23 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     router.replace(withMatchingReturn(`/property/${encodeURIComponent(property.core.id)}`, matchingReturnToken) as never);
   };
 
+  const saveListingStatus = async (next: ListingStatus) => {
+    if (!property || statusSaving || deleting) return;
+    setStatusSaving(true); setError('');
+    try {
+      const saved = await changeListingStatus({expected: property, status: next, store, storage});
+      setProperty(saved); setStatusVisible(false);
+    } catch (error) {
+      setStatusVisible(false);
+      const reason = error instanceof Error ? error.message : '';
+      setError(reason.startsWith('PENDING_PROPERTY_')
+        ? (language === 'ar' ? 'احفظ أو ألغِ مسودة تعديل العقار أولاً، ثم حاول مجددًا.' : 'Save or discard this property’s edit draft, then retry.')
+        : reason === 'LISTING_CHANGED'
+          ? (language === 'ar' ? 'تغيّرت بيانات العقار. أعد فتحه ثم حاول مجددًا.' : 'This property changed. Reopen it and retry.')
+          : (language === 'ar' ? 'تعذّر حفظ الحالة. بياناتك محفوظة؛ حاول مجددًا.' : 'Could not save the status. Your data is safe; please retry.'));
+    } finally { setStatusSaving(false); }
+  };
+
   const confirmDelete = async () => {
     if (!property || deleting) return;
     if (!store.canPermanentlyDelete()) {
@@ -1105,11 +1125,11 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       const result = await deleteSavedProperty({ expected, store });
       if (result.status !== 'deleted') {
         setDeleteVisible(false);
-        setError(t('delete.failed'));
+        setError(result.status === 'evidence_blocked' ? (language === 'ar' ? 'احفظ أو ألغِ مسودة تعديل هذا العقار أولاً، ثم أعد محاولة الحذف.' : 'Save or discard this property’s edit draft before deleting.') : t('delete.failed'));
         return;
       }
       setDeleteVisible(false);
-      router.replace('/' as never);
+      router.replace('/(tabs)/properties' as never);
     } catch {
       setDeleteVisible(false);
       setError(t('delete.failed'));
@@ -1576,8 +1596,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             )}
 
+              <ApprovedAction testID="property-status-action" title={language === 'ar' ? 'تغيير حالة العقار' : 'Change property status'} icon="edit-2" variant="outline" layout="block" onPress={() => setStatusVisible(true)} disabled={deleting || statusSaving} />
               {canPermanentlyDelete ? (
-                <ApprovedAction testID="property-delete-action" title={t('detail.delete')} icon="trash-2" variant="danger" onPress={() => setDeleteVisible(true)} style={{ flex: 0 }} />
+                <ApprovedAction testID="property-delete-action" title={t('detail.delete')} icon="trash-2" variant="danger" onPress={() => setDeleteVisible(true)} disabled={deleting || statusSaving} style={{ flex: 0 }} />
               ) : null}
             </View>
           </>
@@ -1929,6 +1950,18 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       </Modal>
 
+      <Modal visible={statusVisible} transparent animationType="fade" onRequestClose={() => !statusSaving && setStatusVisible(false)}>
+        <View style={styles.modalOverlay}><View style={[styles.modalCard, {backgroundColor: colors.card, borderColor: colors.border, borderRadius: 16}]} testID="property-status-dialog">
+          <Text style={{fontFamily: fonts.bold, color: colors.foreground, textAlign: isRTL ? 'right' : 'left'}}>{language === 'ar' ? 'حالة العقار' : 'Property status'}</Text>
+          <Text style={{fontFamily: fonts.regular, color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left'}}>{statusSaving ? (language === 'ar' ? 'جارٍ حفظ الحالة…' : 'Saving status…') : (language === 'ar' ? 'تبقى بيانات العقار محفوظة. يظهر في المطابقات عندما يكون معروضًا فقط.' : 'Details stay saved. Only active offers appear in matching.')}</Text>
+          {(['active', property.activeOffer.transaction === 'rent' ? 'rented' : 'sold', 'paused'] as ListingStatus[]).map(value => {
+            const label = value === 'active' ? (language === 'ar' ? 'إعادة العرض / متاح' : 'Available / resume marketing') : value === 'rented' ? (language === 'ar' ? 'مؤجر' : 'Rented') : value === 'sold' ? (language === 'ar' ? 'مباع' : 'Sold') : (language === 'ar' ? 'إيقاف التسويق' : 'Pause marketing');
+            return <ApprovedAction key={value} layout="block" title={label} testID={`property-status-${value}`} variant={listingStatus(property) === value ? 'primary' : 'outline'} onPress={() => void saveListingStatus(value)} disabled={statusSaving || listingStatus(property) === value} />;
+          })}
+          <ApprovedAction layout="block" title={t('capture.cancel')} variant="outline" onPress={() => setStatusVisible(false)} disabled={statusSaving} />
+        </View></View>
+      </Modal>
+
       <Modal
         visible={deleteVisible && canPermanentlyDelete}
         transparent
@@ -1947,7 +1980,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               <Text style={[styles.modalActionText, { color: CANCEL_ACTION_COLOR, fontFamily: fonts.semiBold }]}>{t('capture.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => void confirmDelete()} disabled={deleting} style={[styles.modalAction, { borderColor: colors.destructive, opacity: deleting ? 0.6 : 1 }]} testID="property-delete-confirm">
-              <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>{t('delete.confirm')}</Text>
+              <Text style={[styles.modalActionText, { color: colors.destructive, fontFamily: fonts.semiBold }]}>{deleting ? (language === 'ar' ? 'جارٍ الحذف…' : 'Deleting…') : t('delete.confirm')}</Text>
             </TouchableOpacity>
           </View>
         </View>

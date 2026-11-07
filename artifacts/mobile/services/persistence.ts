@@ -54,6 +54,7 @@ export interface PropertyStore {
   compareAndUpdate(expected: Property, replacement: Property): Promise<boolean>;
   canSafelyUpdate(): boolean;
   canPermanentlyDelete(): boolean;
+  getDeletedPropertyIds?(): Promise<string[]>;
   getProperties(): Promise<Property[]>;
   searchProperties(query: string): Promise<Property[]>;
   deleteProperty(expected: Property): Promise<PropertyDeletionResult>;
@@ -203,7 +204,10 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
       await db.runAsync('DELETE FROM person_property_links');await db.runAsync('DELETE FROM property_sources');
       await db.runAsync('DELETE FROM seeker_requirements');await db.runAsync('DELETE FROM properties');await db.runAsync('DELETE FROM people');
       for(const p of next.people){await db.runAsync('INSERT INTO people (id,data,search_text) VALUES (?,?,?)',[p.id,JSON.stringify(p),getPersonSearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO person_creation_chronology (id,created_at) VALUES (?,?)',[p.id,UNKNOWN_CREATION_TIMESTAMP]);}
-      for(const p of next.properties){await db.runAsync('DELETE FROM deleted_property_ids WHERE id = ?',[p.core.id]);await db.runAsync('INSERT INTO properties (id,data,search_text) VALUES (?,?,?)',[p.core.id,JSON.stringify(p),getPropertySearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO property_creation_chronology (id,created_at) VALUES (?,?)',[p.core.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      const deleted = new Set([...(await this.getDeletedPropertyIds()), ...(next.deletedPropertyIds ?? [])]);
+      if(next.properties.some(p => deleted.has(p.core.id))) throw new Error('PROPERTY_ID_DELETED');
+      for(const id of deleted) await db.runAsync('INSERT OR IGNORE INTO deleted_property_ids (id,generation) VALUES (?,1)',[id]);
+      for(const p of next.properties){await db.runAsync('INSERT INTO properties (id,data,search_text) VALUES (?,?,?)',[p.core.id,JSON.stringify(p),getPropertySearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO property_creation_chronology (id,created_at) VALUES (?,?)',[p.core.id,UNKNOWN_CREATION_TIMESTAMP]);}
       for(const r of next.requirements){await db.runAsync('INSERT INTO seeker_requirements (id,data) VALUES (?,?)',[r.id,JSON.stringify(r)]);await db.runAsync('INSERT OR IGNORE INTO requirement_creation_chronology (id,created_at) VALUES (?,?)',[r.id,UNKNOWN_CREATION_TIMESTAMP]);}
       for(const l of next.links)await db.runAsync('INSERT INTO person_property_links (person_id,property_core_id) VALUES (?,?)',[l.personId,l.propertyCoreId]);
       for(const source of next.sources)await db.runAsync('INSERT INTO property_sources (property_core_id,person_id,role) VALUES (?,?,?)',[source.propertyCoreId,source.personId,source.role]);
@@ -281,6 +285,11 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
 
   canPermanentlyDelete() {
     return true;
+  }
+
+  async getDeletedPropertyIds(): Promise<string[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    return (await this.db.getAllAsync<{id:string}>('SELECT id FROM deleted_property_ids ORDER BY id')).map(row => row.id);
   }
 
   async getProperties(): Promise<Property[]> {
@@ -903,7 +912,8 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     validateBusiness(next);
     await this.withChronologyMutationLock(()=>this.withPeopleMutationLock(()=>this.withMutationLock(async()=>{
       await this.recoverWorkspace();if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
-      const deleted=[...await this.getDeletedIds()].filter(id=>!next.properties.some(p=>p.core.id===id));
+      const deleted=[...new Set([...(await this.getDeletedIds()), ...(next.deletedPropertyIds ?? [])])];
+      if(next.properties.some(p=>deleted.includes(p.core.id)))throw new Error('PROPERTY_ID_DELETED');
       const rows=await Promise.all([[this.KEY,next.properties],[this.PEOPLE_KEY,next.people],[WEB_REQUIREMENTS_KEY,next.requirements],[this.PERSON_PROPERTY_LINKS_KEY,next.links],[this.PROPERTY_SOURCES_KEY,next.sources],[this.DELETED_KEY,{version:1,ids:deleted}]].map(async([key,value])=>({key:key as string,before:await this.storage.getItem(key as string),after:JSON.stringify(value)})));
       const journal=JSON.stringify({version:1,rows});await this.storage.setItem('@viewstate_sync_web_journal_v1',journal);
       if(await this.storage.getItem('@viewstate_sync_web_journal_v1')!==journal)throw new Error('SYNC_JOURNAL_FAILED');
@@ -976,8 +986,10 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   canPermanentlyDelete() {
-    return false;
+    return this.lockManager !== null;
   }
+
+  async getDeletedPropertyIds(): Promise<string[]> { return [...await this.getDeletedIds()].sort(); }
 
   async getProperties(): Promise<Property[]> {
     const [properties, chronology] = await Promise.all([
@@ -1013,9 +1025,23 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
-    // Permanent browser deletion is intentionally unavailable: AsyncStorage
-    // cannot provide the required crash-atomic fence and array mutation.
-    return { status: 'unsupported' };
+    if (!this.canPermanentlyDelete()) return { status: 'unsupported' };
+    const before = await readBusiness(this);
+    const matches = before.properties.filter(p => p.core.id === expected.core.id);
+    if (!matches.length) return { status: 'missing' };
+    if (matches.length !== 1) return { status: 'duplicate' };
+    if (JSON.stringify(matches[0]) !== JSON.stringify(expected)) return { status: 'stale' };
+    const id = expected.core.id;
+    // The existing verified workspace journal makes all related arrays and the
+    // deletion fence one recoverable operation, under the same writer locks.
+    await this.replaceWorkspace(before, {
+      ...before,
+      properties: before.properties.filter(p => p.core.id !== id),
+      deletedPropertyIds: [...new Set([...(before.deletedPropertyIds ?? []), id])],
+      links: before.links.filter(l => l.propertyCoreId !== id),
+      sources: before.sources.filter(s => s.propertyCoreId !== id),
+    });
+    return { status: 'deleted', count: 1 };
   }
 
   async deletePropertiesSnapshot(

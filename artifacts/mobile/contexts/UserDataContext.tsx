@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { store } from '@/services/persistence';
 import * as draft from '@/services/draft';
@@ -11,6 +11,9 @@ import * as edit from '@/services/propertyUpdateRecovery';
 import * as enrich from '@/services/propertyEnrichmentRecovery';
 import * as studio from '@/services/studioSave';
 import * as deletion from '@/services/propertyDeletion';
+import { cleanupDeletedProperties } from '@/services/propertyDeletionCleanup';
+import { createAssistantRepository } from '@/services/dailyAssistantRepository';
+import { createMatchNoticeRepository } from '@/services/matchNotifications';
 import * as media from '@/services/attachments';
 import * as FileSystem from 'expo-file-system';
 import { assertOwnedMediaUri } from '@/services/accountMedia';
@@ -72,10 +75,39 @@ export function buildUserData(resources: UserResources) {
       return media.openAttachment(...args);
     }) as typeof media.openAttachment,
   };
-  return { subscribeSync: resources.subscribeSync, store: resources.store, storage, draft: createDraftRepository(storage),
+  let maintenance: Promise<void> | undefined;
+  const cleanupAssistant = createAssistantRepository(resources.syncAccess.storage);
+  const cleanupNotices = createMatchNoticeRepository(resources.syncAccess.storage);
+  const maintainDeletions = () => maintenance ??= resources.syncAccess.exclusive(async () => {
+    await resources.syncAccess.store.init();
+    await cleanupDeletedProperties({
+    store: resources.syncAccess.store, storage: resources.syncAccess.storage, assistant: cleanupAssistant, notices: cleanupNotices,
+    async deleteFile(uri) {
+      scope.assertActive();
+      if (Platform.OS === 'web') await scopedMedia.createIndexedDbWebAttachmentBlobStore().delete(uri);
+      else {
+        access.assertUri(uri);
+        const file = new FileSystem.File(uri);
+        if (file.exists) await file.delete();
+      }
+    },
+    });
+  }).finally(() => { maintenance = undefined; });
+  const remove = recovery.deleteSavedProperty;
+  recovery.deleteSavedProperty = async value => {
+    const result = await remove(value);
+    if (result.status === 'deleted') await maintainDeletions().catch(() => undefined);
+    return result;
+  };
+  return { maintainDeletions, subscribeSync: resources.subscribeSync, store: resources.store, storage, draft: createDraftRepository(storage),
     assistantRepository: resources.assistant, matchNoticeRepository: resources.notices, recovery, media: scopedMedia };
 }
 export function UserDataProvider({ value, children }: { value: ReturnType<typeof buildUserData>; children: React.ReactNode }) {
+  useEffect(() => {
+    const maintain = () => { void value.maintainDeletions().catch(() => undefined); };
+    maintain();
+    return value.subscribeSync(maintain);
+  }, [value]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 /** Legacy mode exists only when real-account configuration is absent at the root. */
