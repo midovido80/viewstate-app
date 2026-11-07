@@ -74,7 +74,8 @@
           "enableBackgroundRecording": false
         }
       ],
-      "./plugins/withLocalMatchAudio.cjs"
+      "./plugins/withLocalMatchAudio.cjs",
+      "./plugins/withIncomingImport.cjs"
     ],
     "experiments": {
       "typedRoutes": true,

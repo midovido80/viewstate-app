@@ -1,3 +1,4 @@
+import { importedSessionIdentity } from '@/services/importFormSessions';
 import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
 import { KitchenFields } from '@/components/KitchenFields';
 import { kitchensApply, type KitchenSpec } from '@workspace/property-domain';
@@ -116,8 +117,14 @@ const isResidential = (type: PropertyType, floorUse?: FloorUse) =>
 let catalogInvalidBridge: (field: string, invalid: boolean) => void = () => undefined;
 
 export default function RequirementEditor() {
+  const {importId}=useLocalSearchParams<{importId?:string|string[]}>();
+  const key=typeof importId==='string'?importId:Array.isArray(importId)?importId[0]:undefined;
+  return <RequirementForm key={key ? `import:${key}` : 'original'} />;
+}
+function RequirementForm() {
   const { store } = useUserData();
-  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam, floorUse: floorUseParam, propertyUse: propertyUseParam } = useLocalSearchParams<{
+  const { requirementId, seekerId, edit, purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam, floorUse: floorUseParam, propertyUse: propertyUseParam, importId } = useLocalSearchParams<{
+    importId?: string;
     requirementId: string | string[];
     seekerId?: string | string[];
     edit?: string | string[];
@@ -459,7 +466,7 @@ export default function RequirementEditor() {
     setStep(value => value - 1);
   };
   const persistForm = useLocalFormDraft({
-    identity: `requirement:${editing ? routeRequirementId : 'new'}:${ownerFromRoute ?? ''}:${initialPurpose}:${initialPropertyType}:${initialApartmentSubtype ?? ''}:${initialFloorUse ?? ''}`,
+    identity: importedSessionIdentity(`requirement:${editing ? routeRequirementId : 'new'}:${ownerFromRoute ?? ''}:${initialPurpose}:${initialPropertyType}:${initialApartmentSubtype ?? ''}:${initialFloorUse ?? ''}`, typeof importId === 'string' ? importId : undefined),
     value: { step, showCatalogBackControls, purpose, propertyType, apartmentSubtype, floorUse, propertyUse, areaMode, areas, bedrooms, bathrooms, masterBedrooms, kitchens, occupancy, livingRooms, parking, floorNumber, requiredArea, unspecified, driverRoom, catalog, amenities, excludedAmenities, services, centralACPreference, minimum, maximum, cadence, notes, commercialActivity, commercialServices, automaticNumberCount, bathroomsEnabled, kitchenEnabled, nearbyServices, baseline, draftIdentity: draftId.current }, ready: recordLoaded,
     complete: !!confirmedRequirement.current, completed: () => !!confirmedRequirement.current,
     restore: saved => { setStep(saved.step); setShowCatalogBackControls(saved.showCatalogBackControls); setPurpose(saved.purpose); setPropertyType(saved.propertyType); setApartmentSubtype(saved.apartmentSubtype); setFloorUse(saved.floorUse); setPropertyUse(saved.propertyUse); setAreaMode(saved.areaMode); setAreas(saved.areas); setBedrooms(saved.bedrooms); setBathrooms(saved.bathrooms); setMasterBedrooms(saved.masterBedrooms); setKitchens(saved.kitchens); setOccupancy(saved.occupancy); setLivingRooms(saved.livingRooms); setParking(saved.parking); setFloorNumber(saved.floorNumber); setRequiredArea(saved.requiredArea); setUnspecified(saved.unspecified); setDriverRoom(saved.driverRoom); setCatalog(saved.catalog); setAmenities(saved.amenities); setExcludedAmenities(saved.excludedAmenities); setServices(saved.services); setCentralACPreference(saved.centralACPreference); setMinimum(saved.minimum); setMaximum(saved.maximum); setCadence(saved.cadence); setNotes(saved.notes); setCommercialActivity(saved.commercialActivity); setCommercialServices(saved.commercialServices); setAutomaticNumberCount(saved.automaticNumberCount); setBathroomsEnabled(saved.bathroomsEnabled); setKitchenEnabled(saved.kitchenEnabled); setNearbyServices(saved.nearbyServices); setBaseline(saved.baseline); draftId.current = saved.draftIdentity; },

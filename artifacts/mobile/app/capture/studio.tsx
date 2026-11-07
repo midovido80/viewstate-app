@@ -1,3 +1,4 @@
+import { importedSessionIdentity } from '@/services/importFormSessions';
 import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
 import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
 import { matchingTarget } from '@/services/matchingScope';
@@ -110,6 +111,7 @@ import {
 
 type InputRef = { current: TextInput | null };
 type RouteParams = {
+  importId?: string | string[];
   mode?: string;
   transaction?: string;
   seekerId?: string;
@@ -171,6 +173,11 @@ const propertyAttachmentMetadata = (attachment: LocalAttachment): PropertyAttach
 });
 
 export default function StudioCaptureRoute() {
+  const params=useLocalSearchParams<RouteParams>();
+  const key=firstParam(params.importId);
+  return <StudioCaptureForm key={key ? `import:${key}` : 'original'} />;
+}
+function StudioCaptureForm() {
   const { store, recovery: { saveStudioPropertyFromPersonSource, retryStudioPropertyRecovery, saveStudioProperty }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore } } = useUserData();
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
@@ -435,7 +442,7 @@ export default function StudioCaptureRoute() {
   );
   const studioBackTarget = getEditBackTarget();
   const persistStudio = useLocalFormDraft({
-    identity: `studio:${editPropertyId ?? editRequirementId ?? 'new'}:${modeParam ?? ''}:${routeTransaction ?? ''}:${seekerParam ?? ''}:${linkPersonId ?? ''}`,
+    identity: importedSessionIdentity(`studio:${editPropertyId ?? editRequirementId ?? 'new'}:${modeParam ?? ''}:${routeTransaction ?? ''}:${seekerParam ?? ''}:${linkPersonId ?? ''}`, firstParam(params.importId)),
     value: { values, step, attachments, selectedPersonId, baselineProperty, baselineRequirement, propertyId: draftPropertyId.current, offerId: draftOfferId.current, requirementId: draftRequirementId.current },
     ready: recordLoaded && !loading, complete: !!savedProperty || !!savedRequirement,
     restore: saved => { setValues(saved.values); setStep(saved.step); setAttachments(saved.attachments); setSelectedPersonId(saved.selectedPersonId); setBaselineProperty(saved.baselineProperty); setBaselineRequirement(saved.baselineRequirement); draftPropertyId.current=saved.propertyId; draftOfferId.current=saved.offerId; draftRequirementId.current=saved.requirementId; preserveStagedFiles.current=true; },

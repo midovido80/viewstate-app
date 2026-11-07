@@ -251,15 +251,13 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    setDraft(prev => {
-      const next = updatePropertyDraft(
-        prev,
-        applyCaptureTransactionDefaults(prev, changes, draftOrigin),
-      );
-      draftRef.current = next;
-      saveDraft(next).catch(console.error);
-      return next;
-    });
+    // Keep the imperative snapshot current before callers verify a durable handoff.
+    // Functional state updaters may run after persistCurrentCapture() is invoked.
+    const previous = draftRef.current;
+    const next = updatePropertyDraft(previous, applyCaptureTransactionDefaults(previous, changes, draftOrigin));
+    draftRef.current = next;
+    setDraft(next);
+    void saveDraft(next).catch(console.error);
     return true;
   }, [draftLoadFailed, draftOrigin, isReady, saveRecoveryStatus, t]);
 

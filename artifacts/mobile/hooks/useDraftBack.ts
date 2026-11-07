@@ -109,6 +109,15 @@ export function useLocalFormDraft<T extends object>({
   };
   return Object.assign(persist, {
     discard,
+    /** Start another local composition only after its prior item was retained elsewhere. */
+    replace: async (value: T) => {
+      await hydration.current;
+      if (unreadable.current) throw Error("FORM_SESSION_UNREADABLE");
+      await repo.write(value);
+      discarded.current = false;
+      current.current.value = value;
+      current.current.restore(value);
+    },
     confirmDiscard: (exit: () => void) =>
       Alert.alert(
         language === "ar" ? "إلغاء المسودة؟" : "Discard draft?",

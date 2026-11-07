@@ -201,7 +201,7 @@ export function NextHomeCanvas({
       >
         <Feather name="clipboard" size={19} color={n.muted} />
         <Text style={{ ...text, flex: 1, fontSize: 14 }}>
-          {ar ? "لصق رسالة عقارية" : "Paste a property message"}
+          {ar ? "استيراد رسالة أو إعلان" : "Import a message or listing"}
         </Text>
         <Text style={small}>
           {ar ? "راجع قبل الحفظ" : "Review before saving"}

@@ -1,6 +1,6 @@
 # ViewState Next — isolated native migration
 
-Status: native foundation plus the second workflow/presentation package. **Full visual parity and device acceptance remain unverified.**
+Status: native foundation, workflow/presentation updates and approved private message import. **Full visual parity and device acceptance remain unverified.**
 
 ## Approved boundary
 
@@ -33,7 +33,7 @@ Home now distinguishes actual **recently worked on** records from its **saved of
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | First use and help     | Dismissible introduction, four-step guide, guide available from global settings                                               | No forced route replacement or sample-data injection; acknowledgement is local to the active workspace                                                                        |
 | Recent work            | Actual property/person/request visits, full history page, honest saved-offer fallback                                         | Active account catalog and managed cover access; loading, empty, error and retry states                                                                                       |
-| Offer message capture  | Paste/review, explicit type/transaction/title, original form handoff                                                          | Raw message is a never-share private note. No inferred price/services, no replacement of any existing capture, retained entry on failure, save confirmation before navigation |
+| Message import | Selected Android shares, paste/media intake, local suggestions, review and original-form handoff | Private originals, explicit confirmation, account-scoped durable inbox, no overwrite of an existing capture; native receiving/OCR need a new APK |
 | Property details       | Price before facts, compact service/nearby chips, correct source heading, follow-up entry                                     | Every original fact, gallery/file access, maps, source management, scoped matching and edit routes                                                                            |
 | People and requests    | Requests before linked offers, quieter profile, compact request detail chips, direct person follow-up                         | Original person roles, ownership, linking/unlinking, phone LTR, request edit and matching                                                                                     |
 | Matching               | Quieter cards plus real property-share and linked follow-up actions                                                           | Original scores, unknowns, differences, full comparison, original saved-record scope and Match all                                                                            |
@@ -43,7 +43,7 @@ Home now distinguishes actual **recently worked on** records from its **saved of
 | Settings/notifications | Shared calm header, one title, consistent content width; local language sheet retained                                        | Existing account, notification, backup, restore and privacy commands                                                                                                          |
 | Contact import         | Home import opens the existing person/import entry, explains role selection, shows classification errors in either entry mode | Actual contacts permission and reviewed batch workflow; browser unavailability remains explicit                                                                               |
 
-The message-capture entry currently supports **offered records**, with explicit original standard-apartment/duplex and other generic property form routes. It does **not** parse free text automatically, route a message into a client requirement, or substitute for the original Studio entry. These are remaining functional differences from the simplified reference, not completed features. Message intake has its own local form session; a resumed original capture blocks transfer instead of being overwritten.
+The approved message-import package now extends this entry to selected Android shares, offline text extraction/review and original Studio/property/client-request form handoff. See [import-20261107.md](import-20261107.md) for the exact scope, privacy boundaries, checks and device gaps. This does not implement a WhatsApp Business Platform bot or whole-chat import. Native receiving and image OCR require a new APK and device acceptance.
 
 Direct follow-up entry validates each supplied person/property against the current catalog. Person-only and property-only entries open the original editor; entries linked to a particular record use a separate draft scope rather than restoring an unrelated generic follow-up draft.
 

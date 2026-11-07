@@ -7,7 +7,7 @@ import { normalizeFlexibleSearchText, flexibleSearchTerms } from './flexibleSear
 export type HomeQuickAction = 'person' | 'property' | 'import' | 'share' | 'matching';
 /** Existing capture entry points only. No alternative capture forms. */
 export function homeQuickRoute(action: HomeQuickAction): string | null {
-  return action === 'person' ? '/person/new' : action === 'property' ? '/capture/transaction' : action === 'matching' ? '/matching' : action === 'import' ? '/person/new?entry=import' : null;
+  return action === 'person' ? '/person/new' : action === 'property' ? '/capture/transaction' : action === 'matching' ? '/matching' : action === 'import' ? '/intake' : null;
 }
 export interface HomeMatch { person: Person; requirement: SeekerRequirement; result: MatchResult }
 /** Read-only projection of the existing engine's shortlists. Never rescoring or accepting another engine. */

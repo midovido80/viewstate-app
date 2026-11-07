@@ -1,3 +1,4 @@
+import { IncomingImportBanner } from '@/components/IncomingImportBanner';
 import { NextExperienceProvider } from '@/contexts/NextExperienceContext';
 import { AppChrome } from '@/components/AppChrome';
 import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
@@ -83,12 +84,14 @@ function RootLayoutNav({
           </Text>
         </View>
       ) : null}
+      <IncomingImportBanner />
       <NextExperienceProvider><AppChrome><Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="next-recent" options={{ headerShown: false }} />
         <Stack.Screen name="next-guide" options={{ headerShown: false }} />
         <Stack.Screen name="intake" options={{ headerShown: false }} />
+        <Stack.Screen name="intake-review/[importId]" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="account" options={{ headerShown: false }} />
