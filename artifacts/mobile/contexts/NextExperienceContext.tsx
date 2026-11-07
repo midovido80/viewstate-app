@@ -54,6 +54,7 @@ function useNextState() {
         const value = await repository.update(mutation);
         if (current === generation.current) {
           setState(value);
+          setReady(true);
           setError(false);
         }
         return true;
