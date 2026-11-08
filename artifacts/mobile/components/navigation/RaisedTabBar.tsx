@@ -8,11 +8,10 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { nextDesign as n } from '@/constants/nextDesign';
-import { Feather } from '@expo/vector-icons';
-import { type NavigationDestination } from './NavigationIcon';
+import { NavigationIcon, type NavigationDestination } from './NavigationIcon';
 
 type Props = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
-const destinations: readonly (NavigationDestination | 'quickAdd')[] = ['index', 'matching', 'quickAdd', 'people', 'properties'];
+const destinations: readonly (NavigationDestination | 'quickAdd')[] = ['properties', 'people', 'quickAdd', 'matching', 'index'];
 /** Four equal real press targets. Keep navigation events/params and the hidden More route intact. */
 export function RaisedTabBar({ state, descriptors, navigation }: Props) {
   const router = useRouter();
@@ -34,7 +33,7 @@ export function RaisedTabBar({ state, descriptors, navigation }: Props) {
           }}
           onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
           style={({ pressed }) => [styles.button, selected && styles.selected, pressed && styles.pressed]}>
-          <Feather name={destination === 'index' ? 'home' : destination === 'matching' ? 'grid' : destination === 'people' ? 'users' : 'briefcase'} size={22} color={selected ? n.blue : n.muted} />
+          <NavigationIcon destination={destination} selected={selected} size={30} />
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={1.3} style={[styles.label, { fontFamily: selected ? fonts.bold : fonts.medium, color: selected ? n.blue : n.muted, writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{title}</Text>
         </Pressable>;
       })}
@@ -43,9 +42,9 @@ export function RaisedTabBar({ state, descriptors, navigation }: Props) {
 }
 const styles = StyleSheet.create({
   bar: { position: 'relative', zIndex: 100, paddingTop: 8, borderTopWidth: 1, borderTopColor: n.border },
-  row: { direction: 'ltr', gap: 4, alignItems: 'stretch' },
-  button: { flex: 1, minWidth: 0, minHeight: 60, paddingHorizontal: 3, paddingVertical: 7, gap: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  selected: { backgroundColor: n.soft },
+  row: { direction: 'ltr', gap: 6, alignItems: 'stretch' },
+  button: { flex: 1, minWidth: 0, minHeight: 68, paddingHorizontal: 3, paddingVertical: 7, gap: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: n.border, backgroundColor: '#FFFFFF' },
+  selected: { backgroundColor: n.soft, borderColor: n.blue },
   pressed: { backgroundColor: '#DFEAFA' },
-  label: { fontSize: 11, lineHeight: 17, textAlign: 'center', flexShrink: 1 },
+  label: { fontSize: 12, lineHeight: 18, textAlign: 'center', flexShrink: 1 },
 });
