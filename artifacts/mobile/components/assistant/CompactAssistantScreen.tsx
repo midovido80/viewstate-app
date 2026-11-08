@@ -11,6 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
+import { getCalendars } from 'expo-localization';
+import { FollowupTimePicker } from './FollowupTimePicker';
+import { followupTimeLabel, hasFollowupTime, type ClockFormat } from '@/services/followupTime';
 import { useI18n } from '@/contexts/I18nContext';
 import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
@@ -80,6 +83,8 @@ export default function CompactAssistantScreen() {
   const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7) + '-01');
   const calendarTarget = useRef<CalendarTarget>('page'), calendarBack = useRef<Mode>(null);
   const pickerBack = useRef<Mode>(null);
+  const [clockFormat, setClockFormat] = useState<ClockFormat>(() => getCalendars()[0]?.uses24hourClock === false ? 12 : 24);
+  const [pickerDay, setPickerDay] = useState(today), [pickerTime, setPickerTime] = useState('09:00'), [timeMoving, setTimeMoving] = useState(false);
   const [pickerQuery, setPickerQuery] = useState(''), [recordId, setRecordId] = useState('');
   const [preferences, setPreferences] = useState(h.state.settings);
   const editorCommitted = useRef(false);
@@ -91,7 +96,7 @@ export default function CompactAssistantScreen() {
   const displayTask = expected ? h.state.tasks.find(v => v.id === expected.id) ?? expected : null;
   const dateLabel = (day: string, options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' }) =>
     new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-ca-gregory-nu-latn' : 'en-GB', { ...options, timeZone: ASSISTANT_TIME_ZONE }).format(new Date(day + 'T12:00:00Z'));
-  const timeLabel = (time: string) => time ? new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW-u-nu-latn' : 'en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date('2026-01-01T' + time + ':00+03:00')) : C('allDay');
+  const timeLabel = (time: string) => time ? followupTimeLabel(time, clockFormat, language === 'ar') : C('allDay');
   const propertyTitle = (propertyId: string) => h.inventory.properties.find(p => p.id === propertyId)?.title ?? C('missingProperty');
   const personName = (task: Followup) => taskPersonName(task, h.inventory) || (task.personId ? C('missingPerson') : '');
   function chooseDay(day: string) { h.setSelectedDay(day); setOverdue(false); setQuery(''); }
@@ -116,11 +121,21 @@ export default function CompactAssistantScreen() {
   function openCalendar(target: CalendarTarget = 'page') {
     calendarTarget.current = target; calendarBack.current = mode;
     const day = target === 'editor' ? draft.date : target === 'reschedule' ? newDate : target === 'next' ? nextDate : h.selectedDay;
+    setPickerDay(day);
+    const time = target === 'editor' ? draft.time : target === 'reschedule' ? newTime : target === 'next' ? nextTime : '';
+    setPickerTime(hasFollowupTime(time) ? time : '09:00'); setTimeMoving(false);
     setCalendarMonth(day.slice(0, 7) + '-01'); setMode('calendar');
   }
   function pickDay(day: string) {
     if (calendarTarget.current === 'page') { chooseDay(day); setDraft(blankDraft(day)); setMode('actions'); }
-    else { if (calendarTarget.current === 'editor') setDraft(d => ({ ...d, date: day })); if (calendarTarget.current === 'reschedule') setNewDate(day); if (calendarTarget.current === 'next') setNextDate(day); setMode(calendarBack.current); }
+    else setPickerDay(day);
+  }
+  function confirmDateTime() {
+    if (timeMoving || !hasFollowupTime(pickerTime)) return;
+    if (calendarTarget.current === 'editor') setDraft(d => ({ ...d, date: pickerDay, time: pickerTime }));
+    if (calendarTarget.current === 'reschedule') { setNewDate(pickerDay); setNewTime(pickerTime); }
+    if (calendarTarget.current === 'next') { setNextDate(pickerDay); setNextTime(pickerTime); }
+    setFieldError(''); setFormError(''); setMode(calendarBack.current);
   }
   function openPicker(which: 'people' | 'properties') { pickerBack.current = mode; setPickerQuery(''); setMode(which); }
   async function pickRecord(which: 'people' | 'properties', targetId: string) {
@@ -132,7 +147,7 @@ export default function CompactAssistantScreen() {
     }
   }
   function validate(d: FollowupDraft, editingId?: string) {
-    try { validateDraft(d, h.state, h.inventory, editingId); setFieldError(''); setFormError(''); return true; }
+    try { if (!hasFollowupTime(d.time)) { setFieldError('time'); setFormError(language === 'ar' ? 'اختر التاريخ والساعة قبل الحفظ.' : 'Choose a date and time before saving.'); return false; } validateDraft(d, h.state, h.inventory, editingId); setFieldError(''); setFormError(''); return true; }
     catch (e) { setFieldError(e instanceof Error ? e.message : ''); setFormError(h.explain(e)); return false; }
   }
   async function saveEditor() {
@@ -177,12 +192,9 @@ export default function CompactAssistantScreen() {
     <View style={s.grow}><Action label={h.busy ? C('saveBusy') : C(save)} onPress={onPress} tone="primary" disabled={h.busy || !h.ready} /></View>
     <Action label={C('back')} onPress={close} tone="quiet" disabled={h.busy} />
   </>;
-  function DateControl({ value, target, label }: { value: string; target: CalendarTarget; label?: string }) {
-    return <View style={s.field}><Txt bold>{label ?? C('date')}</Txt><Action icon="calendar" label={dateLabel(value)} onPress={() => openCalendar(target)} tone="quiet" /></View>;
-  }
-  function renderTimeControl({ value, onChange, required = false }: { value: string; onChange: (s: string) => void; required?: boolean }) {
-    return <AssistantField label={C('time') + (required ? '' : ' · ' + C('optional'))} value={value} onChangeText={onChange} placeholder="09:30" maxLength={5}
-      keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'} autoCorrect={false} autoCapitalize="none" error={fieldError === 'time' || fieldError === 'conflict' ? formError : undefined} style={{ textAlign: 'left', writingDirection: 'ltr' }} />;
+  function DateControl({ value, target }: { value: string; target: CalendarTarget }) {
+    const time = target === 'editor' ? draft.time : target === 'reschedule' ? newTime : nextTime;
+    return <View style={s.field}><Txt bold>{language === 'ar' ? 'التاريخ والساعة' : 'Date & time'}</Txt><Action icon="calendar" label={dateLabel(value) + ' · ' + followupTimeLabel(time, clockFormat, language === 'ar')} onPress={() => openCalendar(target)} tone="quiet" />{fieldError === 'time' || fieldError === 'conflict' ? <Txt color={c.red}>{formError}</Txt> : null}</View>;
   }
   useEffect(() => {
     if (!params.quickAction || !h.ready) return;
@@ -217,7 +229,6 @@ export default function CompactAssistantScreen() {
       <View style={s.field}><Txt bold>{C('person')}</Txt><Action label={h.inventory.people.find(p => p.id === draft.personId)?.name ?? C('pickPerson')} onPress={() => openPicker('people')} tone="quiet" /></View>
       {!draft.personId && <><AssistantField label={C('contactName') + ' · ' + C('optional')} value={draft.personName} onChangeText={personName => setDraft(d => ({ ...d, personName }))} maxLength={100} /><Txt muted size={12}>{C('customNameHint')}</Txt></>}
       <View style={s.field}><Txt bold>{C('property')}</Txt><Action label={draft.propertyId ? propertyTitle(draft.propertyId) : C('pickProperty')} onPress={() => openPicker('properties')} tone="quiet" /></View>
-      {renderTimeControl({ value: draft.time, onChange: time => setDraft(d => ({ ...d, time })), required: draft.kind === 'viewing' })}<Txt muted size={12}>{C(draft.kind === 'viewing' ? 'viewingRequiresTime' : 'allDayHint')}</Txt><Txt muted size={12}>{C('timeHint')}</Txt>
       {draft.kind === 'viewing' && <><Txt bold>{C('duration')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{[30, 45, 60, 90, 120].map(duration => <Pressable key={duration} accessibilityRole="button" accessibilityState={{ selected: draft.duration === duration }} onPress={() => setDraft(d => ({ ...d, duration }))} style={[s.choice, duration === draft.duration && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{duration + ' ' + C('minute')}</Txt></Pressable>)}</View></>}
       <AssistantField label={C('notes') + ' · ' + C('optional')} value={draft.notes} onChangeText={notes => setDraft(d => ({ ...d, notes }))} multiline maxLength={2000} placeholder={C('notesPlaceholder')} />
       {draft.kind === 'available' && <Txt muted>{C('propertyNote')}</Txt>}
@@ -226,10 +237,10 @@ export default function CompactAssistantScreen() {
     modalTitle = C('recordOutcome'); modalBody = <><View style={s.noteBox}><Txt bold>{expected.title}</Txt></View><Txt bold>{C('outcome')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{OUTCOMES[expected.kind].map(value => <Pressable accessibilityRole="button" accessibilityState={{ selected: outcome === value }} key={value} onPress={() => setOutcome(value)} style={[s.choice, value === outcome && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{C(value)}</Txt></Pressable>)}</View>
       <AssistantField label={C('notes') + ' · ' + C('optional')} value={outcomeNotes} onChangeText={setOutcomeNotes} multiline maxLength={2000} />{expected.kind === 'available' && <Txt muted>{C('propertyNote')}</Txt>}
       <View style={[s.toggle, { flexDirection: row }]}><View style={s.grow}><Txt>{C('newFollowup')}</Txt></View><Switch accessibilityLabel={C('newFollowup')} value={nextEnabled} onValueChange={setNextEnabled} /></View>
-      {nextEnabled && <><DateControl value={nextDate} target="next" label={C('nextDate')} />{renderTimeControl({ value: nextTime, onChange: setNextTime })}<AssistantField label={C('nextStep')} value={nextTitle} onChangeText={setNextTitle} maxLength={140} /></>}
+      {nextEnabled && <><DateControl value={nextDate} target="next" /><AssistantField label={C('nextStep')} value={nextTitle} onChangeText={setNextTitle} maxLength={140} /></>}
     </>; modalFooter = <Footer save="saveOutcome" onPress={() => void saveOutcome()} />;
   } else if (mode === 'reschedule' && expected) {
-    modalTitle = C('reschedule'); modalBody = <><Txt bold>{expected.title}</Txt><DateControl value={newDate} target="reschedule" />{renderTimeControl({ value: newTime, onChange: setNewTime, required: expected?.kind === 'viewing' })}<Txt muted>{C('timeHint')}</Txt></>;
+    modalTitle = C('reschedule'); modalBody = <><Txt bold>{expected.title}</Txt><DateControl value={newDate} target="reschedule" /></>;
     modalFooter = <Footer save="saveNewDate" onPress={() => void saveReschedule()} />;
   } else if (mode === 'detail' && displayTask) {
     const task = displayTask;
@@ -242,13 +253,14 @@ export default function CompactAssistantScreen() {
       <Txt bold>{C('history')}</Txt>{task.history.length ? [...task.history].reverse().map((entry, i) => <View key={entry.at + i} style={s.noteBox}><Txt bold>{C(entry.outcome)}</Txt><Txt muted size={12}>{dateLabel(kuwaitDay(new Date(entry.at)))}</Txt>{!!entry.notes && <Txt>{entry.notes}</Txt>}</View>) : <Txt muted>{C('noHistory')}</Txt>}
     </>; if (task.status === 'pending') modalFooter = <><View style={s.grow}><Action label={C('recordOutcome')} tone="primary" onPress={() => openOutcome(task)} /></View><Action label={C('reschedule')} onPress={() => openReschedule(task)} tone="quiet" /></>;
   } else if (mode === 'calendar') {
-    modalTitle = C('chooseDate'); const selected = calendarTarget.current === 'editor' ? draft.date : calendarTarget.current === 'reschedule' ? newDate : calendarTarget.current === 'next' ? nextDate : h.selectedDay;
+    const dateTime = calendarTarget.current !== 'page';
+    modalTitle = dateTime ? language === 'ar' ? 'التاريخ والساعة' : 'Date & time' : C('chooseDate'); const selected = dateTime ? pickerDay : h.selectedDay;
     modalBody = <><View style={[s.row, { flexDirection: row, justifyContent: 'space-between' }]}><IconButton label={C('previousMonth')} name={isRTL ? 'chevron-right' : 'chevron-left'} onPress={() => setCalendarMonth(d => shiftMonth(d, -1))} /><Txt bold size={18}>{dateLabel(calendarMonth, { month: 'long', year: 'numeric' })}</Txt><IconButton label={C('nextMonth')} name={isRTL ? 'chevron-left' : 'chevron-right'} onPress={() => setCalendarMonth(d => shiftMonth(d, 1))} /></View>
       <View style={[s.dayGrid, { flexDirection: row }]}>{Array.from({ length: 7 }, (_, i) => <View key={i} style={s.dayCell}><Txt muted size={12}>{dateLabel(addDays('2026-10-25', i), { weekday: 'short' })}</Txt></View>)}{monthGrid(calendarMonth).map(day => {
         const count = h.state.tasks.filter(v => v.date === day && v.status === 'pending').length;
         return <Pressable key={day} accessibilityRole="button" accessibilityLabel={dateLabel(day)} accessibilityState={{ selected: selected === day }} style={[s.dayCell, day === selected && { backgroundColor: c.blue }, day === today && { borderWidth: 1, borderColor: c.blue }]} onPress={() => pickDay(day)}><Txt color={day === selected ? '#FFFFFF' : day.slice(0, 7) !== calendarMonth.slice(0, 7) ? c.muted : c.ink}>{Number(day.slice(-2))}</Txt>{count ? <CountBadge count={count} /> : null}</Pressable>;
-      })}</View><Txt muted size={12}>{C('noteDate')}</Txt></>;
-    modalFooter = <><View style={s.grow}><Action label={C('today')} onPress={() => pickDay(today)} tone="primary" /></View><Action label={C('back')} onPress={() => setMode(calendarBack.current)} tone="quiet" /></>;
+      })}</View>{dateTime ? <FollowupTimePicker value={pickerTime} onChange={setPickerTime} format={clockFormat} onFormatChange={setClockFormat} onBusy={setTimeMoving} /> : <Txt muted size={12}>{C('noteDate')}</Txt>}</>;
+    modalFooter = <><View style={s.grow}><Action label={dateTime ? language === 'ar' ? 'تأكيد الموعد' : 'Confirm date & time' : C('today')} disabled={dateTime && timeMoving} onPress={dateTime ? confirmDateTime : () => pickDay(today)} tone="primary" /></View><Action label={C('back')} onPress={() => setMode(calendarBack.current)} tone="quiet" /></>;
   } else if (mode === 'people' || mode === 'properties') {
     const which = mode, list = which === 'people' ? h.inventory.people.map(p => ({ id: p.id, name: p.name })) : h.inventory.properties.map(p => ({ id: p.id, name: p.title }));
     const found = list.filter(p => p.name.toLocaleLowerCase().includes(pickerQuery.trim().toLocaleLowerCase()));
