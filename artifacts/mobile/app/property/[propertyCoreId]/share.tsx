@@ -1,10 +1,11 @@
 import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { accountShareSignature } from '@/services/accountOnboarding';
+import { propertyMessageStyle, propertyMessageFooter, propertyMessageDetailValue, isPropertyDownloadUrl } from '@/services/propertyShareMessage';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import { viewStateTextCard } from '@/services/matchNoticePresentation';
-import { Action, AssistantSheet, AssistantText } from '@/components/assistant/ui';
+import { Action, AssistantField, AssistantSheet, AssistantText } from '@/components/assistant/ui';
 import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
@@ -13,7 +14,7 @@ import { Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
-import { PROPERTY_SHARE_NORMAL_FIELDS, Property, PropertyShareSelection, buildPropertySharePreview, createPropertyShareSelection } from '@workspace/property-domain';
+import { PROPERTY_SHARE_NORMAL_FIELDS, getPropertyShareDetails, PropertyDetailField, Property, PropertyShareSelection, buildPropertySharePreview, createPropertyShareSelection } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { propertyDetailLabels } from '@/components/PropertyEnrichmentFields';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -25,7 +26,7 @@ import {
   sharePropertyPreview,
 } from '@/services/propertySharing';
 import { createPropertyPackageShareAdapter } from '@/services/propertySharePackage';
-import { Person } from '@/services/people';
+import { Person, personMatchesSearch } from '@/services/people';
 import { formatPrice, formatRentalCadence, toEnglishDigits } from '@/constants/market';
 import { openAndroidPropertyShareCompose } from '@/services/propertyShareIntent';
 
@@ -89,16 +90,21 @@ export default function PropertyShareScreen() {
   const { store, media: { access } } = useUserData();
   const account = useRealAccount(), guest = useGuestAccount();
   const signature = (include: boolean) => account ? accountShareSignature(account.profile, include, language) : include && guest ? '\n\n' + [language === 'ar' ? 'للتواصل' : 'Contact', guest.identity.name, guest.identity.phone].filter(Boolean).join('\n') : '';
-  const [includeMyDetails, setIncludeMyDetails] = useState(false);
+  const [includeMyDetails, setIncludeMyDetails] = useState(true);
+  const [excludedDetails, setExcludedDetails] = useState<PropertyDetailField[]>([]);
+  const [recipientPicker, setRecipientPicker] = useState(false);
+  const [recipientQuery, setRecipientQuery] = useState('');
+  const [recipientOptions, setRecipientOptions] = useState<Person[]>([]);
+  const [recipientError, setRecipientError] = useState(false);
   const params = useLocalSearchParams<{ propertyCoreId?: string | string[]; matchNoticeId?: string; recipientId?: string }>();
   const rawId = params.propertyCoreId;
   const recipientId = typeof params.recipientId === 'string' ? params.recipientId : undefined;
   const noticeId = typeof params.matchNoticeId === 'string' ? params.matchNoticeId : undefined;
   const notifications = useMatchNotifications(), notificationsRef = useRef(notifications); notificationsRef.current = notifications;
-  const [recipient, setRecipient] = useState<{ id: string; name: string } | null>(null);
+  const [recipient, setRecipient] = useState<Person | null>(null);
   const [matchReady, setMatchReady] = useState(!noticeId && !recipientId);
   const [followupPrompt, setFollowupPrompt] = useState(false);
-  const [shareFormat, setShareFormat] = useState<'viewstate' | 'message'>(noticeId || recipientId ? 'viewstate' : 'message');
+  const [shareFormat, setShareFormat] = useState<'viewstate' | 'message'>('message');
   const shareFlight = useRef(false);
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const router = useRouter(); const colors = useColors(); const insets = useScreenInsets(); const { t, language, fonts, isRTL } = useI18n();
@@ -109,22 +115,32 @@ export default function PropertyShareScreen() {
   const [sharing, setSharing] = useState(false);
   const shareT = (key: string) => t(key as any);
   useEffect(() => {
-    let active = true; setMatchReady(!noticeId && !recipientId); setRecipient(null);
+    let active = true; setMatchReady(!noticeId && !recipientId); setRecipient(null); setRecipientPicker(false); setRecipientOptions([]);
     if (noticeId) void notificationsRef.current.resolve(noticeId).then(({ match }) => {
       if (!active) return;
       if (match.result.propertyId !== id) throw new Error('MATCH_PROPERTY_MISMATCH');
-      setRecipient({ id: match.person.id, name: match.person.name }); setMatchReady(true);
+      setRecipient(match.person); setMatchReady(true);
     }).catch(() => { if (active) setError(language === 'ar' ? 'تعذر تأكيد المطابقة؛ ارجع للإشعارات وحدّثها.' : 'Match could not be confirmed. Return to Notifications and refresh.'); });
     if (!noticeId && recipientId) void store.getPeople().then(people => {
       if (!active) return;
       const person = people.find(person => person.id === recipientId);
       if (!person) throw Error('RECIPIENT_UNAVAILABLE');
-      setRecipient({ id: person.id, name: person.name }); setMatchReady(true);
+      setRecipient(person); setMatchReady(true);
     }).catch(() => { if (active) setError(language === 'ar' ? 'تعذر تحميل العميل. ارجع للمطابقة وأعد المحاولة.' : 'The client could not load. Return to Matching and retry.'); });
     return () => { active = false; };
   }, [id, noticeId, recipientId, language, store]);
 
-  useEffect(() => { if (id) store.getProperty(id).then(value => { if (!value) throw new Error('missing'); setProperty(value); setSelection(createPropertyShareSelection(value)); }).catch(() => setError(t('edit.not_found'))); }, [id, t]);
+  useEffect(() => {
+    let active = true;
+    if (id) void store.getProperty(id).then(value => {
+      if (!active) return;
+      if (!value) throw new Error('missing');
+      setProperty(value);
+      setSelection(createPropertyShareSelection(value));
+      setExcludedDetails([]);
+    }).catch(() => { if (active) setError(t('edit.not_found')); });
+    return () => { active = false; };
+  }, [id, store, t]);
   useEffect(() => {
     if (!property) return;
     void Promise.all([
@@ -142,6 +158,8 @@ export default function PropertyShareScreen() {
     if (!property || !selection) return { preview: null, failed: false };
     try {
       const area = getAreaById(property.core.locationArea.id);
+      const areaName = area?.[language] ?? property.core.locationArea.id;
+      const typeName = t(`propertyType.${property.core.propertyType}` as any);
       const builtPreview = buildPropertySharePreview({
         property, selection,
         availableAttachments: (property.attachments ?? []).map(item => ({ id: item.id, propertyCoreId: property.core.id })),
@@ -149,7 +167,10 @@ export default function PropertyShareScreen() {
         contacts: contacts.filter(person => !!person.displayPhone).map(person => ({ id: person.id, name: person.name, phone: toEnglishDigits(person.displayPhone) })),
         labels: { propertyType: t('detail.type'), transaction: t('detail.transaction'), price: t('detail.price'), area: t('detail.area'), typeDetails: shareT('share.property_details'), description: t('enrich.description'), ownerSource: shareT('share.owner_source'), exactLocation: shareT('share.exact_location'), paci: t('enrich.paci'), mapsLink: t('enrich.maps_link'), personContact: shareT('share.contact') },
         detailLabels: Object.fromEntries(Object.entries(propertyDetailLabels).map(([field, labels]) => [field, labels[language === 'ar' ? 1 : 0]])),
-        formattedDetailValues: Object.fromEntries(Object.entries(property.typeDetails ?? {}).filter(([field]) => field in propertyDetailLabels).map(([field, value]) => [field, formatPropertyDetailValue(field as keyof typeof propertyDetailLabels, value, language)])),
+        formattedDetailValues: Object.fromEntries(getPropertyShareDetails(property).map(({ field, value }) => {
+          const formatted = formatPropertyDetailValue(field, value, language);
+          return [field, shareFormat === 'message' ? propertyMessageDetailValue(field, formatted, language) : formatted];
+        })),
         detailValueLabels: {
           true: t('enrich.yes'),
           false: t('enrich.no'),
@@ -175,16 +196,29 @@ export default function PropertyShareScreen() {
         rentalCadence: property.activeOffer.transaction === 'rent'
           ? formatRentalCadence(property.activeOffer.rentalPeriodId, t as (key: string) => string)
           : t('price.cadence.monthly'),
-        attribution: shareT('share.attribution'),
+        attribution: shareFormat === 'viewstate' ? shareT('share.attribution') : '',
+        messageStyle: shareFormat === 'message'
+          ? propertyMessageStyle(property, selection, language, typeName, areaName, excludedDetails)
+          : undefined,
       });
+      const sender = includeMyDetails ? account?.profile ?? guest?.identity : undefined;
+      const body = toEnglishDigits(builtPreview.text);
+      const text = shareFormat === 'viewstate'
+        ? viewStateTextCard(toEnglishDigits(builtPreview.text + signature(includeMyDetails)), language)
+        : body ? body + propertyMessageFooter(
+          language,
+          sender && { name: 'display_name' in sender ? sender.display_name : sender.name, phone: sender.phone ? toEnglishDigits(sender.phone) : undefined },
+          recipient?.classifications.includes('broker') ?? false,
+          process.env.EXPO_PUBLIC_VIEWSTATE_DOWNLOAD_URL,
+        ) : '';
       return {
-        preview: { ...builtPreview, text: shareFormat === 'viewstate' ? viewStateTextCard(toEnglishDigits(builtPreview.text + signature(includeMyDetails)), language) : toEnglishDigits(builtPreview.text + signature(includeMyDetails)) },
+        preview: { ...builtPreview, text },
         failed: false,
       };
     } catch {
       return { preview: null, failed: true };
     }
-  }, [property, selection, t, language, contacts, shareFormat, account?.profile, guest?.identity, includeMyDetails]);
+  }, [property, selection, t, language, contacts, shareFormat, account?.profile, guest?.identity, includeMyDetails, recipient, excludedDetails]);
   const preview = previewResult.preview;
   const fileAdapter = useMemo(() => {
     if (!property || !selection) return undefined;
@@ -208,6 +242,14 @@ export default function PropertyShareScreen() {
     );
   }, [property, selection, t, account, access]);
   if (!property || !selection) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.foreground }}>{error || t('edit.loading')}</Text></View>;
+  const shareDetails = getPropertyShareDetails(property);
+  const openRecipientPicker = () => {
+    setRecipientQuery('');
+    setRecipientError(false);
+    setRecipientOptions([]);
+    setRecipientPicker(true);
+    void store.getPeople().then(setRecipientOptions).catch(() => setRecipientError(true));
+  };
   const selectedAttachments = (property.attachments ?? []).filter(item => selection.attachmentIds.includes(item.id));
   const hasShareableContent = !!preview && (preview.text.length > 0 || preview.attachmentIds.length > 0);
   const runShare = async () => {
@@ -249,7 +291,16 @@ export default function PropertyShareScreen() {
   return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
     <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}><TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('capture.back')} testID="share-back" style={navigationButtonStyle}><Text style={[navigationButtonTextStyle, { fontFamily: fonts.semiBold }]}>{t('capture.back')}</Text></TouchableOpacity><Text accessibilityRole="header" style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>{t('detail.share')}</Text><View /></View>
     <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-      {recipient && <Text style={{ color: '#173F78', fontFamily: fonts.semiBold }}>{language === 'ar' ? `مشاركة مقترح للعميل: ${recipient.name}` : `Share a suggestion for: ${recipient.name}`}</Text>}
+      {!noticeId && !recipientId ? <Action
+        label={recipient ? recipient.name : language === 'ar' ? 'اختيار مستلم' : 'Choose recipient'}
+        icon="user" onPress={openRecipientPicker} disabled={sharing} testID="share-recipient" />
+        : recipient ? <AssistantText bold>{recipient.name}</AssistantText> : null}
+      {recipient ? <AssistantText muted>{language === 'ar'
+        ? 'اختار نفس المستلم عند فتح تطبيق المشاركة.'
+        : 'Choose the same recipient in the sharing app.'}</AssistantText> : null}
+      {recipient?.classifications.includes('broker') && shareFormat === 'message'
+        && !isPropertyDownloadUrl(process.env.EXPO_PUBLIC_VIEWSTATE_DOWNLOAD_URL)
+        ? <AssistantText muted>{language === 'ar' ? 'رابط تحميل ViewState غير متاح حاليًا.' : 'The ViewState download link is currently unavailable.'}</AssistantText> : null}
       <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 16, gap: 8 }}>
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.preview')}</Text>
       <Text selectable testID="share-preview" style={[styles.preview, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]}>{preview?.text || (previewResult.failed ? t('share.preview_unavailable') : t('share.select_content'))}</Text>
@@ -268,6 +319,13 @@ export default function PropertyShareScreen() {
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.normal_fields')}</Text>
       {account || guest ? <CheckRow disabled={sharing} checked={includeMyDetails} title={language === 'ar' ? 'إظهار بيانات التواصل الخاصة بي' : 'Include my contact details'} subtitle={account ? account.profile.display_name + ' • ' + account.profile.phone : guest?.identity.name} onPress={() => setIncludeMyDetails(v => !v)} testID="share-my-contact" isRTL={isRTL} colors={colors} fonts={fonts} /> : null}
       {PROPERTY_SHARE_NORMAL_FIELDS.map(field => <CheckRow disabled={sharing} key={field} checked={selection.normalFields.includes(field)} title={normalLabel(field)} onPress={() => toggleNormal(field)} testID={`share-normal-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />)}
+      {shareFormat === 'message' && selection.normalFields.includes('type_details') && shareDetails.map(({ field }) => (
+        <CheckRow disabled={sharing} key={field} checked={!excludedDetails.includes(field)}
+          title={propertyDetailLabels[field]?.[language === 'ar' ? 1 : 0] ?? field}
+          onPress={() => setExcludedDetails(current => current.includes(field)
+            ? current.filter(item => item !== field) : [...current, field])}
+          testID={`share-detail-${field}`} isRTL={isRTL} colors={colors} fonts={fonts} />
+      ))}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.attachments')}</Text>
       {(property.attachments ?? []).map(item => <CheckRow disabled={sharing} key={item.id} checked={selection.attachmentIds.includes(item.id)} title={toEnglishDigits(item.originalName)} onPress={() => toggleAttachment(item.id)} testID={`share-attachment-${item.id}`} isRTL={isRTL} colors={colors} fonts={fonts} forceLTR />)}
       <Text style={[styles.heading, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('share.sensitive')}</Text>
@@ -282,6 +340,20 @@ export default function PropertyShareScreen() {
     <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 16), borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background }}>
         <Button title={Platform.OS === 'android' ? shareT('share.system_share') : t('share.send')} testID="share-send" disabled={!hasShareableContent || sharing || !matchReady} loading={sharing} onPress={() => void runShare()} />
     </View>
+    {recipientPicker && <AssistantSheet title={language === 'ar' ? 'اختيار مستلم' : 'Choose recipient'} onClose={() => setRecipientPicker(false)}>
+      <AssistantField label={language === 'ar' ? 'البحث بالاسم أو الرقم' : 'Search by name or number'}
+        value={recipientQuery} onChangeText={setRecipientQuery} />
+      <Action label={language === 'ar' ? 'بدون مستلم محدد' : 'No selected recipient'} onPress={() => {
+        setRecipient(null); setRecipientPicker(false);
+      }} />
+      {recipientError ? <AssistantText>{language === 'ar' ? 'تعذر تحميل الأشخاص.' : 'Could not load people.'}</AssistantText> : null}
+      {recipientOptions.filter(person => personMatchesSearch(person, recipientQuery)).map(person => (
+        <Action key={person.id} label={`${person.name} · ${person.displayPhone}${person.classifications.includes('broker')
+          ? language === 'ar' ? ' · وسيط عقاري' : ' · Broker' : ''}`} onPress={() => {
+          setRecipient(person); setRecipientPicker(false);
+        }} />
+      ))}
+    </AssistantSheet>}
     {followupPrompt && <AssistantSheet title={language === 'ar' ? 'هل أرسلت العقار للعميل؟' : 'Did you send the property to the client?'} onClose={() => setFollowupPrompt(false)}>
       <AssistantText>{language === 'ar' ? 'فتح المشاركة لا يؤكد الإرسال. إذا أرسلته، يمكنك إضافة متابعة مرتبطة بالعميل والعقار.' : 'Opening sharing does not confirm delivery. If you sent it, add a follow-up linked to this client and property.'}</AssistantText>
       <Action label={language === 'ar' ? 'أرسلت — إضافة متابعة' : 'Sent — add follow-up'} icon="calendar" tone="primary" onPress={() => {

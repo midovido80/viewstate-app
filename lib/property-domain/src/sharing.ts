@@ -80,6 +80,13 @@ export interface PropertyShareRequest {
   readonly rentalCadence: string;
   /** Localized product attribution, supplied by the presentation layer. */
   readonly attribution: string;
+  readonly messageStyle?: {
+    readonly title: string;
+    readonly priceLabel: string;
+    readonly detailIcons: Partial<Record<PropertyDetailField, string>>;
+    readonly excludedDetails: readonly PropertyDetailField[];
+    readonly detailOrder: readonly PropertyDetailField[];
+  };
 }
 
 export interface PropertySharePreview {
@@ -192,6 +199,17 @@ function requireDisclosure(
   return value;
 }
 
+/** The same applicable facts power both the selection controls and the share text. */
+export function getPropertyShareDetails(property: Property) {
+  const details = projectPropertyProfileDetails(
+    property.core.propertyType, property.activeOffer.transaction,
+    (property.typeDetails ?? {}) as unknown as Record<string, unknown>,
+  );
+  return PROPERTY_DETAIL_FIELD_DEFINITIONS.flatMap(({ field }) =>
+    details[field] === undefined ? [] : [{ field, value: details[field] }],
+  );
+}
+
 /**
  * Canonical privacy boundary for Property sharing. It accepts one Property,
  * validates it, and constructs both the exact preview text and file ID list.
@@ -269,40 +287,51 @@ export function buildPropertySharePreview(
 
   const localizedNormalValue = (value: string) =>
     request.normalValueLabels?.[value] ?? value;
-  if (fields.has("property_type")) {
+  const messageStyle = request.messageStyle;
+  const title = fields.has('property_type') && fields.has('transaction') ? messageStyle?.title : undefined;
+  if (title) lines.push(title, "");
+  if (!title && fields.has("property_type")) {
     add(labels.propertyType, localizedNormalValue(property.core.propertyType), "🏠");
   }
-  if (fields.has("transaction")) {
+  if (!title && fields.has("transaction")) {
     add(labels.transaction, localizedNormalValue(property.activeOffer.transaction), "↔");
   }
-  if (fields.has("price")) {
+  const addPrice = () => {
+    if (!fields.has("price")) return;
     const price = property.activeOffer.transaction === "sale"
       ? property.activeOffer.salePrice
       : property.activeOffer.rentalPrice;
     const renderedPrice = request.formattedPrice ?? `${price.amount} ${price.currencyCode}`;
     add(
-      labels.price,
+      messageStyle?.priceLabel ?? labels.price,
       property.activeOffer.transaction === "rent"
         ? `${renderedPrice} ${request.rentalCadence}`
         : renderedPrice,
       "💰",
     );
-  }
+  };
+  if (!messageStyle) addPrice();
   if (fields.has("area")) {
     add(labels.area, localizedNormalValue(property.core.locationArea.id), "📍");
   }
   if (fields.has("type_details") && property.typeDetails !== undefined) {
-    const details = projectPropertyProfileDetails(property.core.propertyType, property.activeOffer.transaction, property.typeDetails as unknown as Record<string, unknown>);
-    for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
-      const value = details[definition.field];
-      if (value === undefined) continue;
-      const literalValue = request.formattedDetailValues?.[definition.field] ?? (typeof value === "object" && value !== null && "value" in value
+    const excluded = new Set(messageStyle?.excludedDetails);
+    const details = getPropertyShareDetails(property);
+    if (messageStyle) {
+      const order = new Map(messageStyle.detailOrder.map((field, index) => [field, index]));
+      details.sort((a, b) => (order.get(a.field) ?? order.size) - (order.get(b.field) ?? order.size));
+    }
+    for (const { field, value } of details) {
+      if (excluded.has(field)) continue;
+      const literalValue = request.formattedDetailValues?.[field] ?? (typeof value === "object" && value !== null && "value" in value
         ? String((value as { value: unknown }).value)
         : request.detailValueLabels?.[String(value)]
           ?? (typeof value === "boolean" ? value ? "Yes" : "No" : String(value)));
-       add(request.detailLabels?.[definition.field] ?? `${labels.typeDetails} · ${definition.field}`, literalValue, "▫");
+      add(request.detailLabels?.[field] ?? `${labels.typeDetails} · ${field}`, literalValue,
+        messageStyle ? messageStyle.detailIcons[field] ?? "🔹" : "▫");
     }
   }
+  if (messageStyle) addPrice();
   if (fields.has("description")) add(labels.description, property.core.description?.value, "📝");
 
   add(
@@ -363,7 +392,7 @@ export function buildPropertySharePreview(
   }
 
   return {
-    text: lines.join("\n"),
+    text: messageStyle ? lines.join("\n").trimEnd() : lines.join("\n"),
     attachmentIds: [...selection.attachmentIds],
   };
 }
