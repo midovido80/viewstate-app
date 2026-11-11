@@ -505,17 +505,7 @@ function RequirementForm() {
         candidate: result.value,
         baseline,
         store,
-        navigate: () => isCurrentRoute()
-          ? result.value.seekerId
-            ? router.replace({ pathname: '/person/[personId]', params: { personId: result.value.seekerId, requirementSaved: '1', requirementSavedId: result.value.id } } as never)
-            : router.replace({
-              pathname: '/requirement/view/[requirementId]',
-              params: {
-                requirementId: result.value.id,
-                ...(!editing ? { postSave: '1' } : {}),
-              },
-            } as never)
-          : undefined,
+        navigate: () => exitSavedRequirement(result.value, isCurrentRoute),
       });
       if (isCurrentRoute()) {
         applySaveOutcome(outcome, result.value);
@@ -528,10 +518,30 @@ function RequirementForm() {
     }
   };
 
-  const personDetailsNavigation = (requirement: SeekerRequirement) =>
+  const personDetailsNavigation = (requirement: SeekerRequirement, showSaved = false) =>
     requirement.seekerId
-      ? router.replace({ pathname: '/person/[personId]', params: { personId: requirement.seekerId } } as never)
-      : router.replace({ pathname: '/requirement/view/[requirementId]', params: { requirementId: requirement.id } } as never);
+      ? router.replace({ pathname: '/person/[personId]', params: {
+        personId: requirement.seekerId,
+        ...(showSaved ? { requirementSaved: '1', requirementSavedId: requirement.id } : {}),
+      } } as never)
+      : router.replace({ pathname: '/requirement/view/[requirementId]', params: {
+        requirementId: requirement.id,
+        ...(showSaved && !editing ? { postSave: '1' } : {}),
+      } } as never);
+  const exitSavedRequirement = (requirement: SeekerRequirement, isCurrentRoute: () => boolean) => {
+    if (!isCurrentRoute()) return;
+    // The write has been verified. Replacement must bypass the Back step.
+    confirmedRequirement.current = requirement;
+    formExit(() => {
+      if (!isCurrentRoute()) return;
+      try {
+        personDetailsNavigation(requirement, true);
+      } catch {
+        setRecoveryAction('navigation');
+        setError(localizedRequirementIssue({ code: 'save_navigation_failed' }, language));
+      }
+    });
+  };
   const applySaveOutcome = (
     outcome: Awaited<ReturnType<typeof savePersonRequirement>>,
     requirement: SeekerRequirement,
@@ -583,7 +593,7 @@ function RequirementForm() {
     const isCurrentRoute = () => routeGeneration.current.isCurrent(generation);
     setSaving(true);
     try {
-      const navigate = () => isCurrentRoute() ? personDetailsNavigation(target) : undefined;
+      const navigate = () => exitSavedRequirement(target, isCurrentRoute);
       if (recoveryAction === 'navigation') {
         const outcome = await retryRequirementNavigation(navigate);
         if (isCurrentRoute()) applySaveOutcome(outcome, target);
