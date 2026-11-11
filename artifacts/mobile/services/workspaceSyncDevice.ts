@@ -25,7 +25,7 @@ import {
 import type { UserResources } from "@/contexts/UserDataContext";
 import type { createGoogleAccountDevice } from "./googleAccountDevice";
 type Device = Awaited<ReturnType<typeof createGoogleAccountDevice>>;
-export function createWorkspaceSyncDevice(
+export function createWorkspaceAccountRequest(
   resources: UserResources,
   device: Device,
 ) {
@@ -33,7 +33,7 @@ export function createWorkspaceSyncDevice(
     assert = resources.scope.assertActive;
   if (resources.scope.kind !== "google")
     throw new Error("SYNC_GOOGLE_ACCOUNT_REQUIRED");
-  const request = createAccountCloudRequest(
+  return createAccountCloudRequest(
     device.configuration,
     async () => {
       const { data, error } = await device.client.auth.getSession();
@@ -50,6 +50,11 @@ export function createWorkspaceSyncDevice(
     },
     assert,
   );
+}
+export function createWorkspaceSyncDevice(resources: UserResources, device: Device) {
+  const access = resources.syncAccess;
+  const assert = resources.scope.assertActive;
+  const request = createWorkspaceAccountRequest(resources, device);
   const blobs =
     Platform.OS === "web"
       ? createIndexedDbWebAttachmentBlobStore(resources.mediaDatabaseName)

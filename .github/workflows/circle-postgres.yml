@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/*circle*'
+      - 'supabase/functions/circle-match-worker/**'
       - 'tests/circle-postgres/**'
       - 'artifacts/mobile/services/circleMatchingSource.ts'
       - '.github/workflows/circle-postgres.yml'
