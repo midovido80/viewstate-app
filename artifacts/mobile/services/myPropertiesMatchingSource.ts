@@ -62,6 +62,10 @@ export function normalizeMyPropertyCandidate(
   const offer = source.activeOffer;
   return {
     property: {
+      // Lifecycle is matching evidence, not private disclosure. Omitting it
+      // makes unavailable records appear active to the shared domain engine.
+      ...(source.marketingStatus === undefined ? {} : { marketingStatus: source.marketingStatus }),
+      ...(source.rentalAvailability === undefined ? {} : { rentalAvailability: source.rentalAvailability }),
       core: {
         id: source.core.id,
         propertyType: source.core.propertyType,
