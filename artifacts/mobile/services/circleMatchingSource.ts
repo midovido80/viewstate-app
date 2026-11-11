@@ -20,19 +20,18 @@ export class CircleMatchingSource {
     const rows = await this.load();
     if (!Array.isArray(rows)) throw new Error('CIRCLE_CATALOG_INVALID');
     const seen = new Set<string>();
-    return rows.map(row => {
+    return rows.flatMap(row => {
       if (!row || !uuid.test(row.id) || !uuid.test(row.publisher_id) || !row.source_key
         || !Number.isSafeInteger(row.revision) || row.revision < 1 || seen.has(row.id)) throw new Error('CIRCLE_CATALOG_INVALID');
       seen.add(row.id);
       const normalized = normalizeMyPropertyCandidate(row.facts);
-      if (!normalized || normalized.property.core.id !== row.source_key) throw new Error('CIRCLE_PROPERTY_INVALID');
+      if (!normalized || normalized.property.core.id !== row.source_key) return [];
       // Equal local IDs in separate accounts are distinct publications, not duplicate units.
       const property = { ...normalized.property,
         core: { ...normalized.property.core, id: row.id },
         activeOffer: { ...normalized.property.activeOffer, id: `${row.id}-offer`, propertyCoreId: row.id },
       };
-      if (!validateProperty(property).ok) throw new Error('CIRCLE_PROPERTY_INVALID');
-      return { property };
+      return validateProperty(property).ok ? [{ property }] : [];
     });
   }
 }
