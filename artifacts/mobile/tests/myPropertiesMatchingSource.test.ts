@@ -175,3 +175,49 @@ test('Explicit legacy Apartment category agrees with saved display without migra
   const p = { ...property(), demoCapture: { categoryId: 'duplex' as const } };
   assert.equal((normalizeMyPropertyCandidate(p)!.property.typeDetails as any).apartmentSubtype, 'standard_apartment', 'canonical value wins over legacy category');
 });
+
+for (const unavailable of [
+  { marketingStatus: 'paused' as const },
+  { rentalAvailability: 'rented' as const },
+]) {
+  test(`candidate adapter preserves lifecycle exclusion ${JSON.stringify(unavailable)}`, async () => {
+    const original: Property = { ...property('unavailable'), ...unavailable };
+    const before = JSON.stringify(original);
+    const source = new MyPropertiesMatchingSource({ getProperties: async () => [original] });
+    const [candidate] = await source.getCandidates(requirement);
+    assert.ok(candidate, 'Unavailable records remain candidates so the engine can explain exclusion');
+    assert.equal(evaluateMatch(requirement, { property: original }).category, 'excluded');
+    assert.equal(evaluateMatch(requirement, candidate).category, 'excluded');
+    assert.equal(candidate.property.marketingStatus, original.marketingStatus);
+    assert.equal(candidate.property.rentalAvailability, original.rentalAvailability);
+    assert.equal(candidate.property.core.privateNotes, undefined);
+    assert.equal(JSON.stringify(original), before, 'Projection cannot rewrite saved data');
+  });
+}
+
+test('sold sale properties retain their exclusion through the same candidate adapter', () => {
+  const original: Property = { ...property('sold'), marketingStatus: 'sold', activeOffer: {
+    id: 'sale-offer', propertyCoreId: 'sold', transaction: 'sale', salePrice: { amount: 490, currencyCode: 'KWD' },
+  } };
+  const { rentalPeriodId, centralAC, ...base } = requirement;
+  const purchase: SeekerRequirement = { ...base, purpose: 'buy' };
+  const candidate = normalizeMyPropertyCandidate(original);
+  assert.ok(candidate);
+  assert.equal(evaluateMatch(purchase, { property: original }).category, 'excluded');
+  assert.equal(evaluateMatch(purchase, candidate).category, 'excluded');
+});
+
+test('fresh snapshots follow available, rented, paused and reopened lifecycle without a migration', async () => {
+  let saved: Property = property('lifecycle');
+  const store = { getProperties: async () => [saved] };
+  const category = async () => evaluateMatch(requirement, (await new MyPropertiesMatchingSource(store).getCandidates())[0]).category;
+  assert.equal(await category(), 'direct', 'Legacy records without status remain readable');
+  saved = { ...saved, marketingStatus: 'active', rentalAvailability: 'available' };
+  assert.equal(await category(), 'direct');
+  saved = { ...saved, rentalAvailability: 'rented' };
+  assert.equal(await category(), 'excluded');
+  saved = { ...saved, rentalAvailability: 'available', marketingStatus: 'paused' };
+  assert.equal(await category(), 'excluded');
+  saved = { ...saved, marketingStatus: 'active' };
+  assert.equal(await category(), 'direct');
+});

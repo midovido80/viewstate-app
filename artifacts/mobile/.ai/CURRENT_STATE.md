@@ -1,5 +1,7 @@
 # ViewState App — Current State
 
+> Branch-only verification supplement (2026-11-11): see `docs/trust-circle/verification.md` and `docs/trust-circle/server-contract-and-e2e.md` at repository root. Lifecycle projection is corrected and local eight-account/thirty-property integration is verified; hosted trust-circle sharing and end-to-end app acceptance remain unimplemented/unverified. This does not freeze or unlock other modules.
+
 **Status:** 🟡 BOUNDED PROPERTY IMPLEMENTATION — Foundation Fix 01 and Foundation Fix 02 FROZEN; broader product scope remains separately governed
 **Last updated:** 2026-08-31
 
