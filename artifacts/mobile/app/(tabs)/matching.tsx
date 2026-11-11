@@ -1,3 +1,5 @@
+import { CircleMatchingPanel } from '@/components/CircleMatchingPanel';
+import { useRealAccount } from '@/contexts/RealAccountContext';
 import { matchingTarget, resolveMatchingScope, matchingScopeKey, matchingRestoreFits, runSavedMatchingScope } from '@/services/matchingScope';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { selectHomeMatches } from '@/services/assistantHome';
@@ -48,6 +50,8 @@ function numberFromInput(value: string): number | undefined {
 
 export default function MatchingScreen() {
   const { store } = useUserData();
+  const account = useRealAccount();
+  const [circleMode, setCircleMode] = useState(false);
   const params = useLocalSearchParams<{ scope?: string; entry?: string; requirementId?: string; propertyId?: string; best?: string; returnSession?: string }>();
   const scope = resolveMatchingScope(params);
   const scopeKey = JSON.stringify([matchingScopeKey(scope), params.entry ?? '']);
@@ -264,6 +268,13 @@ export default function MatchingScreen() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
       >
+        {account && scope.kind === 'all' && <Button
+          title={circleMode ? (language === 'ar' ? 'مطابقة مخزوني' : 'Match my inventory') : (language === 'ar' ? 'مطابقة دائرة الثقة' : 'Trust circle matching')}
+          testID="matching-circle-mode" onPress={() => { clearRun(); setCircleMode(value => !value); }} />}
+        {account && scope.kind === 'all' && circleMode
+          ? <CircleMatchingPanel request={account.request} owner={account.profile.user_id}
+              requirements={requirements} properties={properties} />
+          : <>
         {scope.kind !== 'all' && <Button title={language === 'ar' ? 'مطابقة الكل' : 'Match all'} onPress={() => { clearRun(); setMode('saved'); setPolicies({}); setExcluded({}); currentScopeRef.current = '__changing_scope__'; matchAllRequested.current=true; router.setParams(matchingTarget({ kind: 'all' }).params); }} testID="matching-clear-scope" />}
 
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -356,6 +367,7 @@ export default function MatchingScreen() {
         <Text style={[styles.thresholdNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
           {mode === 'quick' ? (language === 'ar' ? 'العقارات حسب الفلاتر، والعملاء حسب طلباتهم الحقيقية. النتائج مؤقتة ولا تُحفظ كطلبات جديدة.' : 'Properties follow the filters; clients follow their real requests. Results are temporary, not new saved requests.') : (language === 'ar' ? 'حتى ٥ ترشيحات لكل طلب؛ لا نملأ القائمة بنتائج ضعيفة.' : 'Up to 5 suggestions per request; weak results do not fill empty places.')}
         </Text>
+        </>}
       </KeyboardAwareScrollViewCompat>
     </View>
   );

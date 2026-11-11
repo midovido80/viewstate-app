@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
+import { matchCircleSnapshot, type CircleSnapshot } from '../../supabase/functions/circle-match-worker/engine.ts';
 import {CircleMatchingSource,type SharedCircleProperty} from '../../artifacts/mobile/services/circleMatchingSource.ts';
 import {BrokerInitiatedMatching} from '../../artifacts/mobile/services/brokerInitiatedMatching.ts';
 import {normalizeMyPropertyCandidate} from '../../artifacts/mobile/services/myPropertiesMatchingSource.ts';
@@ -21,7 +22,7 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
  const db=new PGlite();
  try{
   // Auth harness only. Real PostgreSQL roles/RLS; no signed JWT or Google login claim.
-  await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);grant usage on schema auth to authenticated;
+  await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);grant usage on schema auth to authenticated;
    create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;
    create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;`);
   await db.exec(`create schema storage;
@@ -33,6 +34,7 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
     '20261104071244_fix_sync_record_key_validation.sql',
     '20261111083559_circle_membership_inventory.sql',
     '20261111110000_circle_validation_lifecycle.sql',
+    '20261111120000_circle_matching_delivery.sql',
   ]) {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${migration}`, import.meta.url), 'utf8'));
   }
@@ -95,6 +97,59 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   assert.deepEqual((await matchSample()).matches.map(match => match.propertyId), [shared.id]);
   const matchMs = performance.now() - matchStarted;
 
+  const asWorker = <T,>(work: (tx: Tx) => Promise<T>) => db.transaction(async tx => {
+    await tx.exec('set local role service_role');
+    return work(tx);
+  });
+  const inbox = (broker: number) => asUser(broker, async tx =>
+    (await tx.query('select * from public.vs_circle_matches($1)', [circle])).rows,
+  );
+  const snapshot = async () => asWorker(async tx =>
+    (await tx.query<{ data: CircleSnapshot }>(
+      'select public.vs_circle_worker_snapshot($1) data', [circle],
+    )).rows[0].data,
+  );
+  const commitMatches = (data: CircleSnapshot) => asWorker(async tx =>
+    (await tx.query<{ accepted: boolean }>(
+      'select public.vs_circle_worker_commit($1,$2,$3::jsonb) accepted',
+      [circle, data.revision, JSON.stringify(matchCircleSnapshot(data))],
+    )).rows[0].accepted,
+  );
+
+  await assert.rejects(inbox(8), /CIRCLE_MEMBERSHIP_REQUIRED/);
+  await assert.rejects(asUser(1, tx => tx.query('select public.vs_circle_worker_snapshot($1)', [circle])), /permission denied/);
+  await assert.rejects(asUser(1, tx => tx.query('select * from public.vs_circle_push_claim()')), /permission denied/);
+  const beforeRequest = await snapshot();
+  const sharedRequest = id(490);
+  await asUser(1, tx => tx.query('select public.vs_circle_request($1,$2,$3,$4,$5,$6,$7)',
+    [circle, sharedRequest, [sample.core.locationArea.id], 800, 'monthly', 2, 2]));
+  // The publisher may also publish their own request, but never matches their own listing.
+  await asUser(0, tx => tx.query('select public.vs_circle_request($1,$2,$3,$4,$5,$6,$7)',
+    [circle, id(491), [sample.core.locationArea.id], 800, 'monthly', 2, 2]));
+  assert.equal(await commitMatches(beforeRequest), false, 'stale calculation cannot commit');
+  const ready = await snapshot();
+  assert.equal(matchCircleSnapshot(ready).length, 1);
+  assert.equal(await commitMatches(ready), true);
+  assert.equal(await commitMatches(ready), false, 'processed revisions are not replayed');
+  assert.equal((await inbox(0)).length, 1);
+  assert.equal((await inbox(1)).length, 1);
+
+  for (let b=0; b<2; b++) {
+    await asUser(b, tx => tx.query('select public.vs_circle_register_push($1,$2)',
+      [`ExpoPushToken[fixture_token_${b}]`, true]));
+  }
+  const deliveries = await asWorker(async tx =>
+    (await tx.query<{ id: string; token: string; attempt: number }>('select * from public.vs_circle_push_claim()')).rows,
+  );
+  assert.equal(deliveries.length, 2);
+  assert.equal((await asWorker(tx => tx.query('select * from public.vs_circle_push_claim()'))).rows.length, 0);
+  await asWorker(tx => tx.query('select public.vs_circle_push_result($1,$2,$3,$4)',
+    [deliveries[0].id, deliveries[0].attempt, 'accepted', deliveries[0].token]));
+  await asWorker(tx => tx.query('select public.vs_circle_push_result($1,$2,$3,$4)',
+    [deliveries[1].id, deliveries[1].attempt, 'retry', deliveries[1].token]));
+  assert.equal((await asWorker(tx => tx.query('select * from public.vs_circle_push_claim()'))).rows.length, 0,
+    'retry is deferred');
+
   const dirtyRows = await catalog(1);
   const invalidOldRow = {
     ...dirtyRows[0], id: id(483),
@@ -112,6 +167,9 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   assert.equal((await matchSample()).matches.length, 1);
   assert.equal((await sync(1, offlineRented)).accepted, true);
   assert.equal((await matchSample()).matches.length, 0);
+  assert.equal((await inbox(1)).length, 0, 'stale notification hidden immediately on rental');
+  assert.equal(await commitMatches(await snapshot()), true);
+  assert.equal((await db.query('select * from viewstate_circle.push_outbox')).rows.length, 0);
   assert.equal((await catalog(1))[0].revision, 2);
   await assert.rejects(publish(0, sample.core.id, 1, id(484), sampleFacts), /CIRCLE_SOURCE_STATUS_CONFLICT/);
 

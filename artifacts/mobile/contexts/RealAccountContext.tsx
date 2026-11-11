@@ -1,3 +1,6 @@
+import { createWorkspaceAccountRequest } from '@/services/workspaceSyncDevice';
+import { setCircleForegroundOwner, setCirclePush, showRegisteredCirclePush } from '@/services/circlePush';
+import type { CloudRequest } from '@/services/workspaceCloud';
 import {WorkspaceConnection} from '@/components/account/WorkspaceConnection';
 import { WelcomeExperience as Welcome } from '@/components/account/WelcomeExperience';
 import { AccountEntryScreen } from '@/components/account/AccountEntryScreen';
@@ -30,7 +33,7 @@ const ACTIVATION_KEY = '@viewstate_guest_activation_v1';
 const guestRepository = createGuestRepository(AsyncStorage, () => guestLocalId(Crypto.getRandomBytes(16)));
 type GuestActive = { identity: GuestIdentity; resources: UserResources; data: ReturnType<typeof buildUserData>; reducedMotion: boolean; id: number };
 type Active = { lease: Lease; resources: UserResources; data: ReturnType<typeof buildUserData>; profile: UserContactProfile | null; photo: string; reducedMotion: boolean; id: number };
-interface RealAccount { email: string; profile: UserContactProfile; photo: string; assertActive(): void; saveContact(value: ContactInput, photo: string): Promise<void>; signOut(): Promise<void> }
+interface RealAccount { email: string; profile: UserContactProfile; photo: string; request: CloudRequest; assertActive(): void; saveContact(value: ContactInput, photo: string): Promise<void>; signOut(): Promise<void> }
 const Context = createContext<RealAccount | null>(null);
 export function useRealAccount() { return useContext(Context); }
 
@@ -148,7 +151,23 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
     }).catch(() => { if (mounted.current) { setStage('error'); setError(L('تعذّرت قراءة وضع الدخول من الجهاز.', 'Could not read the local entry preference.')); } });
     return () => { mounted.current = false; hideData(); checking.current = false; const previous = device.current; device.current = null; previous?.dispose(); };
   }, []);
+  const readyOwner = stage === 'ready' ? active?.lease.account.userId : undefined;
+  useEffect(() => {
+    setCircleForegroundOwner(readyOwner);
+    if (readyOwner) void showRegisteredCirclePush(readyOwner).catch(() => undefined);
+    return () => setCircleForegroundOwner(undefined);
+  }, [readyOwner]);
   const signOut = async () => {
+    const owner = current.current;
+    const accountDevice = device.current;
+    if (owner && accountDevice) {
+      setCircleForegroundOwner(undefined);
+      const revoke = setCirclePush(createWorkspaceAccountRequest(owner.resources, accountDevice),
+        owner.lease.account.userId, false).catch(() => undefined);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([revoke, new Promise<void>(resolve => { timer = setTimeout(resolve, 1500); })]);
+      if (timer) clearTimeout(timer);
+    }
     hideData(); setStage('signin'); setError(''); setBusy(true);
     try { await AsyncStorage.setItem(ENTRY_MODE_KEY, 'choice'); await device.current?.offline.forget(); await device.current?.account.signOut(); }
     catch { if (mounted.current) { setStage('error'); setError(L('تعذّر إنهاء جلسة الدخول. بيانات التطبيق مخفية؛ أعد محاولة تسجيل الخروج.', 'Could not end the sign-in session. App data is hidden; retry sign out.')); } }
@@ -247,7 +266,7 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   </ScrollView></SafeAreaView>;
   if (active && stage === 'profile') return <AccountProfileForm userId={active.lease.account.userId} email={active.lease.account.email} initial={active.profile ?? (pendingTransfer.current ? { user_id: active.lease.account.userId, display_name: pendingTransfer.current.name, phone: pendingTransfer.current.phone, company: '', classification: '' as UserContactProfile['classification'], other_classification: '' } : null)} photo={active.photo} onSave={saveContact} onCancel={() => void signOut()} />;
   if (active && stage === 'welcome') return <View style={{ flex: 1 }}><Welcome name={active.profile?.display_name} reducedMotion={active.reducedMotion} busy={busy} onDone={() => void finishWelcome()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
-  if (active?.profile && stage === 'ready') return <Context.Provider value={{ email: active.lease.account.email, profile: active.profile, photo: active.photo, assertActive: () => assertCurrent(active), saveContact, signOut }}><UserDataProvider value={active.data}><View key={active.id} style={{flex:1}}><WorkspaceConnection resources={active.resources} device={device.current!} revalidate={active.lease.revalidate} /><View style={{flex:1}}>{children}</View></View></UserDataProvider></Context.Provider>;
+  if (active?.profile && stage === 'ready') return <Context.Provider value={{ email: active.lease.account.email, profile: active.profile, photo: active.photo, request: createWorkspaceAccountRequest(active.resources, device.current!), assertActive: () => assertCurrent(active), saveContact, signOut }}><UserDataProvider value={active.data}><View key={active.id} style={{flex:1}}><WorkspaceConnection resources={active.resources} device={device.current!} revalidate={active.lease.revalidate} /><View style={{flex:1}}>{children}</View></View></UserDataProvider></Context.Provider>;
   return <AccountEntryScreen checking={stage === 'checking'} failed={stage === 'error'} busy={busy} error={error}
     onGoogle={() => void signIn()} onGuest={() => void startGuest()} onRetry={() => void bootstrap(true)}
     onSignOut={device.current ? () => void signOut() : undefined}
