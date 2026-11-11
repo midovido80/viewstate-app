@@ -1,5 +1,7 @@
 # ViewState App — Current State
 
+> Trust-circle stage 01 (2026-11-11), branch-only app code: the additive membership/inventory schema is deployed to Supabase and hosted role/RLS/RPC tests passed; existing private policies are unchanged. Circle UI, durable device publication, hosted matching worker and remote/push notifications are NOT implemented or accepted. See `docs/trust-circle/server-stage-01.md` at repository root. No main/pilot merge or APK is included.
+
 > Branch-only verification supplement (2026-11-11): see `docs/trust-circle/verification.md` and `docs/trust-circle/server-contract-and-e2e.md` at repository root. Lifecycle projection is corrected and local eight-account/thirty-property integration is verified; hosted trust-circle sharing and end-to-end app acceptance remain unimplemented/unverified. This does not freeze or unlock other modules.
 
 **Status:** 🟡 BOUNDED PROPERTY IMPLEMENTATION — Foundation Fix 01 and Foundation Fix 02 FROZEN; broader product scope remains separately governed
