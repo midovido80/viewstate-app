@@ -22,8 +22,9 @@ import {
   useFonts as useTajawalFonts,
 } from '@expo-google-fonts/tajawal';
 import { useUserData } from '@/contexts/UserDataContext';
-import { RealAccountGate } from '@/contexts/RealAccountContext';
-import { Stack } from 'expo-router';
+import { listenForCirclePush } from '@/services/circlePush';
+import { RealAccountGate, useRealAccount } from '@/contexts/RealAccountContext';
+import { Stack, useRootNavigationState, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
@@ -47,6 +48,25 @@ function RootLayoutNav({
   integrityStatus: LocalStoreIntegrityStatus;
 }) {
   const { isRTL, t, fonts } = useI18n();
+  const account = useRealAccount();
+  const owner = account?.profile.user_id;
+  const router = useRouter();
+  const navigationReady = Boolean(useRootNavigationState()?.key);
+  useEffect(() => {
+    if (!owner || !navigationReady) return;
+    let cancelled = false;
+    let remove: (() => void) | undefined;
+    void listenForCirclePush(owner, identifier => {
+      if (!cancelled) router.push({ pathname: '/matching', params: { circlePush: identifier } });
+    }).then(dispose => {
+      if (cancelled) dispose?.();
+      else remove = dispose;
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      remove?.();
+    };
+  }, [navigationReady, owner, router]);
   // Expo Router restores the requested route. Auth/onboarding remain owned by the root gate.
   // Never replace a restored property URL merely because its account is ready.
   return (
