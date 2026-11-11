@@ -51,8 +51,11 @@ function numberFromInput(value: string): number | undefined {
 export default function MatchingScreen() {
   const { store } = useUserData();
   const account = useRealAccount();
-  const [circleMode, setCircleMode] = useState(false);
-  const params = useLocalSearchParams<{ scope?: string; entry?: string; requirementId?: string; propertyId?: string; best?: string; returnSession?: string }>();
+  const [inventoryScope, setInventoryScope] = useState<'private' | 'circle' | 'both'>('private');
+  const params = useLocalSearchParams<{ scope?: string; entry?: string; requirementId?: string; propertyId?: string; best?: string; returnSession?: string; circlePush?: string; circleEntry?: string }>();
+  useEffect(() => {
+    if (params.circlePush || params.circleEntry) setInventoryScope('circle');
+  }, [params.circlePush, params.circleEntry]);
   const scope = resolveMatchingScope(params);
   const scopeKey = JSON.stringify([matchingScopeKey(scope), params.entry ?? '']);
   const requestedRequirementId = scope.kind === 'requirement' ? scope.id : undefined;
@@ -268,13 +271,24 @@ export default function MatchingScreen() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
       >
-        {account && scope.kind === 'all' && <Button
-          title={circleMode ? (language === 'ar' ? 'مطابقة مخزوني' : 'Match my inventory') : (language === 'ar' ? 'مطابقة دائرة الثقة' : 'Trust circle matching')}
-          testID="matching-circle-mode" onPress={() => { clearRun(); setCircleMode(value => !value); }} />}
-        {account && scope.kind === 'all' && circleMode
-          ? <CircleMatchingPanel request={account.request} owner={account.profile.user_id}
-              requirements={requirements} properties={properties} />
-          : <>
+        {account && scope.kind === 'all' && <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', gap: 6, marginBottom: 12 }}>
+          {(['private', 'circle', 'both'] as const).map(value => {
+            const label = {
+              private: language === 'ar' ? 'عقاراتي' : 'My properties',
+              circle: language === 'ar' ? 'دائرة الثقة' : 'Trust circle',
+              both: language === 'ar' ? 'الكل' : 'All',
+            }[value];
+            return <TouchableOpacity key={value} accessibilityRole="tab"
+              accessibilityState={{ selected: inventoryScope === value }} testID={`matching-inventory-${value}`}
+              style={[styles.modeButton, { backgroundColor: inventoryScope === value ? colors.card : colors.muted }]}
+              onPress={() => setInventoryScope(value)}>
+              <Text style={[styles.modeText, { color: inventoryScope === value ? colors.primary : colors.mutedForeground, fontFamily: fonts.semiBold }]}>{label}</Text>
+            </TouchableOpacity>;
+          })}
+        </View>}
+        {account && scope.kind === 'all' && inventoryScope !== 'private' && <CircleMatchingPanel
+          request={account.request} owner={account.profile.user_id} requirements={requirements} properties={properties} />}
+        {(!account || scope.kind !== 'all' || inventoryScope !== 'circle') && <>
         {scope.kind !== 'all' && <Button title={language === 'ar' ? 'مطابقة الكل' : 'Match all'} onPress={() => { clearRun(); setMode('saved'); setPolicies({}); setExcluded({}); currentScopeRef.current = '__changing_scope__'; matchAllRequested.current=true; router.setParams(matchingTarget({ kind: 'all' }).params); }} testID="matching-clear-scope" />}
 
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>

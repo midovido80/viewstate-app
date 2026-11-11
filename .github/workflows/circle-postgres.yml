@@ -5,6 +5,7 @@ on:
       - 'supabase/migrations/*circle*'
       - 'supabase/functions/circle-match-worker/**'
       - 'tests/circle-postgres/**'
+      - 'scripts/enable-circle-worker-delivery.sql'
       - 'artifacts/mobile/services/circleMatchingSource.ts'
       - '.github/workflows/circle-postgres.yml'
   workflow_dispatch:
@@ -26,6 +27,6 @@ jobs:
       - run: pnpm --dir tests/circle-postgres install --ignore-workspace --frozen-lockfile --ignore-scripts
       - name: Execute PostgreSQL RLS, RPC and matching integration
         working-directory: artifacts/mobile
-        run: node --import tsx --test ../../tests/circle-postgres/circleDatabase.test.ts
+        run: node --import tsx --test ../../tests/circle-postgres/*.test.ts
       - name: Check mobile TypeScript
         run: pnpm --filter @workspace/mobile typecheck

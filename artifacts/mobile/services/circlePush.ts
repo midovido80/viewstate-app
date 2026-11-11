@@ -6,6 +6,37 @@ import { circleRpc } from './circleMatchingApi';
 
 const storageKey = (owner: string) => `@viewstate_circle_push_${owner}`;
 
+export function isCirclePush(data: Record<string, unknown>) {
+  return data.kind === 'trust-circle-match' || data.kind === 'trust-circle-cooperation';
+}
+
+export async function listenForCirclePush(owner: string, open: (identifier: string) => void) {
+  if (Platform.OS !== 'android') return undefined;
+  const notifications = await import('expo-notifications');
+  let disposed = false;
+  const seen = new Set<string>();
+  const handle = async (response: import('expo-notifications').NotificationResponse) => {
+    const { content, identifier } = response.notification.request;
+    if (!isCirclePush(content.data) || seen.has(identifier)) return;
+    seen.add(identifier);
+    const registered = await AsyncStorage.getItem(storageKey(owner));
+    if (disposed || foregroundOwner !== owner) return;
+    await notifications.clearLastNotificationResponseAsync();
+    if (!disposed && foregroundOwner === owner && registered) open(identifier);
+  };
+  const handleSafely = (response: import('expo-notifications').NotificationResponse) => {
+    void handle(response).catch(() => undefined);
+  };
+  const subscription = notifications.addNotificationResponseReceivedListener(handleSafely);
+  void notifications.getLastNotificationResponseAsync()
+    .then(response => { if (response && !disposed) handleSafely(response); })
+    .catch(() => undefined);
+  return () => {
+    disposed = true;
+    subscription.remove();
+  };
+}
+
 let foregroundOwner: string | undefined;
 export function setCircleForegroundOwner(owner: string | undefined) {
   foregroundOwner = owner;
@@ -17,7 +48,7 @@ export async function showRegisteredCirclePush(owner: string) {
   if (foregroundOwner !== owner) return;
   notifications.setNotificationHandler({
     async handleNotification(notification) {
-      const show = foregroundOwner === owner && notification.request.content.data.kind === 'trust-circle-match'
+      const show = foregroundOwner === owner && isCirclePush(notification.request.content.data)
         && Boolean(await AsyncStorage.getItem(storageKey(owner)));
       return { shouldShowBanner: show, shouldShowList: show, shouldPlaySound: show, shouldSetBadge: false };
     },

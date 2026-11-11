@@ -35,6 +35,9 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
     '20261111083559_circle_membership_inventory.sql',
     '20261111110000_circle_validation_lifecycle.sql',
     '20261111120000_circle_matching_delivery.sql',
+    '20261111130000_circle_all_property_types.sql',
+    '20261111130500_circle_listing_management.sql',
+    '20261111131000_circle_cooperation.sql',
   ]) {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${migration}`, import.meta.url), 'utf8'));
   }
@@ -150,6 +153,53 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   assert.equal((await asWorker(tx => tx.query('select * from public.vs_circle_push_claim()'))).rows.length, 0,
     'retry is deferred');
 
+  const opportunity = (await inbox(1))[0] as { id: string };
+  const cooperate = (broker: number, purpose = 'viewing') => asUser(broker, async tx =>
+    (await tx.query<{ id: string }>('select public.vs_circle_cooperation_request($1,$2,$3,$4) id',
+      [circle, opportunity.id, purpose, 'split_evenly'])).rows[0].id,
+  );
+  const act = (broker: number, cooperationId: string, action: string) => asUser(broker, async tx =>
+    (await tx.query<{ state: string }>('select public.vs_circle_cooperation_action($1,$2,$3) state',
+      [circle, cooperationId, action])).rows[0].state,
+  );
+  const history = (broker: number) => asUser(broker, async tx =>
+    (await tx.query<{ id: string; status: string; source_key: string | null }>(
+      'select * from public.vs_circle_cooperation_list($1)', [circle],
+    )).rows,
+  );
+  await assert.rejects(cooperate(8), /CIRCLE_MEMBERSHIP_REQUIRED/);
+  await assert.rejects(cooperate(1, '55512345'), /CIRCLE_COOPERATION_INVALID/);
+  await assert.rejects(asUser(1, tx => tx.query('select * from viewstate_circle.cooperations')), /permission denied/);
+  await assert.rejects(asUser(1, tx => tx.query('select * from public.vs_circle_cooperation_push_claim()')), /permission denied/);
+
+  const firstCooperation = await cooperate(1);
+  assert.equal(await cooperate(0), firstCooperation, 'reverse request returns the existing cooperation');
+  assert.equal((await history(1))[0].source_key, null, 'private source key is not returned to requester');
+  assert.equal((await history(0))[0].source_key, sample.core.id);
+  await assert.rejects(act(1, firstCooperation, 'accept'), /CIRCLE_COOPERATION_RECIPIENT_REQUIRED/);
+  assert.equal(await act(0, firstCooperation, 'decline'), 'declined');
+
+  const closedCooperation = await cooperate(1);
+  assert.equal(await act(1, closedCooperation, 'close'), 'closed');
+  await assert.rejects(act(0, closedCooperation, 'confirm'), /CIRCLE_COOPERATION_UNAVAILABLE/);
+
+  const secondCooperation = await cooperate(1);
+  assert.notEqual(firstCooperation, secondCooperation);
+  assert.equal(await act(0, secondCooperation, 'accept'), 'accepted');
+  assert.equal(await act(0, secondCooperation, 'confirm'), 'accepted');
+  assert.equal(await act(0, secondCooperation, 'confirm'), 'accepted', 'retry does not count twice');
+  assert.equal(await act(1, secondCooperation, 'confirm'), 'completed');
+  assert.equal(await act(1, secondCooperation, 'confirm'), 'completed', 'completion retry is idempotent');
+  assert.equal(await cooperate(0), secondCooperation);
+  const cooperationDeliveries = await asWorker(async tx =>
+    (await tx.query<{ token: string; cooperation_id: string }>(
+      'select * from public.vs_circle_cooperation_push_claim()',
+    )).rows,
+  );
+  assert.equal(cooperationDeliveries.length, 4, 'stale pending and first-confirmation pushes are suppressed');
+  assert.deepEqual(new Set(cooperationDeliveries.map(row => row.token)),
+    new Set(['ExpoPushToken[fixture_token_0]', 'ExpoPushToken[fixture_token_1]']));
+
   const dirtyRows = await catalog(1);
   const invalidOldRow = {
     ...dirtyRows[0], id: id(483),
@@ -168,9 +218,11 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   assert.equal((await sync(1, offlineRented)).accepted, true);
   assert.equal((await matchSample()).matches.length, 0);
   assert.equal((await inbox(1)).length, 0, 'stale notification hidden immediately on rental');
+  assert.equal((await history(1)).find(row => row.id === secondCooperation)?.status, 'completed');
   assert.equal(await commitMatches(await snapshot()), true);
   assert.equal((await db.query('select * from viewstate_circle.push_outbox')).rows.length, 0);
-  assert.equal((await catalog(1))[0].revision, 2);
+  assert.equal((await catalog(1)).length, 0, 'an unavailable listing is hidden from other brokers');
+  assert.equal((await catalog(0))[0].revision, 2, 'publisher can still manage the inactive publication');
   await assert.rejects(publish(0, sample.core.id, 1, id(484), sampleFacts), /CIRCLE_SOURCE_STATUS_CONFLICT/);
 
   assert.equal((await sync(2, sample)).accepted, true);
@@ -189,6 +241,8 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
    await assert.rejects(catalog(b),/CIRCLE_MEMBERSHIP_REQUIRED/);
    await asUser(b,tx=>tx.query('select public.vs_circle_accept($1)',[circle]));
   }
+  assert.deepEqual(await history(2), [], 'membership alone does not grant cooperation history');
+  await assert.rejects(act(2, secondCooperation, 'close'), /CIRCLE_COOPERATION_UNAVAILABLE/);
   await assert.rejects(asUser(1,tx=>tx.query("insert into viewstate_circle.members(circle_id,user_id,state) values($1,$2,'active')",[circle,users[8]])),/permission denied/);
   await assert.rejects(asUser(1,tx=>tx.query('select * from viewstate_circle.change_queue')),/permission denied/);
   const published=[];

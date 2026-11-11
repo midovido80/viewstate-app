@@ -1,3 +1,8 @@
+import { getSavedPropertyTypeLabel } from '@/services/savedPropertyClassification';
+import { CircleCooperationCard, CircleCooperationRequest, type Cooperation, type CooperationAction } from './CircleCooperation';
+import { CircleManageListing } from './CircleManageListing';
+import { useUserData } from '@/contexts/UserDataContext';
+import { changeListingStatus, type ListingStatus } from '@/services/propertyLifecycle';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -27,8 +32,10 @@ interface Props {
 }
 
 export function CircleMatchingPanel({ request, owner, properties, requirements }: Props) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const colors = useColors();
+  const { store, storage } = useUserData();
+  const [managed, setManaged] = useState<Listing | null>(null);
   const ar = language === 'ar';
   const L = (arabic: string, english: string) => ar ? arabic : english;
   const api = useRef(request);
@@ -41,6 +48,8 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [selected, setSelected] = useState<Circle | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [cooperations, setCooperations] = useState<Cooperation[]>([]);
+  const [cooperationMatch, setCooperationMatch] = useState<string | null>(null);
   const [automatic, setAutomatic] = useState<AutomaticMatch[]>([]);
   const [results, setResults] = useState<readonly MatchResult[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,6 +89,9 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
         setListings([]);
         setResults(null);
         setAutomatic([]);
+        setCooperations([]);
+        setManaged(null);
+        setCooperationMatch(null);
         setFailed(true);
       }
     } finally {
@@ -98,9 +110,11 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
     setListings([]);
     setResults(null);
     setAutomatic([]);
-    const [rows, matches] = await Promise.all([
+    setCooperations([]);
+    const [rows, matches, history] = await Promise.all([
       rpc<SharedCircleProperty[]>('vs_circle_catalog', { p_circle: circle.id }),
       rpc<AutomaticMatch[]>('vs_circle_matches', { p_circle: circle.id }),
+      rpc<Cooperation[]>('vs_circle_cooperation_list', { p_circle: circle.id }),
     ]);
     const source = new CircleMatchingSource(async () => rows);
     const candidates = await source.getCandidates();
@@ -112,6 +126,12 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
     setSelected(circle);
     setListings(candidates.map(({ property }) => ({ property, row: byId.get(property.core.id)! })));
     setAutomatic(matches);
+    setCooperations(history);
+    setManaged(current => {
+      if (!current) return null;
+      const row = byId.get(current.row.id);
+      return row ? { ...current, row } : null;
+    });
     setResults(matchesForRequest?.matches ?? null);
   }
 
@@ -127,9 +147,10 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
 
   function publish(property: Property) {
     if (!selected) return;
-    const facts = circlePropertyFacts(property);
-    if (!facts) return;
     void perform(async () => {
+      const fresh = await store.getProperty(property.core.id);
+      const facts = fresh && circlePropertyFacts(fresh);
+      if (!facts) throw new Error('CIRCLE_LISTING_CHANGED');
       const revision = await rpc<number>('vs_circle_my_publication', {
         p_circle: selected.id, p_source: property.core.id,
       });
@@ -154,7 +175,31 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
       ? ` · ${details.bedroomCount} ${L('غرف', 'bedrooms')}` : '';
     const availability = property.rentalAvailability === 'rented' ? L(' · مؤجّر', ' · Rented')
       : property.marketingStatus === 'paused' ? L(' · موقوف', ' · Paused') : '';
-    return `${location?.[language] ?? property.core.locationArea.id} · ${formatPrice(price.amount, price.currencyCode, language)} ${cadence}${rooms}${availability}`;
+    const type = getSavedPropertyTypeLabel(property, language, t(`propertyType.${property.core.propertyType}` as Parameters<typeof t>[0]));
+    return `${type} · ${location?.[language] ?? property.core.locationArea.id} · ${formatPrice(price.amount, price.currencyCode, language)} ${cadence}${rooms}${availability}`;
+  }
+
+  function manageStatus(status: ListingStatus) {
+    if (!managed || !selected) return;
+    void perform(async () => {
+      const property = await store.getProperty(managed.row.source_key);
+      if (!property) throw new Error('CIRCLE_LISTING_CHANGED');
+      const updated = await changeListingStatus({ expected: property, status, store, storage });
+      setManaged({ ...managed, property: updated });
+      await loadCircle(selected);
+    });
+  }
+
+  function withdrawManaged() {
+    if (!managed || !selected) return;
+    void perform(async () => {
+      await rpc('vs_circle_publish', {
+        p_circle: selected.id, p_source: managed.row.source_key, p_expected: managed.row.revision,
+        p_operation: Crypto.randomUUID(), p_facts: null, p_withdraw: true,
+      });
+      setManaged(null);
+      await loadCircle(selected);
+    }, true);
   }
 
   return <View style={{ gap: 10, marginBottom: 16 }}>
@@ -163,7 +208,7 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
     <Action label={L('تحديث الدوائر والنتائج', 'Refresh circles and results')} disabled={busy} onPress={() => void perform(async () => {
       const refreshed = await refresh();
       if (selected && refreshed.some(circle => circle.id === selected.id)) await loadCircle(selected);
-      else { setSelected(null); setListings([]); setAutomatic([]); setResults(null); }
+      else { setSelected(null); setListings([]); setAutomatic([]); setCooperations([]); setResults(null); }
     })} testID="circle-refresh" />
     {failed && <Text accessibilityRole="alert" style={{ color: colors.destructive }}>{L(
       'تعذّر إتمام العملية. راجع الاتصال أو الصلاحية وحدّث الدائرة قبل إعادة المحاولة.',
@@ -189,7 +234,7 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
       tone={circle.id === selected?.id ? 'primary' : 'secondary'} testID={`circle-open-${circle.id}`}
       onPress={() => void perform(async () => {
         setSelected(null); setListings([]); setAutomatic([]); setResults(null);
-        setSelectedPropertyId(null); setSelectedRequestId(null);
+        setSelectedPropertyId(null); setSelectedRequestId(null); setManaged(null); setCooperationMatch(null);
         await loadCircle(circle);
       })} />)}
     {selected?.owner_id === owner && <>
@@ -206,13 +251,16 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
         <Action key={property.core.id} label={listingLabel(property)} disabled={busy} testID={`circle-select-property-${property.core.id}`}
           onPress={() => { setSelectedPropertyId(property.core.id); setShowProperties(false); }} />)}
       {selectedProperty && <>
+        <AssistantText bold>{L('معاينة ما يراه أعضاء الدائرة', 'Preview what members will see')}</AssistantText>
         <AssistantText>{listingLabel(selectedProperty)}</AssistantText>
+        <AssistantText>{L('تُشارك المنطقة العامة والسعر ومواصفات المطابقة. يظل عنوان العقار الخاص ورقم المالك والموقع الدقيق والملفات خاصة.',
+          'The general area, price and matching specifications are shared. Your private title, owner contact, exact location and files stay private.')}</AssistantText>
         <Action label={L('نشر المواصفات في الدائرة', 'Publish listing facts to circle')} testID="circle-publish"
           disabled={busy} onPress={() => publish(selectedProperty)} />
       </>}
       <Action label={L('اختيار طلب للمطابقة', 'Choose request to match')} disabled={busy} onPress={() => setShowRequirements(value => !value)} />
       {showRequirements && requirements.filter(requirement => circleRequestFacts(requirement)).map((requirement, index) => (
-        <Action key={requirement.id} label={`${L('طلب إيجار', 'Rental request')} ${index + 1} · ${requirement.budget.maximum} KWD`}
+        <Action key={requirement.id} label={`${requirement.purpose === 'rent' ? L('طلب إيجار', 'Rental request') : L('طلب شراء', 'Purchase request')} ${index + 1} · ${requirement.budget.maximum} KWD`}
           disabled={busy} testID={`circle-select-request-${requirement.id}`}
           onPress={() => { setSelectedRequestId(requirement.id); setShowRequirements(false); setResults(null); }} />
       ))}
@@ -221,8 +269,8 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
         <Action label={L('مطابقة الآن داخل الدائرة', 'Match now in circle')} disabled={busy} testID="circle-match-now"
           onPress={() => void perform(() => loadCircle(selected, selectedRequest))} />
         <AssistantText>{L(
-          'المطابقة التلقائية تستخدم المناطق والميزانية وفترة الإيجار وعدد الغرف والحمامات.',
-          'Automatic matching uses areas, budget, rental period, bedrooms and bathrooms.',
+          'يشارك التطبيق مواصفات المطابقة اللازمة حسب نوع العقار. بيانات الاتصال تظل خاصة.',
+          'The app shares matching criteria for the property type. Contact details stay private.',
         )}</AssistantText>
         <Action label={L('تفعيل المطابقة التلقائية للطلب', 'Share request for automatic matching')} disabled={busy}
           testID="circle-share-request" onPress={() => void perform(async () => {
@@ -235,20 +283,50 @@ export function CircleMatchingPanel({ request, owner, properties, requirements }
           }, true)} />
       </>}
       <AssistantText bold>{L('مخزون الدائرة', 'Circle inventory')} ({listings.length})</AssistantText>
-      {(results ?? automatic.map(match => ({ propertyId: match.property_id, score: match.score }))).map((match, index) => {
+      {results?.map((match, index) => {
         const listing = listings.find(item => item.property.core.id === match.propertyId);
-        if (!listing) return null;
-        return <AssistantText key={`${match.propertyId}-${index}`}>{Math.round(match.score)}% · {listingLabel(listing.property)}</AssistantText>;
+        return listing && <AssistantText key={`${match.propertyId}-${index}`}>{Math.round(match.score)}% · {listingLabel(listing.property)}</AssistantText>;
       })}
+      {automatic.map(match => {
+        const listing = listings.find(item => item.property.core.id === match.property_id);
+        if (!listing) return null;
+        const existing = cooperations.some(entry => entry.match_id === match.id && ['pending', 'accepted', 'completed'].includes(entry.status));
+        return <View key={match.id} style={{ gap: 6 }}>
+          <AssistantText>{Math.round(match.score)}% · {listingLabel(listing.property)}</AssistantText>
+          {!existing && <Action label={L('طلب تعاون', 'Request cooperation')} disabled={busy}
+            testID={`circle-cooperate-${match.id}`} onPress={() => setCooperationMatch(match.id)} />}
+        </View>;
+      })}
+      {cooperationMatch && <CircleCooperationRequest busy={busy} onClose={() => setCooperationMatch(null)}
+        onSend={(purpose, terms) => void perform(async () => {
+          await rpc('vs_circle_cooperation_request', { p_circle: selected.id, p_match: cooperationMatch, p_purpose: purpose, p_terms: terms });
+          setCooperationMatch(null);
+          await loadCircle(selected);
+        }, true)} />}
+      {cooperations.length > 0 && <AssistantText bold>{L('طلبات التعاون', 'Cooperation requests')}</AssistantText>}
+      {cooperations.map(entry => <CircleCooperationCard key={entry.id} entry={entry} owner={owner} busy={busy}
+        onAction={(action: CooperationAction) => void perform(async () => {
+          await rpc('vs_circle_cooperation_action', { p_circle: selected.id, p_id: entry.id, p_action: action });
+          await loadCircle(selected);
+        }, true)}
+        onUpdateListing={() => void perform(async () => {
+          const listing = listings.find(item => item.row.source_key === entry.source_key && item.row.publisher_id === owner);
+          const property = entry.source_key && await store.getProperty(entry.source_key);
+          if (!listing || !property) throw new Error('CIRCLE_LISTING_CHANGED');
+          setManaged({ row: listing.row, property });
+        })} />)}
       {results?.length === 0 && <AssistantText>{L('لا توجد مطابقات لهذا الطلب في الدائرة.', 'No circle matches for this request.')}</AssistantText>}
+      {managed && <CircleManageListing property={managed.property}
+        title={properties.find(property => property.core.id === managed.row.source_key)?.listingTitle || listingLabel(managed.property)}
+        busy={busy} onClose={() => setManaged(null)} onStatus={manageStatus} onWithdraw={withdrawManaged} />}
       {listings.map(({ row, property }) => <View key={row.id} style={{ gap: 5 }}>
         <AssistantText>{listingLabel(property)}</AssistantText>
-        {row.publisher_id === owner && <Action label={L('سحب العرض من الدائرة', 'Withdraw from circle')} disabled={busy}
-          testID={`circle-withdraw-${row.id}`} onPress={() => void perform(async () => {
-            await rpc('vs_circle_publish', { p_circle: selected.id, p_source: row.source_key,
-              p_expected: row.revision, p_operation: Crypto.randomUUID(), p_facts: null, p_withdraw: true });
-            await loadCircle(selected);
-          }, true)} />}
+        {row.publisher_id === owner && <Action label={L('إدارة الإعلان', 'Manage listing')} disabled={busy}
+          testID={`circle-manage-${row.id}`} onPress={() => void perform(async () => {
+            const local = await store.getProperty(row.source_key);
+            if (!local) throw new Error('CIRCLE_LISTING_CHANGED');
+            setManaged({ row, property: local });
+          })} />}
       </View>)}
     </>}
     {Platform.OS === 'android' && <>

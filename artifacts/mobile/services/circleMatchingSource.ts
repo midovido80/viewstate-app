@@ -1,5 +1,4 @@
-import { validateProperty, type MatchingPropertyCandidate, type SeekerRequirement } from '@workspace/property-domain';
-import { normalizeMyPropertyCandidate } from './myPropertiesMatchingSource';
+import { validateProperty, type Property, type MatchingPropertyCandidate, type SeekerRequirement } from '@workspace/property-domain';
 
 export interface SharedCircleProperty {
   id: string;
@@ -24,14 +23,18 @@ export class CircleMatchingSource {
       if (!row || !uuid.test(row.id) || !uuid.test(row.publisher_id) || !row.source_key
         || !Number.isSafeInteger(row.revision) || row.revision < 1 || seen.has(row.id)) throw new Error('CIRCLE_CATALOG_INVALID');
       seen.add(row.id);
-      const normalized = normalizeMyPropertyCandidate(row.facts);
-      if (!normalized || normalized.property.core.id !== row.source_key) return [];
-      // Equal local IDs in separate accounts are distinct publications, not duplicate units.
-      const property = { ...normalized.property,
-        core: { ...normalized.property.core, id: row.id },
-        activeOffer: { ...normalized.property.activeOffer, id: `${row.id}-offer`, propertyCoreId: row.id },
-      };
-      return validateProperty(property).ok ? [{ property }] : [];
+      try {
+        const facts = row.facts as Property;
+        if (!validateProperty(facts).ok || facts.core.id !== row.source_key) return [];
+        // Equal local IDs in separate accounts are distinct publications.
+        return [{ property: {
+          ...facts,
+          core: { ...facts.core, id: row.id },
+          activeOffer: { ...facts.activeOffer, id: `${row.id}-offer`, propertyCoreId: row.id },
+        } }];
+      } catch {
+        return [];
+      }
     });
   }
 }

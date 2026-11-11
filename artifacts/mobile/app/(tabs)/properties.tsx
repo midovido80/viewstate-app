@@ -1,3 +1,4 @@
+import { useRealAccount } from '@/contexts/RealAccountContext';
 import { PropertyVisualCard } from '@/components/PropertyVisualSummary';
 import { matchingTarget } from '@/services/matchingScope';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
@@ -48,6 +49,7 @@ const PROPERTY_FILTER_OPTIONS = [
 
 export default function PropertiesScreen() {
   const { store } = useUserData();
+  const account = useRealAccount();
   const router = useRouter();
   const { highlight } = useLocalSearchParams<{ highlight?: string | string[] }>();
   const highlightedId = Array.isArray(highlight) ? highlight[0] : highlight;
@@ -261,6 +263,11 @@ export default function PropertiesScreen() {
             <Text style={{ color: selected ? colors.primary : colors.mutedForeground, fontFamily: selected ? fonts.bold : fonts.medium }}>{tab === 'properties' ? (language === 'ar' ? 'العقارات' : 'Properties') : (language === 'ar' ? 'طلبات العملاء' : 'Client requests')}</Text>
           </TouchableOpacity>;
         })}
+        {account && <TouchableOpacity accessibilityRole="button" testID="inventory-open-circle"
+          onPress={() => router.push({ pathname: '/matching', params: { circleEntry: String(Date.now()) } })}
+          style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: colors.border }}>
+          <Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{language === 'ar' ? 'دائرة الثقة' : 'Trust circle'}</Text>
+        </TouchableOpacity>}
       </View>
       <View style={styles.searchContainer}>
         <Feather

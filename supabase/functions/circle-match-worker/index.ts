@@ -1,12 +1,14 @@
 import { matchCircleSnapshot, type CircleSnapshot } from './engine.ts';
 
 type PushClaim = { id: string; token: string; attempt: number };
+type PushKind = 'match' | 'cooperation';
 type PushResult = 'accepted' | 'retry' | 'unregistered' | 'permanent';
 
-async function sendPush(token: string, accessToken?: string): Promise<PushResult> {
+async function sendPush(token: string, kind: PushKind, accessToken?: string): Promise<PushResult> {
   try {
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
+      redirect: 'error',
       signal: AbortSignal.timeout(8000),
       headers: {
         'Content-Type': 'application/json',
@@ -15,9 +17,11 @@ async function sendPush(token: string, accessToken?: string): Promise<PushResult
       body: JSON.stringify({
         to: token,
         title: 'ViewState',
-        body: 'توجد مطابقة جديدة في دائرة الثقة · New trust circle match',
+        body: kind === 'match'
+          ? 'توجد مطابقة جديدة في دائرة الثقة · New trust circle match'
+          : 'لديك تحديث تعاون في دائرة الثقة · Trust circle cooperation update',
         channelId: 'trust-circle',
-        data: { kind: 'trust-circle-match' },
+        data: { kind: `trust-circle-${kind}` },
       }),
     });
     if (!response.ok) return response.status === 400 || response.status === 413 ? 'permanent' : 'retry';
@@ -43,6 +47,7 @@ Deno.serve(async request => {
   async function rpc<T>(name: string, body = {}): Promise<T> {
     const response = await fetch(`${url}/rest/v1/rpc/${name}`, {
       method: 'POST',
+      redirect: 'error',
       signal: AbortSignal.timeout(8000),
       headers: { apikey: key!, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -69,18 +74,21 @@ Deno.serve(async request => {
       }
     }
     const expoToken = Deno.env.get('EXPO_ACCESS_TOKEN');
-    const claims = await rpc<PushClaim[]>('vs_circle_push_claim');
-    for (let offset = 0; offset < claims.length; offset += 5) {
-      const batch = await Promise.allSettled(claims.slice(offset, offset + 5).map(async claim => {
-        const result = await sendPush(claim.token, expoToken);
-        await rpc('vs_circle_push_result', {
-          p_id: claim.id, p_attempt: claim.attempt, p_status: result, p_token: claim.token,
-        });
-        return result;
-      }));
-      for (const outcome of batch) {
-        if (outcome.status === 'fulfilled' && outcome.value === 'accepted') accepted++;
-        else errors++;
+    for (const kind of ['match', 'cooperation'] as const) {
+      const rpcPrefix = kind === 'match' ? 'vs_circle_push' : 'vs_circle_cooperation_push';
+      const claims = await rpc<PushClaim[]>(`${rpcPrefix}_claim`);
+      for (let offset = 0; offset < claims.length; offset += 5) {
+        const batch = await Promise.allSettled(claims.slice(offset, offset + 5).map(async claim => {
+          const result = await sendPush(claim.token, kind, expoToken);
+          await rpc(`${rpcPrefix}_result`, {
+            p_id: claim.id, p_attempt: claim.attempt, p_status: result, p_token: claim.token,
+          });
+          return result;
+        }));
+        for (const outcome of batch) {
+          if (outcome.status === 'fulfilled' && outcome.value === 'accepted') accepted++;
+          if (outcome.status === 'rejected' || outcome.value === 'retry') errors++;
+        }
       }
     }
     return Response.json({ evaluated, accepted, errors, durationMs: Math.round(performance.now() - started) }, { status: errors ? 503 : 200 });
