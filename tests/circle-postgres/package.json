@@ -1,0 +1,13 @@
+{
+  "name": "viewstate-circle-postgres-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated development-only PostgreSQL/RLS harness; not part of the application workspace",
+  "scripts": {
+    "test": "cd ../../artifacts/mobile && node --import tsx --test ../../tests/circle-postgres/circleDatabase.test.ts"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14"
+  }
+}

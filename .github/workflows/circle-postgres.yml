@@ -1,0 +1,30 @@
+name: Circle PostgreSQL Permissions
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/*circle*'
+      - 'tests/circle-postgres/**'
+      - 'artifacts/mobile/services/circleMatchingSource.ts'
+      - '.github/workflows/circle-postgres.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  postgres-rls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir tests/circle-postgres install --ignore-workspace --frozen-lockfile --ignore-scripts
+      - name: Execute PostgreSQL RLS, RPC and matching integration
+        working-directory: artifacts/mobile
+        run: node --import tsx --test ../../tests/circle-postgres/circleDatabase.test.ts
+      - name: Check mobile TypeScript
+        run: pnpm --filter @workspace/mobile typecheck

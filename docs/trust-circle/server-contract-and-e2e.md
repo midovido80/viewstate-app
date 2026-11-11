@@ -1,6 +1,6 @@
 # Trust-circle server contract and release acceptance
 
-Status: DESIGN / NOT DEPLOYED. This document is not an implemented backend.
+Status: OVERALL DESIGN. Membership/inventory stage 01 is now deployed and tested as recorded in server-stage-01.md. Remaining pipeline/UI/notification stages below are not implemented; this contract is not a claim of complete backend or E2E readiness.
 Baseline inspected: 0d9934bffb682688a5a35a58356aa79887dc6fcf.
 Pilot scope: one circle, eight broker accounts, thirty distinct residential rental listings.
 
