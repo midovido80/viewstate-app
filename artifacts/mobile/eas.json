@@ -1,0 +1,19 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "internal": {
+      "environment": "preview",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "image": "sdk-54"
+      },
+      "pnpm": "10.26.1",
+      "node": "24.22.1",
+      "channel": "viewstate-next-pilot"
+    }
+  }
+}

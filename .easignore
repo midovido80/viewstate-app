@@ -1,0 +1,69 @@
+# EAS source input is created from the repository root.
+# Keep workspace manifests, the lockfile, mobile source, and workspace libraries
+# needed to resolve and build the mobile app; omit repository-only metadata.
+
+# Repository, GitHub, Replit, Agent, and workspace metadata.
+.git
+.github
+.cursor
+.vscode
+.agents
+.local
+.cache
+.config
+.ai
+replit.md
+.replit
+.replitignore
+**/.replit-artifact
+**/.gitignore
+**/.easignore
+.npmrc
+
+# Local CLI state, dependencies, build output, and caches.
+.expo
+**/.expo
+**/.expo-shared
+**/node_modules
+**/dist
+**/build
+**/out-tsc
+**/tmp
+**/.metro
+**/.turbo
+**/.parcel-cache
+**/web-build
+**/static-build
+**/*.tsbuildinfo
+
+# Tests and test output are not part of the build source.
+**/tests
+**/__tests__
+**/*.test.*
+**/*.spec.*
+**/test-output
+**/coverage
+
+# Secrets, credentials, signing material, and local databases.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.db
+**/*.db-*
+**/*.sqlite
+**/*.sqlite3
+**/*.jks
+**/*.keystore
+**/*.p8
+**/*.p12
+**/*.pem
+**/*.key
+**/*.mobileprovision
+
+# Unrelated attached assets and generated release artifacts.
+attached_assets
+**/attached_assets
+**/*.apk
+**/*.aab
+**/*.ipa
+**/*.xcarchive

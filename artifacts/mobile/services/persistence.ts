@@ -1,0 +1,1471 @@
+import {readBusiness,sameBusiness,validateBusiness,type BusinessSnapshot} from './workspaceSnapshot';
+import { Platform } from 'react-native';
+import * as SQLite from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Property, normalizeSeekerRequirement, validateProperty } from '@workspace/property-domain';
+import { getAreaById } from '@/constants/kuwait-areas';
+import { SerialTaskQueue } from '@/services/serialTaskQueue';
+import { validatePropertySource } from '@workspace/property-domain';
+import {
+  appendUnreadableRecord,
+  parseStoredRecord,
+  type UnreadableRecord,
+} from '@/services/localRecordParser';
+import { migrateStage01B1WebProperties } from '@/services/stage01B1CurrencyMigration';
+import {
+  getPropertySearchText,
+  initializeSQLiteStore,
+  type SQLiteInitializationDatabase,
+} from '@/services/sqliteStoreInitialization';
+import {
+  Person,
+  PersonPropertyLink,
+  PersonStore,
+  PropertySource,
+  assertValidPerson,
+  enrichPersonIdentity,
+  getPersonSearchText,
+  personMatchesSearch,
+} from '@/services/people';
+import {
+  addWebChronology,
+  createCreationTimestamp,
+  getWebChronology,
+  migrateWebStoreChronology,
+  sortByChronology,
+  UNKNOWN_CREATION_TIMESTAMP,
+} from '@/services/chronology';
+import {
+  PERSON_REQUIREMENT_MUTATION_LOCK,
+  SQLiteRequirementStore,
+  WEB_REQUIREMENTS_KEY,
+  WebRequirementStore,
+  type RequirementRecoveryReport,
+  type RequirementPersistenceOptions,
+  type RequirementStore,
+} from '@/services/requirementPersistence';
+
+export { getPropertySearchText };
+
+export interface PropertyStore {
+  init(): Promise<void>;
+  saveProperty(property: Property): Promise<void>;
+  getProperty(id: string): Promise<Property | null>;
+  compareAndUpdate(expected: Property, replacement: Property): Promise<boolean>;
+  canSafelyUpdate(): boolean;
+  canPermanentlyDelete(): boolean;
+  getDeletedPropertyIds?(): Promise<string[]>;
+  getProperties(): Promise<Property[]>;
+  searchProperties(query: string): Promise<Property[]>;
+  deleteProperty(expected: Property): Promise<PropertyDeletionResult>;
+  deletePropertiesSnapshot(
+    expected: readonly Property[],
+    capability?: PropertyDeletionCapability,
+  ): Promise<PropertyDeletionResult>;
+  getPropertyInventory(): Promise<PropertyInventory>;
+}
+
+export type PropertyDeletionResult =
+  | { status: 'deleted'; count: number }
+  | { status: 'missing' | 'stale' | 'duplicate' | 'unsupported' };
+
+export interface PropertyInventory {
+  count: number;
+  ids: string[];
+}
+
+export interface LocalStoreIntegrityStatus {
+  readonly unreadableRecords: readonly UnreadableRecord[];
+  readonly hasUnreadableRecords: boolean;
+}
+
+export interface PropertyDeletionCapability {
+  /** The caller has excluded old writers that do not honor deletion fences. */
+  cooperatingWritersConfirmed: true;
+}
+
+interface KeyValueStorage {
+  removeItem?(key:string):Promise<void>;
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+}
+
+interface LockManager {
+  request<T>(name: string, options: { mode: 'exclusive' }, callback: () => Promise<T>): Promise<T>;
+}
+
+const nativeMutations = new SerialTaskQueue();
+
+export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore {
+  private db: SQLite.SQLiteDatabase | null = null;
+  private initialization: Promise<void> | null = null;
+  private integrityWarnings: UnreadableRecord[] = [];
+  private readonly requirements: SQLiteRequirementStore;
+
+  constructor(
+    private readonly databaseFactory: () => Promise<SQLite.SQLiteDatabase> =
+      () => SQLite.openDatabaseAsync('viewstate.db'),
+    options: RequirementPersistenceOptions = {},
+  ) {
+    this.requirements = new SQLiteRequirementStore(
+      () => {
+        if (!this.db) throw new Error('DB not initialized');
+        return this.db;
+      },
+      this,
+      warning => this.addIntegrityWarning(warning),
+      nativeMutations,
+      options,
+    );
+  }
+
+  async init() {
+    if (!this.initialization) {
+      const attempt = this.initialize();
+      this.initialization = attempt;
+      attempt.catch(() => {
+        if (this.initialization === attempt) this.initialization = null;
+      });
+    }
+    await this.initialization;
+    await this.consolidateDuplicatePeople();
+  }
+
+  getIntegrityStatus(): LocalStoreIntegrityStatus {
+    return {
+      unreadableRecords: [...this.integrityWarnings],
+      hasUnreadableRecords: this.integrityWarnings.length > 0,
+    };
+  }
+
+  private addIntegrityWarning(warning: UnreadableRecord): void {
+    appendUnreadableRecord(this.integrityWarnings, warning);
+  }
+
+  private parsePropertyRow(row: { id: string; data: string }): Property | null {
+    const result = parseStoredRecord<Property>(
+      row.data,
+      { type: 'property', id: row.id },
+      value => {
+        try {
+          const property = value as Property;
+          return property.core?.id === row.id && validateProperty(property).ok;
+        } catch {
+          return false;
+        }
+      },
+    );
+    if (!result.ok) {
+      this.addIntegrityWarning(result.warning);
+      return null;
+    }
+    return result.value;
+  }
+
+  private parsePersonRow(row: { id: string; data: string }): Person | null {
+    const result = parseStoredRecord<Person>(
+      row.data,
+      { type: 'person', id: row.id },
+      value => {
+        try {
+          const person = value as Person;
+          if (person.id !== row.id) return false;
+          assertValidPerson(person);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    );
+    if (!result.ok) {
+      this.addIntegrityWarning(result.warning);
+      return null;
+    }
+    return result.value;
+  }
+
+  private async initialize() {
+    this.integrityWarnings = [];
+    this.db = await this.databaseFactory();
+    await initializeSQLiteStore({
+      db: this.db as SQLiteInitializationDatabase,
+      parsePropertyRow: row => this.parsePropertyRow(row),
+      parsePersonRow: row => this.parsePersonRow(row),
+      runMutation: task => nativeMutations.enqueue(task),
+    });
+  }
+
+  /** Sync adapter only: expected snapshot and all replacements share one SQLite transaction. */
+  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+    validateBusiness(next);if(!this.db)throw new Error('DB not initialized');
+    await nativeMutations.enqueue(async()=>{await this.db!.withTransactionAsync(async()=>{
+      if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
+      const db=this.db!;
+      await db.runAsync('DELETE FROM person_property_links');await db.runAsync('DELETE FROM property_sources');
+      await db.runAsync('DELETE FROM seeker_requirements');await db.runAsync('DELETE FROM properties');await db.runAsync('DELETE FROM people');
+      for(const p of next.people){await db.runAsync('INSERT INTO people (id,data,search_text) VALUES (?,?,?)',[p.id,JSON.stringify(p),getPersonSearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO person_creation_chronology (id,created_at) VALUES (?,?)',[p.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      const deleted = new Set([...(await this.getDeletedPropertyIds()), ...(next.deletedPropertyIds ?? [])]);
+      if(next.properties.some(p => deleted.has(p.core.id))) throw new Error('PROPERTY_ID_DELETED');
+      for(const id of deleted) await db.runAsync('INSERT OR IGNORE INTO deleted_property_ids (id,generation) VALUES (?,1)',[id]);
+      for(const p of next.properties){await db.runAsync('INSERT INTO properties (id,data,search_text) VALUES (?,?,?)',[p.core.id,JSON.stringify(p),getPropertySearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO property_creation_chronology (id,created_at) VALUES (?,?)',[p.core.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const r of next.requirements){await db.runAsync('INSERT INTO seeker_requirements (id,data) VALUES (?,?)',[r.id,JSON.stringify(r)]);await db.runAsync('INSERT OR IGNORE INTO requirement_creation_chronology (id,created_at) VALUES (?,?)',[r.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const l of next.links)await db.runAsync('INSERT INTO person_property_links (person_id,property_core_id) VALUES (?,?)',[l.personId,l.propertyCoreId]);
+      for(const source of next.sources)await db.runAsync('INSERT INTO property_sources (property_core_id,person_id,role) VALUES (?,?,?)',[source.propertyCoreId,source.personId,source.role]);
+    });});
+  }
+
+  async saveProperty(property: Property) {
+    if (!this.db) throw new Error('DB not initialized');
+    const searchText = getPropertySearchText(property);
+    await nativeMutations.enqueue(async () => {
+      const existing = await this.db!.getFirstAsync<{ data: string }>(
+        'SELECT data FROM properties WHERE id = ?',
+        [property.core.id],
+      );
+      const deleted = await this.db!.getFirstAsync<{ id: string }>(
+        'SELECT id FROM deleted_property_ids WHERE id = ?',
+        [property.core.id],
+      );
+      if (deleted) throw new Error('PROPERTY_ID_DELETED');
+      if (existing) {
+        if (existing.data !== JSON.stringify(property)) {
+          throw new Error('PROPERTY_ID_ALREADY_EXISTS');
+        }
+        return;
+      }
+      await this.db!.withTransactionAsync(async () => {
+        await this.db!.runAsync(
+          'INSERT INTO properties (id, data, search_text) VALUES (?, ?, ?)',
+          [property.core.id, JSON.stringify(property), searchText],
+        );
+        await this.db!.runAsync(
+          'INSERT OR IGNORE INTO property_creation_chronology (id, created_at) VALUES (?, ?)',
+          [property.core.id, createCreationTimestamp()],
+        );
+      });
+    });
+  }
+
+  async getProperty(id: string): Promise<Property | null> {
+    if (!this.db) throw new Error('DB not initialized');
+    const row = await this.db.getFirstAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM properties WHERE id = ?',
+      [id],
+    );
+    return row ? this.parsePropertyRow(row) : null;
+  }
+
+  async compareAndUpdate(expected: Property, replacement: Property): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (expected.core.id !== replacement.core.id) return false;
+    let updated = false;
+    await nativeMutations.enqueue(async () => {
+      const deleted = await this.db!.getFirstAsync<{ id: string }>(
+        'SELECT id FROM deleted_property_ids WHERE id = ?',
+        [expected.core.id],
+      );
+      if (deleted) return;
+      const result = await this.db!.runAsync(
+        'UPDATE properties SET data = ?, search_text = ? WHERE id = ? AND data = ?',
+        [
+          JSON.stringify(replacement),
+          getPropertySearchText(replacement),
+          expected.core.id,
+          JSON.stringify(expected),
+        ],
+      );
+      updated = result.changes === 1;
+    });
+    return updated;
+  }
+
+  canSafelyUpdate() {
+    return true;
+  }
+
+  canPermanentlyDelete() {
+    return true;
+  }
+
+  async getDeletedPropertyIds(): Promise<string[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    return (await this.db.getAllAsync<{id:string}>('SELECT id FROM deleted_property_ids ORDER BY id')).map(row => row.id);
+  }
+
+  async getProperties(): Promise<Property[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM properties',
+    );
+    const chronology = await this.db.getAllAsync<{ id: string; created_at: number }>(
+      'SELECT id, created_at FROM property_creation_chronology',
+      [],
+    );
+    const chronologyById = new Map(chronology.map(row => [row.id, row.created_at]));
+    const properties = rows.flatMap(row => {
+      const property = this.parsePropertyRow(row);
+      return property
+        ? [{
+          property,
+          entry: {
+            id: row.id,
+            createdAt: chronologyById.get(row.id)
+              ?? UNKNOWN_CREATION_TIMESTAMP,
+          },
+        }]
+        : [];
+    });
+    return sortByChronology(properties, item => item.entry).map(item => item.property);
+  }
+
+  async searchProperties(query: string): Promise<Property[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const properties = await this.getProperties();
+    const term = query.toLocaleLowerCase();
+    return properties.filter(property => getPropertySearchText(property).includes(term));
+  }
+
+  async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
+    return this.deletePropertiesSnapshot([expected], { cooperatingWritersConfirmed: true });
+  }
+
+  async deletePropertiesSnapshot(
+    expected: readonly Property[],
+    _capability?: PropertyDeletionCapability,
+  ): Promise<PropertyDeletionResult> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (new Set(expected.map(property => property.core.id)).size !== expected.length) {
+      return { status: 'duplicate' };
+    }
+    let result: PropertyDeletionResult = { status: 'stale' };
+    await nativeMutations.enqueue(async () => {
+      await this.db!.withTransactionAsync(async () => {
+        for (const property of expected) {
+          const rows = await this.db!.getAllAsync<{ data: string }>(
+            'SELECT data FROM properties WHERE id = ?',
+            [property.core.id],
+          );
+          if (rows.length === 0) {
+            result = { status: 'missing' };
+            throw new Error('DELETE_PRECONDITION');
+          }
+          if (rows.length !== 1 || rows[0].data !== JSON.stringify(property)) {
+            result = rows.length > 1 ? { status: 'duplicate' } : { status: 'stale' };
+            throw new Error('DELETE_PRECONDITION');
+          }
+        }
+        for (const property of expected) {
+          await this.db!.runAsync(
+            `INSERT INTO deleted_property_ids (id, generation) VALUES (?, 1)
+             ON CONFLICT(id) DO UPDATE SET generation = generation + 1`,
+            [property.core.id],
+          );
+          const deleted = await this.db!.runAsync(
+            'DELETE FROM properties WHERE id = ? AND data = ?',
+            [property.core.id, JSON.stringify(property)],
+          );
+          if (deleted.changes !== 1) throw new Error('DELETE_PRECONDITION');
+           await this.db!.runAsync(
+             'DELETE FROM person_property_links WHERE property_core_id = ?',
+             [property.core.id],
+           );
+            await this.db!.runAsync(
+              'DELETE FROM property_sources WHERE property_core_id = ?',
+              [property.core.id],
+            );
+        }
+        result = { status: 'deleted', count: expected.length };
+      });
+    }).catch(error => {
+      if (error instanceof Error && error.message === 'DELETE_PRECONDITION') return;
+      throw error;
+    });
+    return result;
+  }
+
+  async getPropertyInventory(): Promise<PropertyInventory> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ id: string }>('SELECT id FROM properties ORDER BY id');
+    return { count: rows.length, ids: rows.map(row => row.id) };
+  }
+
+  async savePerson(person: Person): Promise<Person> {
+    if (!this.db) throw new Error('DB not initialized');
+    assertValidPerson(person);
+    let resolved = person;
+    await nativeMutations.enqueue(async () => {
+      const existing = await this.db!.getFirstAsync<{ data: string }>(
+        'SELECT data FROM people WHERE id = ?',
+        [person.id],
+      );
+      if (existing) {
+        if (existing.data !== JSON.stringify(person)) throw new Error('PERSON_ID_ALREADY_EXISTS');
+        resolved = person;
+        return;
+      }
+      const rows = await this.db!.getAllAsync<{ id: string; data: string }>(
+        'SELECT id, data FROM people',
+      );
+      const samePhone = rows.map(row => this.parsePersonRow(row))
+        .filter((candidate): candidate is Person => candidate !== null)
+        .find(candidate => candidate.normalizedPhone === person.normalizedPhone);
+      if (samePhone) {
+        const enriched = enrichPersonIdentity(samePhone, person);
+        if (JSON.stringify(enriched) !== JSON.stringify(samePhone)) {
+          await this.db!.runAsync(
+            'UPDATE people SET data = ?, search_text = ? WHERE id = ? AND data = ?',
+            [JSON.stringify(enriched), getPersonSearchText(enriched), samePhone.id, JSON.stringify(samePhone)],
+          );
+        }
+        resolved = enriched;
+        return;
+      }
+      await this.db!.withTransactionAsync(async () => {
+        await this.db!.runAsync(
+          'INSERT INTO people (id, data, search_text) VALUES (?, ?, ?)',
+          [person.id, JSON.stringify(person), getPersonSearchText(person)],
+        );
+        await this.db!.runAsync(
+          'INSERT OR IGNORE INTO person_creation_chronology (id, created_at) VALUES (?, ?)',
+          [person.id, createCreationTimestamp()],
+        );
+      });
+      resolved = person;
+    });
+    return resolved;
+  }
+
+  async getPerson(id: string): Promise<Person | null> {
+    if (!this.db) throw new Error('DB not initialized');
+    const row = await this.db.getFirstAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM people WHERE id = ?',
+      [id],
+    );
+    return row ? this.parsePersonRow(row) : null;
+  }
+
+  async updatePerson(expected: Person, replacement: Person): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (expected.id !== replacement.id) return false;
+    assertValidPerson(replacement);
+    let updated = false;
+    await nativeMutations.enqueue(async () => {
+      const people = await this.db!.getAllAsync<{ id: string; data: string }>(
+        'SELECT id, data FROM people',
+      );
+      const current = people.find(row => row.id === expected.id);
+      if (!current || current.data !== JSON.stringify(expected)) return;
+      const collision = people.map(row => this.parsePersonRow(row)).find(candidate => {
+        return candidate?.id !== replacement.id
+          && candidate?.normalizedPhone === replacement.normalizedPhone;
+      });
+      if (collision) {
+        await this.consolidateNativePeople([replacement, collision], replacement);
+        updated = true;
+        return;
+      }
+      const result = await this.db!.runAsync(
+        'UPDATE people SET data = ?, search_text = ? WHERE id = ? AND data = ?',
+        [
+          JSON.stringify(replacement),
+          getPersonSearchText(replacement),
+          expected.id,
+          JSON.stringify(expected),
+        ],
+      );
+      updated = result.changes === 1;
+    });
+    return updated;
+  }
+
+  private parseRequirementForConsolidation(row: { id: string; data: string }): {
+    id: string; seekerId?: string; literal: Record<string, unknown>;
+  } | null {
+    try {
+      const literal = JSON.parse(row.data) as unknown;
+      const value = normalizeSeekerRequirement(literal, {
+        isCanonicalAreaId: id => getAreaById(id) !== undefined,
+      });
+      return value.ok && value.value.id === row.id
+        && typeof literal === 'object' && literal !== null && !Array.isArray(literal)
+        ? {
+          id: value.value.id,
+          ...(value.value.seekerId ? { seekerId: value.value.seekerId } : {}),
+          literal: literal as Record<string, unknown>,
+        }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async preflightNativeConsolidationStorage(): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    const [peopleRows, propertyRows, links, sources] = await Promise.all([
+      this.db.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM people'),
+      this.db.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM properties'),
+      this.db.getAllAsync<{ personId: string; propertyCoreId: string }>(
+        `SELECT person_id AS personId, property_core_id AS propertyCoreId
+         FROM person_property_links`,
+      ),
+      this.db.getAllAsync<{ propertyCoreId: string; personId: string; role: PropertySource['role'] }>(
+        `SELECT property_core_id AS propertyCoreId, person_id AS personId, role
+         FROM property_sources`,
+      ),
+    ]);
+    const people = peopleRows.map(row => this.parsePersonRow(row));
+    if (people.some(person => person === null)) throw new Error('UNREADABLE_PERSON_STORAGE');
+    const properties = propertyRows.map(row => this.parsePropertyRow(row));
+    if (properties.some(property => property === null)) throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    const readablePeople = new Map(
+      people.filter((person): person is Person => person !== null).map(person => [person.id, person]),
+    );
+    const readablePropertyIds = new Set(
+      properties.filter((property): property is Property => property !== null)
+        .map(property => property.core.id),
+    );
+    if (links.some(link => !link
+      || typeof link.personId !== 'string' || !link.personId
+      || typeof link.propertyCoreId !== 'string' || !link.propertyCoreId
+      || !readablePeople.has(link.personId) || !readablePropertyIds.has(link.propertyCoreId))) {
+      throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    }
+    if (sources.some(source => {
+      try {
+        if (!source || !validatePropertySource(source).ok) return true;
+        const person = readablePeople.get(source.personId);
+        return !person
+          || !readablePropertyIds.has(source.propertyCoreId);
+      } catch {
+        return true;
+      }
+    })) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    }
+  }
+
+  private async consolidateNativePeople(
+    candidates: readonly Person[],
+    replacement?: Person,
+  ): Promise<Person> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM people');
+    const parsed = rows.map(row => ({ row, person: this.parsePersonRow(row) }));
+    const matching = parsed.flatMap(item => item.person
+      && candidates.some(candidate => candidate.id === item.person!.id)
+      ? [item.person] : []);
+    if (matching.length < 2) return candidates[0];
+    const chronology = await this.db.getAllAsync<{ id: string; created_at: number }>(
+      'SELECT id, created_at FROM person_creation_chronology',
+    );
+    const createdAt = new Map(chronology.map(row => [row.id, row.created_at]));
+    const survivor = [...matching].sort((a, b) =>
+      (createdAt.get(a.id) ?? UNKNOWN_CREATION_TIMESTAMP) - (createdAt.get(b.id) ?? UNKNOWN_CREATION_TIMESTAMP)
+      || a.id.localeCompare(b.id))[0];
+    const effective = matching.map(person =>
+      replacement?.id === person.id ? replacement : person);
+    const effectiveSurvivor = effective.find(person => person.id === survivor.id)!;
+    const merged = effective.reduce(
+      (current, person) => current.id === person.id ? current : enrichPersonIdentity(current, person),
+      effectiveSurvivor,
+    );
+    const requirements = await this.db.getAllAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM seeker_requirements',
+    );
+    const losers = matching.filter(person => person.id !== survivor.id);
+    const loserIds = new Set(losers.map(person => person.id));
+    const parsedRequirements = requirements.map(row => ({
+      row,
+      requirement: this.parseRequirementForConsolidation(row),
+    }));
+    if (parsedRequirements.some(item => !item.requirement)) {
+      throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
+    }
+    await this.preflightNativeConsolidationStorage();
+    await this.db.withTransactionAsync(async () => {
+      await this.db!.runAsync(
+        'UPDATE people SET data = ?, search_text = ? WHERE id = ?',
+        [JSON.stringify(merged), getPersonSearchText(merged), survivor.id],
+      );
+      for (const loser of losers) {
+        await this.db!.runAsync(
+          'INSERT OR IGNORE INTO person_property_links (person_id, property_core_id) SELECT ?, property_core_id FROM person_property_links WHERE person_id = ?',
+          [survivor.id, loser.id],
+        );
+        await this.db!.runAsync('DELETE FROM person_property_links WHERE person_id = ?', [loser.id]);
+        await this.db!.runAsync('UPDATE property_sources SET person_id = ? WHERE person_id = ?', [survivor.id, loser.id]);
+      }
+      for (const item of parsedRequirements) {
+        if (item.requirement?.seekerId && loserIds.has(item.requirement.seekerId)) {
+          const replacement = { ...item.requirement.literal, seekerId: survivor.id };
+          await this.db!.runAsync(
+            'UPDATE seeker_requirements SET data = ? WHERE id = ? AND data = ?',
+            [JSON.stringify(replacement), item.row.id, item.row.data],
+          );
+        }
+      }
+      for (const loser of losers) {
+        await this.db!.runAsync('DELETE FROM people WHERE id = ?', [loser.id]);
+      }
+    });
+    return merged;
+  }
+
+  private async consolidateDuplicatePeople(): Promise<void> {
+    if (!this.db) return;
+    await nativeMutations.enqueue(async () => {
+      const people = await this.db!.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM people');
+      const parsed = people.map(row => this.parsePersonRow(row));
+      const groups = new Map<string, Person[]>();
+      for (const person of parsed.filter((person): person is Person => person !== null)) {
+        groups.set(person.normalizedPhone, [...(groups.get(person.normalizedPhone) ?? []), person]);
+      }
+      for (const group of groups.values()) if (group.length > 1) await this.consolidateNativePeople(group);
+    });
+  }
+
+  async getPeople(): Promise<Person[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ id: string; data: string }>(
+      'SELECT id, data FROM people',
+    );
+    const chronology = await this.db.getAllAsync<{ id: string; created_at: number }>(
+      'SELECT id, created_at FROM person_creation_chronology',
+      [],
+    );
+    const chronologyById = new Map(chronology.map(row => [row.id, row.created_at]));
+    const people = rows.flatMap(row => {
+      const person = this.parsePersonRow(row);
+      return person
+        ? [{
+          person,
+          entry: {
+            id: row.id,
+            createdAt: chronologyById.get(row.id)
+              ?? UNKNOWN_CREATION_TIMESTAMP,
+          },
+        }]
+        : [];
+    });
+    return sortByChronology(people, item => item.entry).map(item => item.person);
+  }
+
+  async searchPeople(query: string): Promise<Person[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    return (await this.getPeople()).filter(person => personMatchesSearch(person, query));
+  }
+
+  async deletePerson(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    let deleted = false;
+    await nativeMutations.enqueue(async () => {
+      await this.db!.withTransactionAsync(async () => {
+        await this.db!.runAsync('DELETE FROM person_property_links WHERE person_id = ?', [id]);
+        await this.db!.runAsync('DELETE FROM property_sources WHERE person_id = ?', [id]);
+        const result = await this.db!.runAsync('DELETE FROM people WHERE id = ?', [id]);
+        deleted = result.changes === 1;
+      });
+    });
+    return deleted;
+  }
+
+  async linkPersonToProperty(link: PersonPropertyLink): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (!link.personId || !link.propertyCoreId) throw new Error('INVALID_PERSON_PROPERTY_LINK');
+    await nativeMutations.enqueue(async () => {
+      const [person, property] = await Promise.all([
+        this.db!.getFirstAsync<{ id: string }>('SELECT id FROM people WHERE id = ?', [link.personId]),
+        this.db!.getFirstAsync<{ id: string }>('SELECT id FROM properties WHERE id = ?', [link.propertyCoreId]),
+      ]);
+      if (!person || !property) throw new Error('PERSON_PROPERTY_LINK_TARGET_MISSING');
+      await this.db!.runAsync(
+        'INSERT OR IGNORE INTO person_property_links (person_id, property_core_id) VALUES (?, ?)',
+        [link.personId, link.propertyCoreId],
+      );
+    });
+  }
+
+  async unlinkPersonFromProperty(link: PersonPropertyLink): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    let unlinked = false;
+    await nativeMutations.enqueue(async () => {
+      const result = await this.db!.runAsync(
+        'DELETE FROM person_property_links WHERE person_id = ? AND property_core_id = ?',
+        [link.personId, link.propertyCoreId],
+      );
+      unlinked = result.changes === 1;
+    });
+    return unlinked;
+  }
+
+  async getPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{ personId: string; propertyCoreId: string }>(
+      `SELECT person_id AS personId, property_core_id AS propertyCoreId
+       FROM person_property_links ORDER BY person_id, property_core_id`,
+    );
+    return rows;
+  }
+
+  async getLinksForPerson(personId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks()).filter(link => link.personId === personId);
+  }
+
+  async getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks())
+      .filter(link => link.propertyCoreId === propertyCoreId);
+  }
+
+  async setPropertySource(source: PropertySource): Promise<void> {
+    if (!this.db) throw new Error('DB not initialized');
+    const validation = validatePropertySource(source);
+    if (!validation.ok) throw new Error('INVALID_PROPERTY_SOURCE');
+    await nativeMutations.enqueue(async () => {
+      await this.db!.withTransactionAsync(async () => {
+        const [person, property] = await Promise.all([
+          this.db!.getFirstAsync<{ id: string; data: string }>('SELECT id, data FROM people WHERE id = ?', [source.personId]),
+          this.db!.getFirstAsync<{ id: string }>('SELECT id FROM properties WHERE id = ?', [source.propertyCoreId]),
+        ]);
+        if (!person || !property) throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
+        const sourcePerson = this.parsePersonRow(person);
+        if (!sourcePerson) throw new Error('UNREADABLE_PERSON_STORAGE');
+        await this.db!.runAsync(
+          `INSERT INTO property_sources (property_core_id, person_id, role) VALUES (?, ?, ?)
+           ON CONFLICT(property_core_id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role`,
+          [source.propertyCoreId, source.personId, source.role],
+        );
+      });
+    });
+  }
+
+  async getPropertySource(propertyCoreId: string): Promise<PropertySource | null> {
+    if (!this.db) throw new Error('DB not initialized');
+    const row = await this.db.getFirstAsync<{
+      propertyCoreId: string; personId: string; role: PropertySource['role'];
+    }>(
+      `SELECT property_core_id AS propertyCoreId, person_id AS personId, role
+       FROM property_sources WHERE property_core_id = ?`,
+      [propertyCoreId],
+    );
+    if (!row) return null;
+    const source = { propertyCoreId: row.propertyCoreId, personId: row.personId, role: row.role };
+    if (!validatePropertySource(source).ok) throw new Error('UNREADABLE_PROPERTY_SOURCE');
+    return source;
+  }
+
+  async removePropertySource(propertyCoreId: string): Promise<boolean> {
+    if (!this.db) throw new Error('DB not initialized');
+    let removed = false;
+    await nativeMutations.enqueue(async () => {
+      const result = await this.db!.runAsync(
+        'DELETE FROM property_sources WHERE property_core_id = ?',
+        [propertyCoreId],
+      );
+      removed = result.changes === 1;
+    });
+    return removed;
+  }
+
+  async getPropertySourcesForPerson(personId: string): Promise<PropertySource[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    const rows = await this.db.getAllAsync<{
+      propertyCoreId: string; personId: string; role: PropertySource['role'];
+    }>(
+      `SELECT property_core_id AS propertyCoreId, person_id AS personId, role
+       FROM property_sources WHERE person_id = ? ORDER BY property_core_id`,
+      [personId],
+    );
+    const sources = rows.map(row => ({ propertyCoreId: row.propertyCoreId, personId: row.personId, role: row.role }));
+    if (sources.some(source => !validatePropertySource(source).ok)) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE');
+    }
+    return sources;
+  }
+
+  saveRequirement = (requirement: Parameters<RequirementStore['saveRequirement']>[0]) =>
+    this.requirements.saveRequirement(requirement);
+
+  getRequirement = (id: string) => this.requirements.getRequirement(id);
+
+  getRequirements = () => this.requirements.getRequirements();
+
+  getRequirementsForSeeker = (seekerId: string) =>
+    this.requirements.getRequirementsForSeeker(seekerId);
+
+  updateRequirement = (
+    expected: Parameters<RequirementStore['updateRequirement']>[0],
+    replacement: Parameters<RequirementStore['updateRequirement']>[1],
+  ) => this.requirements.updateRequirement(expected, replacement);
+}
+
+export class WebStore implements PropertyStore, PersonStore, RequirementStore {
+  private readonly KEY = '@viewstate_properties';
+  private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1';
+  private readonly PEOPLE_KEY = '@viewstate_people_v1';
+  private readonly PERSON_PROPERTY_LINKS_KEY = '@viewstate_person_property_links_v1';
+  private readonly PROPERTY_SOURCES_KEY = '@viewstate_property_sources_v1';
+  private initialization: Promise<void> | null = null;
+  private integrityWarnings: UnreadableRecord[] = [];
+  private readonly requirementsEnabled: boolean;
+  private readonly requirements: WebRequirementStore;
+
+  constructor(
+    private readonly storage: KeyValueStorage = AsyncStorage,
+    private readonly suppliedLocks?: LockManager | null,
+    options: RequirementPersistenceOptions = {},
+  ) {
+    this.requirementsEnabled = options.requirementsEnabled ?? true;
+    this.requirements = new WebRequirementStore(
+      storage,
+      () => this.lockManager,
+      this,
+      warning => appendUnreadableRecord(this.integrityWarnings, warning),
+      options,
+    );
+  }
+
+  async init() {
+    await this.recoverWorkspace();
+    if (!this.initialization) {
+      const attempt = migrateStage01B1WebProperties(this.storage, this.KEY)
+        .then(() => this.withChronologyMutationLock(() =>
+          migrateWebStoreChronology({
+            storage: this.storage,
+            propertiesKey: this.KEY,
+            peopleKey: this.PEOPLE_KEY,
+            requirementsKey: this.requirementsEnabled
+              ? WEB_REQUIREMENTS_KEY
+              : undefined,
+          })))
+        .then(() => undefined);
+      this.initialization = attempt;
+      attempt.catch(() => {
+        if (this.initialization === attempt) this.initialization = null;
+      });
+    }
+    await this.initialization;
+    await this.consolidateDuplicatePeople();
+  }
+
+  getIntegrityStatus(): LocalStoreIntegrityStatus {
+    return {
+      unreadableRecords: [...this.integrityWarnings],
+      hasUnreadableRecords: this.integrityWarnings.length > 0,
+    };
+  }
+
+  /** Raw array access for non-deletion mutations; never call from visible reads. */
+  private async getAllRaw(): Promise<Property[]> {
+    const data = await this.storage.getItem(this.KEY);
+    if (data === null) return [];
+    const parsed = JSON.parse(data) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    return parsed as Property[];
+  }
+
+  /** Visible reads honor durable ID-only deletion fences without recursive reads. */
+  private async getAll(): Promise<Property[]> {
+    const [all, deletedIds] = await Promise.all([
+      this.getAllRaw(),
+      this.getDeletedIds(),
+    ]);
+    return all.filter(property => !deletedIds.has(property.core.id));
+  }
+
+  private get lockManager(): LockManager | null {
+    if (this.suppliedLocks !== undefined) return this.suppliedLocks;
+    const manager = typeof navigator === 'undefined'
+      ? undefined
+      : (navigator as Navigator & { locks?: unknown }).locks;
+    if (!manager || typeof (manager as { request?: unknown }).request !== 'function') return null;
+    return manager as LockManager;
+  }
+
+  private async withMutationLock<T>(work: () => Promise<T>): Promise<T> {
+    const locks = this.lockManager;
+    if (!locks) {
+      throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
+    }
+    return locks.request('viewstate-properties-mutation', { mode: 'exclusive' }, work);
+  }
+
+  private async withChronologyMutationLock<T>(work: () => Promise<T>): Promise<T> {
+    const locks = this.lockManager;
+    // Without Web Locks, browser mutations are already disabled. Initialization
+    // may still safely perform its one-time migration because no writer can race it.
+    if (!locks) return work();
+    return locks.request('viewstate-chronology-mutation', { mode: 'exclusive' }, work);
+  }
+
+  async recoverWorkspace(){
+    const key='@viewstate_sync_web_journal_v1',raw=await this.storage.getItem(key);if(!raw)return;
+    const journal=JSON.parse(raw) as {version:number;rows:{key:string;before:string|null;after:string}[]};
+    if(journal.version!==1||!Array.isArray(journal.rows)||journal.rows.some(r=>![this.KEY,this.PEOPLE_KEY,this.PERSON_PROPERTY_LINKS_KEY,this.PROPERTY_SOURCES_KEY,WEB_REQUIREMENTS_KEY,this.DELETED_KEY].includes(r.key)))throw new Error('SYNC_JOURNAL_DAMAGED');
+    const values=await Promise.all(journal.rows.map(r=>this.storage.getItem(r.key)));
+    if(!values.every((v,i)=>v===journal.rows[i].after)){
+      if(!values.every((v,i)=>v===journal.rows[i].before||v===journal.rows[i].after))throw new Error('SYNC_JOURNAL_CONCURRENT_CHANGE');
+      for(const row of journal.rows){if(row.before===null&&this.storage.removeItem)await this.storage.removeItem(row.key);else await this.storage.setItem(row.key,row.before??(row.key===this.DELETED_KEY?'{"version":1,"ids":[]}':'[]'));}
+    }
+    await this.storage.setItem(key,'');
+  }
+  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+    validateBusiness(next);
+    await this.withChronologyMutationLock(()=>this.withPeopleMutationLock(()=>this.withMutationLock(async()=>{
+      await this.recoverWorkspace();if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
+      const deleted=[...new Set([...(await this.getDeletedIds()), ...(next.deletedPropertyIds ?? [])])];
+      if(next.properties.some(p=>deleted.includes(p.core.id)))throw new Error('PROPERTY_ID_DELETED');
+      const rows=await Promise.all([[this.KEY,next.properties],[this.PEOPLE_KEY,next.people],[WEB_REQUIREMENTS_KEY,next.requirements],[this.PERSON_PROPERTY_LINKS_KEY,next.links],[this.PROPERTY_SOURCES_KEY,next.sources],[this.DELETED_KEY,{version:1,ids:deleted}]].map(async([key,value])=>({key:key as string,before:await this.storage.getItem(key as string),after:JSON.stringify(value)})));
+      const journal=JSON.stringify({version:1,rows});await this.storage.setItem('@viewstate_sync_web_journal_v1',journal);
+      if(await this.storage.getItem('@viewstate_sync_web_journal_v1')!==journal)throw new Error('SYNC_JOURNAL_FAILED');
+      try{for(const row of rows)await this.storage.setItem(row.key,row.after);for(const row of rows)if(await this.storage.getItem(row.key)!==row.after)throw new Error('SYNC_LOCAL_WRITE_FAILED');}
+      catch(error){await this.recoverWorkspace();throw error;}
+      await this.storage.setItem('@viewstate_sync_web_journal_v1','');
+    })));
+  }
+
+  async saveProperty(property: Property) {
+    await this.withChronologyMutationLock(() =>
+      this.withMutationLock(async () => {
+        const all = await this.getAllRaw();
+        if ((await this.getDeletedIds()).has(property.core.id)) {
+          throw new Error('PROPERTY_ID_DELETED');
+        }
+        const existing = all.findIndex(p => p.core.id === property.core.id);
+        if (existing >= 0) {
+          if (JSON.stringify(all[existing]) !== JSON.stringify(property)) {
+            throw new Error('PROPERTY_ID_ALREADY_EXISTS');
+          }
+          const chronology = await getWebChronology(this.storage, 'property');
+          await addWebChronology(
+            this.storage,
+            'property',
+            property.core.id,
+            chronology.get(property.core.id) ?? UNKNOWN_CREATION_TIMESTAMP,
+          );
+          return;
+        }
+        await addWebChronology(
+          this.storage,
+          'property',
+          property.core.id,
+          createCreationTimestamp(),
+        );
+        all.unshift(property);
+        await this.storage.setItem(this.KEY, JSON.stringify(all));
+      }));
+  }
+
+  async getProperty(id: string): Promise<Property | null> {
+    const matching = (await this.getAll()).filter(property => property.core.id === id);
+    if (matching.length > 1) throw new Error('DUPLICATE_PROPERTY');
+    return matching[0] ?? null;
+  }
+
+  async compareAndUpdate(expected: Property, replacement: Property): Promise<boolean> {
+    if (expected.core.id !== replacement.core.id || !this.canSafelyUpdate()) return false;
+    return this.withMutationLock(async () => {
+      const all = await this.getAllRaw();
+      if ((await this.getDeletedIds()).has(expected.core.id)) return false;
+      const matching = all
+        .map((property, index) => ({ property, index }))
+        .filter(item => item.property.core.id === expected.core.id);
+      if (
+        matching.length !== 1
+        || JSON.stringify(matching[0].property) !== JSON.stringify(expected)
+      ) {
+        return false;
+      }
+      all[matching[0].index] = replacement;
+      await this.storage.setItem(this.KEY, JSON.stringify(all));
+      return true;
+    });
+  }
+
+  canSafelyUpdate() {
+    return this.lockManager !== null;
+  }
+
+  canPermanentlyDelete() {
+    return this.lockManager !== null;
+  }
+
+  async getDeletedPropertyIds(): Promise<string[]> { return [...await this.getDeletedIds()].sort(); }
+
+  async getProperties(): Promise<Property[]> {
+    const [properties, chronology] = await Promise.all([
+      this.getAll(),
+      getWebChronology(this.storage, 'property'),
+    ]);
+    return sortByChronology(properties, property => ({
+      id: property.core.id,
+      createdAt: chronology.get(property.core.id)
+        ?? UNKNOWN_CREATION_TIMESTAMP,
+    }));
+  }
+
+  async searchProperties(query: string): Promise<Property[]> {
+    const all = await this.getProperties();
+    const q = query.toLowerCase();
+    return all.filter(p => {
+      return getPropertySearchText(p).includes(q);
+    });
+  }
+
+  private async getDeletedIds(): Promise<Set<string>> {
+    const raw = await this.storage.getItem(this.DELETED_KEY);
+    if (raw === null) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      !parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+      || (parsed as { version?: unknown }).version !== 1
+      || !Array.isArray((parsed as { ids?: unknown }).ids)
+      || !(parsed as { ids: unknown[] }).ids.every(id => typeof id === 'string')
+    ) throw new Error('UNREADABLE_DELETION_SAFEGUARD');
+    return new Set((parsed as { ids: string[] }).ids);
+  }
+
+  async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
+    if (!this.canPermanentlyDelete()) return { status: 'unsupported' };
+    const before = await readBusiness(this);
+    const matches = before.properties.filter(p => p.core.id === expected.core.id);
+    if (!matches.length) return { status: 'missing' };
+    if (matches.length !== 1) return { status: 'duplicate' };
+    if (JSON.stringify(matches[0]) !== JSON.stringify(expected)) return { status: 'stale' };
+    const id = expected.core.id;
+    // The existing verified workspace journal makes all related arrays and the
+    // deletion fence one recoverable operation, under the same writer locks.
+    await this.replaceWorkspace(before, {
+      ...before,
+      properties: before.properties.filter(p => p.core.id !== id),
+      deletedPropertyIds: [...new Set([...(before.deletedPropertyIds ?? []), id])],
+      links: before.links.filter(l => l.propertyCoreId !== id),
+      sources: before.sources.filter(s => s.propertyCoreId !== id),
+    });
+    return { status: 'deleted', count: 1 };
+  }
+
+  async deletePropertiesSnapshot(
+    _expected: readonly Property[],
+    _capability?: PropertyDeletionCapability,
+  ): Promise<PropertyDeletionResult> {
+    // Do not add a caller assertion or lock-based escape hatch here. Only the
+    // native SQLite adapter has a transaction spanning fence and exact deletes.
+    return { status: 'unsupported' };
+  }
+
+  async getPropertyInventory(): Promise<PropertyInventory> {
+    const all = await this.getAll();
+    const ids = all.map(property => property.core.id);
+    if (new Set(ids).size !== ids.length) throw new Error('DUPLICATE_PROPERTY');
+    return { count: ids.length, ids: [...ids].sort() };
+  }
+
+  private async getAllPeople(): Promise<Person[]> {
+    const raw = await this.storage.getItem(this.PEOPLE_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PERSON_STORAGE');
+    return parsed as Person[];
+  }
+
+  private async getAllPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
+    const raw = await this.storage.getItem(this.PERSON_PROPERTY_LINKS_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    return parsed as PersonPropertyLink[];
+  }
+
+  private async getAllPropertySources(): Promise<PropertySource[]> {
+    const raw = await this.storage.getItem(this.PROPERTY_SOURCES_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    const sources = parsed as PropertySource[];
+    if (sources.some(source => !validatePropertySource(source).ok)) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    }
+    if (new Set(sources.map(source => source.propertyCoreId)).size !== sources.length) {
+      throw new Error('DUPLICATE_PROPERTY_SOURCE');
+    }
+    return sources;
+  }
+
+  private async withPeopleMutationLock<T>(work: () => Promise<T>): Promise<T> {
+    const locks = this.lockManager;
+    if (!locks) throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
+    return locks.request(PERSON_REQUIREMENT_MUTATION_LOCK, { mode: 'exclusive' }, work);
+  }
+
+  async savePerson(person: Person): Promise<Person> {
+    assertValidPerson(person);
+    return this.withChronologyMutationLock(() =>
+      this.withPeopleMutationLock(async () => {
+        const all = await this.getAllPeople();
+        if (all.some(candidate => {
+          try { assertValidPerson(candidate); return false; } catch { return true; }
+        })) throw new Error('UNREADABLE_PERSON_STORAGE');
+        const existing = all.find(item => item.id === person.id);
+        if (existing) {
+          if (JSON.stringify(existing) !== JSON.stringify(person)) {
+            throw new Error('PERSON_ID_ALREADY_EXISTS');
+          }
+          const chronology = await getWebChronology(this.storage, 'person');
+          await addWebChronology(
+            this.storage,
+            'person',
+            person.id,
+            chronology.get(person.id) ?? UNKNOWN_CREATION_TIMESTAMP,
+          );
+          return existing;
+        }
+        const samePhone = all.find(candidate =>
+          candidate.normalizedPhone === person.normalizedPhone,
+        );
+        if (samePhone) {
+          const enriched = enrichPersonIdentity(samePhone, person);
+          if (JSON.stringify(enriched) !== JSON.stringify(samePhone)) {
+            all[all.indexOf(samePhone)] = enriched;
+            await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
+          }
+          return enriched;
+        }
+        await addWebChronology(this.storage, 'person', person.id, createCreationTimestamp());
+        all.unshift(person);
+        await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
+        return person;
+      }));
+  }
+
+  async getPerson(id: string): Promise<Person | null> {
+    const matching = (await this.getAllPeople()).filter(person => person.id === id);
+    if (matching.length > 1) throw new Error('DUPLICATE_PERSON');
+    return matching[0] ?? null;
+  }
+
+  async updatePerson(expected: Person, replacement: Person): Promise<boolean> {
+    if (expected.id !== replacement.id) return false;
+    assertValidPerson(replacement);
+    return this.withPeopleMutationLock(async () => {
+      const all = await this.getAllPeople();
+      if (all.some(candidate => {
+        try { assertValidPerson(candidate); return false; } catch { return true; }
+      })) throw new Error('UNREADABLE_PERSON_STORAGE');
+      const matching = all
+        .map((person, index) => ({ person, index }))
+        .filter(item => item.person.id === expected.id);
+      if (
+        matching.length !== 1
+        || JSON.stringify(matching[0].person) !== JSON.stringify(expected)
+      ) return false;
+      const collision = all.find(item =>
+        item.id !== replacement.id && item.normalizedPhone === replacement.normalizedPhone
+      );
+      if (collision) {
+        await this.consolidateWebPeople([replacement, collision], all, replacement);
+        return true;
+      }
+      all[matching[0].index] = replacement;
+      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
+      return true;
+    });
+  }
+
+  async getPeople(): Promise<Person[]> {
+    const [people, chronology] = await Promise.all([
+      this.getAllPeople(),
+      getWebChronology(this.storage, 'person'),
+    ]);
+    return sortByChronology(people, person => ({
+      id: person.id,
+      createdAt: chronology.get(person.id)
+        ?? UNKNOWN_CREATION_TIMESTAMP,
+    }));
+  }
+
+  private async getRawRequirementsForConsolidation(): Promise<{
+    raw: string | null;
+    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId?: string } }>;
+    unreadableSeekerIds: Array<string | null>;
+    rawValues: unknown[];
+  }> {
+    const raw = await this.storage.getItem(WEB_REQUIREMENTS_KEY);
+    if (raw === null) return { raw, values: [], unreadableSeekerIds: [], rawValues: [] };
+    try {
+      const array = JSON.parse(raw) as unknown;
+      if (!Array.isArray(array)) throw new Error('invalid');
+      const unreadableSeekerIds: Array<string | null> = [];
+      const values = array.flatMap(value => {
+        const normalized = normalizeSeekerRequirement(value, {
+          isCanonicalAreaId: id => getAreaById(id) !== undefined,
+        });
+        if (!normalized.ok || typeof value !== 'object' || value === null || Array.isArray(value)) {
+          unreadableSeekerIds.push(
+            typeof value === 'object' && value !== null
+              && typeof (value as { seekerId?: unknown }).seekerId === 'string'
+              ? (value as { seekerId: string }).seekerId : null,
+          );
+          return [];
+        }
+        return [{ value: value as Record<string, unknown>, requirement: normalized.value }];
+      });
+      return { raw, values, unreadableSeekerIds, rawValues: array };
+    } catch {
+      throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
+    }
+  }
+
+  private async consolidateWebPeople(
+    candidates: readonly Person[],
+    suppliedPeople?: Person[],
+    replacement?: Person,
+  ): Promise<Person> {
+    const people = suppliedPeople ?? await this.getAllPeople();
+    if (people.some(person => {
+      try { assertValidPerson(person); return false; } catch { return true; }
+    })) throw new Error('UNREADABLE_PERSON_STORAGE');
+    const matching = people.filter(person => candidates.some(candidate => candidate.id === person.id));
+    if (matching.length < 2) return candidates[0];
+    const chronology = await getWebChronology(this.storage, 'person');
+    const survivor = [...matching].sort((a, b) =>
+      (chronology.get(a.id) ?? UNKNOWN_CREATION_TIMESTAMP) - (chronology.get(b.id) ?? UNKNOWN_CREATION_TIMESTAMP)
+      || a.id.localeCompare(b.id))[0];
+    const effective = matching.map(person =>
+      replacement?.id === person.id ? replacement : person);
+    const effectiveSurvivor = effective.find(person => person.id === survivor.id)!;
+    const merged = effective.reduce(
+      (current, person) => current.id === person.id ? current : enrichPersonIdentity(current, person),
+      effectiveSurvivor,
+    );
+    const losers = new Set(matching.filter(person => person.id !== survivor.id).map(person => person.id));
+    const [links, sources, requirements, properties] = await Promise.all([
+      this.getAllPersonPropertyLinks(),
+      this.getAllPropertySources(),
+      this.getRawRequirementsForConsolidation(),
+      this.getAll(),
+    ]);
+    if (requirements.unreadableSeekerIds.length > 0) {
+      throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
+    }
+    if (links.some(link => !link || typeof link.personId !== 'string'
+      || typeof link.propertyCoreId !== 'string' || !link.personId || !link.propertyCoreId)) {
+      throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    }
+    if (properties.some(property => !validateProperty(property).ok)) {
+      throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    }
+    const propertyIds = new Set(properties.map(property => property.core.id));
+    const personIds = new Set(people.map(person => person.id));
+    if (links.some(link =>
+      !personIds.has(link.personId) || !propertyIds.has(link.propertyCoreId)
+    )) {
+      throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    }
+    if (sources.some(source => {
+      const sourcePerson = people.find(person => person.id === source.personId);
+      return !propertyIds.has(source.propertyCoreId)
+        || !sourcePerson;
+    })) {
+      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    }
+    const nextPeople = people
+      .filter(person => !losers.has(person.id))
+      .map(person => person.id === survivor.id ? merged : person);
+    const linkSet = new Set<string>();
+    const nextLinks = links.flatMap(link => {
+      const next = losers.has(link.personId) ? { ...link, personId: survivor.id } : link;
+      const key = `${next.personId}\u0000${next.propertyCoreId}`;
+      return linkSet.has(key) ? [] : (linkSet.add(key), [next]);
+    });
+    const nextSources = sources.map(source => losers.has(source.personId)
+      ? { ...source, personId: survivor.id } : source);
+    const nextRequirements = requirements.rawValues.map(value => {
+      const item = requirements.values.find(candidate => candidate.value === value);
+      return item?.requirement.seekerId && losers.has(item.requirement.seekerId)
+        ? { ...item.value, seekerId: survivor.id } : value;
+    });
+    // Dependents first leaves the old person available if a later write fails.
+    // Best-effort rollback restores exact prior bytes before surfacing failure.
+    const writes: Array<[string, string | null, string]> = [
+      [this.PERSON_PROPERTY_LINKS_KEY, await this.storage.getItem(this.PERSON_PROPERTY_LINKS_KEY), JSON.stringify(nextLinks)],
+      [this.PROPERTY_SOURCES_KEY, await this.storage.getItem(this.PROPERTY_SOURCES_KEY), JSON.stringify(nextSources)],
+      [WEB_REQUIREMENTS_KEY, requirements.raw, JSON.stringify(nextRequirements)],
+      [this.PEOPLE_KEY, await this.storage.getItem(this.PEOPLE_KEY), JSON.stringify(nextPeople)],
+    ];
+    const completed: Array<[string, string | null]> = [];
+    try {
+      for (const [key, before, after] of writes) {
+        if (before === null && after === '[]') continue;
+        await this.storage.setItem(key, after);
+        completed.push([key, before]);
+      }
+    } catch (error) {
+      for (const [key, before] of completed.reverse()) {
+        if (before !== null) await this.storage.setItem(key, before).catch(() => undefined);
+      }
+      throw error;
+    }
+    return merged;
+  }
+
+  private async consolidateDuplicatePeople(): Promise<void> {
+    if (!this.lockManager) return;
+    await this.withPeopleMutationLock(async () => {
+      const people = await this.getAllPeople();
+      if (people.some(person => {
+        try { assertValidPerson(person); return false; } catch { return true; }
+      })) return;
+      const groups = new Map<string, Person[]>();
+      for (const person of people) {
+        groups.set(person.normalizedPhone, [...(groups.get(person.normalizedPhone) ?? []), person]);
+      }
+      for (const group of groups.values()) {
+        if (group.length > 1) await this.consolidateWebPeople(group);
+      }
+    });
+  }
+
+  async searchPeople(query: string): Promise<Person[]> {
+    return (await this.getPeople()).filter(person => personMatchesSearch(person, query));
+  }
+
+  async deletePerson(id: string): Promise<boolean> {
+    return this.withPeopleMutationLock(async () => {
+      const people = await this.getAllPeople();
+      const remainingPeople = people.filter(person => person.id !== id);
+      if (remainingPeople.length === people.length) return false;
+      const links = await this.getAllPersonPropertyLinks();
+      const remainingLinks = links.filter(link => link.personId !== id);
+      if (remainingLinks.length !== links.length) {
+        await this.storage.setItem(
+          this.PERSON_PROPERTY_LINKS_KEY,
+          JSON.stringify(remainingLinks),
+        );
+      }
+      const sources = await this.getAllPropertySources();
+      const remainingSources = sources.filter(source => source.personId !== id);
+      if (remainingSources.length !== sources.length) {
+        await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(remainingSources));
+      }
+      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(remainingPeople));
+      return true;
+    });
+  }
+
+  async linkPersonToProperty(link: PersonPropertyLink): Promise<void> {
+    if (!link.personId || !link.propertyCoreId) throw new Error('INVALID_PERSON_PROPERTY_LINK');
+    await this.withPeopleMutationLock(async () => {
+      const [people, property] = await Promise.all([
+        this.getAllPeople(),
+        this.getProperty(link.propertyCoreId),
+      ]);
+      if (!people.some(person => person.id === link.personId) || !property) {
+        throw new Error('PERSON_PROPERTY_LINK_TARGET_MISSING');
+      }
+      const links = await this.getAllPersonPropertyLinks();
+      if (links.some(item =>
+        item.personId === link.personId && item.propertyCoreId === link.propertyCoreId
+      )) return;
+      links.push({ personId: link.personId, propertyCoreId: link.propertyCoreId });
+      await this.storage.setItem(this.PERSON_PROPERTY_LINKS_KEY, JSON.stringify(links));
+    });
+  }
+
+  async unlinkPersonFromProperty(link: PersonPropertyLink): Promise<boolean> {
+    return this.withPeopleMutationLock(async () => {
+      const links = await this.getAllPersonPropertyLinks();
+      const remaining = links.filter(item =>
+        item.personId !== link.personId || item.propertyCoreId !== link.propertyCoreId
+      );
+      if (remaining.length === links.length) return false;
+      await this.storage.setItem(this.PERSON_PROPERTY_LINKS_KEY, JSON.stringify(remaining));
+      return true;
+    });
+  }
+
+  async getPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
+    const links = await this.getAllPersonPropertyLinks();
+    const pairs = links.map(link => `${link.personId}\u0000${link.propertyCoreId}`);
+    if (new Set(pairs).size !== pairs.length) throw new Error('DUPLICATE_PERSON_PROPERTY_LINK');
+    return links;
+  }
+
+  async getLinksForPerson(personId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks()).filter(link => link.personId === personId);
+  }
+
+  async getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks())
+      .filter(link => link.propertyCoreId === propertyCoreId);
+  }
+
+  async setPropertySource(source: PropertySource): Promise<void> {
+    const validation = validatePropertySource(source);
+    if (!validation.ok) throw new Error('INVALID_PROPERTY_SOURCE');
+    await this.withPeopleMutationLock(async () => {
+      const [people, property, sources] = await Promise.all([
+        this.getAllPeople(),
+        this.getProperty(source.propertyCoreId),
+        this.getAllPropertySources(),
+      ]);
+      const sourcePerson = people.find(person => person.id === source.personId);
+      if (!sourcePerson || !property) {
+        throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
+      }
+      const next = [
+        ...sources.filter(item => item.propertyCoreId !== source.propertyCoreId),
+        source,
+      ];
+      await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(next));
+    });
+  }
+
+  async getPropertySource(propertyCoreId: string): Promise<PropertySource | null> {
+    const matching = (await this.getAllPropertySources())
+      .filter(source => source.propertyCoreId === propertyCoreId);
+    if (matching.length > 1) throw new Error('DUPLICATE_PROPERTY_SOURCE');
+    return matching[0] ?? null;
+  }
+
+  async removePropertySource(propertyCoreId: string): Promise<boolean> {
+    return this.withPeopleMutationLock(async () => {
+      const sources = await this.getAllPropertySources();
+      const remaining = sources.filter(source => source.propertyCoreId !== propertyCoreId);
+      if (remaining.length === sources.length) return false;
+      await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(remaining));
+      return true;
+    });
+  }
+
+  async getPropertySourcesForPerson(personId: string): Promise<PropertySource[]> {
+    return (await this.getAllPropertySources()).filter(source => source.personId === personId);
+  }
+
+  saveRequirement = (requirement: Parameters<RequirementStore['saveRequirement']>[0]) =>
+    this.requirements.saveRequirement(requirement);
+
+  getRequirement = (id: string) => this.requirements.getRequirement(id);
+
+  getRequirements = () => this.requirements.getRequirements();
+
+  getRequirementsForSeeker = (seekerId: string) =>
+    this.requirements.getRequirementsForSeeker(seekerId);
+
+  getRequirementRecoveryReport(): RequirementRecoveryReport {
+    return this.requirements.getRecoveryReport();
+  }
+
+  updateRequirement = (
+    expected: Parameters<RequirementStore['updateRequirement']>[0],
+    replacement: Parameters<RequirementStore['updateRequirement']>[1],
+  ) => this.requirements.updateRequirement(expected, replacement);
+}
+
+export const store: PropertyStore & PersonStore & RequirementStore & {
+  getIntegrityStatus(): LocalStoreIntegrityStatus;
+} =
+  Platform.OS === 'web' ? new WebStore() : new SQLiteStore();
+
+export function getRequirementRecoveryReport(): RequirementRecoveryReport | null {
+  return store instanceof WebStore ? store.getRequirementRecoveryReport() : null;
+}

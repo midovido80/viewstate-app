@@ -1,0 +1,12 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.viewstateimport'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.viewstateimport'
+  defaultConfig { versionCode 1; versionName '1.0.0' }
+}
+repositories { maven { url 'https://jitpack.io' } }
+dependencies { implementation 'cz.adaptech.tesseract4android:tesseract4android:4.9.0' }

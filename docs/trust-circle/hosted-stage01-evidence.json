@@ -1,0 +1,1013 @@
+{
+  "catalog": [
+    {
+      "id": "29b03020-4e3e-4d9f-afd8-679a9a75446a",
+      "facts": {
+        "core": {
+          "id": "a52b0a7f-598e-40dc-a0d5-9f32c7aa92ea",
+          "locationArea": {
+            "id": "mahboula"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "2b171123-443e-407f-9899-6671128ec29e",
+          "rentalPrice": {
+            "amount": 335,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "a52b0a7f-598e-40dc-a0d5-9f32c7aa92ea",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "a52b0a7f-598e-40dc-a0d5-9f32c7aa92ea",
+      "publisher_id": "af10e247-676d-4beb-ab4b-a27a3efd78c7"
+    },
+    {
+      "id": "34a75fe8-9228-4061-9e12-0c31c52fc3f9",
+      "facts": {
+        "core": {
+          "id": "9714b78a-3b96-4f0c-ad60-2e2e5536829a",
+          "locationArea": {
+            "id": "hawally"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "75c85f10-6d57-430b-9160-b650d769447e",
+          "rentalPrice": {
+            "amount": 430,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "9714b78a-3b96-4f0c-ad60-2e2e5536829a",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "9714b78a-3b96-4f0c-ad60-2e2e5536829a",
+      "publisher_id": "01f5ae4f-1985-4a48-8e44-e0bb08b92c5c"
+    },
+    {
+      "id": "34dabc3d-943e-4d48-8b00-025e107813ab",
+      "facts": {
+        "core": {
+          "id": "0fbddd88-f7b2-4a0e-b6bf-afe1e4fe61d8",
+          "locationArea": {
+            "id": "salmiya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "542eaab6-92a1-403a-aeed-dbd002f3359a",
+          "rentalPrice": {
+            "amount": 380,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "0fbddd88-f7b2-4a0e-b6bf-afe1e4fe61d8",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "0fbddd88-f7b2-4a0e-b6bf-afe1e4fe61d8",
+      "publisher_id": "0c35460c-7963-4d74-b1cf-918d008eae42"
+    },
+    {
+      "id": "378761ff-3d40-4bee-a1ae-f21f4b2868c3",
+      "facts": {
+        "core": {
+          "id": "db3d29c9-f875-4d17-8cf9-59dcbf935606",
+          "locationArea": {
+            "id": "bayan"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "4429b353-efc2-4d7d-8e1d-a1ca6ead5eea",
+          "rentalPrice": {
+            "amount": 360,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "db3d29c9-f875-4d17-8cf9-59dcbf935606",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "db3d29c9-f875-4d17-8cf9-59dcbf935606",
+      "publisher_id": "2b02c836-6ce1-4d71-9f0b-74829661a74e"
+    },
+    {
+      "id": "3cf215ff-531b-484b-81cd-edec40800879",
+      "facts": {
+        "core": {
+          "id": "e59849cb-5e14-4f78-aea7-917e07b10e34",
+          "locationArea": {
+            "id": "hawally"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "07095219-0ade-4cce-9327-58743708e79a",
+          "rentalPrice": {
+            "amount": 310,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "e59849cb-5e14-4f78-aea7-917e07b10e34",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "e59849cb-5e14-4f78-aea7-917e07b10e34",
+      "publisher_id": "01f5ae4f-1985-4a48-8e44-e0bb08b92c5c"
+    },
+    {
+      "id": "47cee880-cbf2-4718-94bd-0f5ac9affd11",
+      "facts": {
+        "core": {
+          "id": "1d971150-d839-4604-8fc4-cf355722919f",
+          "locationArea": {
+            "id": "salmiya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "c4c65d83-53e3-46b6-a3c0-aa56d080188a",
+          "rentalPrice": {
+            "amount": 340,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "1d971150-d839-4604-8fc4-cf355722919f",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "1d971150-d839-4604-8fc4-cf355722919f",
+      "publisher_id": "0c35460c-7963-4d74-b1cf-918d008eae42"
+    },
+    {
+      "id": "4aa25de4-c0d6-4ac7-b9f9-7bc5e4a52471",
+      "facts": {
+        "core": {
+          "id": "054dc1b3-84b5-414e-bb74-0ffdee457c17",
+          "locationArea": {
+            "id": "salwa"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "aed87b9f-a0c1-4ba7-93b5-09ac2e789aec",
+          "rentalPrice": {
+            "amount": 395,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "054dc1b3-84b5-414e-bb74-0ffdee457c17",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "054dc1b3-84b5-414e-bb74-0ffdee457c17",
+      "publisher_id": "4b8b8a57-2477-4675-a43f-b353a8f4afb9"
+    },
+    {
+      "id": "4c8fb420-94b7-4062-b69f-4a51adc54276",
+      "facts": {
+        "core": {
+          "id": "91d775e8-3b52-49b4-b6a4-b4070e1261e8",
+          "locationArea": {
+            "id": "mangaf"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "f361df8c-7862-4bd3-a6e8-0af4ab66698a",
+          "rentalPrice": {
+            "amount": 410,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "91d775e8-3b52-49b4-b6a4-b4070e1261e8",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "91d775e8-3b52-49b4-b6a4-b4070e1261e8",
+      "publisher_id": "89d18e42-61ab-4b92-a919-485c043f9bc0"
+    },
+    {
+      "id": "4d8c8ce3-5595-4413-a181-18f077eb03b0",
+      "facts": {
+        "core": {
+          "id": "a583b26c-36b6-46c3-ae6d-6829460cfdf4",
+          "locationArea": {
+            "id": "salwa"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "90777e05-610e-4c18-a789-4207a2a0fa61",
+          "rentalPrice": {
+            "amount": 435,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "a583b26c-36b6-46c3-ae6d-6829460cfdf4",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "a583b26c-36b6-46c3-ae6d-6829460cfdf4",
+      "publisher_id": "4b8b8a57-2477-4675-a43f-b353a8f4afb9"
+    },
+    {
+      "id": "5123e38f-6ac5-4a40-99f8-ea8bb85fe1cd",
+      "facts": {
+        "core": {
+          "id": "b571196b-1cc1-4129-af07-be7f8a70dd70",
+          "locationArea": {
+            "id": "mishref"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "5ed3ef43-72d7-4230-a0ef-bc1e4fad221b",
+          "rentalPrice": {
+            "amount": 405,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "b571196b-1cc1-4129-af07-be7f8a70dd70",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "b571196b-1cc1-4129-af07-be7f8a70dd70",
+      "publisher_id": "1b44db5f-2e48-45d5-9694-cb93d8c0cdd9"
+    },
+    {
+      "id": "548cada5-18e8-42b2-a00f-b6f0305aa623",
+      "facts": {
+        "core": {
+          "id": "96cd69dc-3e8b-45ad-8818-2113bbf6e806",
+          "locationArea": {
+            "id": "hawally"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "245467e3-f420-44f3-9afe-485c917a12d4",
+          "rentalPrice": {
+            "amount": 350,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "96cd69dc-3e8b-45ad-8818-2113bbf6e806",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "96cd69dc-3e8b-45ad-8818-2113bbf6e806",
+      "publisher_id": "01f5ae4f-1985-4a48-8e44-e0bb08b92c5c"
+    },
+    {
+      "id": "5efcfce1-e169-45e9-bb4c-d91b95c61c1f",
+      "facts": {
+        "core": {
+          "id": "76a8d329-710d-4411-b310-f86da538a11f",
+          "locationArea": {
+            "id": "mangaf"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "fe0c0d1a-cc0d-458f-880a-07ef5c321ac7",
+          "rentalPrice": {
+            "amount": 330,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "76a8d329-710d-4411-b310-f86da538a11f",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "76a8d329-710d-4411-b310-f86da538a11f",
+      "publisher_id": "89d18e42-61ab-4b92-a919-485c043f9bc0"
+    },
+    {
+      "id": "60bebf8c-b10e-484a-b0db-57e56715c677",
+      "facts": {
+        "core": {
+          "id": "1ad08b29-e369-4934-97b0-3b258b1c72c2",
+          "locationArea": {
+            "id": "mangaf"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "8b957815-c3a1-49e8-8b48-6dd51b1d1bf7",
+          "rentalPrice": {
+            "amount": 370,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "1ad08b29-e369-4934-97b0-3b258b1c72c2",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "1ad08b29-e369-4934-97b0-3b258b1c72c2",
+      "publisher_id": "89d18e42-61ab-4b92-a919-485c043f9bc0"
+    },
+    {
+      "id": "7bfc61d7-b250-4486-b5a0-253abab22b7b",
+      "facts": {
+        "core": {
+          "id": "5dcc0ba4-a313-406d-bbe1-54fc2cfe7a61",
+          "locationArea": {
+            "id": "bayan"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "a95e75c8-28a6-4d88-b42e-7b58cf41c24b",
+          "rentalPrice": {
+            "amount": 440,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "5dcc0ba4-a313-406d-bbe1-54fc2cfe7a61",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "5dcc0ba4-a313-406d-bbe1-54fc2cfe7a61",
+      "publisher_id": "2b02c836-6ce1-4d71-9f0b-74829661a74e"
+    },
+    {
+      "id": "7c07c86a-3787-492e-9d56-0c0134a97b4f",
+      "facts": {
+        "core": {
+          "id": "89457981-9ebe-478f-ac00-8ac4e7de24b6",
+          "locationArea": {
+            "id": "mahboula"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "91fe9b18-9ac6-4043-8022-3e01628278a6",
+          "rentalPrice": {
+            "amount": 415,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "89457981-9ebe-478f-ac00-8ac4e7de24b6",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "89457981-9ebe-478f-ac00-8ac4e7de24b6",
+      "publisher_id": "af10e247-676d-4beb-ab4b-a27a3efd78c7"
+    },
+    {
+      "id": "80293d86-ef1e-400a-9a10-e310ba8893a5",
+      "facts": {
+        "core": {
+          "id": "7cc77697-7100-4fe1-bf9a-33de2db3063e",
+          "locationArea": {
+            "id": "salmiya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "d7cb2229-3735-4941-a52f-e59d5a12d0e3",
+          "rentalPrice": {
+            "amount": 300,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "7cc77697-7100-4fe1-bf9a-33de2db3063e",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "7cc77697-7100-4fe1-bf9a-33de2db3063e",
+      "publisher_id": "0c35460c-7963-4d74-b1cf-918d008eae42"
+    },
+    {
+      "id": "82cdf4f9-902f-4920-9933-f0ebbadfb314",
+      "facts": {
+        "core": {
+          "id": "e59e9bc9-8509-4ccb-b391-77bf3d3fd1bd",
+          "locationArea": {
+            "id": "salwa"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "98191e75-7e46-432c-9fab-2261844f6440",
+          "rentalPrice": {
+            "amount": 315,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "e59e9bc9-8509-4ccb-b391-77bf3d3fd1bd",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "e59e9bc9-8509-4ccb-b391-77bf3d3fd1bd",
+      "publisher_id": "4b8b8a57-2477-4675-a43f-b353a8f4afb9"
+    },
+    {
+      "id": "a9938815-a408-42ed-b44c-b7a732b9859c",
+      "facts": {
+        "core": {
+          "id": "2bc20da0-7697-4703-a4cc-8d49c0f987d6",
+          "locationArea": {
+            "id": "hawally"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "e432333d-0236-48e6-88d9-aeff4ccd6f29",
+          "rentalPrice": {
+            "amount": 390,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "2bc20da0-7697-4703-a4cc-8d49c0f987d6",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "2bc20da0-7697-4703-a4cc-8d49c0f987d6",
+      "publisher_id": "01f5ae4f-1985-4a48-8e44-e0bb08b92c5c"
+    },
+    {
+      "id": "b943e637-8bdc-41cc-ab0e-3a088d7ef14b",
+      "facts": {
+        "core": {
+          "id": "7814a986-2639-4d9c-9b85-4eb43146b92f",
+          "locationArea": {
+            "id": "jabriya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "4df80d8a-1896-4630-b539-d51dee5ffed3",
+          "rentalPrice": {
+            "amount": 345,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "7814a986-2639-4d9c-9b85-4eb43146b92f",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "7814a986-2639-4d9c-9b85-4eb43146b92f",
+      "publisher_id": "7952aa54-33de-4e65-ab3a-05237a0e2fc8"
+    },
+    {
+      "id": "baca99e0-d97e-4486-8db6-abd9587ad313",
+      "facts": {
+        "core": {
+          "id": "44e416ed-324d-4b8c-b7b7-b73b0b2f7351",
+          "locationArea": {
+            "id": "mishref"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "5cb4e7cd-f3e7-4c40-90c5-f675779bb9bc",
+          "rentalPrice": {
+            "amount": 445,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "44e416ed-324d-4b8c-b7b7-b73b0b2f7351",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "44e416ed-324d-4b8c-b7b7-b73b0b2f7351",
+      "publisher_id": "1b44db5f-2e48-45d5-9694-cb93d8c0cdd9"
+    },
+    {
+      "id": "c462f60e-59d1-42ef-864f-9b93bc54c840",
+      "facts": {
+        "core": {
+          "id": "ba221f2f-31b8-47ce-a89d-dd4bf1431280",
+          "locationArea": {
+            "id": "jabriya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "cf900dca-52f5-42f1-813e-e00eda69bccd",
+          "rentalPrice": {
+            "amount": 385,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "ba221f2f-31b8-47ce-a89d-dd4bf1431280",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "ba221f2f-31b8-47ce-a89d-dd4bf1431280",
+      "publisher_id": "7952aa54-33de-4e65-ab3a-05237a0e2fc8"
+    },
+    {
+      "id": "c6de9e19-07e5-4381-9d4f-0083fe0477b1",
+      "facts": {
+        "core": {
+          "id": "1382a254-dc5e-4512-b95a-387e1027957f",
+          "locationArea": {
+            "id": "bayan"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "777f36b5-f08b-4589-ac90-6b3a818398b8",
+          "rentalPrice": {
+            "amount": 320,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "1382a254-dc5e-4512-b95a-387e1027957f",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "1382a254-dc5e-4512-b95a-387e1027957f",
+      "publisher_id": "2b02c836-6ce1-4d71-9f0b-74829661a74e"
+    },
+    {
+      "id": "c9d01580-02ba-4e8c-99f9-b53b21131141",
+      "facts": {
+        "core": {
+          "id": "cbaac428-a795-48c9-b731-039ea333751a",
+          "locationArea": {
+            "id": "mishref"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "9563b3fa-70cc-45b7-bbf0-e8e8bbe1c136",
+          "rentalPrice": {
+            "amount": 325,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "cbaac428-a795-48c9-b731-039ea333751a",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "cbaac428-a795-48c9-b731-039ea333751a",
+      "publisher_id": "1b44db5f-2e48-45d5-9694-cb93d8c0cdd9"
+    },
+    {
+      "id": "de54f442-4c75-4f1d-a913-ad3a49205fae",
+      "facts": {
+        "core": {
+          "id": "eba5740e-3d2d-47ff-a4b4-9b03470f0acd",
+          "locationArea": {
+            "id": "salmiya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "340d2134-68d2-4205-b6ce-bc5ea3d01fe2",
+          "rentalPrice": {
+            "amount": 420,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "eba5740e-3d2d-47ff-a4b4-9b03470f0acd",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "eba5740e-3d2d-47ff-a4b4-9b03470f0acd",
+      "publisher_id": "0c35460c-7963-4d74-b1cf-918d008eae42"
+    },
+    {
+      "id": "e1d32ebd-26a5-4b19-be48-88116d296b2f",
+      "facts": {
+        "core": {
+          "id": "fdc1b36e-fe22-454a-92df-276dee2109ee",
+          "locationArea": {
+            "id": "salwa"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "3c415c4c-6ac4-41f9-bcb3-8c5d4a5f2150",
+          "rentalPrice": {
+            "amount": 355,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "fdc1b36e-fe22-454a-92df-276dee2109ee",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "fdc1b36e-fe22-454a-92df-276dee2109ee",
+      "publisher_id": "4b8b8a57-2477-4675-a43f-b353a8f4afb9"
+    },
+    {
+      "id": "f3fb6101-5797-4ab5-a608-81c231b4df80",
+      "facts": {
+        "core": {
+          "id": "ef5d626c-5e40-4258-9ddc-84c2cb8905df",
+          "locationArea": {
+            "id": "mahboula"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "96dd64eb-7cb9-477f-b719-3ee56aed4974",
+          "rentalPrice": {
+            "amount": 375,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "ef5d626c-5e40-4258-9ddc-84c2cb8905df",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 2,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "ef5d626c-5e40-4258-9ddc-84c2cb8905df",
+      "publisher_id": "af10e247-676d-4beb-ab4b-a27a3efd78c7"
+    },
+    {
+      "id": "f553d1a4-b498-497a-bf7f-0bf6bfd8e71a",
+      "facts": {
+        "core": {
+          "id": "7dbf0989-fa1a-4381-b7d4-4cf382a60286",
+          "locationArea": {
+            "id": "jabriya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "1daebba0-0799-4f7b-964a-83d7f2513f0a",
+          "rentalPrice": {
+            "amount": 305,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "7dbf0989-fa1a-4381-b7d4-4cf382a60286",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "7dbf0989-fa1a-4381-b7d4-4cf382a60286",
+      "publisher_id": "7952aa54-33de-4e65-ab3a-05237a0e2fc8"
+    },
+    {
+      "id": "f591bf05-265b-4f8b-b123-22e22dda20a5",
+      "facts": {
+        "core": {
+          "id": "661ef074-e9ec-4308-ad90-ea68ec3e9a49",
+          "locationArea": {
+            "id": "jabriya"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "283f0dd5-56a4-4de2-b3d4-098d71ebebb0",
+          "rentalPrice": {
+            "amount": 425,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "661ef074-e9ec-4308-ad90-ea68ec3e9a49",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "661ef074-e9ec-4308-ad90-ea68ec3e9a49",
+      "publisher_id": "7952aa54-33de-4e65-ab3a-05237a0e2fc8"
+    },
+    {
+      "id": "f595b26f-39f2-4c1c-907e-e99342150e5e",
+      "facts": {
+        "core": {
+          "id": "a6c45422-e632-446f-8887-861de63cc97e",
+          "locationArea": {
+            "id": "mishref"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "d1b39f8c-5aae-44c5-a451-1172b4be287b",
+          "rentalPrice": {
+            "amount": 365,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "a6c45422-e632-446f-8887-861de63cc97e",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 3,
+          "propertyType": "apartment",
+          "bathroomCount": 3,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "a6c45422-e632-446f-8887-861de63cc97e",
+      "publisher_id": "1b44db5f-2e48-45d5-9694-cb93d8c0cdd9"
+    },
+    {
+      "id": "fed24f40-7478-4e67-ae9f-775ff4d02112",
+      "facts": {
+        "core": {
+          "id": "8ec501e7-0254-4940-b1f4-e0add1999798",
+          "locationArea": {
+            "id": "bayan"
+          },
+          "propertyType": "apartment"
+        },
+        "activeOffer": {
+          "id": "6bbba1b5-7800-4229-a179-e6db20b35a19",
+          "rentalPrice": {
+            "amount": 400,
+            "currencyCode": "KWD"
+          },
+          "transaction": "rent",
+          "propertyCoreId": "8ec501e7-0254-4940-b1f4-e0add1999798",
+          "rentalPeriodId": "monthly"
+        },
+        "typeDetails": {
+          "bedroomCount": 4,
+          "propertyType": "apartment",
+          "bathroomCount": 2,
+          "apartmentSubtype": "standard_apartment"
+        },
+        "marketingStatus": "active",
+        "rentalAvailability": "available"
+      },
+      "revision": 1,
+      "source_key": "8ec501e7-0254-4940-b1f4-e0add1999798",
+      "publisher_id": "2b02c836-6ce1-4d71-9f0b-74829661a74e"
+    }
+  ],
+  "evidence": "HOSTED_POSTGRES_ROLE_RLS_RPC_NOT_LOGIN_OR_DEVICE_E2E",
+  "expected_denials": 14,
+  "fixtures_removed": true,
+  "broker_identities": 8,
+  "shared_properties": 30,
+  "fixture_publishers": [
+    "0c35460c-7963-4d74-b1cf-918d008eae42",
+    "7952aa54-33de-4e65-ab3a-05237a0e2fc8",
+    "01f5ae4f-1985-4a48-8e44-e0bb08b92c5c",
+    "4b8b8a57-2477-4675-a43f-b353a8f4afb9",
+    "2b02c836-6ce1-4d71-9f0b-74829661a74e",
+    "1b44db5f-2e48-45d5-9694-cb93d8c0cdd9",
+    "89d18e42-61ab-4b92-a919-485c043f9bc0",
+    "af10e247-676d-4beb-ab4b-a27a3efd78c7"
+  ],
+  "outsider_identities": 1,
+  "active_member_read_checks": 8,
+  "private_policies_unchanged": true,
+  "remaining_after_withdraw_and_member_removal": 25
+}

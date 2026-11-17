@@ -1,0 +1,223 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  evaluateMatch,
+  type Property,
+  type SeekerRequirement,
+} from "@workspace/property-domain";
+import {
+  MyPropertiesMatchingSource,
+  normalizeMyPropertyCandidate,
+} from "../services/myPropertiesMatchingSource.ts";
+const requirement: SeekerRequirement = {
+  id: "11111111-1111-4111-8111-111111111111",
+  seekerId: "s",
+  purpose: "rent",
+  propertyType: "apartment",
+  preferredAreaIds: ["salmiya"],
+  preferredAreaMode: "specific_areas",
+  budget: { minimum: 400, maximum: 500, currencyCode: "KWD" },
+  rentalPeriodId: "monthly",
+  centralAC: true,
+  notes: "",
+};
+const property = (id = "p", amount = 490): Property => ({
+  core: {
+    id,
+    propertyType: "apartment",
+    locationArea: { id: "salmiya" },
+    privateNotes: {
+      value: "private",
+      privacy: { classification: "private_notes", disclosurePolicy: "never" },
+    },
+  },
+  activeOffer: {
+    id: id + "-offer",
+    propertyCoreId: id,
+    transaction: "rent",
+    rentalPrice: { amount, currencyCode: "KWD" },
+    rentalPeriodId: "monthly",
+  },
+  typeDetails: {
+    propertyType: "apartment",
+    apartmentSubtype: "standard_apartment",
+    bedroomCount: 3,
+    bathroomCount: 2,
+    masterBedroomCount: 1,
+    hasCentralAC: true,
+    hasElevator: true,
+    hasSecurityGuard: true,
+    parkingSpaceCount: 2,
+  },
+  nearbyServices: ["mosque"],
+});
+
+test("candidate preserves approved modern facts and strips private data without rewriting the source", () => {
+  const p = property();
+  const before = JSON.stringify(p);
+  const result = normalizeMyPropertyCandidate(p)!;
+  assert.ok(result);
+  assert.equal((result.property.typeDetails as any).hasCentralAC, true);
+  assert.equal((result.property.typeDetails as any).masterBedroomCount, 1);
+  assert.equal((result.property.typeDetails as any).hasElevator, true);
+  assert.deepEqual(result.property.nearbyServices, ["mosque"]);
+  assert.equal(result.property.core.privateNotes, undefined);
+  assert.equal(result.property.attachments, undefined);
+  assert.equal(result.property.locationEnrichment, undefined);
+  assert.equal(JSON.stringify(p), before);
+  assert.equal(evaluateMatch(requirement, result).category, "direct");
+});
+test("one snapshot serves concurrent requests; each new explicit run refreshes it", async () => {
+  let reads = 0;
+  const store = {
+    getProperties: async () => {
+      reads++;
+      return [property()];
+    },
+  };
+  const source = new MyPropertiesMatchingSource(store);
+  await Promise.all([
+    source.getCandidates(requirement),
+    source.getCandidates({ ...requirement, id: "other" }),
+  ]);
+  assert.equal(reads, 1);
+  await new MyPropertiesMatchingSource(store).getCandidates(requirement);
+  assert.equal(reads, 2);
+});
+test("candidate retrieval does not prematurely remove price or location negotiation opportunities", async () => {
+  const over = property("over", 520);
+  const outside = {
+    ...property("outside"),
+    core: {
+      id: "outside",
+      propertyType: "apartment" as const,
+      locationArea: { id: "hawally" },
+    },
+  };
+  const result = await new MyPropertiesMatchingSource({
+    getProperties: async () => [over, outside],
+  }).getCandidates(requirement);
+  assert.deepEqual(
+    result.map((item) => item.property.core.id),
+    ["over", "outside"],
+  );
+  assert.equal(evaluateMatch(requirement, result[0]).category, "negotiation");
+  assert.equal(evaluateMatch(requirement, result[1]).category, "negotiation");
+  assert.equal(
+    evaluateMatch(requirement, result[1], { strictFields: ["location"] })
+      .category,
+    "excluded",
+  );
+});
+test("malformed records are ignored and duplicate IDs appear once in deterministic store order", async () => {
+  const p = property();
+  const result = await new MyPropertiesMatchingSource({
+    getProperties: async () =>
+      [null, {}, p, p, property("second")] as Property[],
+  }).getCandidates(requirement);
+  assert.deepEqual(
+    result.map((item) => item.property.core.id),
+    ["p", "second"],
+  );
+  assert.equal(normalizeMyPropertyCandidate({}), null);
+});
+test("false facts and Studio subtype survive projection without becoming unknown or a bedroom", () => {
+  const p = {
+    ...property(),
+    typeDetails: {
+      propertyType: "apartment",
+      apartmentSubtype: "studio",
+      studioRoomCount: 1,
+      bathroomCount: 1,
+      hasCentralAC: false,
+      hasParking: false,
+    },
+  } as Property;
+  const result = normalizeMyPropertyCandidate(p)!;
+  assert.ok(result);
+  assert.equal((result.property.typeDetails as any).apartmentSubtype, "studio");
+  assert.equal((result.property.typeDetails as any).hasCentralAC, false);
+  assert.equal((result.property.typeDetails as any).hasParking, false);
+  assert.equal((result.property.typeDetails as any).bedroomCount, undefined);
+});
+test("whole-building projection suppresses stale bedrooms and duplicate Unit facts", () => {
+  const p = {
+    ...property(),
+    core: { ...property().core, propertyType: "whole_building" },
+    typeDetails: {
+      propertyType: "whole_building",
+      bedroomCount: 9,
+      apartmentCount: 20,
+      hasBuildingParking: false,
+    },
+  } as Property;
+  const candidate = normalizeMyPropertyCandidate(p)!;
+  assert.ok(candidate);
+  assert.equal((candidate.property.typeDetails as any).bedroomCount, undefined);
+  assert.equal(
+    (candidate.property.typeDetails as any).buildingParkingTypes,
+    undefined,
+  );
+  assert.equal((candidate.property.typeDetails as any).apartmentCount, 20);
+});
+
+test('Explicit legacy Apartment category agrees with saved display without migration', async () => {
+  const { getSavedPropertyTypeLabel } = await import('../services/savedPropertyClassification.ts');
+  for (const [categoryId, expected] of [['family_apartment', 'standard_apartment'], ['bachelor_apartment', 'standard_apartment'], ['duplex', 'duplex']]) {
+    const p = { ...property(), demoCapture: { categoryId } as any };
+    delete (p.typeDetails as any).apartmentSubtype;
+    const before = JSON.stringify(p);
+    const normalized = normalizeMyPropertyCandidate(p)!;
+    assert.equal((normalized.property.typeDetails as any).apartmentSubtype, expected);
+    assert.notEqual(getSavedPropertyTypeLabel(p, 'en', 'Apartment'), 'Apartment');
+    assert.equal(JSON.stringify(p), before);
+  }
+  const p = { ...property(), demoCapture: { categoryId: 'duplex' as const } };
+  assert.equal((normalizeMyPropertyCandidate(p)!.property.typeDetails as any).apartmentSubtype, 'standard_apartment', 'canonical value wins over legacy category');
+});
+
+for (const unavailable of [
+  { marketingStatus: 'paused' as const },
+  { rentalAvailability: 'rented' as const },
+]) {
+  test(`candidate adapter preserves lifecycle exclusion ${JSON.stringify(unavailable)}`, async () => {
+    const original: Property = { ...property('unavailable'), ...unavailable };
+    const before = JSON.stringify(original);
+    const source = new MyPropertiesMatchingSource({ getProperties: async () => [original] });
+    const [candidate] = await source.getCandidates(requirement);
+    assert.ok(candidate, 'Unavailable records remain candidates so the engine can explain exclusion');
+    assert.equal(evaluateMatch(requirement, { property: original }).category, 'excluded');
+    assert.equal(evaluateMatch(requirement, candidate).category, 'excluded');
+    assert.equal(candidate.property.marketingStatus, original.marketingStatus);
+    assert.equal(candidate.property.rentalAvailability, original.rentalAvailability);
+    assert.equal(candidate.property.core.privateNotes, undefined);
+    assert.equal(JSON.stringify(original), before, 'Projection cannot rewrite saved data');
+  });
+}
+
+test('sold sale properties retain their exclusion through the same candidate adapter', () => {
+  const original: Property = { ...property('sold'), marketingStatus: 'sold', activeOffer: {
+    id: 'sale-offer', propertyCoreId: 'sold', transaction: 'sale', salePrice: { amount: 490, currencyCode: 'KWD' },
+  } };
+  const { rentalPeriodId, centralAC, ...base } = requirement;
+  const purchase: SeekerRequirement = { ...base, purpose: 'buy' };
+  const candidate = normalizeMyPropertyCandidate(original);
+  assert.ok(candidate);
+  assert.equal(evaluateMatch(purchase, { property: original }).category, 'excluded');
+  assert.equal(evaluateMatch(purchase, candidate).category, 'excluded');
+});
+
+test('fresh snapshots follow available, rented, paused and reopened lifecycle without a migration', async () => {
+  let saved: Property = property('lifecycle');
+  const store = { getProperties: async () => [saved] };
+  const category = async () => evaluateMatch(requirement, (await new MyPropertiesMatchingSource(store).getCandidates())[0]).category;
+  assert.equal(await category(), 'direct', 'Legacy records without status remain readable');
+  saved = { ...saved, marketingStatus: 'active', rentalAvailability: 'available' };
+  assert.equal(await category(), 'direct');
+  saved = { ...saved, rentalAvailability: 'rented' };
+  assert.equal(await category(), 'excluded');
+  saved = { ...saved, rentalAvailability: 'available', marketingStatus: 'paused' };
+  assert.equal(await category(), 'excluded');
+  saved = { ...saved, marketingStatus: 'active' };
+  assert.equal(await category(), 'direct');
+});

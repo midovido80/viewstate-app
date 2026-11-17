@@ -1,0 +1,92 @@
+import { Platform } from 'react-native';
+import * as Linking from 'expo-linking';
+import * as Location from 'expo-location';
+import {
+  requestInjectedCoordinates,
+  type Coordinates,
+} from './coordinateRequest';
+import {
+  normalizeGoogleMapsLink,
+  openGoogleMapsQuery as openGoogleMapsQueryWithOpener,
+  openPastedGoogleMapsLink,
+  openPropertyMapsLocation as openPropertyMapsLocationWithOpener,
+  type LinkOpener,
+  type MapCoordinates,
+} from './mapsLink';
+
+export type { Coordinates } from './coordinateRequest';
+export { requestInjectedCoordinates } from './coordinateRequest';
+export { normalizeGoogleMapsLink } from './mapsLink';
+
+export type PropertyMapLocation =
+  | { readonly source: 'coordinates'; readonly coordinates: Coordinates }
+  | { readonly source: 'pasted_link'; readonly link: string };
+
+export interface LocationSource {
+  requestForegroundPermissionsAsync(): Promise<{ granted: boolean }>;
+  getCurrentPositionAsync(options?: {
+    accuracy?: Location.Accuracy;
+  }): Promise<{
+    coords: {
+      latitude: number;
+      longitude: number;
+      accuracy?: number | null;
+    };
+  }>;
+}
+
+export async function requestCurrentCoordinates(
+  source: LocationSource = Location,
+  platform: string = Platform.OS,
+): Promise<Coordinates> {
+  return requestInjectedCoordinates(source, platform, Location.Accuracy.Balanced);
+}
+
+export function pastedMapLocation(link: string): PropertyMapLocation {
+  return { source: 'pasted_link', link: normalizeGoogleMapsLink(link) };
+}
+
+export async function openGoogleMaps(
+  coordinates: Coordinates,
+  opener: LinkOpener = Linking,
+): Promise<void> {
+  const query = `${coordinates.latitude},${coordinates.longitude}`;
+  await openGoogleMapsQuery(query, opener);
+}
+
+export async function openGoogleMapsQuery(
+  query: string,
+  opener: LinkOpener = Linking,
+): Promise<void> {
+  await openGoogleMapsQueryWithOpener(query, opener, Platform.OS);
+}
+
+export async function openPastedLocationLink(
+  location: PropertyMapLocation,
+  opener: LinkOpener = Linking,
+): Promise<void> {
+  if (location.source !== 'pasted_link') throw new Error('LOCATION_LINK_MISSING');
+  try {
+    await openPastedGoogleMapsLink(location.link, opener, Platform.OS);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_LOCATION_LINK') throw error;
+    throw new Error('LOCATION_LINK_UNAVAILABLE');
+  }
+}
+
+export async function openSavedPropertyMapsLocation(
+  link: string | undefined,
+  coordinates: MapCoordinates | undefined,
+  opener: LinkOpener = Linking,
+  platform: string = Platform.OS,
+): Promise<void> {
+  try {
+    await openPropertyMapsLocationWithOpener(link, coordinates, opener, platform);
+  } catch (error) {
+    if (error instanceof Error && (
+      error.message === 'INVALID_LOCATION_LINK'
+      || error.message === 'INVALID_KUWAIT_COORDINATES'
+    )) throw error;
+    throw new Error('LOCATION_LINK_UNAVAILABLE');
+  }
+}

@@ -1,0 +1,1236 @@
+# ViewState App — Decisions Log
+
+**Status:** PRE-IMPLEMENTATION  
+**Last updated:** 2026-08-13
+
+---
+
+## How to Use This Log
+
+Every significant architectural, product, or tooling decision is recorded here before implementation. Entries are immutable — once written, never deleted (mark as SUPERSEDED if reversed, not deleted).
+
+### Entry format
+
+```
+## [DEC-XXX] — [Short title]
+Date: YYYY-MM-DD
+Status: ACTIVE | SUPERSEDED | PENDING
+Decided by: Founder | AI Proposal (Founder approved) | Open
+Category: Architecture | Product | Tooling | UX | Data
+
+### Context
+[Why was this decision needed?]
+
+### Decision
+[What was decided?]
+
+### Rationale
+[Why this option?]
+
+### Alternatives considered
+- [Option A]: rejected because [reason]
+
+### Consequences
+[What does this lock in? What does it prevent?]
+```
+
+---
+
+## Decisions
+
+---
+
+## [DEC-001] — Governance-first project structure
+Date: 2026-08-13  
+Status: ACTIVE  
+Decided by: Founder  
+Category: Architecture
+
+### Context
+Project started from scratch. Founder requires tight control over all AI sessions and layer-by-layer build with explicit approval gates.
+
+### Decision
+The very first action is the Governance Package. No product feature is implemented until governance is complete and the Founder explicitly unlocks each layer. Governance uses the exact approved filenames: README.md, PROJECT_BIBLE.md, ARCHITECTURE.md, UX_RULES.md, DATABASE_RULES.md, CHANGE_POLICY.md, AI_WORKFLOW.md, TESTING.md, GRILL_ME.md, DECISIONS.md, CURRENT_STATE.md.
+
+### Rationale
+Governance retrofitted after code exists is ignored. Governance-first gives the Founder control over every decision.
+
+### Consequences
+Project is in PRE-IMPLEMENTATION state. Nothing is built until explicitly unlocked.
+
+---
+
+## [DEC-002] — Bilingual Arabic/English from day one
+Date: 2026-08-13  
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-031.
+Active clause: Application UI and system-authored content remain bilingual; user-entered and imported free text is stored literally and is not automatically translated or duplicated.
+Decided by: Founder  
+Category: UX + Data
+
+### Decision
+Every user-visible string has both `ar` and `en` versions. Every text DB column has `_ar` and `_en` variants. The app defaults to Arabic (RTL).
+
+### Rationale
+Retrofitting bilingual support is expensive and error-prone. Zero tech debt on this dimension from day one.
+
+### Consequences
+All DB schemas must include bilingual text columns. All i18n keys written in both languages before any screen is considered done.
+
+---
+
+## [DEC-003] — React Native + Expo as mobile platform
+Date: 2026-08-13  
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-037.
+Active clause: React Native + Expo and Expo Router remain approved; Expo Go is a preview/testing option, not an exclusive runtime or dependency gate.
+Decided by: Founder  
+Category: Architecture
+
+### Decision
+React Native with Expo (SDK 53+). Expo Router for file-based navigation. NativeTabs on iOS 26+.
+
+### Rationale
+Expo provides device features (contacts, camera, file system) via JavaScript API. Replit environment supports Expo Go for live preview. TypeScript-first stack shares types with the Express API server.
+
+### Consequences
+Only Expo Go compatible packages may be used in the mobile client.
+
+---
+
+## [DEC-004] — V001 contact roles: Tenant, Buyer, Owner, Broker only
+Date: 2026-08-13  
+Status: SUPERSEDED
+Superseded by: DEC-030.
+Decided by: Founder  
+Category: Product (Rule 11)
+
+### Decision
+V001 supports exactly four contact roles: Tenant, Buyer, Owner, Broker. No other roles.
+
+### Rationale
+These four roles cover the approved V001 broker use case. Additional roles (investor, developer, etc.) are deferred to V002.
+
+### Consequences
+The `contacts.roles` DB column is a text array constrained to these four values. UI role picker shows exactly four options.
+
+---
+
+## [DEC-005] — V001 matching: Compare + Score + Explain only
+Date: 2026-08-13  
+Status: ACTIVE  
+Decided by: Founder  
+Category: Architecture (Rule 12)
+
+### Decision
+V001 matching engine does exactly: Compare (field-to-field), Score (0–100), Explain (breakdown per field). No ML, no embeddings, no automated notifications.
+
+### Rationale
+Rule-based matching is transparent, debuggable, and fully unit-testable. V002 can upgrade to ML without changing the API contract.
+
+### Consequences
+Matching is deterministic. Every match has an explainable score breakdown. Architecture must allow ML upgrade in V002.
+
+---
+
+## [DEC-006] — Global Search is a core utility on every primary screen
+Date: 2026-08-13  
+Status: ACTIVE  
+Decided by: Founder  
+Category: UX (Rule 13)
+
+### Decision
+Global Search lives in the blue top header on every primary tab screen. Not a secondary feature — a core utility. Searches across contacts and properties simultaneously.
+
+### Consequences
+`GlobalSearchBar` is a shared component imported by every primary screen layout. Search architecture must support cross-entity results.
+
+---
+
+## [DEC-007] — Visual baseline locked for V001
+Date: 2026-08-13  
+Status: ACTIVE  
+Decided by: Founder  
+Category: UX (Rule 14)
+
+### Decision
+V001 visual baseline: blue header, global search in header, white/light background, red for headings/key data, blue for action buttons, green for WhatsApp/Call actions, minimal colors elsewhere.
+
+### Consequences
+`constants/colors.ts` is locked to these tokens. No AI session may introduce additional accent colors.
+
+---
+
+## [DEC-008] — Auth provider: PENDING FOUNDER DECISION
+Date: 2026-08-13  
+Status: PENDING  
+Decided by: Open  
+Category: Architecture
+
+### Options
+A) Clerk with phone OTP  
+B) Replit Auth  
+C) Custom phone OTP with SMS provider (e.g., Vonage, Twilio)
+
+---
+
+## [DEC-009] — Object storage provider: PENDING FOUNDER DECISION
+Date: 2026-08-13  
+Status: PENDING  
+Decided by: Open  
+Category: Architecture
+
+### Options
+A) Replit Object Storage (App Storage) — simplest  
+B) Cloudinary — image optimization included  
+C) AWS S3 — most flexible
+
+---
+
+## [DEC-010] — V001 contact and property classification system
+Date: 2026-08-13
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-032.
+Active clause: Follow Up, Important, Pending, and Order Complete / Closed Deal remain a separate optional classification capability and are not Tasks.
+Decided by: Founder
+Category: Product
+
+### Context
+Stage 00.1 approved a minimal follow-up capability as in-scope for V001. The Founder defined the exact scope.
+
+### Decision
+V001 includes an optional lightweight classification system attached to a Contact or a Property. Exactly four labels are permitted: **Follow Up**, **Important**, **Pending**, **Order Complete / Closed Deal**. The label appears visibly next to the contact name or property title. Only one label at a time per record.
+
+### Rules
+- Classification is optional — broker applies it only when needed
+- No dates, scheduled reminders, automation, pipeline stages, or calendar integration
+- "Order Complete / Closed Deal" is a status label only — NOT a deal ledger, transaction tracker, or commission system
+- Persistence column name, SQL type, constraint representation (TEXT check / ENUM / etc.), and nullability are deferred to the Database stage
+
+### Consequences
+Replaces the earlier "Tasks & Follow-up system — Deferred" entry. A full task-management or reminder engine remains deferred. This classification system is the complete V001 follow-up scope.
+
+---
+
+## [DEC-011] — WhatsApp and WhatsApp Business as dual required communication channels
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder
+Category: Product + Integration
+
+### Context
+Stage 00.1 required clarification on the WhatsApp product scope. The Founder confirmed both apps are required.
+
+### Decision
+ViewState V001 must support both WhatsApp and WhatsApp Business as required communication channel options. When the broker initiates a communication action from a contact or property workflow, ViewState presents a choice between WhatsApp and WhatsApp Business. The selected app is opened.
+
+### Rationale
+Brokers use both personal WhatsApp and WhatsApp Business accounts in their daily workflow. Both must be reachable from ViewState without forcing the broker to leave the app and manually switch.
+
+### Boundary
+The precise technical mechanism (deep links, intents, APIs) is NOT decided at Stage 00.1. It is decided in the Integration stage. ViewState also supports WhatsApp and WhatsApp Business as data import/capture sources — mechanism TBD in Integration stage. V001 does NOT include in-app messaging or WhatsApp Business API for automated messaging.
+
+### Consequences
+All previous governance text that locked V001 to `.txt` export parsing as the settled product-level integration approach has been updated to reflect this open boundary.
+
+---
+
+## [DEC-012] — Market-configurable location taxonomy
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Context
+Governance files previously hard-coded Egypt's 27 governorates as the universal location taxonomy. The product definition requires location taxonomy to be generic and market-configurable. Kuwait is the first operational/deployment market; GCC is the planned expansion region.
+
+### Decision
+ViewState's location concept for properties and requirements must be generic and market-configurable. The specific taxonomy (areas, districts, regions, etc.) is market configuration — loaded per deployment, not hard-coded into product code or governance. Kuwait is the first operational/deployment market for V001; Kuwait's area taxonomy is the first concrete market configuration. GCC expansion follows, with each market providing its own location taxonomy. No country-specific location list or administrative term is hard-coded into the core product definition.
+
+### Consequences
+- All hard-coded Egypt-specific governorate lists and Egypt-specific location wording removed from governance files
+- Exact column name, data type, nullability, and schema representation for the location field are deferred to the Database stage
+- Market configuration layer design (what it provides, how it is structured, which fields it exposes) is deferred to the Architecture stage
+
+---
+
+## [DEC-013] — Kuwait as first operational/deployment market; GCC expansion planned
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Context
+The prior governance wording stated "GCC is the first deployment market." The Founder has specified Kuwait more precisely as the first operational/deployment market for V001.
+
+### Decision
+ViewState V001's first operational/deployment market is **Kuwait**. GCC is the planned expansion region after the Kuwait-first release. The product itself remains generic and scalable beyond any single country — Kuwait-first is an operational decision, not a product architecture constraint.
+
+### Product-level consequences
+- Property and location workflows must be capable of supporting a Kuwait-first market configuration in which the broker can select from Kuwait areas when entering property data
+- The complete Kuwait area taxonomy (names, groupings, IDs, source, update mechanism) is deferred to the Market Configuration / Property / Database stage — it is NOT decided in Stage 00.1
+- Where a real country context is needed for V001 product-definition examples or market configuration illustration, use Kuwait (not UAE or any other GCC country)
+- If a real V001 market currency example is ever required in a later stage, Kuwait uses KWD — but KWD is not a universal core product default and must not be treated as such in Stage 00.1
+- Additional GCC markets after Kuwait provide their own location taxonomies, currencies, phone formats, and locale settings via market configuration
+
+### What is NOT locked by this decision
+- Kuwait area names, count, grouping, or data source → Market Configuration stage
+- Database column name or type for the location field → Database stage
+- Phone number format for Kuwait → Market Configuration stage
+- KWD as a hardcoded currency default → Market Configuration stage
+
+---
+
+## [DEC-014] — Formal Freeze: Stage 00.1 — Product Purpose & User Lock
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder verbal authorization — "نفذ"
+
+### Decision
+Stage 00.1 — Product Purpose & User Lock is **FROZEN and APPROVED** as of 2026-08-13.
+
+The product-level decisions documented across Stage 00.1 (DEC-001 through DEC-013 as they relate to product purpose and user lock) are now the authoritative, locked definition of what ViewState is, who it is for, and what V001 delivers.
+
+### Frozen Content Summary
+The following product-level decisions are frozen under this entry — see `STAGE_00_1_FREEZE.md` for the full formal record:
+- Generic real-estate tool for professional brokers/consultants — market-configurable and scalable
+- Kuwait as first operational/deployment market; GCC expansion planned
+- Primary user: broker/consultant, mobile-first, no demographic assumptions
+- Operating model: Capture → Organize → Act; Matching is North Star, not only value
+- Speed target: ~10–15 seconds for basic capture only
+- Requirements as explicit named V001 feature
+- V001 scope fixed: Contacts · Properties · Requirements · Matching · Classification · Import/WhatsApp+WA Business · Global Search · User Profile · Arabic/English
+- Classification: 4 optional labels (Follow Up / Important / Pending / Order Complete or Closed Deal) — no reminders, no automation, no deal ledger; persistence deferred to Database stage
+- WhatsApp + WhatsApp Business: both required communication choices; technical mechanism deferred to Integration stage
+- Location: market-configurable concept; Kuwait area taxonomy as first market config; persistence deferred to Database stage
+- All approved V001 'is NOT' boundaries
+
+### Change Process
+Any future change to Stage 00.1 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged. Silent edits during implementation sessions are prohibited (Rule 6).
+
+### What Is NOT Locked
+All schema, architecture, integration, and market configuration specifics remain deferred to their respective stages. See `STAGE_00_1_FREEZE.md` — "What Is NOT Frozen" table.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2 has NOT started — WAITING for Founder authorization.
+
+---
+
+## [DEC-015] — Editorial governance correction: DEC-004 stale market reference
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (session authorization — Stage 00.2.1 governance correction pass)
+Category: Governance (Change Policy — Editorial Correction)
+
+### Context
+DEC-004's authoritative decision is correct and unchanged: V001 supports exactly four contact roles — Tenant, Buyer, Owner, Broker. No other roles. However, DEC-004's rationale sentence referred to "the Egyptian broker's immediate use case." DEC-012 and DEC-013 subsequently locked Kuwait as the first operational/deployment market and established the product core as generic and market-configurable. The Egypt reference became stale and inconsistent with frozen Stage 00.1 governance.
+
+### Decision
+The rationale phrase "100% of the Egyptian broker's immediate use case" is replaced with market-neutral wording: "the approved V001 broker use case." No other content in DEC-004 is changed. The four roles (Tenant, Buyer, Owner, Broker), their behavior, multi-role support rule, schema constraint reference, and V002 deferral note are all unchanged.
+
+### Change Policy compliance
+- Category: Editorial correction to a stale market reference in a rationale sentence only
+- The authoritative decision text of DEC-004 is not modified
+- No Stage 00.1 product decision is reopened or altered
+- No role is added, removed, renamed, or reordered
+- No schema, implementation, or behavior change
+- Founder explicit authorization: Stage 00.2.1 governance correction session, 2026-08-13
+- Logged per Change Policy requirements
+
+---
+
+## [DEC-016] — Commission Management and Analytics/Reporting classified as DEFERRED
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.1 freeze pass authorization)
+Category: Product (Scope Classification)
+
+### Context
+Stage 00.2.1 CTO verification identified that Commission Management and Analytics/Reporting were classified as OUT OF V001 in the analysis, while PROJECT_BIBLE.md listed both as "Deferred." This created a classification inconsistency. The analysis also used contradictory wording ("explicitly excluded and deferred") for Commission Management. A Founder decision was required to confirm the intended classification.
+
+### Decision
+**Commission Management = DEFERRED** — not in V001; intentionally preserved for later ViewState versions. V001's "Order Complete / Closed Deal" classification label covers basic deal closure acknowledgement. Full commission tracking, calculation, and management may be added or expanded in later versions. Architecture must not block future inclusion.
+
+**Analytics / Reporting = DEFERRED** — not in V001; intentionally preserved for later ViewState versions. Analytics features grow in value as broker data accumulates. Analytics dashboards, usage reporting, and performance metrics are natural post-V001 additions. Architecture must not block future inclusion.
+
+### Founder authorization intent
+"موافق اذا كان ده هيكون سهل فى الاصدارات التالية من فيوستيت اننا نعدل او نضيف عليهم او نوسع فيهم و نضيف عليهم فيتشرز جديدة"
+(Approved so that it will be easy in later versions of ViewState to modify, add to, expand, and add new features to these capabilities.)
+
+### Consequences
+- Final Stage 00.2.1 scope count: **15 IN V001 + 5 OUT OF V001 + 5 DEFERRED = 25 top-level decisions**
+- Commission Management and Analytics/Reporting removed from OUT OF V001; added to DEFERRED
+- Architecture for all V001 modules must not block adding Commission and Analytics features in V002+
+- PROJECT_BIBLE.md OUT OF SCOPE table wording is resolved: both were already listed as "Deferred" there; this decision formalizes that classification
+
+---
+
+## [DEC-017] — Formal Freeze: Stage 00.2.1 — V001 Scope Analysis
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder verbal authorization — "موافق"
+
+### Decision
+Stage 00.2.1 — V001 Scope Analysis is **FROZEN and APPROVED** as of 2026-08-13.
+
+The product-scope decisions documented in `STAGE_00_2_1_ANALYSIS.md` are the authoritative, locked definition of the ViewState V001 capability boundary. No implementation session, AI agent, or collaborator may silently alter the substance of any Stage 00.2.1 decision.
+
+### Frozen Content Summary
+See `STAGE_00_2_1_FREEZE.md` for the full formal record. Summary:
+- **15 IN V001:** Authentication/Login · Contacts (4 roles) · Properties · Buyer/Tenant Requirements · Matching · Classification (4 labels) · Global Search · WhatsApp/WA Business Communication Choice · Property Sharing via WhatsApp/WA Business · Import · User Profile · Media & Attachments (Photos+Videos+Documents) · Contact Notes · Property Notes · Property Location
+- **5 OUT OF V001:** Tasks/Reminders · Deal Management · Broker-to-Broker Network/Marketplace · Public Property Portal · AI Assistant/NLI
+- **5 DEFERRED:** Full Export System · Market Configuration (administration) · Backup/Sync · Commission Management · Analytics/Reporting
+- **Total:** 27 visible inventory rows · 2 sub-capabilities (Basic Settings, Follow-up Classifications) · **25 top-level decisions**
+
+### Change Process
+Any future change to Stage 00.2.1 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged. Silent edits during implementation sessions are prohibited (Rule 6).
+
+### What Is NOT Locked by Stage 00.2.1
+All schema, architecture, integration mechanisms, UI flows, Kuwait area taxonomy, storage provider, auth provider, and market configuration specifics remain deferred to their respective stages. See `STAGE_00_2_1_FREEZE.md` — "What Is NOT Frozen" table.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.2 has NOT started — WAITING for separate Founder authorization.
+
+---
+
+## [DEC-018] — V001 Matching is bidirectional
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.2 Founder Decision 1)
+Category: Product (Rule 12)
+
+### Context
+Stage 00.2.2 CTO verification identified that the original minimum capability analysis did not resolve the matching direction. The Founder confirmed V001 must support both directions.
+
+### Decision
+V001 Matching must support both directions:
+- **Direction A — Requirement → Properties:** Broker starts from a Buyer/Tenant Requirement and identifies matching Properties from their own inventory.
+- **Direction B — Property → Requirements / Relevant Clients:** Broker starts from a Property and identifies matching Buyer/Tenant Requirements associated with relevant contacts in the broker's own data.
+
+Both directions follow the frozen product principle: Compare → Score (0–100) → Explain.
+
+Matching remains: broker-initiated · rule-based · per-broker · private · non-AI · non-marketplace.
+
+### What Is NOT Decided Here
+Scoring weights, scoring thresholds beyond already frozen governance, algorithms, queries, schema, automatic alerts, push notifications, ML, embeddings, cross-broker matching.
+
+### Consequences
+The bidirectionality is a product behavior boundary only. Neither direction triggers automated behavior. Architecture must support both entry points. Mechanism, query implementation, and screen design are deferred to their respective stages.
+
+---
+
+## [DEC-019] — Buyer/Tenant contact may have one or more Requirements
+Date: 2026-08-13
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-030.
+Active clause: A Person may own multiple separate Requirements; the effective Person classification is Seeker rather than Buyer or Tenant.
+Decided by: Founder (Stage 00.2.2 Founder Decision 2)
+Category: Product
+
+### Context
+Stage 00.2.2 CTO verification identified that the original analysis silently claimed "one active requirement per contact is sufficient." No frozen governance source supported this cardinality limit. The Founder resolved the question.
+
+### Decision
+A Buyer or Tenant contact may have **one or more Requirements** in V001. V001 must not artificially restrict a Buyer/Tenant to a single Requirement. This supports real broker cases where the same client may have different simultaneous property needs.
+
+The product-level minimum:
+> A Buyer/Tenant contact can have multiple distinct Requirements, and each Requirement can independently participate in Matching.
+
+Capture First → Enrich Later is preserved: a Requirement with only property type and budget range is a valid, complete record regardless of how many other Requirements the same contact holds.
+
+### What Is NOT Decided Here
+Active/inactive requirement status · maximum number of requirements · requirement priority · requirement version history · requirement expiration · database cardinality implementation · schema relationships · UI tabs · requirement grouping.
+
+### Consequences
+Requirements are an additive, separate-workflow demand-record. They do not increase the burden of basic Contact capture. Multiple Requirements per contact strengthen Matching input depth.
+
+---
+
+## [DEC-020] — One editable running note per Contact and per Property in V001
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.2.2 Founder Decision 3)
+Category: Product
+
+### Context
+Stage 00.2.2 CTO verification identified that the original analysis inferred "single note" from a planned schema column (DATABASE_RULES.md `contacts.notes TEXT`) while Stage 00.2.1 had explicitly said "Persistence TBD." The Founder resolved the product behavior question.
+
+### Decision
+For V001:
+- **Contact Notes:** Each Contact may have one editable running internal note. The broker can read and update it.
+- **Property Notes:** Each Property may have one editable running internal note. The broker can read and update it. Property Notes remain distinct from Property Description.
+
+This is product behavior only. It does not permanently prevent future versions from expanding Notes into multiple notes, a timeline, note history, dated entries, or an activity log.
+
+### What Is NOT Decided Here
+Database column · data type · storage structure · timestamps · versioning mechanism · rich text · audit log · note history persistence.
+
+### Consequences
+Notes are one editable running plain-text annotation per record in V001. They must not evolve into task management, deal tracking, or threaded communication within V001.
+
+---
+
+## [DEC-021] — Formal Freeze: Stage 00.2.2 — Minimum Capability Analysis
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder verbal authorization — "نفذ ال correction و ال verification و اقفل المرحة دي"
+
+### Decision
+Stage 00.2.2 — Minimum Capability Analysis is **FROZEN and APPROVED** as of 2026-08-13.
+
+The minimum capability definitions documented across Stage 00.2.2 are the authoritative, locked definition of the minimum product behavior required for each of the 15 V001 capabilities.
+
+### Frozen Content Summary
+See `STAGE_00_2_2_FREEZE.md` for the full formal record. Summary:
+- **Three Founder decisions:** Bidirectional Matching (DEC-018) · One-or-more Requirements per Buyer/Tenant (DEC-019) · One editable running note per Contact and per Property (DEC-020)
+- **Two CTO corrections applied:** Property Location visual selection method neutralized (not categorically excluded); Authentication session-lifetime specificity removed (deferred to Foundation/Auth stage)
+- **15 IN V001 minimum capability definitions frozen:** see STAGE_00_2_2_FREEZE.md §Minimum Capability Definitions
+- **Capture First and 10–15 second basic capture target confirmed intact**
+- **Capture → Organize → Act confirmed fully covered**
+- **North Star (bidirectional Matching) confirmed strengthened without scope creep**
+
+### Change Process
+Any future change to Stage 00.2.2 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged. Silent edits during implementation sessions are prohibited (Rule 6).
+
+### What Is NOT Locked by Stage 00.2.2
+All schema, architecture, integration mechanisms, UI flows, visual selection methods, session lifetime, Kuwait area taxonomy, storage provider, auth provider, and market configuration specifics remain deferred to their respective stages. See `STAGE_00_2_2_FREEZE.md` — "What Is NOT Frozen" table.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.2.3 has NOT started — WAITING for separate Founder authorization.
+
+---
+
+## [DEC-022] — V001 BASIC capture minima, Contact role rule, and Requirement Purpose rule
+Date: 2026-08-13
+Status: PARTIALLY SUPERSEDED
+Partially superseded by: DEC-030 and DEC-031.
+Active clause: BASIC capture guidance remains subject to DEC-031, which requires at least one Person classification before final save, and DEC-030, which replaces the four-role model.
+Decided by: Founder (Stage 00.3 approval)
+Category: Product
+
+### Context
+Stage 00.3 required formal Founder approval of the minimum capture fields for Contact, Property, and Requirement, as well as resolution of two closely related rules: whether Contact role is required at capture time, and whether Requirement Purpose may be inferred from Contact role.
+
+### Decision
+**Contact BASIC capture minimum:** Name + Phone Number. A Contact with Name and Phone Number is a valid saved record. No additional fields are required for initial validity.
+
+**Contact role:** Role assignment is NOT required to save a Contact. Role is enrichment. A Contact may exist without a role. Role may be assigned during initial capture or at any later time. The four allowed roles remain exactly: Tenant · Buyer · Owner · Broker. Multi-role Contacts are supported. No fifth role.
+
+**Property BASIC capture minimum:** Property Type · Purpose (Sale or Rent) · Price · Market-configured Location Area. Optional enrichment must not block BASIC capture.
+
+**Requirement BASIC capture minimum:** Property Type · Purpose (Buy or Rent) · Budget Range. Purpose belongs explicitly to the Requirement — it may NOT be inferred solely from Contact role, because Contacts may be multi-role. A Requirement must belong to a Contact holding at least one of: Buyer role, Tenant role. Owner-only and Broker-only Contacts may not own Requirements.
+
+**Contact Import validity:** Import should populate all available source information automatically. Before saving an imported Contact as a valid record, Name and Phone Number must exist. If either is unavailable from the source, the broker provides only the missing minimum value. Role remains optional at import time.
+
+**BASIC capture target:** Approximately 10–15 seconds for each of Contact, Property, and Requirement.
+
+### Consequences
+Capture First → Enrich Later is mandatory. Optional enrichment may never become a mandatory prerequisite for valid BASIC capture unless a future Founder-approved scope change explicitly changes this rule.
+
+---
+
+## [DEC-023] — Matching ≥70% visibility threshold and deferred scoring formula
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 approval)
+Category: Product (Rule 12)
+
+### Context
+Stage 00.3 required resolution of (a) which Matching results are surfaced to the broker, (b) whether the scoring formula is defined at this stage, and (c) whether a zero-match result is a valid product outcome.
+
+### Decision
+**Visibility threshold:** Only Matching results scoring ≥70% are surfaced to the broker. Results below 70% are not shown.
+
+**Zero qualifying matches:** If no record reaches 70%, the product presents "No Matches ≥70%" — this is a valid and successful Matching outcome. The system must not surface weak matches to avoid an empty result.
+
+**Scoring formula: FULLY DEFERRED.** The following are not defined at Stage 00.3 and must not be assumed: scoring weights, coefficients, relative field importance, mandatory criteria, soft criteria, penalties, mathematical formula, or algorithm implementation.
+
+**Explanation:** The product must explain the score/result using relevant matching reasons. The exact explanation structure, matching fields used in scoring, and explanation presentation remain deferred to the Implementation stage.
+
+**Matching architecture protection:** The future Matching implementation must permit scoring logic to evolve without requiring unnecessary reconstruction of the entire Matching layer. The exact scoring architecture remains deferred. This statement protects future flexibility only.
+
+### Consequences
+Both Matching directions (J-06 and J-07) operate under the ≥70% threshold. Matching remains broker-initiated, non-automatic, non-background, non-notification-driven. No cross-broker matching. No AI/ML.
+
+---
+
+## [DEC-024] — Property Sharing recipient: any saved Contact
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 — overrides prior Stage 00.3 analysis recommendation)
+Category: Product
+
+### Context
+The initial Stage 00.3 analysis recommended restricting Property Sharing recipients to Buyer/Tenant contacts only (FD-1 Option A). The Founder reviewed this recommendation and overrode it.
+
+### Decision
+V001 Property Sharing may target any saved Contact, including: Tenant · Buyer · Owner · Broker · Contact with no role assigned.
+
+Conditions that remain unchanged: the sharing action is private · broker-initiated · directed at one specific Property · directed at one specific Contact · conducted via WhatsApp or WhatsApp Business.
+
+Private one-to-one sharing with a Broker Contact is NOT Broker-to-Broker Marketplace behavior. Broker-to-Broker Marketplace remains OUT OF V001.
+
+### What Is NOT Decided Here
+Sharing payload format · Property card design · UX entry point · Property-first vs Contact-first selection sequence · technical WhatsApp mechanism.
+
+### Consequences
+J-08 (Share Property with Contact) has no role restriction on the recipient. Any saved Contact with a phone number is a valid recipient. Marketplace, bulk, public, automated, and scheduled sharing remain out of V001.
+
+---
+
+## [DEC-025] — Authentication / Language / Profile first-run behavior and Arabic/RTL default
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder (Stage 00.3 — resolves FD-2)
+Category: Product + UX
+
+### Context
+Stage 00.3 analysis identified FD-2: whether User Profile setup or Language selection is a mandatory first-run gate after authentication. The analysis presented two options. The Founder resolved this.
+
+### Decision
+After successful authentication, the broker may immediately begin productive use. There is no mandatory Profile-completion gate. There is no mandatory Language-selection gate.
+
+**Default V001 language: Arabic — RTL.** Device locale is NOT the frozen default. English remains user-selectable. The broker may change language later through the app's language preference control.
+
+Profile enrichment is optional and may occur at any time. Profile is not a prerequisite for Properties, Contacts, Requirements, Matching, Search, or Sharing.
+
+### What Is NOT Decided Here
+Exact UI location of the language preference control · exact Profile field set beyond what is already frozen elsewhere · localization SDK or technical implementation.
+
+### Consequences
+J-01 (Authenticate) and J-14 (Configure Profile and Language) are independent journeys. All other journeys are accessible immediately after authentication. Arabic/RTL is the product's pre-configured default; the broker may change it at any time without a first-run gate.
+
+---
+
+## [DEC-026] — Formal Freeze: Stage 00.3 — Core User Journeys Lock
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder/CTO review and approval of corrected Stage 00.3 analysis + CTO precision correction pass
+
+### Decision
+Stage 00.3 — Core User Journeys Lock is **FROZEN and APPROVED** as of 2026-08-13.
+
+The core user journey inventory, minimum capture definitions, matching behavior rules, and product-level behaviors documented across Stage 00.3 (DEC-022 through DEC-026 as they relate to core user journeys) are the authoritative, locked definition of the minimum product journey model for ViewState V001.
+
+### Frozen Content Summary
+See `STAGE_00_3_FREEZE.md` for the full formal record. Summary:
+- **15 journeys frozen:** J-01 Authenticate · J-02 Create Contact · J-03 Create Property · J-04 Create Requirement · J-05 Import Contact · J-06 Match Requirement→Properties · J-07 Match Property→Requirements/Clients · J-08 Share Property with Contact · J-09 Communicate with Contact · J-10 Enrich Contact · J-11 Enrich Property · J-12 Enrich Requirement · J-13 Classify Contact or Property · J-14 Configure Profile and Language · J-15 Global Search and Retrieve
+- **Minimum capture frozen:** Contact (Name + Phone) · Property (Type + Purpose + Price + Location Area) · Requirement (Type + Purpose + Budget Range)
+- **Matching threshold frozen:** ≥70% visibility · scoring formula deferred · zero qualifying matches valid
+- **Four Founder decisions recorded:** DEC-022 (capture minima + role/purpose rules) · DEC-023 (matching threshold) · DEC-024 (sharing recipient) · DEC-025 (auth/language/profile)
+
+### Change Process
+Any future change to Stage 00.3 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 00.4 has NOT started — WAITING for Founder authorization.
+
+---
+
+_New decisions are appended here as they are made. Entries are never deleted._
+## [DEC-027] — V001 Product Success Definition and 35 Release-Blocking Conditions
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder + CTO (Stage 00.4 approval)
+Category: Product acceptance
+
+### Context
+Stage 00.4 required establishing an authoritative, frozen definition of what V001 product success means and what conditions would mean V001 must not be accepted as functionally complete.
+
+### Decision
+**V001 is considered functionally successful when all five of the following are demonstrably true:**
+1. A broker can create a valid Contact (Name + Phone), Property (Type + Purpose + Price + Location Area), or Requirement (Type + Purpose + Budget Range) in a single fast action without required optional enrichment — and the saved record is immediately usable.
+2. A broker can initiate Matching in both directions (Requirement→Properties and Property→Requirements/Clients), receive scored results (0–100) at ≥70%, see an explanation using relevant matching reasons, and receive "No Matches ≥70%" when no record qualifies. Neither direction may be absent.
+3. A broker can locate any Contact or Property through a quickly accessible Global Search across four approved fields, share a specific Property with any saved Contact via WhatsApp or WhatsApp Business, and initiate communication with any Contact through WhatsApp or WhatsApp Business.
+4. Every broker's Contacts, Properties, Requirements, Notes, and Matching results are completely invisible to every other broker.
+5. The product renders in Arabic (RTL) by default. English (LTR) is selectable. Broker enters full productive use immediately after authentication — no mandatory Profile gate, no mandatory Language gate.
+
+**35 Release-Blocking Conditions:** See `STAGE_00_4_FREEZE.md` for the full numbered list. Any single condition being true means V001 must not be accepted as functionally complete. Key coverage: both Matching directions; ≥70% threshold; explained results; Capture First for all three entity types; Property four-field minimum; Requirement Purpose explicit (not from Contact role alone, UX pre-fill from prior explicit broker choice permitted if reviewable/changeable); Property Sharing to any saved Contact; both WhatsApp AND WhatsApp Business available; all three Contact Import sources present; multi-role Contact capability; multiple Requirements per Buyer/Tenant; both Arabic/RTL and English/LTR functional; per-broker data isolation; all three media types on Properties; Contact Notes; Property Notes; all four Global Search concepts individually searchable when matching records exist; no OUT OF V001 features.
+
+---
+
+## [DEC-028] — V001 Three-Level Success Model (Separate Levels Mandatory)
+Date: 2026-08-13
+Status: ACTIVE
+Decided by: Founder + CTO (Stage 00.4 approval)
+Category: Product acceptance governance
+
+### Decision
+V001 success must be evaluated at three separate, non-collapsed levels:
+
+**Level 1 — Product Definition Acceptance (Stage 00.4):** Product behavior is correctly and completely specified at a level sufficient to guide implementation. Closed by Stage 00.4.
+
+**Level 2 — Implementation Acceptance (Implementation + Testing stages):** A working implementation satisfies each frozen journey's PASS conditions, release-blocking conditions are absent, and all 15 capabilities are present and verifiable by technical and functional testing. 10–15 second capture target assessed by structured task-timing test.
+
+**Level 3 — Beta Acceptance (Beta stage):** Real broker users in actual field conditions can successfully complete the primary journeys. 10–15 second target validated by real-user usability testing in Arabic.
+
+**Rationale:** Collapsing Product Definition with Implementation testing creates premature commitments. Collapsing Implementation with Beta conflates technical correctness with real-user usability.
+
+### Consequences
+Stage 00.4 closes Level 1 only. Levels 2 and 3 are separate future stages with separate evaluation methods and separate evidence requirements.
+
+---
+
+## [DEC-029] — Formal Freeze: Stage 00.4 — V001 Success & Acceptance Lock
+Date: 2026-08-13
+Status: ACTIVE — PERMANENT FREEZE RECORD
+Decided by: Founder + CTO
+Category: Governance (Category A — highest risk)
+Authorization: Founder analysis approval + CTO precision correction passes (C1–C6, four wording fixes, search precision) + Founder freeze authorization
+
+### Decision
+Stage 00.4 — V001 Success & Acceptance Lock is **FROZEN and APPROVED** as of 2026-08-13.
+
+The product success definition, per-journey acceptance criteria, cross-product acceptance criteria, 35 release-blocking conditions, and three success levels documented in Stage 00.4 are the authoritative, locked definition of what constitutes a complete and acceptable ViewState V001 product.
+
+### Frozen Content Summary
+See `STAGE_00_4_FREEZE.md` for the full formal record. Summary:
+- **V001 Product Success Definition:** 5 statements covering Capture, Matching, Act, Privacy, and Language/Access
+- **15 journey acceptance criteria:** J-01 through J-15, each with preconditions, PASS conditions, valid empty/failure states, FAIL conditions, and explicitly not tested items
+- **Cross-product criteria:** Capture→Organize→Act · Private Per-Broker · Bilingual · Capture First · Matching North Star
+- **35 release-blocking conditions:** any single condition = V001 not acceptable
+- **Three success levels:** Product Definition (Level 1, closed by Stage 00.4) · Implementation (Level 2) · Beta (Level 3)
+- **Governance consistency:** No Category D or E findings; all open items are Category B or C
+
+### Change Process
+Any future change to Stage 00.4 content requires Change Policy Category A: Founder written approval → exact diff shown → Founder confirms → applied → new DECISIONS.md entry logged.
+
+### Implementation Status
+PRE-IMPLEMENTATION confirmed. Zero product code written or modified. Stage 01 has NOT started — WAITING for Founder authorization.
+
+
+---
+
+## [DEC-030] — V001 Person Classification Model
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Context
+
+The historical V001 role model used Tenant, Buyer, Owner, and Broker. The approved reconciliation replaces the demand-side split and adds the operational classifications required by V001.
+
+### Decision
+
+V001 supports exactly these five Person classifications:
+
+- Seeker / باحث
+- Owner / مالك
+- Broker / دلال
+- Real Estate Company / شركة عقارية
+- Building Guard / حارس
+
+Tenant and Buyer are replaced by one demand-side classification: Seeker.
+
+A Seeker may own multiple independent Requirements. Requirements remain separate records and are never stored as Contact Notes.
+
+Each Requirement contains its own purpose:
+
+- Rent
+- Buy
+
+Purchase versus rental intent belongs to the Requirement, not the Person classification.
+
+### Supersedes
+
+This decision supersedes the future-implementation effect of DEC-004 and related Stage 00.3/00.4 rules that limit V001 to Tenant, Buyer, Owner, and Broker. Historical records remain unchanged.
+
+### Consequences
+
+All role values, validation rules, Requirement ownership rules, import flows, matching eligibility rules, and user-visible classification lists must use this model.
+
+---
+
+## [DEC-031] — Mandatory Role-first Person Capture
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product + UX
+
+### Decision
+
+Adding a Person begins by selecting at least one approved classification. The user then chooses Add manually or Import from phone or another approved source.
+
+At least one classification is required before final save. Multi-role support is required. Classifications may be changed later without losing Person data, Requirements, or relationships.
+
+Minimum manual save requires Name, Phone, and at least one classification. No additional enrichment field is mandatory.
+
+Imported names and notes must be preserved literally. Imported values must not be translated, silently rewritten, or discarded.
+
+### Supersedes
+
+This decision supersedes the future-implementation effect of DEC-022 and Stage 00.4 rules stating that a Contact may be finally saved without a role. Historical records remain unchanged.
+
+### Consequences
+
+A zero-classification Person may exist only as an unsaved or recoverable Draft/import state, not as a valid final saved Person record.
+
+---
+
+## [DEC-032] — V001 Tasks and Follow-ups Minimum Scope
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product
+
+### Decision
+
+V001 includes fast Task or Follow-up creation; a short title as the only mandatory field; optional date and time; optional links to a Person, Property, or Requirement; Open and Done statuses; Today, Upcoming, All, and Done views; a simple calendar filter; local notification when date/time is selected and permission is granted; edit, complete, and reopen; and Draft preservation with no silent loss.
+
+V001 excludes recurring Tasks, workflow automation, pipelines, team assignment, Google Calendar synchronization, Apple Calendar synchronization, and advanced productivity analytics.
+
+### Supersedes
+
+This decision supersedes the V001 exclusion of all Tasks and Follow-ups. It does not alter the separate four follow-up classification labels: Follow Up, Important, Pending, and Order Complete / Closed Deal. Those labels remain a separate lightweight classification capability and are not Tasks.
+
+### Consequences
+
+The Task capability requires its own Draft, persistence, notification permission, failure recovery, testing, and privacy rules.
+
+---
+
+## [DEC-033] — Property Import and Safe Share Boundary
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product + Integration
+
+### Decision
+
+Property Import is included in V001. Manual Property entry remains permanently available.
+
+ViewState may receive Property-related content shared from WhatsApp Business, WhatsApp, and other operating-system-supported share sources. Supported incoming content may include text, photos, videos, and documents. Manual text paste is supported.
+
+Property Import creates a Draft first. Only supported fields may be extracted. The broker must review and edit extracted data before final save. Original received content remains available when extraction is incomplete, and extraction failure leaves the content available for manual completion.
+
+ViewState does not access private WhatsApp conversations and does not promise unsupported or private WhatsApp APIs. WhatsApp Business is the operational priority, but the integration remains replaceable.
+
+Property Safe Share is limited to one Property at a time, with Preview before sending and field/media selection. WhatsApp Business appears first, followed by WhatsApp and other supported channels.
+
+Owner data, source information, private Notes, exact location, and PACI are not included automatically. Bulk Property Export is excluded from this workflow.
+
+Full-account backup/data portability is a separate capability. ViewState Card and direct ViewState-to-ViewState sharing require a separate later stage.
+
+### Supersedes
+
+This decision supersedes Stage 00.4 release blockers that treat Property Import as prohibited and Full Export as the only relevant export boundary. Historical records remain unchanged.
+
+---
+
+## [DEC-034] — Draft Save and No-Silent-Loss Recovery
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Data + UX + Architecture
+
+### Decision
+
+Every add or edit operation maintains an independent Draft. Draft data is saved locally during entry and when the app moves to the background. Drafts must be recoverable after app closure, app crash, phone restart, connection failure, or session failure.
+
+A new Property, Person, Requirement, Task, or Follow-up form must never contain data from a previous completed record.
+
+A Draft may be cleared only after confirmed successful final persistence or explicit user-confirmed discard.
+
+Save failure must preserve all entered fields and media, show a clear message, and provide Retry without requiring re-entry.
+
+Editing must not mutate the persisted original record until final save succeeds. Selected photos and videos must be retained in app-controlled storage and must not depend only on temporary picker paths.
+
+Drafts must not be silently deleted. Multiple Drafts remain distinguishable and recoverable. Local Drafts remain private and are not automatically shared or uploaded. Server-backed Draft synchronization requires a separate Impact Analysis and approval.
+
+### Consequences
+
+This decision does not prematurely freeze debounce timing, storage technology, or schema.
+
+---
+
+## [DEC-035] — Explicit Per-share Disclosure Policy
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Privacy + Product
+
+### Decision
+
+Every Property share presents a final Preview showing exactly what will be shared.
+
+Owner identity, owner phone, and source information are hidden by default. A user may enable a specific owner/source field for that share only, with a clear warning and explicit confirmation. The choice is not remembered for later shares.
+
+Private Notes can never be included through the normal Property Share flow.
+
+Exact location, Google Maps link, and PACI are disabled by default. Each may be enabled explicitly for that share.
+
+General area, approved specifications, price, and selected media may be shared normally. No linked Seeker or client information may be exposed.
+
+Sharing begins only after recipient, channel, and Preview are confirmed. The same disclosure rules apply to every channel. Share failure must not modify or delete the Property, Draft, or media.
+
+### Consequences
+
+Privacy filtering must be enforced outside presentation-only UI and must apply consistently to every supported share adapter.
+
+---
+
+## [DEC-036] — PACI, Location, and Maps Behavior
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Product + Data + Integration
+
+### Decision
+
+Kuwait Property location selection uses Governorate and Area. Area selection supports fast text search and displays complete names. The taxonomy remains configurable for future GCC expansion.
+
+PACI and exact location are optional and never block Property save.
+
+Location may be provided by map-point selection, current location after permission, a pasted Google Maps link, or manual entry/correction.
+
+Coordinates use a platform-neutral representation. Original user-provided map links are preserved.
+
+Maps, reverse geocoding, and automated lookup must not silently override the user’s selected Area or PACI. The user may correct Area, PACI, map link, and coordinates.
+
+Permission denial, offline state, and map failure must not prevent saving the Property or its Draft.
+
+Google Maps is the first operational map option. Maps use a replaceable adapter. iOS provides an appropriate Apple Maps or browser fallback.
+
+Exact location and PACI remain private by default during sharing. Movement history is not collected. Any external PACI integration requires separate privacy, reliability, replacement, failure, and data-authority analysis before approval.
+
+---
+
+## [DEC-037] — Cross-Platform Android/iOS Product Contract
+Date: 2026-08-25
+Status: ACTIVE
+Decided by: Founder
+Category: Architecture + Product + Testing
+
+### Decision
+
+ViewState App V001 is one product supporting Android and iOS/iPhone.
+
+Android is the first implementation, pilot, and operational-validation platform. Android-first does not authorize an Android-only architecture.
+
+iOS architectural compatibility must be maintained continuously during every implementation stage.
+
+After Android stabilization, the remaining iOS-specific work may include only remaining platform integrations, real-device verification, TestFlight verification, and App Store preparation.
+
+Shared product behavior, domain logic, validation, matching, persistence, API contracts, migrations, privacy, and backup rules remain platform-neutral.
+
+Business rules must never be duplicated inside platform-specific UI or native modules.
+
+Native functions must be isolated behind replaceable platform adapters, including Contacts; Photos and videos; Files and backup/restore; Location and maps; WhatsApp and WhatsApp Business; Notifications; Secure storage and authentication; Deep links; and future ViewState Card opening.
+
+Every dependency requires Android, iOS, and Expo compatibility review.
+
+A platform-specific dependency requires documented justification, a safe equivalent fallback, isolation from shared product logic, and Founder approval if it reduces parity or data safety.
+
+Persisted data, migrations, backup formats, import/export formats, and future ViewState Card formats remain platform-neutral.
+
+Android hardware and gesture back behavior and iOS native swipe-back/navigation behavior must both be respected.
+
+Arabic, English, RTL/LTR, keyboard behavior, accessibility, and responsive layout must be verified on both platforms.
+
+Every future feature Impact Analysis requires an Android/iOS Compatibility Impact section.
+
+Android real-device testing is mandatory for the first pilot, including Honor X9 where applicable.
+
+iPhone real-device and TestFlight testing are mandatory before iOS freeze or App Store submission.
+
+TypeScript success, Expo prebuild, simulator success, or binary generation alone is not proof of iOS functional readiness.
+
+Historical permanent single-platform priority statements are superseded. Android-first is rollout and operational-testing priority only.
+
+Platform parity means equivalent product capability and data safety, not identical native UI behavior.
+
+### Supersedes
+
+This decision supersedes the platform-priority portions of artifacts/mobile/.ai/README.md:10-12, artifacts/mobile/.ai/ARCHITECTURE.md:8-22, and artifacts/mobile/.ai/DECISIONS.md:80-93, only to the extent that they establish permanent iOS priority or postpone Android compatibility. Historical records remain unchanged.
+
+### Consequences
+
+A feature is not architecturally complete when it works only on Android without a documented iOS path. Android may reach pilot readiness first, but iOS compatibility work continues during every preceding implementation stage. Tooling/build success alone cannot establish functional readiness.
+
+---
+
+## [DEC-038] — Governance Reconciliation Corrective Pass and Formal Freeze
+Date: 2026-08-26
+Status: ACTIVE
+Decided by: Founder
+Category: Governance
+
+### Context
+Founder authorized a governance-only corrective pass from baseline `84be5c9d02adb73cea15ad2a875fd23fcc38bbfd` after PR #1 successfully merged the approved governance reconciliation. The live README, CURRENT_STATE, and related current documents still contained stale active rules that contradicted DEC-030 through DEC-037, and the completed reconciliation freeze had not been recorded durably.
+
+### Decision
+Correct current authoritative governance sections, without rewriting historical decision bodies or changing historical freeze files. Mark only directly affected historical decisions as superseded or partially superseded. Create the conditional formal reconciliation freeze record.
+
+### Scope and constraints
+The correction covers current platform, Person classification, user-text localization, Tasks/Follow-ups, Property workflow, stage-status, governance-index, and decision-status wording. No product decision is reopened or changed. No current database migration is created. Stage 01 remains locked.
+
+### Freeze condition
+The Governance Reconciliation Corrective Freeze becomes effective only after the corrective PR is merged normally, the resulting GitHub `main` contains the verified corrective tree with no prohibited files, and Stage 01 remains locked. Corrective PR number and final branch head are recorded in the freeze record before merge.
+
+### Historical preservation
+The Stage 00.1, 00.2.1, 00.2.2, 00.3, and 00.4 freeze files remain unchanged.
+---
+
+## [DEC-039] — Final Governance Closeout
+Date: 2026-08-26
+Status: PARTIALLY SUPERSEDED BY DEC-040 only for the wording and scope of the next permitted Stage 01 analysis.
+Decided by: Founder
+Category: Governance
+
+### Context
+
+Founder authorized one final governance-only closeout from verified GitHub `main` commit `fbed357dabf09799c73982bb0643673ef3337a05` after PR #2 merged. The live governance still displayed the reconciliation as conditional, retained an obsolete implementation order that delayed the first Property step, and did not state the mandatory lifecycle consistently.
+
+### Decision
+
+Finalize the Governance Reconciliation as FROZEN, record PR #2’s normal merge and verified merge commit, correct the active implementation order so the next permitted action is only the bounded Stage 01 Building Form Impact Analysis, restore the exact mandatory lifecycle, and preserve the historical conditional explanation.
+
+### Scope and constraints
+
+This is a governance-only closeout. It adds no product requirement, makes no new architecture or technology decision, authorizes no product implementation, and does not change DEC-001 through DEC-038 or any historical freeze file. Stage 01 remains NOT STARTED / LOCKED. Authentication, broad database design, broad API infrastructure, Contacts, Requirements, Matching, Tasks, imports, sharing, media, and other modules are not implicitly authorized.
+
+### Verification and final state
+
+The closeout branch is based directly on the approved `main` commit. Only the six Founder-authorized governance files changed. DEC-001 through DEC-039 are unique and sequential. PR #2 merged normally at `fbed357dabf09799c73982bb0643673ef3337a05`, and the resulting `main` tree was independently verified.
+
+The mandatory lifecycle is: Founder → CTO Review → Impact Analysis → Founder Approval → Implementation → Testing → CTO Review → Freeze → WAIT. No IMPLEMENT command may bypass CTO Review, Impact Analysis, or Founder approval.
+
+Final state: GOVERNANCE FROZEN; STAGE 01 NOT STARTED / LOCKED; NEXT PERMITTED ACTION is Bounded Stage 01 Building Form Impact Analysis only; WAIT.
+ACTION is Bounded Stage 01 Building Form Impact Analysis only; WAIT.
+
+---
+
+## [DEC-040] — Property Capture Analysis Scope Clarification and Expansion
+Date: 2026-08-26
+Status: ACTIVE only upon normal amendment PR merge, verified GitHub main, exact allowlist compliance, historical preservation, and continued Stage 01 lock; before those conditions it is APPROVED / NOT EFFECTIVE.
+Decided by: Founder
+Category: Governance
+
+### Context
+
+DEC-039 finalized the Governance Reconciliation and used the bounded Stage 01 Building Form Impact Analysis wording. The Founder has clarified that the future analysis must examine transaction-first capture of the exact built property or independently offered unit currently being offered, without forcing parent Building creation. Current property planning guidance also contains an incomplete taxonomy and a stale Title requirement that conflicts with DEC-022.
+
+### Decision
+
+The future Stage 01 analysis is titled:
+
+**Stage 01 — Property Capture Architecture & Dynamic Form Impact Analysis**
+**(Sale & Rent — Built Properties; Land Workflow Separate)**
+
+When freshly authorized by the Founder after this governance amendment freeze, the analysis may assess this workflow:
+
+Transaction → exact offered built property or independently offered unit → relevant fields only → quick save → optional enrichment later.
+
+The analysis may cover Whole Building, Commercial Complex, Apartment, Floor, House, Villa, Office, Shop, Warehouse, Chalet, and additional built-property types identified during analysis. Whether a user-selectable Other type exists remains an unresolved Stage 01 Founder decision. A broker must not be forced to create a parent Building record before capturing an independently offered unit.
+
+Land remains part of V001 but requires a separately analyzed, approved, and frozen later workflow. This decision expands analysis scope only. It does not approve a final taxonomy, Property/Offer/Unit model, parent/unit relationship, persisted price model, UI, schema, migration, API, dependency, or implementation.
+
+### BASIC Property capture
+
+DEC-022 remains authoritative. BASIC Property fields are exactly Property Type, Purpose, Price, and Market-configured Location Area. Title is not a required BASIC Property field. This decision creates no fifth BASIC requirement. Rental Price and Sale Price remain separate concepts; no generic persisted price model is approved.
+
+### Relationship to DEC-039
+
+DEC-039 is PARTIALLY SUPERSEDED BY DEC-040 only for the wording and scope of the next permitted Stage 01 analysis. DEC-039's historical body, governance freeze, pre-implementation state, mandatory lifecycle, Stage 01 lock, and separately locked-module constraints remain active.
+
+### Effectiveness and final state
+
+Before normal amendment PR merge and verification, the existing governance baseline is FROZEN; this scope amendment is APPROVED FOR GOVERNANCE IMPLEMENTATION / NOT YET EFFECTIVE; DEC-040 is NOT YET EFFECTIVE; Stage 01 is NOT STARTED / LOCKED; and the current permitted wording remains the existing bounded Building Form Impact Analysis.
+
+After normal amendment PR merge, verified GitHub main, exact eight-file allowlist compliance, historical freeze-file and decision-body preservation, and continued Stage 01 lock, this decision is ACTIVE without a second administrative PR. The resulting state is: GOVERNANCE SCOPE AMENDMENT FROZEN; DEC-040 ACTIVE; PRODUCT PRE-IMPLEMENTATION; STAGE 01 NOT STARTED / LOCKED; NEXT PERMITTED ACTION fresh Founder authorization for the expanded Stage 01 Impact Analysis only; WAIT.
+
+---
+
+## [DEC-041] — Property Sequencing, Deferred Native Blocker, and Broker Display Terminology
+Date: 2026-08-28
+Status: APPROVED — sequencing and terminology only; no release or merge authorization.
+Decided by: Founder
+Category: Product Sequencing and Terminology
+
+### Context
+
+Stage 01A and the Stage 01B1 local Property capture vertical slice were implemented after the previous governance tracker was written. PR #7 remains open and unmerged at `4a26835ee2715471f111ffb339aaf634b4cf9967`. Physical Android testing repeatedly reached successful manifest and bundle responses but failed during early post-bundle startup. Removing KeyboardProvider on the preserved diagnostic branch did not prevent the reported failure, and no exact responsible module was identified.
+
+### Decision
+
+Continue governed delivery in this order:
+
+1. Properties
+2. People and Requirements
+3. Matching
+4. Consolidated native-device and persona acceptance testing
+
+The Android startup investigation is deferred during these implementation stages but remains a release blocker. This sequencing decision does not claim the crash is fixed, waive native acceptance, authorize release, or authorize merging PR #7.
+
+For the future People stage, the approved Arabic user-facing Broker display terminology is `وسيط`. This does not claim that People UI has already been implemented. English remains `Broker`. Existing internal role identifiers, stored values, role behavior, and literal user-entered or imported text must not be renamed, translated, duplicated, or rewritten.
+
+### Bounded Task #5 implementation status
+
+The Founder separately authorized Task #5, limited to the existing BASIC built-property Sale/Rent capture reliability layer. The local implementation commit is `fc1ecb4b9defec78c29c803ebfb106161741e331`, based directly on `4a26835ee2715471f111ffb339aaf634b4cf9967`.
+
+Task #5 is implemented locally and provisionally accepted by the Founder based on the submitted implementation and verification report. This acceptance is not an independent Founder code review, native-device acceptance, full Properties completion, or freeze.
+
+The submitted report attributes the completed checks to mobile tests and typecheck, property-domain tests and typecheck, web capture regression, and a bounded agent-assisted CTO review. Android/iOS physical-device acceptance remains outstanding, and the Android startup failure remains unresolved.
+
+This decision does not approve or freeze the full Properties module. Dynamic fields, Land, detail/edit/enrichment, media, maps/PACI, sharing/import, People, Requirements, Matching, integrations, APIs, server persistence, and release remain separately governed.
+
+### Final state
+
+Task #5 is implemented locally, provisionally accepted based on the submitted report, and not frozen. It has not been pushed, merged, or released. PR #7 and the protected and diagnostic branches remain unchanged. Physical Android/iOS acceptance remains outstanding. WAIT.
+
+---
+
+## [DEC-042] — Narrow Local Saved-Property Permanent-Deletion Exception
+Date: 2026-08-28
+Status: APPROVED FOR BOUNDED LOCAL IMPLEMENTATION; REAL-DATA EXECUTION REQUIRES SEPARATE FOUNDER APPROVAL
+Decided by: Founder
+Category: Data Safety
+
+### Context
+
+The general Governance rule requires soft deletion and prohibits hard deletion of user data. The Founder has approved a narrow exception so a saved Property can be permanently removed from one explicitly identified local ViewState storage namespace. This exception is required for an explicit per-Property deletion control and for a separately approved fixed-snapshot purge; it is not a general deletion-policy change.
+
+### Decision
+
+A saved Property may be permanently deleted only through either:
+
+1. explicit per-Property confirmation that identifies the exact Property version to delete; or
+2. a fixed target snapshot whose real-data execution receives a separate explicit Founder approval after implementation and isolated synthetic verification.
+
+Deletion must fail closed for stale, unreadable, conflicting, pending, unsupported, or failed operations. A fixed-snapshot purge is all-or-nothing: every targeted Property is removed together or none is, while unrelated Properties and Properties added after the snapshot are preserved. The implementation may retain only the minimum non-content Property identifier/state required to prevent delayed saves, edits, retries, or recovery from recreating a permanently deleted identity. It must not retain Property price, area, notes, links, offer content, or personal details in that safeguard.
+
+### Boundaries
+
+- The exception applies only to saved Properties in the explicitly identified local browser profile/storage namespace or local device store.
+- It does not authorize deletion of drafts, recovery evidence, preferences, other entities, other devices, profiles, environments, server data, backups, or protected repository history.
+- Drafts and recovery evidence must not be silently deleted to manufacture success. An incompatible or conflicting pending state blocks deletion until explicitly resolved.
+- No annual-to-monthly relabeling, amount conversion, fifth BASIC field, Property Domain change, identity substitution, archival substitute, migration of real records, or unrelated refactor is authorized.
+- Existing annual or unknown-cadence saved Properties remain honestly represented unless separately and explicitly corrected.
+- The general no-hard-delete rule remains active for every other user-data category and storage boundary.
+- Implementation approval and destructive real-data execution approval are separate gates. This decision does not authorize a purge of current Preview or device data.
+
+### Compatibility and verification
+
+The bounded implementation must preserve existing Property and Offer identities, unrelated data and current architecture. Deletion and pricing tests use isolated synthetic stores only. Web and Native guarantees and limitations must be reported separately; unavailable platform coverage is not a pass. No commit, push, merge, publication, freeze, or real-data deletion is authorized before the implementation report and CTO review.
+
+---
+
+## [DEC-043] — Bounded V001 Properties and People Completion Authorization
+Date: 2026-08-29
+Status: APPROVED FOR BOUNDED LOCAL IMPLEMENTATION; NOT TESTED, FROZEN, MERGED, OR RELEASED
+Decided by: Founder
+Category: Product + Domain + Local Data + Privacy
+
+### Decision
+
+The Founder authorizes immediate local implementation of the bounded V001 Properties and People completion contract while preserving the existing BASIC Property flow. BASIC remains exactly Property Type, Transaction, transaction-specific Price, and configured Area. Optional enrichment begins only after successful BASIC save and never becomes a fifth BASIC requirement.
+
+The authorized Property enrichment uses the existing eleven built-property types and additive, optional, type-discriminated details. Physical facts remain Property type details and Sale/Rent terms remain in the existing active Offer. Floor enrichment first selects Residential or Commercial and finalizes only compatible fields. A BASIC Other Built Property remains valid without type details; completed Other enrichment requires a nonblank literal clarification distinct from Property description. Existing BASIC-only Properties remain valid. Incompatible saved type details must be explicitly removed before changing Property type.
+
+People use only the active classifications Seeker, Owner, Broker, Real Estate Company, and Building Guard. Final saved People require the governed literal Name and Phone plus at least one existing classification; multi-classification remains supported. Imported names, displayed phones, and notes remain literal. Contact import is local, permission-based, and limited to user-selected contacts. The approved Arabic Broker display term is `وسيط`; stored classification identifiers are unchanged.
+
+Property attachments are optional local image, video, or PDF records with stable identity, original name, MIME metadata, order, and at most one optional image cover. Selected files move to app-managed local storage; persistence stores metadata rather than file binaries or temporary picker paths. Removal is confirmed, metadata is saved safely before file deletion, lists remain lightweight, and PDFs use a system or external viewer. No cloud storage or embedded PDF renderer is authorized.
+
+A Person-to-Property association is private and neutral, contains only stable Person and Property identities, and is unique by pair. It has no role, classification, status, source, priority, ownership, tenancy, buyer interest, or commercial meaning. Unlinking deletes neither record. Deleting either record removes only its associations and never deletes the other record. Cooperation facts belong in private Property Notes.
+
+BASIC Area remains unchanged. Optional private location enrichment may store manual PACI, manual location text, an original Maps link, and platform-neutral coordinates. Current location requires explicit action and foreground permission. No value may silently overwrite Area, PACI, link, text, or coordinates. Failure or denial never blocks Property or Draft save. No PACI lookup, reverse geocoding, or embedded map integration is authorized.
+
+Selective sharing is limited to one validated Property at a time with transient selection and exact Preview. Normal approved Property fields and explicitly selected attachments may be included. Private Notes are never selectable. Owner/source, PACI, exact or manual location, Maps link, and Person contact data default off and require explicit selection for every share. People and neutral links never share automatically, sharing never mutates saved data, and choices are not remembered.
+
+### Boundaries
+
+The implementation is local-first and additive. It must preserve existing Properties, People-compatible future data, stable identities, KWD pricing, fresh monthly Rent wording, legacy cadence truth, Area data, deletion fences, unknown fields, and recovery evidence. It must not introduce Land, Matching, Tasks, Follow-ups, commission logic, Unit entities, Parent Building relationships, cloud synchronization, authentication, server persistence, external PACI lookup, reverse geocoding, or a new search architecture.
+
+This decision resolves the prior implementation lock only for the bounded contract above. It does not authorize a governance rewrite, phase freeze, real-data migration or deletion, commit, push, merge, publication, release, or APK build. Completion and acceptance remain pending implementation, synthetic verification, CTO-style review, and Founder review.
+
+---
+
+## [DEC-044] — Final Bounded V001 Dynamic Details Field Contract
+Date: 2026-08-29
+Status: APPROVED FOR BOUNDED LOCAL IMPLEMENTATION; NOT FROZEN, MERGED, OR RELEASED
+Decided by: Founder
+Category: Property Domain + Local Product
+
+### Decision
+
+The Founder's latest explicit approval establishes the final bounded V001 Dynamic Details field contract for this implementation. It supersedes only unresolved or previously recommended Dynamic Details field proposals and does not approve prior CTO recommendations wholesale. DEC-043 remains active for governed People, neutral links, local media, private manual/current location, selective sharing, compatibility, privacy, and implementation boundaries.
+
+BASIC remains exactly the existing Property Type, Transaction, transaction-specific Price, and configured Area. The existing eleven built-property types remain unchanged. Enrichment is optional after BASIC save. Every new detail field is optional except Floor Use when completing Floor enrichment and nonblank literal clarification when completing Other Built Property enrichment.
+
+Approved applicability:
+
+- Apartment: built-up area, existing apartment subtype, bedrooms, bathrooms, living rooms, floor number, furnishing, maid room, parking spaces.
+- House and Villa: plot area, built-up area, bedrooms, bathrooms, living rooms, total floor count, furnishing, maid room, parking spaces, pool.
+- Chalet: the House/Villa fields plus waterfront.
+- Floor: Residential or Commercial discriminator. Residential uses built-up area, bedrooms, bathrooms, living rooms, floor number, furnishing, maid room, and parking. Commercial uses built-up area, bathrooms, floor number, intended use, literal commercial activity, parking, frontage width, and ceiling height.
+- Office: built-up area, floor number, bathrooms, intended use, literal commercial activity, parking.
+- Shop: built-up area, floor number, intended use, literal commercial activity, parking, frontage width, and ceiling height. PACI remains private Location data.
+- Whole Building and Commercial Complex: plot area, built-up area, total floor count, total unit count, apartment count, shop count, office count, elevator count, and parking spaces.
+- Warehouse: plot area, built-up area, bathrooms, intended use, literal commercial activity, parking, ceiling height, loading bays, and cold storage.
+- Other Built Property: nonblank literal clarification when enrichment is completed, plus plot area, built-up area, and parking spaces where applicable.
+
+Furnishing values are exactly Unfurnished, Semi-furnished, and Furnished, with localized Arabic display equivalents and stable stored identifiers. Property Condition and Availability are not authorized because their final taxonomies remain unresolved. Counts are nonnegative integers with no invented business maximum. When total unit count is present, the sum of known apartment, shop, and office counts must not exceed it; equality is not required.
+
+Physical facts remain in type details. Description and Private Notes remain in their governed Property Core locations. PACI remains private Location data. Sale/Rent terms remain in the existing active Offer.
+
+### Boundaries
+
+Implementation remains local-first, additive, and backward-compatible. It must preserve existing data, identities, pricing and rental-cadence truth, recovery, low-tap capture, bilingual behavior, and tested APK behavior. No Property Condition, Availability, Unit or Parent Building model, Matching, cloud/platform/auth work, Tasks, Follow-ups, commissions, architecture rewrite, real-data operation, GitHub action, commit, publication, or APK build is authorized.
+
+---
+
+## [DEC-045] — Formal FW01.1 Source Freeze
+Date: 2026-09-12
+Status: ACTIVE — SOURCE FREEZE DECISION
+Decided by: Founder
+Category: Governance
+
+### Decision
+
+The Founder formally approved FW01.1 SOURCE FREEZE at exact commit `a52a93daaf89c2d4a4110d0a0aa9ce24fb030e16`, based directly on FW01 baseline `b6c1e6e098ebec99d01f5013886098662283da55`.
+
+### Frozen Source Boundary
+
+The frozen source revision changes only:
+
+- `artifacts/mobile/app/person/[personId].tsx`
+- `artifacts/mobile/tests/personUi.test.ts`
+- `artifacts/mobile/package.json`
+
+The read-only “FW01.1 — Post-Push CTO Verification, Android/iOS Compatibility Impact & Source Freeze Readiness” report concluded “FW01.1 SOURCE FREEZE READY — FOUNDER DECISION REQUIRED.”
+
+### Boundaries and Final State
+
+This decision does not merge FW01.1 source code into `main`. The frozen branch and exact frozen commit remain unchanged. The governance branch and PR document the source freeze only and include no FW01.1 product-source merge.
+
+Android/iOS native runtime acceptance, physical-device acceptance, and full FW01 acceptance remain open and are not completed. This decision authorizes no product-code merge, release, tag, native execution, or FW02 work.
+
+Any change to the frozen revision, source scope, or the three frozen files requires new explicit Founder approval under the mandatory governance lifecycle.
+
+Final state: FW01.1 SOURCE FROZEN — NATIVE AND FULL FW01 ACCEPTANCE OPEN — WAIT.
+
+## Founder decision — 2026-10-01: Property sector selection
+Three equal-width buttons (All, Residential, Commercial) precede the type list. All is default; tapping the active Residential/Commercial filter returns to All. Floor is shared and takes its use from the selected sector; All requires selecting Floor use before proceeding. Do not repeat that choice in the new Floor form. Preserve existing stored floorUse contracts and older records.
+Duplex is directly selectable under Residential/All using propertyType=apartment and apartmentSubtype=duplex. Commercial Duplex and a new dedicated Duplex form are deferred. No new tool or dependency is authorized within this feature package.
+
+## Founder decision — 2026-10-07: Residential Occupancy and Master bedrooms
+Add optional Family/Bachelor/Any Occupancy to all residential Offered Property forms, including Studio. Add optional actual Master bedrooms directly below Bedrooms on all residential types except Studio. Master bedrooms are part of total bedrooms and cannot exceed a known total. These facts are excluded from commercial forms and introduce no duplicate Wanted Requirement fields.
+Residential Other uses optional propertyUse to distinguish it from commercial Other without changing the existing canonical property type; old unclassified records remain supported. Persisted Other use is locked during details editing. Additive local persistence only; no new dependency or bulk migration is authorized.
+
+## Founder decision — 2026-10-15: Property inventory sector filters
+Add Residential and Commercial controls below the current Properties tab filter row. Use mutually exclusive sector selection; tapping the active sector restores both sectors, and All clears both sector and intent facets. Sector restrictions intersect search and existing filters for Offered/Wanted rows. Shared Floor/Other types require a known stored use to appear in a specific sector; unknown legacy use remains available in the unfiltered list without inference or migration.
+
+## Founder decision — 2026-10-15: Explicit Floor names and canonical use
+Replace the main selector's generic Floor choice with Residential floor and Commercial floor. All shows both; Residential and Commercial each show their matching choice. Selection saves the existing propertyType=floor and floorUse=residential/commercial contracts for Offered and Wanted, without another Floor-use question in the new selected-use form. Apply localized specific names to inventory cards, details, review and search. Preserve draft transition protections and leave unknown legacy Floor use unclassified until explicitly completed. This supersedes the earlier main-selector generic Floor/use-choice presentation, without changing the stored taxonomy.
+
+## Founder decision — 2026-10-15: People sector filters
+Apply Residential/Commercial filters to People in combination with the existing intent filters. Wanted + Rent + Residential requires one owned residential Rental Request. Offered combinations use the linked/source Property's own transaction and canonical sector. Never satisfy different selected dimensions using separate records for one Person. Cards and overflow counts reflect matching activities; All clears the filters and retains persons without associated activity. Sector is derived for presentation only, without persisting or guessing unknown use.

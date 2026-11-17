@@ -1,0 +1,182 @@
+import {
+  PROPERTY_SOURCE_ROLES,
+  PropertySourceRole,
+} from '@workspace/property-domain';
+import {
+  matchesFlexibleSearch,
+  personClassificationSearchValues,
+  type FlexibleSearchField,
+} from '@/services/flexibleSearch';
+
+export const PERSON_CLASSIFICATIONS = [
+  'seeker',
+  'owner',
+  'broker',
+  'real_estate_company',
+  'building_guard',
+] as const;
+
+export type PersonClassification = typeof PERSON_CLASSIFICATIONS[number];
+
+/** A broker can record a request they are representing without changing their role. */
+export function canOwnPropertyRequirement(person?: { classifications?: readonly string[] } | null): boolean {
+  return person?.classifications?.some(role => role === 'seeker' || role === 'broker') ?? false;
+}
+
+export { PROPERTY_SOURCE_ROLES };
+export type { PropertySourceRole };
+
+export interface PropertySource {
+  propertyCoreId: string;
+  personId: string;
+  role: PropertySourceRole;
+}
+
+/**
+ * User-authored fields are kept exactly as entered. normalizedPhone is the
+ * comparison/search representation and must never replace displayPhone.
+ */
+export interface Person {
+  id: string;
+  classifications: PersonClassification[];
+  name: string;
+  displayPhone: string;
+  normalizedPhone: string;
+  notes: string;
+}
+
+export interface PersonPropertyLink {
+  personId: string;
+  propertyCoreId: string;
+}
+
+export interface PersonInput {
+  id: string;
+  classifications: readonly PersonClassification[];
+  name: string;
+  displayPhone: string;
+  normalizedPhone?: string;
+  notes?: string;
+}
+
+const classificationSet = new Set<string>(PERSON_CLASSIFICATIONS);
+
+function normalizePhoneDigit(character: string): string {
+  const code = character.charCodeAt(0);
+  if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
+  if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0);
+  return character;
+}
+
+export function normalizePersonPhone(phone: string): string {
+  const trimmed = phone.trim();
+  const digits = Array.from(trimmed)
+    .map(normalizePhoneDigit)
+    .filter(character => character >= '0' && character <= '9')
+    .join('');
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
+}
+
+export function createPerson(input: PersonInput): Person {
+  const person: Person = {
+    id: input.id,
+    classifications: [...input.classifications],
+    name: input.name,
+    displayPhone: input.displayPhone,
+    normalizedPhone: normalizePersonPhone(input.normalizedPhone ?? input.displayPhone),
+    notes: input.notes ?? '',
+  };
+  assertValidPerson(person);
+  return person;
+}
+
+export function assertValidPerson(person: Person): void {
+  if (!person.id) throw new Error('PERSON_ID_REQUIRED');
+  if (!person.name.trim()) throw new Error('PERSON_NAME_REQUIRED');
+  if (!person.displayPhone.trim() || !person.normalizedPhone.replace('+', '')) {
+    throw new Error('PERSON_PHONE_REQUIRED');
+  }
+  const displayNormalized = normalizePersonPhone(person.displayPhone);
+  const normalizedIsCanonical = person.normalizedPhone === normalizePersonPhone(person.normalizedPhone);
+  const displayNationalDigits = displayNormalized.replace(/\D/g, '').replace(/^0+/, '');
+  const isCountryQualifiedDisplay = person.normalizedPhone.startsWith('+')
+    && person.normalizedPhone.replace(/\D/g, '').endsWith(displayNationalDigits);
+  if (!normalizedIsCanonical || (
+    person.normalizedPhone !== displayNormalized
+    && !isCountryQualifiedDisplay
+  )) {
+    throw new Error('PERSON_PHONE_NORMALIZATION_MISMATCH');
+  }
+  if (!Array.isArray(person.classifications) || person.classifications.length === 0) {
+    throw new Error('PERSON_CLASSIFICATION_REQUIRED');
+  }
+  if (
+    new Set(person.classifications).size !== person.classifications.length
+    || person.classifications.some(value => !classificationSet.has(value))
+  ) {
+    throw new Error('INVALID_PERSON_CLASSIFICATION');
+  }
+}
+
+export function getPersonSearchText(person: Person): string {
+  return [
+    person.name.toLocaleLowerCase(),
+    person.displayPhone.toLocaleLowerCase(),
+    person.normalizedPhone,
+  ].join(' ');
+}
+
+export function personMatchesSearch(person: Person, query: string): boolean {
+  const fields: FlexibleSearchField[] = [
+    { field: 'name', value: person.name },
+    { field: 'phone', value: person.displayPhone },
+    { field: 'phone', value: person.normalizedPhone },
+    ...personClassificationSearchValues(person.classifications)
+      .map(value => ({ field: 'classification', value })),
+  ];
+  const literalQuery = query.toLocaleLowerCase();
+  const normalizedQuery = normalizePersonPhone(query);
+  return matchesFlexibleSearch(fields, query)
+    || getPersonSearchText(person).toLocaleLowerCase().includes(literalQuery)
+    || (normalizedQuery.replace('+', '').length > 0
+      && person.normalizedPhone.includes(normalizedQuery));
+}
+
+export interface PersonStore {
+  /** Saves a new identity or returns the existing canonical phone identity. */
+  savePerson(person: Person): Promise<Person>;
+  updatePerson(expected: Person, replacement: Person): Promise<boolean>;
+  getPerson(id: string): Promise<Person | null>;
+  getPeople(): Promise<Person[]>;
+  searchPeople(query: string): Promise<Person[]>;
+  deletePerson(id: string): Promise<boolean>;
+  linkPersonToProperty(link: PersonPropertyLink): Promise<void>;
+  unlinkPersonFromProperty(link: PersonPropertyLink): Promise<boolean>;
+  getPersonPropertyLinks(): Promise<PersonPropertyLink[]>;
+  getLinksForPerson(personId: string): Promise<PersonPropertyLink[]>;
+  getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]>;
+  setPropertySource(source: PropertySource): Promise<void>;
+  getPropertySource(propertyCoreId: string): Promise<PropertySource | null>;
+  removePropertySource(propertyCoreId: string): Promise<boolean>;
+  getPropertySourcesForPerson(personId: string): Promise<PropertySource[]>;
+}
+
+/** A source role describes the relationship, not the Person's classifications. */
+export function personCanBePropertySource(
+  _person: Person,
+  role: PropertySourceRole,
+): boolean {
+  return PROPERTY_SOURCE_ROLES.includes(role);
+}
+
+/**
+ * Enrichment never replaces authored identity fields.  The sole compatible
+ * optional field is notes: an incoming note may fill an empty existing note.
+ */
+export function enrichPersonIdentity(existing: Person, incoming: Person): Person {
+  return {
+    ...existing,
+    classifications: [...new Set([...existing.classifications, ...incoming.classifications])],
+    notes: existing.notes === '' && incoming.notes !== '' ? incoming.notes : existing.notes,
+  };
+}

@@ -1,0 +1,120 @@
+{
+  "evidence": "LOCAL_REPOSITORY_INTEGRATION_NOT_APP_E2E",
+  "brokers": 8,
+  "properties": 30,
+  "localCrossBrokerMatches": 0,
+  "testOnlyAggregatePairs": 30,
+  "localNoticeEntries": 30,
+  "rows": [
+    {
+      "requestBroker": 1,
+      "propertyBroker": 2,
+      "localCandidates": 4,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 4,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000101",
+        "11111111-1111-4111-8111-000000000109",
+        "11111111-1111-4111-8111-000000000117",
+        "11111111-1111-4111-8111-000000000125"
+      ]
+    },
+    {
+      "requestBroker": 2,
+      "propertyBroker": 3,
+      "localCandidates": 4,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 4,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000102",
+        "11111111-1111-4111-8111-000000000110",
+        "11111111-1111-4111-8111-000000000118",
+        "11111111-1111-4111-8111-000000000126"
+      ]
+    },
+    {
+      "requestBroker": 3,
+      "propertyBroker": 4,
+      "localCandidates": 4,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 4,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000103",
+        "11111111-1111-4111-8111-000000000111",
+        "11111111-1111-4111-8111-000000000119",
+        "11111111-1111-4111-8111-000000000127"
+      ]
+    },
+    {
+      "requestBroker": 4,
+      "propertyBroker": 5,
+      "localCandidates": 4,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 4,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000104",
+        "11111111-1111-4111-8111-000000000112",
+        "11111111-1111-4111-8111-000000000120",
+        "11111111-1111-4111-8111-000000000128"
+      ]
+    },
+    {
+      "requestBroker": 5,
+      "propertyBroker": 6,
+      "localCandidates": 4,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 4,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000105",
+        "11111111-1111-4111-8111-000000000113",
+        "11111111-1111-4111-8111-000000000121",
+        "11111111-1111-4111-8111-000000000129"
+      ]
+    },
+    {
+      "requestBroker": 6,
+      "propertyBroker": 7,
+      "localCandidates": 4,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 3,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000106",
+        "11111111-1111-4111-8111-000000000114",
+        "11111111-1111-4111-8111-000000000122"
+      ]
+    },
+    {
+      "requestBroker": 7,
+      "propertyBroker": 8,
+      "localCandidates": 3,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 3,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000107",
+        "11111111-1111-4111-8111-000000000115",
+        "11111111-1111-4111-8111-000000000123"
+      ]
+    },
+    {
+      "requestBroker": 8,
+      "propertyBroker": 1,
+      "localCandidates": 3,
+      "localMatches": 0,
+      "aggregateCandidates": 30,
+      "aggregateMatches": 4,
+      "propertyIds": [
+        "11111111-1111-4111-8111-000000000100",
+        "11111111-1111-4111-8111-000000000108",
+        "11111111-1111-4111-8111-000000000116",
+        "11111111-1111-4111-8111-000000000124"
+      ]
+    }
+  ]
+}
