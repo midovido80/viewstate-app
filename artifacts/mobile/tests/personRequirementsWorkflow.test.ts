@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { evaluateMatch, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement, parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
+import { createPerson, isPropertySeeker, PERSON_CLASSIFICATION_GROUPS } from '@/services/people';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const SEEKER = 'person-seeker';
@@ -14,6 +15,26 @@ const basic = {
   currencyCode: 'KWD',
   notes: '  literal broker note  ',
 };
+
+test('Person roles can be combined and keep property requests available for seekers', () => {
+  assert.deepEqual(PERSON_CLASSIFICATION_GROUPS.map(group => group.roles), [
+    ['rent_seeker', 'buy_seeker', 'investor'],
+    ['owner', 'owner_agent', 'property_management'],
+    ['broker', 'real_estate_company', 'building_guard'],
+  ]);
+  for (const classifications of [
+    ['seeker'], ['rent_seeker'], ['buy_seeker'], ['investor', 'owner'],
+  ] as const) {
+    const person = createPerson({ id: SEEKER, name: 'Ahmad', displayPhone: '50000000', classifications });
+    assert.deepEqual(person.classifications, classifications);
+    assert.equal(isPropertySeeker(person), true);
+  }
+  const manager = createPerson({
+    id: 'manager', name: 'Fahad', displayPhone: '50000001',
+    classifications: ['owner_agent', 'property_management'],
+  });
+  assert.equal(isPropertySeeker(manager), false);
+});
 
 test('Person workflow builds valid Rent and Buy M1 requirements without rental period', () => {
   const rent = buildPersonRequirement(ID, SEEKER, { ...basic, purpose: 'rent', bedroomsMinimum: 2, occupancy: 'any' });

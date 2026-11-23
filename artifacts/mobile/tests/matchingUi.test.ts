@@ -359,6 +359,6 @@ test('Person entry opens the saved Match All mode without selecting one Requirem
 
 test('non-seeker post-save state does not render a disabled Requirement CTA', async () => {
   const personScreen = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(personScreen, /params\.saved === '1' && person\.classifications\.includes\('seeker'\)/);
+  assert.match(personScreen, /params\.saved === '1' && isPropertySeeker\(person\)/);
   assert.doesNotMatch(personScreen, /testID="person-saved-add-requirement"[^>]*disabled=/);
 });

@@ -265,7 +265,7 @@ const locks = {
 test('Web Requirement persistence survives recreation and isolates Seekers', async () => {
   const people = new Map<string, Person>([
     ['seeker-1', seeker('seeker-1')],
-    ['seeker-2', seeker('seeker-2')],
+    ['seeker-2', { ...seeker('seeker-2'), classifications: ['rent_seeker', 'owner'] }],
     ['owner-1', owner('owner-1')],
   ]);
   const peopleReader = {

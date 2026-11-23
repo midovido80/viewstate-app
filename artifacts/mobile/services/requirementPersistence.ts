@@ -9,7 +9,7 @@ import {
   sortByChronology,
   UNKNOWN_CREATION_TIMESTAMP,
 } from '@/services/chronology';
-import type { Person } from '@/services/people';
+import { isPropertySeeker, type Person } from '@/services/people';
 import type { UnreadableRecord } from '@/services/localRecordParser';
 import {
   normalizeSeekerRequirement,
@@ -96,7 +96,7 @@ async function assertSeekerOwnership(
 ): Promise<void> {
   const person = await personStore.getPerson(seekerId);
   if (!person) throw new Error('REQUIREMENT_SEEKER_NOT_FOUND');
-  if (!person.classifications.includes('seeker')) {
+  if (!isPropertySeeker(person)) {
     throw new Error('REQUIREMENT_SEEKER_CLASSIFICATION_REQUIRED');
   }
 }

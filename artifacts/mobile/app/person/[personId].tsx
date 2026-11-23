@@ -21,6 +21,7 @@ import { useColors } from '@/hooks/useColors';
 import { useI18n, Translations } from '@/contexts/I18nContext';
 import {
   createPerson,
+  isPropertySeeker,
   Person,
   PERSON_CLASSIFICATIONS,
   PersonClassification,
@@ -346,12 +347,12 @@ export default function PersonDetailScreen() {
               </View>
             </View>
             {person.notes ? <Text style={[styles.note, { color: colors.foreground, backgroundColor: colors.card, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{person.notes}</Text> : null}
-            {params.saved === '1' && person.classifications.includes('seeker') ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('requirements.add_property_requirement')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-saved-add-requirement"/><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
+            {params.saved === '1' && isPropertySeeker(person) ? <View style={[styles.savedBox, { backgroundColor: colors.accent }]} testID="person-saved-next-step"><Text style={{ color: colors.foreground, fontFamily: fonts.semiBold }}>{t('requirements.person_saved')}</Text><View style={styles.actions}><Button title={t('requirements.add_property_requirement')} onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-saved-add-requirement"/><Button title={t('summary.done')} onPress={() => router.setParams({ saved: undefined })} variant="outline" testID="person-saved-done"/></View></View> : null}
             <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
               <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{t('requirements.property_requirements')}</Text>
-              {person.classifications.includes('seeker') ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement"><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('requirements.add')}</Text></TouchableOpacity> : null}
+              {isPropertySeeker(person) ? <TouchableOpacity onPress={() => router.push({ pathname: '/requirement/new', params: { seekerId: person.id } } as never)} testID="person-add-requirement"><Text style={{ color: colors.primary, fontFamily: fonts.semiBold }}>{t('requirements.add')}</Text></TouchableOpacity> : null}
             </View>
-            {!person.classifications.includes('seeker') ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.seeker_required')}</Text> : requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
+            {!isPropertySeeker(person) ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.seeker_required')}</Text> : requirements.length === 0 ? <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{t('requirements.none')}</Text> : requirements.map(requirement => <View key={requirement.id} style={[styles.requirementCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`person-requirement-${requirement.id}`}>
               <Text style={[styles.requirementTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{t(`requirements.purpose.${requirement.purpose}`)} · {t(`propertyType.${requirement.propertyType}`)}</Text>
               <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>{requirement.preferredAreaIds.map(areaId => { const area = getAreaById(areaId); return area ? (language === 'ar' ? area.ar : area.en) : areaId; }).join(' → ')}</Text>
               <Text style={{ color: colors.foreground, textAlign: isRTL ? 'right' : 'left' }}>{formatPrice(requirement.budget.minimum, requirement.budget.currencyCode, language)}–{formatPrice(requirement.budget.maximum, requirement.budget.currencyCode, language)}</Text>

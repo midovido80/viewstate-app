@@ -173,7 +173,12 @@ test('Source path: resolved native path reads the same file as its file URL', as
 test('Bounded People model preserves literal fields and normalized phone search', () => {
   assert.deepEqual(PERSON_CLASSIFICATIONS, [
     'seeker',
+    'rent_seeker',
+    'buy_seeker',
+    'investor',
     'owner',
+    'owner_agent',
+    'property_management',
     'broker',
     'real_estate_company',
     'building_guard',
@@ -290,7 +295,7 @@ test('People source exposes selected contact import, actions, links, and confirm
   assert.match(detail, /linkPersonToProperty/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE property_core_id = \?/);
   assert.match(persistence, /DELETE FROM person_property_links WHERE person_id = \?/);
-  assert.match(translations, /'people\.classification\.broker': 'وسيط'/);
+  assert.match(translations, /'people\.classification\.broker': 'وسيط عقاري'/);
 });
 
 test('Synthetic enrichment route preserves the bounded post-save entry points and write-free Later action', async () => {
@@ -2328,8 +2333,7 @@ test('V001 injected adapters preserve attachment metadata sequencing and nonbloc
   }).ok, 'location enrichment failure cannot block BASIC finalization');
 });
 
-test('V001 People synthetic model has five classifications, independent links, search seams, and URL actions', async () => {
-  assert.equal(PERSON_CLASSIFICATIONS.length, 5);
+test('V001 People synthetic model supports independent links, search seams, and URL actions', async () => {
   const imported = createPerson({
     id: 'v001-imported-person', name: 'Imported أحمد', displayPhone: '+965 5000 0001',
     notes: 'imported contact', classifications: ['owner', 'broker'],

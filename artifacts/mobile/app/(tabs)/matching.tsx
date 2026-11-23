@@ -42,7 +42,7 @@ import {
   validMatchingRequirements,
   type MatchAllPersonGroup,
 } from '@/services/matchingUi';
-import type { Person } from '@/services/people';
+import { isPropertySeeker, type Person } from '@/services/people';
 
 type MatchingMode = 'saved' | 'quick';
 
@@ -334,7 +334,7 @@ export default function MatchingScreen() {
   const [loading, setLoading] = useState(false);
 
   const seekerPeople = useMemo(
-    () => people.filter(person => person.classifications.includes('seeker')),
+    () => people.filter(isPropertySeeker),
     [people],
   );
   const visibleAreas = useMemo(
@@ -354,9 +354,7 @@ export default function MatchingScreen() {
           setPeople(loadedPeople);
           setProperties(loadedProperties);
           if (requestedRequirementId) setMode('saved');
-          const firstSeeker = loadedPeople.find(person =>
-            person.classifications.includes('seeker'),
-          );
+          const firstSeeker = loadedPeople.find(isPropertySeeker);
           setSelectedSeekerId(current => current ?? firstSeeker?.id ?? null);
         })
         .catch(() => {

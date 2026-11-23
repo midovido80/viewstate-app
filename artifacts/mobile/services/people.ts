@@ -1,14 +1,19 @@
 import {
   PROPERTY_SOURCE_ROLES,
-  PropertySourceRole,
+  type PropertySourceRole,
 } from '@workspace/property-domain';
+
+const SEEKER_CLASSIFICATIONS = ['rent_seeker', 'buy_seeker', 'investor'] as const;
+
+export const PERSON_CLASSIFICATION_GROUPS = [
+  { id: 'seekers', roles: SEEKER_CLASSIFICATIONS },
+  { id: 'ownership', roles: ['owner', 'owner_agent', 'property_management'] },
+  { id: 'partners', roles: ['broker', 'real_estate_company', 'building_guard'] },
+] as const;
 
 export const PERSON_CLASSIFICATIONS = [
   'seeker',
-  'owner',
-  'broker',
-  'real_estate_company',
-  'building_guard',
+  ...PERSON_CLASSIFICATION_GROUPS.flatMap(group => [...group.roles]),
 ] as const;
 
 export type PersonClassification = typeof PERSON_CLASSIFICATIONS[number];
@@ -50,6 +55,11 @@ export interface PersonInput {
 }
 
 const classificationSet = new Set<string>(PERSON_CLASSIFICATIONS);
+
+export function isPropertySeeker(person: Person): boolean {
+  return person.classifications.includes('seeker')
+    || SEEKER_CLASSIFICATIONS.some(role => person.classifications.includes(role));
+}
 
 function normalizePhoneDigit(character: string): string {
   const code = character.charCodeAt(0);
