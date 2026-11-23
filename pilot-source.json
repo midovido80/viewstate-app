@@ -1,0 +1,7 @@
+{
+  "repository": "midovido80/viewstate-app",
+  "branch": "codex/latest-pilot-2026-11-23",
+  "channel": "viewstate-next-pilot",
+  "runtime": "viewstate-next-android-1",
+  "previewPort": 8081
+}
