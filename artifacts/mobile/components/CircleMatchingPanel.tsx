@@ -179,7 +179,28 @@ export function CircleMatchingPanel({
   >(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [failureReason, setFailureReason] = useState("");
   const [done, setDone] = useState("");
+  const failureMessage =
+    failureReason === "CIRCLE_COOPERATION_COOLDOWN"
+      ? L(
+          "تم رفض طلب التعاون السابق. تقدر ترسل طلبًا جديدًا لنفس الفرصة بعد 24 ساعة من الرفض.",
+          "The previous cooperation request was declined. You can request this opportunity again 24 hours after the decline.",
+        )
+      : failureReason === "CIRCLE_MEMBER_REQUEST_LIMIT"
+        ? L(
+            "وصلت حدك: 200 طلب مشاركة في هالدائرة. أوقف مطابقة طلب سابق عشان تضيف طلبًا جديدًا.",
+            "You have reached 200 shared requests in this circle. Pause an existing request to add another.",
+          )
+        : failureReason === "CIRCLE_REQUEST_LIMIT"
+          ? L(
+              "الدائرة وصلت حد 2000 طلب مشاركة. تقدر تعدّل طلباتك الحالية أو توقف مطابقتها.",
+              "This circle has reached 2000 shared requests. You can still edit or pause your existing requests.",
+            )
+          : L(
+              "تعذّر تنفيذ الإجراء. حاول مرة أخرى.",
+              "Could not complete this action. Try again.",
+            );
   const [name, setName] = useState("");
   const router = useRouter();
   const [tools, setTools] = useState<CircleTool | null>(null);
@@ -214,13 +235,14 @@ export function CircleMatchingPanel({
       flight.current = true;
       setBusy(true);
       setFailed(false);
+      setFailureReason("");
       setDone("");
       try {
         await polling.current;
         if (!active.current) return;
         await work();
         if (active.current && doneMessage) setDone(doneMessage);
-      } catch {
+      } catch (error) {
         if (active.current) {
           setListings([]);
           setResults(null);
@@ -232,6 +254,7 @@ export function CircleMatchingPanel({
           setMembers([]);
           setCooperationMatch(null);
           setFailed(true);
+          setFailureReason(error instanceof Error ? error.message : "");
         }
       } finally {
         flight.current = false;
@@ -825,10 +848,7 @@ export function CircleMatchingPanel({
         )}
         {failed && !tools && (
           <Text accessibilityRole="alert" style={{ color: colors.destructive }}>
-            {L(
-              "تعذّر تنفيذ الإجراء. حاول مرة أخرى.",
-              "Could not complete this action. Try again.",
-            )}
+            {failureMessage}
           </Text>
         )}
         {busy && <ActivityIndicator color={colors.primary} />}
@@ -1547,14 +1567,7 @@ export function CircleMatchingPanel({
               contentContainerStyle={{ gap: 12, paddingBottom: 16 }}
             >
               {busy && <ActivityIndicator color={colors.primary} />}
-              {failed && (
-                <AssistantText>
-                  {L(
-                    "تعذّر تنفيذ الإجراء. حاول مرة ثانية.",
-                    "Could not complete this action. Retry.",
-                  )}
-                </AssistantText>
-              )}
+              {failed && <AssistantText>{failureMessage}</AssistantText>}
               {tools === "create" && (
                 <>
                   <AssistantField

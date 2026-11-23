@@ -2,7 +2,7 @@ import { setCircleRequirementMatching } from '../../artifacts/mobile/services/ci
 import {URL} from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import { matchCircleSnapshot, type CircleSnapshot } from '../../supabase/functions/circle-match-worker/engine.ts';
 import {CircleMatchingSource,type SharedCircleProperty} from '../../artifacts/mobile/services/circleMatchingSource.ts';
@@ -32,27 +32,8 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
    create function storage.foldername(text) returns text[] language sql as $$ select string_to_array($1,'/') $$;`);
   await db.exec('create table public.user_profiles(user_id uuid primary key,display_name text,company text,phone text);');
   await db.exec('alter table auth.users add column phone text, add column phone_confirmed_at timestamptz, add column is_anonymous boolean default false;');
-  for (const migration of [
-    '20261104070955_offline_workspace_sync.sql',
-    '20261104071244_fix_sync_record_key_validation.sql',
-    '20261111083559_circle_membership_inventory.sql',
-    '20261111110000_circle_validation_lifecycle.sql',
-    '20261111120000_circle_matching_delivery.sql',
-    '20261111130000_circle_all_property_types.sql',
-    '20261111130500_circle_listing_management.sql',
-    '20261111131000_circle_cooperation.sql',
-    '20261115120000_circle_activity_alerts.sql',
-    '20261115130000_circle_requirement_status.sql',
-    '20261115140000_circle_matching_workspace.sql',
-    '20261115150000_circle_notification_inbox.sql',
-    '20261115160000_pilot_update_announcements.sql',
-    '20261115170000_circle_matching_progress.sql',
-    '20261115180000_circle_notification_targets.sql',
-    '20261119075658_circle_member_summaries.sql',
-    '20261119080832_circle_match_notification_context.sql',
-    '20261119084104_circle_invite_links.sql',
-    '20261119133000_request_catalog_parity.sql',
-  ]) {
+  for (const migration of (await readdir(new URL('../../supabase/migrations/',import.meta.url)))
+    .filter(file=>file.endsWith('.sql') && file>'20261104000000').sort()) {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${migration}`, import.meta.url), 'utf8'));
   }
   await db.exec(await readFile(new URL('../../supabase/tests/circles/request_catalog_parity.sql', import.meta.url), 'utf8'));
@@ -103,7 +84,7 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   const sync = (revision: number, value: unknown) => asUser(0, async tx => (
     await tx.query<{ result: { accepted: boolean; revision: number } }>(
       'select public.commit_account_workspace($1,$2::jsonb) result',
-      [revision, JSON.stringify({ version: 1, records: { [`property/${sample.core.id}`]: value } })],
+      [revision, JSON.stringify({ version: 1, records: { [`property/${sample.core.id}`]: value }, circlePropertyFacts: { [sample.core.id]: normalizeMyPropertyCandidate(value)?.property ?? null } })],
     )
   ).rows[0].result);
   const matchSample = async () => {
@@ -335,6 +316,8 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   assert.equal((await history(0))[0].source_key, sample.core.id);
   await assert.rejects(act(1, firstCooperation, 'accept'), /CIRCLE_COOPERATION_RECIPIENT_REQUIRED/);
   assert.equal(await act(0, firstCooperation, 'decline'), 'declined');
+  await assert.rejects(cooperate(1), /CIRCLE_COOPERATION_COOLDOWN/);
+  await db.query("update viewstate_circle.cooperations set updated_at=now()-interval '25 hours' where id=$1", [firstCooperation]);
 
   const closedCooperation = await cooperate(1);
   assert.equal(await act(1, closedCooperation, 'close'), 'closed');
@@ -505,13 +488,13 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   await assert.rejects(acceptLink(2, revokedToken), /CIRCLE_INVITE_UNAVAILABLE/);
   const sendPhone = (phone: string) => asUser(0, async tx => (await tx.query<{ data: { status: string } }>('select public.vs_circle_invite_phone($1,$2) data', [inviteCircle, phone])).rows[0].data.status);
   await db.query('update auth.users set phone=$1 where id=$2', ['96550001234', users[4]]);
-  assert.equal(await sendPhone('+96550001234'), 'unavailable', 'unconfirmed profile numbers do not identify a recipient');
+  assert.equal(await sendPhone('+96550001234'), 'accepted', 'unconfirmed numbers return the same private acknowledgement');
   await db.query('update auth.users set phone_confirmed_at=now() where id=$1', [users[4]]);
-  assert.equal(await sendPhone('+96550001234'), 'sent');
-  assert.equal(await sendPhone('+96550001234'), 'pending');
+  assert.equal(await sendPhone('+96550001234'), 'accepted');
+  assert.equal(await sendPhone('+96550001234'), 'accepted');
   await asUser(4, tx=>tx.query('select public.vs_circle_accept($1)',[inviteCircle]));
-  assert.equal(await sendPhone('+96550001234'), 'already_member');
-  for(let i=0;i<26;i++)assert.equal(await sendPhone('+96550009999'),'unavailable');
+  assert.equal(await sendPhone('+96550001234'), 'accepted');
+  for(let i=0;i<6;i++)assert.equal(await sendPhone('+96550009999'),'accepted');
   assert.equal(await sendPhone('+96550009999'),'rate_limited');
   const named = await asUser(4, async tx => (await tx.query<{ data: {circle_name: string}[] }>('select public.vs_circle_invitations_named() data')).rows[0].data);
   assert.ok(!named.some(invite => invite.circle_name === 'Invitation test'), 'accepted invitation leaves pending inbox');

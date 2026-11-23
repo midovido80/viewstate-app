@@ -17,3 +17,5 @@ The web preview rebuilds from this repository, then serves [localhost:8081](http
 Commit and push the intended changes before running `npm run release:pilot -- "Release description"`. The release check refuses a different branch/repository, uncommitted files, an unpublished or obsolete commit, or a different GitHub default branch. The existing worker secret must be loaded from secure operator storage for release announcements.
 
 See [the source and release policy](docs/releases/pilot-source-policy-20261123.ar.md), [the November 23 source recovery report](docs/releases/github-recovery-20261123.ar.md), and [project instructions](AGENTS.md). Web previews do not prove physical Android push delivery.
+
+The [Claude report remediation results](docs/releases/claude-report-fixes-20261123.ar.md) record source fixes, regression checks, pending deployment and remaining product/device decisions.

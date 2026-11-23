@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Linking,
@@ -9,37 +9,37 @@ import {
   Share,
   Text,
   View,
-} from 'react-native';
-import * as Crypto from 'expo-crypto';
-import { Feather } from '@expo/vector-icons';
-import { useI18n } from '@/contexts/I18nContext';
-import { useRealAccount } from '@/contexts/RealAccountContext';
-import { useUserData } from '@/contexts/UserDataContext';
-import { useScreenInsets } from '@/hooks/useScreenInsets';
-import { useColors } from '@/hooks/useColors';
+} from "react-native";
+import * as Crypto from "expo-crypto";
+import { Feather } from "@expo/vector-icons";
+import { useI18n } from "@/contexts/I18nContext";
+import { useRealAccount } from "@/contexts/RealAccountContext";
+import { useUserData } from "@/contexts/UserDataContext";
+import { useScreenInsets } from "@/hooks/useScreenInsets";
+import { useColors } from "@/hooks/useColors";
 import {
   circleRpc,
   listTrustCircles,
   type TrustCircle,
-} from '@/services/circleMatchingApi';
+} from "@/services/circleMatchingApi";
 import {
   canInvitePerson,
   circleInviteMessage,
   circleInviteUrl,
-} from '@/services/circleInvitations';
-import { filterPropertySourcePeople } from '@/services/propertySourceSelection';
+} from "@/services/circleInvitations";
+import { filterPropertySourcePeople } from "@/services/propertySourceSelection";
 import {
   normalizePhoneForCountry,
   type PhoneCountryCode,
-} from '@/services/phoneEntry';
-import { openWhatsAppComposeWithOpener } from '@/services/whatsappCompose';
-import type { Person } from '@/services/people';
-import { Button } from './Button';
-import { TextInput } from './FormField';
-import { CompactDropdown } from './FormChoices';
-import { KeyboardAwareScrollViewCompat } from './KeyboardAwareScrollViewCompat';
-import { PhoneCountrySheet } from './PhoneCountrySheet';
-import { PhoneNumberText } from './PhoneNumberText';
+} from "@/services/phoneEntry";
+import { openWhatsAppComposeWithOpener } from "@/services/whatsappCompose";
+import type { Person } from "@/services/people";
+import { Button } from "./Button";
+import { TextInput } from "./FormField";
+import { CompactDropdown } from "./FormChoices";
+import { KeyboardAwareScrollViewCompat } from "./KeyboardAwareScrollViewCompat";
+import { PhoneCountrySheet } from "./PhoneCountrySheet";
+import { PhoneNumberText } from "./PhoneNumberText";
 
 export function CircleInviteComposer({
   onClose,
@@ -56,22 +56,22 @@ export function CircleInviteComposer({
     colors = useColors(),
     insets = useScreenInsets();
   const { language, fonts, isRTL } = useI18n(),
-    ar = language === 'ar';
+    ar = language === "ar";
   const [circles, setCircles] = useState<TrustCircle[]>([]),
     [ready, setReady] = useState(false);
-  const [circleId, setCircleId] = useState(initialCircleId ?? ''),
+  const [circleId, setCircleId] = useState(initialCircleId ?? ""),
     [people, setPeople] = useState<Person[]>([]);
   const [recipient, setRecipient] = useState(person),
-    [query, setQuery] = useState('');
+    [query, setQuery] = useState("");
   const [phone, setPhone] = useState(
-    person?.normalizedPhone || person?.displayPhone || '',
+    person?.normalizedPhone || person?.displayPhone || "",
   );
-  const [country, setCountry] = useState<PhoneCountryCode>('KW'),
+  const [country, setCountry] = useState<PhoneCountryCode>("KW"),
     [countryOpen, setCountryOpen] = useState(false);
-  const [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
+  const [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [sharedText, setSharedText] = useState('');
+    [sharedText, setSharedText] = useState("");
   const flight = useRef(false),
     live = useRef(true),
     capability = useRef<
@@ -81,7 +81,7 @@ export function CircleInviteComposer({
   const text = {
     color: colors.foreground,
     fontFamily: fonts.regular,
-    textAlign: isRTL ? ('right' as const) : ('left' as const),
+    textAlign: isRTL ? ("right" as const) : ("left" as const),
     lineHeight: 24,
   };
   useEffect(() => {
@@ -100,7 +100,7 @@ export function CircleInviteComposer({
             ),
           );
           setCircleId((value) =>
-            owned.some((circle) => circle.id === value) ? value : '',
+            owned.some((circle) => circle.id === value) ? value : "",
           );
           setReady(true);
         })
@@ -109,8 +109,8 @@ export function CircleInviteComposer({
             setReady(true);
             setError(
               L(
-                'تعذّر تحميل الدوائر. أغلق الدعوة وافتحها مرة ثانية.',
-                'Could not load circles. Reopen the invitation.',
+                "تعذّر تحميل الدوائر. أغلق الدعوة وافتحها مرة ثانية.",
+                "Could not load circles. Reopen the invitation.",
               ),
             );
           }
@@ -119,24 +119,24 @@ export function CircleInviteComposer({
       live.current = false;
     };
   }, [account?.profile.user_id, store]);
-  let international = '';
+  let international = "";
   try {
     international = normalizePhoneForCountry(phone, country);
   } catch {}
-  const send = async (channel: 'app' | 'whatsapp') => {
+  const send = async (channel: "app" | "whatsapp") => {
     if (flight.current || !account) return;
-    setError('');
-    setNotice('');
+    setError("");
+    setNotice("");
     const circle = circles.find((item) => item.id === circleId);
     if (!circle) {
-      setError(L('اختر الدائرة أولًا.', 'Choose a circle first.'));
+      setError(L("اختر الدائرة أولًا.", "Choose a circle first."));
       return;
     }
     if (!/^\+[1-9][0-9]{6,14}$/.test(international)) {
       setError(
         L(
-          'راجع رقم المستلم مع كود الدولة.',
-          'Review the recipient’s international number.',
+          "راجع رقم المستلم مع كود الدولة.",
+          "Review the recipient’s international number.",
         ),
       );
       return;
@@ -144,53 +144,36 @@ export function CircleInviteComposer({
     flight.current = true;
     setBusy(true);
     try {
-      if (channel === 'app') {
+      if (channel === "app") {
         const result = await circleRpc<{ status: string }>(
           account.request,
-          'vs_circle_invite_phone',
+          "vs_circle_invite_phone",
           { p_circle: circle.id, p_phone: international },
         );
         if (!live.current) return;
-        if (result.status === 'already_member') {
-          setNotice(
-            L(
-              'هذا الشخص عضو في الدائرة بالفعل.',
-              'This person is already a member.',
-            ),
-          );
-          return;
-        }
-        if (result.status === 'rate_limited') {
+        if (result.status === "rate_limited") {
           setError(
             L(
-              'وصلت حد الدعوات المباشرة لهالساعة. جرّب لاحقًا أو استخدم واتساب.',
-              'Direct invitation limit reached. Retry later or use WhatsApp.',
+              "وصلت حد الدعوات المباشرة اليوم. جرّب غدًا أو استخدم واتساب.",
+              "Daily direct invitation limit reached. Retry tomorrow or use WhatsApp.",
             ),
           );
           return;
         }
-        if (result.status === 'pending') {
-          setNotice(
-            L(
-              'الدعوة موجودة وبانتظار قبول المستلم.',
-              'Invitation already pending.',
-            ),
-          );
-          return;
-        }
-        if (result.status !== 'sent') {
-          setError(
-            L(
-              'ما نقدر نرسل لهذا الرقم داخل التطبيق بدون رقم مؤكد. تقدر ترسل الدعوة عبر واتساب.',
-              'In-app invitation requires a confirmed phone number. Use WhatsApp instead.',
-            ),
-          );
-          return;
-        }
+        if (
+          ![
+            "accepted",
+            "sent",
+            "pending",
+            "already_member",
+            "unavailable",
+          ].includes(result.status)
+        )
+          throw new Error("CIRCLE_INVITE_RESPONSE_INVALID");
         setNotice(
           L(
-            'تم إرسال الدعوة داخل ViewState. المستلم يراجعها ويقبلها من دائرة الثقة.',
-            'Invitation sent in ViewState. The recipient reviews and accepts it in Trust Circle.',
+            "تمت معالجة الطلب. إذا كان الرقم مؤكدًا في ViewState، تظهر الدعوة للمستلم. حفاظًا على الخصوصية، ما نؤكد تسجيل الرقم أو وصول الدعوة. تقدر ترسل الرابط عبر واتساب.",
+            "Request processed. If the number is verified in ViewState, the recipient can see the invitation. For privacy, registration and delivery are not confirmed. You can also send the link via WhatsApp.",
           ),
         );
       } else {
@@ -199,9 +182,9 @@ export function CircleInviteComposer({
           capability.current?.phone !== international
         ) {
           const token = Array.from(Crypto.getRandomBytes(32), (value) =>
-            value.toString(16).padStart(2, '0'),
-          ).join('');
-          await circleRpc(account.request, 'vs_circle_invite_link', {
+            value.toString(16).padStart(2, "0"),
+          ).join("");
+          await circleRpc(account.request, "vs_circle_invite_link", {
             p_circle: circle.id,
             p_token: token,
           });
@@ -220,14 +203,14 @@ export function CircleInviteComposer({
         if (!live.current) return;
         setSharedText(message);
         await openWhatsAppComposeWithOpener(
-          `phone=${encodeURIComponent(international.replace(/\D/g, ''))}&text=${encodeURIComponent(message)}`,
+          `phone=${encodeURIComponent(international.replace(/\D/g, ""))}&text=${encodeURIComponent(message)}`,
           Linking,
         );
         if (live.current)
           setNotice(
             L(
-              'فتحنا واتساب بالدعوة الجاهزة. راجع الرسالة واضغط إرسال هناك.',
-              'WhatsApp opened with the invitation. Review and press Send there.',
+              "فتحنا واتساب بالدعوة الجاهزة. راجع الرسالة واضغط إرسال هناك.",
+              "WhatsApp opened with the invitation. Review and press Send there.",
             ),
           );
       }
@@ -235,8 +218,8 @@ export function CircleInviteComposer({
       if (live.current)
         setError(
           L(
-            'تعذّر فتح الإرسال. الدعوة باقية هنا؛ تقدر تشارك النص أو تعيد المحاولة.',
-            'Could not open sending. Share the prepared text or retry.',
+            "تعذّر فتح الإرسال. الدعوة باقية هنا؛ تقدر تشارك النص أو تعيد المحاولة.",
+            "Could not open sending. Share the prepared text or retry.",
           ),
         );
     } finally {
@@ -256,16 +239,16 @@ export function CircleInviteComposer({
       <KeyboardAvoidingView
         style={{
           flex: 1,
-          justifyContent: 'flex-end',
-          backgroundColor: '#00000066',
+          justifyContent: "flex-end",
+          backgroundColor: "#00000066",
         }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View
           testID="circle-invite-composer"
           accessibilityViewIsModal
           style={{
-            height: '88%',
+            height: "88%",
             backgroundColor: colors.card,
             borderTopLeftRadius: 22,
             borderTopRightRadius: 22,
@@ -276,27 +259,27 @@ export function CircleInviteComposer({
         >
           <View
             style={{
-              direction: 'ltr',
-              flexDirection: isRTL ? 'row-reverse' : 'row',
-              alignItems: 'center',
+              direction: "ltr",
+              flexDirection: isRTL ? "row-reverse" : "row",
+              alignItems: "center",
             }}
           >
             <Text
               accessibilityRole="header"
               style={{ ...text, flex: 1, fontFamily: fonts.bold, fontSize: 23 }}
             >
-              {L('دعوة لدائرة الثقة', 'Invite to Trust Circle')}
+              {L("دعوة لدائرة الثقة", "Invite to Trust Circle")}
             </Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={L('إغلاق الدعوة', 'Close invitation')}
+              accessibilityLabel={L("إغلاق الدعوة", "Close invitation")}
               disabled={busy}
               onPress={onClose}
               style={{
                 width: 48,
                 height: 48,
-                justifyContent: 'center',
-                alignItems: 'center',
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
               <Feather name="x" size={22} color={colors.foreground} />
@@ -309,37 +292,37 @@ export function CircleInviteComposer({
               <>
                 <Text style={text}>
                   {L(
-                    'سجّل الدخول عشان ترسل دعوة من حسابك.',
-                    'Sign in to invite colleagues.',
+                    "سجّل الدخول عشان ترسل دعوة من حسابك.",
+                    "Sign in to invite colleagues.",
                   )}
                 </Text>
                 <Button
-                  title={L('تسجيل الدخول', 'Sign in')}
+                  title={L("تسجيل الدخول", "Sign in")}
                   onPress={() => {
                     onClose();
-                    router.push('/account/account');
+                    router.push("/account/account");
                   }}
                 />
               </>
             ) : !ready ? (
               <Text style={text}>
-                {L('جارٍ تحميل دوائرك…', 'Loading your circles…')}
+                {L("جارٍ تحميل دوائرك…", "Loading your circles…")}
               </Text>
             ) : !circles.length ? (
               <>
                 <Text style={text}>
                   {L(
-                    'الدعوات يرسلها مسؤول الدائرة. أنشئ دائرة أو اطلب من مسؤول دائرتك إرسال الدعوة.',
-                    'Only circle owners send invitations. Create a circle or ask its owner.',
+                    "الدعوات يرسلها مسؤول الدائرة. أنشئ دائرة أو اطلب من مسؤول دائرتك إرسال الدعوة.",
+                    "Only circle owners send invitations. Create a circle or ask its owner.",
                   )}
                 </Text>
                 <Button
-                  title={L('إنشاء دائرة', 'Create a circle')}
+                  title={L("إنشاء دائرة", "Create a circle")}
                   onPress={() => {
                     onClose();
                     router.push({
-                      pathname: '/trust-circle',
-                      params: { create: '1' },
+                      pathname: "/trust-circle",
+                      params: { create: "1" },
                     } as never);
                   }}
                 />
@@ -347,7 +330,7 @@ export function CircleInviteComposer({
             ) : (
               <>
                 <CompactDropdown
-                  label={L('1. أي دائرة تبي تدعوه لها؟', '1. Choose a circle')}
+                  label={L("1. أي دائرة تبي تدعوه لها؟", "1. Choose a circle")}
                   testID="invite-circle-picker"
                   options={circles.map((circle) => ({
                     value: circle.id,
@@ -357,32 +340,32 @@ export function CircleInviteComposer({
                   onSelect={(value) => {
                     if (flight.current) return;
                     setCircleId(value);
-                    setError('');
-                    setNotice('');
-                    setSharedText('');
+                    setError("");
+                    setNotice("");
+                    setSharedText("");
                     capability.current = undefined;
                   }}
                 />
                 <Text style={text}>
                   {L(
-                    'الدعوة متاحة للدوائر اللي تديرها.',
-                    'You can invite to circles you own.',
+                    "الدعوة متاحة للدوائر اللي تديرها.",
+                    "You can invite to circles you own.",
                   )}
                 </Text>
                 <Text style={{ ...text, fontFamily: fonts.bold }}>
-                  {L('2. منو تبي تدعو؟', '2. Choose a colleague')}
+                  {L("2. منو تبي تدعو؟", "2. Choose a colleague")}
                 </Text>
                 {!person && (
                   <>
                     <TextInput
                       testID="invite-person-search"
                       accessibilityLabel={L(
-                        'ابحث عن زميل',
-                        'Search colleagues',
+                        "ابحث عن زميل",
+                        "Search colleagues",
                       )}
                       placeholder={L(
-                        'ابحث بالاسم أو رقم الهاتف',
-                        'Search name or phone',
+                        "ابحث بالاسم أو رقم الهاتف",
+                        "Search name or phone",
                       )}
                       value={query}
                       editable={!busy}
@@ -395,24 +378,24 @@ export function CircleInviteComposer({
                         padding: 12,
                       }}
                     />
-                    {filterPropertySourcePeople(people, 'all', query)
+                    {filterPropertySourcePeople(people, "all", query)
                       .slice(0, 6)
                       .map((item) => (
                         <Button
                           key={item.id}
                           title={
-                            (recipient?.id === item.id ? '✓ ' : '') + item.name
+                            (recipient?.id === item.id ? "✓ " : "") + item.name
                           }
                           variant="outline"
                           disabled={busy}
                           onPress={() => {
                             if (flight.current) return;
-                            setSharedText('');
-                            setNotice('');
+                            setSharedText("");
+                            setNotice("");
                             capability.current = undefined;
                             setRecipient(item);
                             setPhone(item.normalizedPhone || item.displayPhone);
-                            setError('');
+                            setError("");
                           }}
                         />
                       ))}
@@ -425,8 +408,8 @@ export function CircleInviteComposer({
                 )}
                 <View
                   style={{
-                    direction: 'ltr',
-                    flexDirection: isRTL ? 'row-reverse' : 'row',
+                    direction: "ltr",
+                    flexDirection: isRTL ? "row-reverse" : "row",
                     gap: 8,
                   }}
                 >
@@ -440,14 +423,14 @@ export function CircleInviteComposer({
                   />
                   <TextInput
                     testID="invite-phone"
-                    accessibilityLabel={L('رقم المدعو', 'Invitee phone')}
+                    accessibilityLabel={L("رقم المدعو", "Invitee phone")}
                     keyboardType="phone-pad"
                     value={phone}
                     editable={!busy}
                     onChangeText={(value) => {
                       if (flight.current) return;
-                      setSharedText('');
-                      setNotice('');
+                      setSharedText("");
+                      setNotice("");
                       capability.current = undefined;
                       setPhone(value);
                       setRecipient(undefined);
@@ -460,8 +443,8 @@ export function CircleInviteComposer({
                       borderColor: colors.border,
                       borderRadius: 12,
                       padding: 12,
-                      textAlign: 'left',
-                      writingDirection: 'ltr',
+                      textAlign: "left",
+                      writingDirection: "ltr",
                     }}
                   />
                 </View>
@@ -469,33 +452,33 @@ export function CircleInviteComposer({
                   {international || phone}
                 </PhoneNumberText>
                 <Text style={{ ...text, fontFamily: fonts.bold }}>
-                  {L('3. شلون تبي ترسل الدعوة؟', '3. Choose how to send')}
+                  {L("3. شلون تبي ترسل الدعوة؟", "3. Choose how to send")}
                 </Text>
                 <Button
                   testID="invite-send-app"
-                  title={L('إرسال عبر ViewState', 'Send in ViewState')}
+                  title={L("إرسال عبر ViewState", "Send in ViewState")}
                   loading={busy}
                   disabled={busy}
-                  onPress={() => void send('app')}
+                  onPress={() => void send("app")}
                 />
                 <Text style={text}>
                   {L(
-                    'للرقم المؤكد داخل التطبيق. إذا ما توفر، استخدم واتساب.',
-                    'For a confirmed in-app phone number. Otherwise use WhatsApp.',
+                    "للرقم المؤكد داخل التطبيق. إذا ما توفر، استخدم واتساب.",
+                    "For a confirmed in-app phone number. Otherwise use WhatsApp.",
                   )}
                 </Text>
                 <Button
                   testID="invite-send-whatsapp"
-                  title={L('إرسال عبر واتساب', 'Send via WhatsApp')}
+                  title={L("إرسال عبر واتساب", "Send via WhatsApp")}
                   variant="whatsapp"
                   loading={busy}
                   disabled={busy}
-                  onPress={() => void send('whatsapp')}
+                  onPress={() => void send("whatsapp")}
                 />
                 <Text style={text}>
                   {L(
-                    'بيظهر اسم حسابك واسم الدائرة، بدون معرّف الحساب. المستلم يراجع الدعوة ويقبلها بنفسه.',
-                    'Shows your account name and circle, without account IDs. The recipient reviews and accepts.',
+                    "بيظهر اسم حسابك واسم الدائرة، بدون معرّف الحساب. المستلم يراجع الدعوة ويقبلها بنفسه.",
+                    "Shows your account name and circle, without account IDs. The recipient reviews and accepts.",
                   )}
                 </Text>
               </>
@@ -519,14 +502,14 @@ export function CircleInviteComposer({
                   {sharedText}
                 </Text>
                 <Button
-                  title={L('مشاركة نص الدعوة', 'Share invitation text')}
+                  title={L("مشاركة نص الدعوة", "Share invitation text")}
                   variant="outline"
                   onPress={() => {
                     void Share.share({ message: sharedText }).catch(() =>
                       setError(
                         L(
-                          'تعذّرت المشاركة. أعد المحاولة.',
-                          'Could not share. Retry.',
+                          "تعذّرت المشاركة. أعد المحاولة.",
+                          "Could not share. Retry.",
                         ),
                       ),
                     );
@@ -536,7 +519,7 @@ export function CircleInviteComposer({
             )}
           </KeyboardAwareScrollViewCompat>
           <Button
-            title={L('رجوع', 'Back')}
+            title={L("رجوع", "Back")}
             variant="outline"
             disabled={busy}
             onPress={onClose}
@@ -549,8 +532,8 @@ export function CircleInviteComposer({
             onSelect={(value) => {
               if (flight.current) return;
               capability.current = undefined;
-              setSharedText('');
-              setNotice('');
+              setSharedText("");
+              setNotice("");
               setCountry(value);
               setCountryOpen(false);
             }}

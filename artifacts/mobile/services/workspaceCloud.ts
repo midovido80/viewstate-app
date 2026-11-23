@@ -1,5 +1,6 @@
 import { AccountConnectionError } from "./googleAccountService";
 import type { SyncCloud, CloudWorkspace, SyncRecords } from "./workspaceSync";
+import { normalizeMyPropertyCandidate } from "./myPropertiesMatchingSource";
 export type CloudRequest = (
   path: string,
   options?: {
@@ -40,11 +41,19 @@ export function createWorkspaceCloud(
       return rows.length ? decode(rows[0]) : { revision: 0, records: {} };
     },
     async write(expectedRevision, records) {
+      const circlePropertyFacts = Object.fromEntries(
+        Object.entries(records)
+          .filter(([key]) => key.startsWith("property/"))
+          .map(([key, value]) => [
+            key.slice("property/".length),
+            normalizeMyPropertyCandidate(value)?.property ?? null,
+          ]),
+      );
       const response = await request("/rest/v1/rpc/commit_account_workspace", {
         method: "POST",
         body: JSON.stringify({
           expected_revision: expectedRevision,
-          next_payload: { version: 1, records },
+          next_payload: { version: 1, records, circlePropertyFacts },
         }),
       });
       const row = await response.json();

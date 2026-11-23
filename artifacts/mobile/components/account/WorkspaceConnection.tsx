@@ -50,6 +50,7 @@ export function WorkspaceConnection({
   const router = useRouter();
   const [resolving, setResolving] = useState(false);
   const [resolutionError, setResolutionError] = useState("");
+  const [damagedState, setDamagedState] = useState(false);
   const [status, setStatus] = useState<
       "local" | "synced" | "offline" | "error" | "conflict"
     >("local"),
@@ -103,11 +104,13 @@ export function WorkspaceConnection({
         const state = await sync.sync();
         if (!alive) return;
         setConflicts(state.conflicts);
+        setDamagedState(false);
         setStatus(state.conflicts.length ? "conflict" : "synced");
         ready.current = true;
       } catch (error) {
         if (!alive) return;
         const code = (error as Error).message;
+        setDamagedState(code === "SYNC_STATE_DAMAGED");
         setStatus(
           /CONNECTION|FETCH|NETWORK|REAUTHENTICATE|HTTP_40[13]/i.test(code)
             ? "offline"
@@ -271,6 +274,28 @@ export function WorkspaceConnection({
       setResolving(false);
     }
   }
+  async function recoverDamagedState() {
+    if (!engine.current || resolving) return;
+    setResolving(true);
+    setResolutionError("");
+    try {
+      const state = await engine.current.recoverDamagedState();
+      resources.scope.assertActive();
+      setDamagedState(false);
+      setConflicts(state.conflicts);
+      setStatus(state.conflicts.length ? "conflict" : "local");
+      setOpen(state.conflicts.length > 0);
+      if (!state.conflicts.length) retry.current();
+    } catch {
+      setResolutionError(
+        ar
+          ? "ما اكتمل الاسترداد. النسخ محفوظة؛ حاول مرة ثانية عند توفر الاتصال."
+          : "Recovery did not complete. Versions are preserved; retry when connected.",
+      );
+    } finally {
+      setResolving(false);
+    }
+  }
   return (
     <>
       {status !== "synced" && (
@@ -295,6 +320,31 @@ export function WorkspaceConnection({
             </Text>
           )}
         </Pressable>
+      )}
+      {damagedState && (
+        <View
+          style={{ padding: 14, gap: 8, backgroundColor: colors.secondary }}
+        >
+          <Text style={text}>
+            {ar
+              ? "تعطلت معلومات المزامنة. سنحفظ نسخة للاسترداد من بيانات الجهاز والسحابة، ثم تراجع كل اختلاف قبل المزامنة. اختيار نسخة غير موجودة يعني حذف السجل."
+              : "Sync history is damaged. Save recovery copies of device and cloud data, then review every difference before syncing. Choosing an absent version deletes that record."}
+          </Text>
+          <Button
+            disabled={resolving}
+            title={
+              ar
+                ? "حفظ النسخ ومراجعة الاختلافات"
+                : "Save copies and review differences"
+            }
+            onPress={() => void recoverDamagedState()}
+          />
+          {!!resolutionError && (
+            <Text accessibilityRole="alert" style={text}>
+              {resolutionError}
+            </Text>
+          )}
+        </View>
       )}
       <Modal
         visible={open}

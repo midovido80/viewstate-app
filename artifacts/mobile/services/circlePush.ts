@@ -1,6 +1,7 @@
 import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
+import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 import type { CloudRequest } from "./workspaceCloud";
 import { circleRpc } from "./circleMatchingApi";
@@ -8,6 +9,132 @@ import {
   refreshPushRegistration,
   serializePushRegistration,
 } from "./pushRegistrationRefresh";
+import { createPushRevocations } from "./pushRevocation";
+import { createSecureSessionStorage } from "./secureSessionStorage";
+
+let revocations: Promise<ReturnType<typeof createPushRevocations>> | undefined;
+function pushRevocations() {
+  if (!revocations)
+    revocations = (async () => {
+      const secure = await import("expo-secure-store");
+      if (!(await secure.isAvailableAsync()))
+        throw Error("SECURE_PUSH_STORAGE_UNAVAILABLE");
+      return createPushRevocations(
+        createSecureSessionStorage(
+          {
+            getItem: (key) => secure.getItemAsync(key),
+            setItem: (key, value) =>
+              secure.setItemAsync(key, value, {
+                keychainAccessible: secure.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+              }),
+            removeItem: (key) => secure.deleteItemAsync(key),
+          },
+          Crypto.randomUUID,
+        ),
+      );
+    })().catch((error) => {
+      revocations = undefined;
+      throw error;
+    });
+  return revocations;
+}
+
+export async function retryCirclePushRevocations(
+  request?: CloudRequest,
+  owner?: string,
+) {
+  if (Platform.OS !== "android") return;
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) return;
+  const base = new URL(url);
+  if (
+    base.protocol !== "https:" ||
+    base.username ||
+    base.password ||
+    base.pathname !== "/" ||
+    base.search ||
+    base.hash ||
+    !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)
+  )
+    throw Error("INVALID_SUPABASE_PUBLIC_CONFIG");
+  await (
+    await pushRevocations()
+  ).retry(async (binding) => {
+    if (!binding.secret) {
+      if (!request || binding.owner !== owner)
+        throw Error("CIRCLE_PUSH_ORIGINAL_OWNER_REQUIRED");
+      await circleRpc(request, "vs_circle_register_push", {
+        p_token: binding.token,
+        p_enabled: false,
+      });
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(
+        `${base.origin}/rest/v1/rpc/vs_circle_revoke_push_device`,
+        {
+          method: "POST",
+          headers: { apikey: key, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            p_token: binding.token,
+            p_secret: binding.secret,
+          }),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) throw Error("CIRCLE_PUSH_REVOKE_FAILED");
+    } finally {
+      clearTimeout(timer);
+    }
+  }, owner);
+}
+
+export function prepareCirclePushSignOut(owner: string) {
+  return serializePushRegistration(owner, async () => {
+    if (Platform.OS !== "android") return;
+    await (
+      await pushRevocations()
+    ).prepare(owner, await AsyncStorage.getItem(storageKey(owner)));
+    await AsyncStorage.removeItem(storageKey(owner));
+  });
+}
+
+async function registerPushDevice(
+  request: CloudRequest,
+  owner: string,
+  token: string,
+) {
+  if (foregroundOwner !== owner) throw Error("CIRCLE_PUSH_ACCOUNT_CHANGED");
+  const queue = await pushRevocations();
+  const current = await queue.read(owner);
+  const secret =
+    current?.token === token && current.secret
+      ? current.secret
+      : Array.from(Crypto.getRandomBytes(32), (byte) =>
+          byte.toString(16).padStart(2, "0"),
+        ).join("");
+  await queue.remember(
+    { owner, token, secret },
+    await AsyncStorage.getItem(storageKey(owner)),
+  );
+  await retryCirclePushRevocations(request, owner);
+  await queue.assertReady(token);
+  if (foregroundOwner !== owner) throw Error("CIRCLE_PUSH_ACCOUNT_CHANGED");
+  await AsyncStorage.setItem(storageKey(owner), token);
+  await circleRpc(request, "vs_circle_prepare_push_device", {
+    p_token: token,
+    p_secret: secret,
+  });
+  if (foregroundOwner !== owner) throw Error("CIRCLE_PUSH_ACCOUNT_CHANGED");
+  await circleRpc(request, "vs_circle_register_push_device", {
+    p_token: token,
+    p_secret: secret,
+  });
+  void retryCirclePushRevocations(request, owner).catch(() => undefined);
+}
 
 const storageKey = (owner: string) => `@viewstate_circle_push_${owner}`;
 
@@ -128,14 +255,15 @@ async function setCirclePushUnlocked(
   enabled: boolean,
 ) {
   if (!enabled) {
-    const token = await AsyncStorage.getItem(storageKey(owner));
-    if (token) {
-      await circleRpc(request, "vs_circle_register_push", {
-        p_token: token,
-        p_enabled: false,
-      });
-      await AsyncStorage.removeItem(storageKey(owner));
-    }
+    if (Platform.OS !== "android") return;
+    const queue = await pushRevocations();
+    const binding = await queue.read(owner);
+    const token =
+      binding?.token ?? (await AsyncStorage.getItem(storageKey(owner)));
+    await queue.prepare(owner, token);
+    await AsyncStorage.removeItem(storageKey(owner));
+    await retryCirclePushRevocations(request, owner);
+    if (token) await queue.assertReady(token, owner);
     return;
   }
   if (Platform.OS !== "android")
@@ -157,12 +285,7 @@ async function setCirclePushUnlocked(
   const { data: token } = await notifications.getExpoPushTokenAsync({
     projectId,
   });
-  // Retain the token before the RPC so a lost response can be revoked on retry.
-  await AsyncStorage.setItem(storageKey(owner), token);
-  await circleRpc(request, "vs_circle_register_push", {
-    p_token: token,
-    p_enabled: true,
-  });
+  await registerPushDevice(request, owner, token);
   await showRegisteredCirclePush(owner);
   await syncCircleUpdateDevice(request, owner).catch(() => undefined);
 }
@@ -202,18 +325,10 @@ export function refreshRegisteredCirclePush(
       register: async (token) => {
         if (foregroundOwner !== owner)
           throw Error("CIRCLE_PUSH_ACCOUNT_CHANGED");
-        await circleRpc(request, "vs_circle_register_push", {
-          p_token: token,
-          p_enabled: true,
-        });
+        await registerPushDevice(request, owner, token);
       },
       write: (token) => AsyncStorage.setItem(storageKey(owner), token),
-      remove: async (token) => {
-        await circleRpc(request, "vs_circle_register_push", {
-          p_token: token,
-          p_enabled: false,
-        });
-      },
+      remove: async () => retryCirclePushRevocations(request, owner),
     });
     await showRegisteredCirclePush(owner);
     await syncCircleUpdateDevice(request, owner);
