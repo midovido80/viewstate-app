@@ -8,6 +8,11 @@ $ErrorActionPreference = 'Stop'
 function Get-PilotSource([string]$Folder) {
     $publisher = Join-Path $Folder 'scripts\publish-pilot-update.mjs'
     if (-not (Test-Path -LiteralPath $publisher -PathType Leaf)) { return }
+    $sourceCheck = Join-Path $Folder 'scripts\check-pilot-source.mjs'
+    if (-not (Test-Path -LiteralPath $sourceCheck -PathType Leaf)) { return }
+    $proofJson = & node $sourceCheck '--preview' 2>$null
+    if ($LASTEXITCODE -ne 0) { return }
+    $proof = ($proofJson -join [Environment]::NewLine) | ConvertFrom-Json
 
     $mobile = Join-Path $Folder 'artifacts\mobile'
     $app = (Get-Content -LiteralPath (Join-Path $mobile 'app.json') -Raw | ConvertFrom-Json).expo
@@ -24,6 +29,8 @@ function Get-PilotSource([string]$Folder) {
         Folder = $Folder
         Publisher = $publisher
         Runtime = $app.runtimeVersion
+        Branch = $proof.branch
+        Commit = $proof.commit
         HasDependencies = Test-Path -LiteralPath (Join-Path $mobile 'node_modules\expo\package.json')
     }
 }
@@ -41,6 +48,8 @@ try {
         if (-not $source.HasDependencies) { throw 'Expo dependencies are missing from the selected source folder.' }
         Get-Command node.exe -ErrorAction Stop | Out-Null
         Write-Host "Source: $($source.Folder)"
+        Write-Host "Branch: $($source.Branch)"
+        Write-Host "Commit: $($source.Commit)"
         Write-Host "Android Pilot runtime: $($source.Runtime)"
         exit 0
     }
@@ -50,7 +59,7 @@ try {
 
     while ($true) {
         if ($source -and $source.HasDependencies) {
-            $message = "Publish this source to Android Pilot?`n`n$($source.Folder)`nRuntime: $($source.Runtime)`n`nYes: Publish  |  No: Choose another folder"
+            $message = "Publish this source to Android Pilot?`n`n$($source.Folder)`nBranch: $($source.Branch)`nCommit: $($source.Commit)`nRuntime: $($source.Runtime)`n`nYes: Publish  |  No: Choose another folder"
             $choice = [Windows.Forms.MessageBox]::Show($message, $title, 'YesNoCancel', 'Question', 'Button3')
             if ($choice -eq 'Yes') { break }
             if ($choice -eq 'Cancel') { exit 0 }

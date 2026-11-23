@@ -6,7 +6,11 @@
     "preinstall": "node scripts/preinstall.mjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test:release": "node --test tests/release-source.test.mjs",
+    "release:check": "node scripts/check-pilot-source.mjs",
+    "release:pilot": "node scripts/publish-pilot-update.mjs",
+    "preview:web": "node scripts/preview-pilot-web.mjs"
   },
   "private": true,
   "dependencies": {

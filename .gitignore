@@ -63,3 +63,6 @@ test-output/
 
 # Supabase CLI transient local cache
 /supabase/.temp/
+
+# Rebuilt local web preview
+/.preview/

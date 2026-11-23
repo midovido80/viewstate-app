@@ -4,11 +4,13 @@ on:
   pull_request:
     branches:
       - main
+      - "codex/latest-pilot-2026-11-23"
   push:
     branches:
       - main
-      - 'fix/offline-session-sync-*'
-      - 'work/viewstate-next-*'
+      - "codex/latest-pilot-2026-11-23"
+      - "fix/offline-session-sync-*"
+      - "work/viewstate-next-*"
   workflow_dispatch:
 
 permissions:
@@ -48,6 +50,9 @@ jobs:
       - name: Property domain standalone typecheck
         run: pnpm --filter @workspace/property-domain typecheck
 
+      - name: Release source safety tests
+        run: node --test tests/release-source.test.mjs
+
       - name: Property domain tests
         run: pnpm --filter @workspace/property-domain test
 
@@ -61,8 +66,8 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags origin main
-            BASE="$(git merge-base origin/main HEAD)"
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            BASE="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
             git diff --check "$BASE..HEAD"
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             git diff --check "${{ github.event.before }}..${{ github.sha }}"
