@@ -1,9 +1,9 @@
 import { spawnSync, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile, stat, mkdir, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { assertPilotSource, repositoryRoot } from "./pilot-source.mjs";
+import { fingerprintPreviewInputs } from "./preview-inputs.mjs";
 
 const before = assertPilotSource({ preview: true });
 const mobile = path.join(repositoryRoot, "artifacts/mobile");
@@ -26,17 +26,7 @@ async function fingerprint() {
           )),
     )
     .sort();
-  const hash = createHash("sha256");
-  for (const name of new Set(names)) {
-    hash.update(name + "\0");
-    try {
-      hash.update(await readFile(path.join(repositoryRoot, name)));
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-      hash.update("deleted");
-    }
-  }
-  return hash.digest("hex");
+  return fingerprintPreviewInputs(repositoryRoot, names);
 }
 const inputHash = await fingerprint();
 const { CIRCLE_WORKER_SECRET: _workerSecret, ...buildEnvironment } =

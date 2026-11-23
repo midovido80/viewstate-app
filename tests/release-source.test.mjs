@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validatePilotSource } from "../scripts/pilot-source.mjs";
+import { fingerprintPreviewInputs } from "../scripts/preview-inputs.mjs";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 const config = {
   repository: "midovido80/viewstate-app",
@@ -79,4 +83,30 @@ test("publishing refuses a repository whose default branch no longer matches the
     () => validatePilotSource(config, { ...source, defaultBranch: "main" }),
     /PILOT_SOURCE_DEFAULT_BRANCH/,
   );
+});
+
+test("ignored Expo environment changes invalidate the web preview fingerprint", async () => {
+  const prefix = path.join(tmpdir(), "viewstate-preview-inputs-");
+  const root = await mkdtemp(prefix);
+  try {
+    await mkdir(path.join(root, "artifacts/mobile"), { recursive: true });
+    const before = await fingerprintPreviewInputs(root, []);
+    const env = path.join(root, "artifacts/mobile/.env.production.local");
+    await writeFile(
+      env,
+      "EXPO_PUBLIC_VIEWSTATE_DOWNLOAD_URL=https://example.invalid/one\n",
+    );
+    const first = await fingerprintPreviewInputs(root, []);
+    assert.notEqual(first, before);
+    await writeFile(
+      env,
+      "EXPO_PUBLIC_VIEWSTATE_DOWNLOAD_URL=https://example.invalid/two\n",
+    );
+    assert.notEqual(await fingerprintPreviewInputs(root, []), first);
+    await rm(env);
+    assert.equal(await fingerprintPreviewInputs(root, []), before);
+  } finally {
+    assert.ok(root.startsWith(prefix));
+    await rm(root, { recursive: true, force: true });
+  }
 });
