@@ -83,6 +83,41 @@ export const KUWAIT_AREAS: readonly Area[] = approvedDataset.areas
   })
   .sort((a, b) => a.displayOrder - b.displayOrder);
 
+const isDisallowedSelectorLocation = (area: Area): boolean =>
+  /doha|qatar/i.test(`${area.id} ${area.en} ${area.ar}`);
+
+export const getSelectableKuwaitAreas = (): Area[] =>
+  KUWAIT_AREAS.filter(area => !isDisallowedSelectorLocation(area));
+
+export interface AreaPresentationValidation {
+  readonly ok: boolean;
+  readonly issues: readonly string[];
+}
+
+export function validateKuwaitAreaPresentation(
+  areas: readonly Area[] = getSelectableKuwaitAreas(),
+): AreaPresentationValidation {
+  const issues: string[] = [];
+  if (KUWAIT_GOVERNORATES.length !== 6) issues.push('governorate_count');
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  for (const area of areas) {
+    if (ids.has(area.id)) issues.push(`duplicate_id:${area.id}`);
+    ids.add(area.id);
+    for (const name of [area.en, area.ar]) {
+      const normalized = normalizeAreaSearchText(name);
+      if (names.has(normalized)) issues.push(`duplicate_name:${name}`);
+      names.add(normalized);
+    }
+    if (isDisallowedSelectorLocation(area)) issues.push(`disallowed_location:${area.id}`);
+    if (!KUWAIT_GOVERNATES_IDS.has(area.governorateId)) issues.push(`unknown_governorate:${area.id}`);
+  }
+  if (ids.size !== areas.length) issues.push('area_not_unique');
+  return { ok: issues.length === 0, issues };
+}
+
+const KUWAIT_GOVERNATES_IDS = new Set(KUWAIT_GOVERNORATES.map(governorate => governorate.id));
+
 const aliasesByAreaId = new Map<string, string[]>();
 for (const alias of KUWAIT_AREA_ALIASES) {
   const values = aliasesByAreaId.get(alias.canonicalAreaId) ?? [];
@@ -105,9 +140,27 @@ export const getAreaById = (
   return areas.find(area => area.id === id);
 };
 
+export const getGovernorateById = (
+  id: string,
+  governorates: readonly Governorate[] = KUWAIT_GOVERNORATES,
+): Governorate | undefined => governorates.find(governorate => governorate.id === id);
+
+export const sortAreasForLanguage = (
+  areas: readonly Area[],
+  language: 'ar' | 'en',
+): Area[] => [...areas].sort((a, b) =>
+  (language === 'ar' ? a.ar : a.en).localeCompare(language === 'ar' ? b.ar : b.en, language === 'ar' ? 'ar' : 'en'),
+);
+
+export const getAreasByGovernorate = (
+  governorateId: string,
+  language: 'ar' | 'en',
+  areas: readonly Area[] = getSelectableKuwaitAreas(),
+): Area[] => sortAreasForLanguage(areas.filter(area => area.governorateId === governorateId), language);
+
 export const searchAreas = (
   query: string,
-  areas: readonly Area[] = KUWAIT_AREAS,
+  areas: readonly Area[] = getSelectableKuwaitAreas(),
 ): Area[] => {
   const term = normalizeAreaSearchText(query);
   if (!term) return [...areas];
@@ -131,6 +184,12 @@ export const searchAreas = (
       .some(value => normalizeAreaSearchText(value).includes(term));
   });
 };
+
+export const searchAreasSorted = (
+  query: string,
+  language: 'ar' | 'en',
+  areas: readonly Area[] = getSelectableKuwaitAreas(),
+): Area[] => sortAreasForLanguage(searchAreas(query, areas), language);
 
 export const KUWAIT_AREA_DATASET_STATUS = {
   source: 'viewstate-kuwait-areas-v1.0.0-approved.json',

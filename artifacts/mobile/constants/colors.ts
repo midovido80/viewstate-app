@@ -6,43 +6,43 @@
 
 const colors = {
   light: {
-    text: '#0F1D2E',
-    tint: '#1976F3',
+    text: '#1B2940',
+    tint: '#2454ED',
 
-    background: '#F6F8FA',
-    foreground: '#0F1D2E',
+    background: '#F5F7FC',
+    foreground: '#1B2940',
 
     card: '#FFFFFF',
-    cardForeground: '#0F1D2E',
+    cardForeground: '#1B2940',
 
-    primary: '#1976F3',
+    primary: '#2454ED',
     primaryForeground: '#FFFFFF',
 
     turquoise: '#18B5A6',
 
-    secondary: '#E6F7F5',
-    secondaryForeground: '#18B5A6',
+    secondary: '#E5E7EB',
+    secondaryForeground: '#1B2940',
 
-    muted: '#E5E7EB', // Slightly darker than background for dividers/empty backgrounds
-    mutedForeground: '#6B7280',
+    muted: '#E5E7EB',
+    mutedForeground: '#607086',
 
-    accent: '#E6F7F5', // Secondary turquoise background
-    accentForeground: '#18B5A6',
+    accent: '#18355C',
+    accentForeground: '#FFFFFF',
 
-    destructive: '#FF6B6B',
+    destructive: '#D73C4A',
     destructiveForeground: '#FFFFFF',
 
-    success: '#A6D96A',
-    whatsapp: '#25D366',
-    whatsappForeground: '#062B18',
+    success: '#087F5B',
+    whatsapp: '#087F5B',
+    whatsappForeground: '#FFFFFF',
     warning: '#FFB84D',
 
-    border: '#E5E7EB',
+    border: '#DFE5EF',
     input: '#FFFFFF',
   },
 
   inputRadius: 14,
-  cardRadius: 16,
+  cardRadius: 19,
   modalRadius: 20,
   spacing: 8,
 };

@@ -7,4 +7,4 @@ Treat a canonical normalized phone as one Person identity whose classifications 
 
 **Why:** A role difference must never create a second identity, while existing relationship data and user-authored person fields must remain intact.
 
-**How to apply:** Any create, edit, or contact-import path that encounters an existing canonical phone must enrich or safely consolidate that Person. If any involved persisted record is unreadable or dangling, fail closed before writes rather than risk changing opaque bytes or losing relationships.
+**How to apply:** Normal create/edit identity handling may enrich or safely consolidate an existing Person. Reviewed batch contact import is the deliberate exception: preflight canonical phones and report existing identities as skipped without changing their classifications. If any involved persisted record is unreadable or dangling, fail closed before writes rather than risk changing opaque bytes or losing relationships.

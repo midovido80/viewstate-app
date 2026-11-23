@@ -75,6 +75,10 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # GHSA-jqcg-44mw-7w3h: keep Express on the patched proxy address parser.
+  "express>proxy-addr": "2.0.8"
+  # GHSA-pqg4-j6r4-53mv: pin React DevTools' transitive dependency to the patched release.
+  "react-devtools-core>shell-quote": "1.11.0"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"

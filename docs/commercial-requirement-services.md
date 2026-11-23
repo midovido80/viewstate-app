@@ -1,0 +1,11 @@
+# Commercial requirement forms
+
+Base: `1f1ad85137eae8d6782dc3bbf3890bb2cb96eeb6` (pre-APK touch and Expo 54 compatibility correction).
+
+Office and commercial-floor requests use a dedicated Property services section. PACI number count is an optional manually entered nonnegative safe integer, distinct from a property's PACI identifier. No area-to-license calculation or legal eligibility inference is made. Bathroom and kitchen selections require an explicit private/shared choice. Turning a parent off removes its child. All commercial requests use manual commercial-activity text, private/public/paid parking, and six nearby-service choices. The selected type stays above the scroll area, including the separate Studio request flow.
+
+`commercialActivity` and `commercialServices` are optional additions to the existing JSON requirement contract. Native/Web persistence, normalization and form adapters preserve them. Old rows require no migration, remain readable, and are not rewritten on read. On explicit commercial edit/save, retired Intended use and the legacy activity selector are replaced by the manual activity; non-commercial nearby conditions are removed with a visible notice. Existing residential contracts remain unchanged.
+
+The single matching evaluator advances to `shortlist-v6` so previous results cannot mix with the revised commercial conditions. Actual recorded security/camera/elevator/bathroom/parking facts may be compared. PACI count, facility cleaning and kitchen privacy have no authoritative offered-property inputs in this snapshot: they remain unknown and earn no confirmed-match points. Never infer them from area, the PACI identifier or a generic kitchen checkbox. Extending those offered-property inputs is a separate follow-up. Free-text commercial activity is compared literally, with only existing English/Arabic catalog aliases normalized; it is not a licensing recommendation.
+
+No schema migration, cloud settings, Expo owner/signing changes, dependency changes or paid build is part of this change. Reverting this branch to the base restores the previous source; export any new-format disposable test requests before running old code, whose strict contract does not understand the new optional fields.

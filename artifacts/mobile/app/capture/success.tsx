@@ -1,24 +1,41 @@
+import { useDraftBack } from '@/hooks/useDraftBack';
+import { matchingEntryHref } from '@/services/matchingScope';
 import { useRef } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
+import { getPropertySuccessRoutes } from '@/services/propertyDetailPresentation';
 
 export default function SuccessScreen() {
   const router = useRouter();
   const navigationStartedRef = useRef(false);
-  const { propertyCoreId, linkPersonId } = useLocalSearchParams<{ propertyCoreId?: string; linkPersonId?: string }>();
+  const {
+    propertyCoreId,
+    linkPersonId,
+    basicCaptureFollowUp,
+    basicApartmentFollowUp,
+  } = useLocalSearchParams<{
+    propertyCoreId?: string;
+    linkPersonId?: string;
+    basicCaptureFollowUp?: string;
+    basicApartmentFollowUp?: string;
+  }>();
   const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const { t, isRTL, fonts } = useI18n();
-  const replaceOnce = (destination: string) => {
+  const insets = useScreenInsets();
+  const { t, isRTL, fonts, language } = useI18n();
+  const closeSavedFlow = (destination: string) => { router.dismissAll(); router.replace(destination as never); };
+  const { back: savedBack, exit: savedExit } = useDraftBack({ persist: async () => true, localExit: () => closeSavedFlow(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : propertyCoreId ? `/property/${encodeURIComponent(propertyCoreId)}` : '/properties') });
+  const navigateOnce = (destination: string, replace = false) => {
     if (navigationStartedRef.current) return;
     navigationStartedRef.current = true;
-    router.replace(destination as never);
+    savedExit(() => closeSavedFlow(destination));
   };
+  const destinations = getPropertySuccessRoutes(propertyCoreId);
+  const showCaptureFollowUp = basicCaptureFollowUp === '1' || basicApartmentFollowUp === '1';
 
   return (
     <View
@@ -31,8 +48,8 @@ export default function SuccessScreen() {
         },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
-        <Feather name="check" size={42} color={colors.accentForeground} />
+      <View style={[styles.iconWrap, { backgroundColor: colors.success }]}>
+        <Feather name="check" size={42} color={colors.primaryForeground} />
       </View>
       <Text
         style={[
@@ -50,22 +67,56 @@ export default function SuccessScreen() {
       >
         {t('summary.success_detail')}
       </Text>
-      <View style={styles.spacer} />
-      {propertyCoreId ? (
+      <Button title={t('capture.back')} onPress={savedBack} variant="outline" testID="saved-flow-back" /><View style={styles.spacer} />
+      {propertyCoreId && <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} onPress={() => navigateOnce(matchingEntryHref({ kind: 'property', id: propertyCoreId }))} size="large" testID="property-match-now" />}
+      {showCaptureFollowUp && propertyCoreId ? (
+        <>
+          <Button
+            title={t('summary.add_details')}
+            onPress={() => navigateOnce(`/property/${encodeURIComponent(propertyCoreId)}/enrich`)}
+            size="large"
+            testID="btn-add-property-details"
+          />
+          <Button
+            title={t('summary.later')}
+            onPress={() => navigateOnce(destinations.home, true)}
+            variant="outline"
+            size="large"
+            testID="btn-finish-later"
+          />
+        </>
+      ) : propertyCoreId ? (
+        <>
+          <Button
+            title={t('summary.view_property')}
+            onPress={() => destinations.detail && navigateOnce(destinations.detail)}
+            size="large"
+            testID="btn-view-property"
+          />
+          <Button
+            title={t('summary.view_properties')}
+            onPress={() => destinations.properties && navigateOnce(destinations.properties)}
+            variant="outline"
+            size="large"
+            testID="btn-view-properties"
+          />
+          <Button
+            title={t('summary.done')}
+            onPress={() => navigateOnce('/', true)}
+            variant="outline"
+            size="large"
+            testID="btn-later"
+          />
+        </>
+      ) : (
         <Button
-          title={t('summary.add_details')}
-          onPress={() => replaceOnce(`/property/${encodeURIComponent(propertyCoreId)}/enrich`)}
+          title={t('summary.done')}
+          onPress={() => navigateOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/', true)}
+          variant="outline"
           size="large"
-          testID="btn-add-details-now"
+          testID="btn-later"
         />
-      ) : null}
-      <Button
-        title={t('summary.later')}
-        onPress={() => replaceOnce(linkPersonId ? `/person/${encodeURIComponent(linkPersonId)}` : '/')}
-        variant={propertyCoreId ? 'outline' : undefined}
-        size="large"
-        testID="btn-later"
-      />
+      )}
     </View>
   );
 }
