@@ -1,1 +1,9 @@
 - [Person identity consolidation](person-identity-consolidation.md) — one phone identity can hold multiple roles; consolidate links safely and fail closed on opaque data.
+- [Incompatible property detail transitions](incompatible-property-detail-transitions.md) — confirm before removing incompatible draft values; never silently clear or auto-persist them.
+- [Expo Preview verification](expo-preview-navigation.md) — use normal in-app entry; destructive confirmations need in-flow UI because web Alert can fail silently.
+- [Property fact convergence](property-fact-convergence.md) — mapped legacy metadata is fallback-only; a canonical edit snapshot, including deletion, is authoritative.
+- [Requirement save evidence boundary](requirement-save-evidence-boundary.md) — separate unrecoverable historical exceptions from independently verified current save gates.
+- [Property list ordering](property-list-ordering.md) — retain deterministic creation chronology until an updated-order storage change is authorized.
+- [Wanted Requirement boundary](studio-requirement-media-scope.md) — Requirements hold seeker preferences, not Property location or media; decode legacy rows without rewriting them.
+- [Wanted catalog selection](wanted-catalog-selection.md) — choose transaction, type, and apartment subtype once before specifications; preserve those choices on Back.
+- [Property entry verification](property-entry-verification.md) — verify Home and Person-led entries separately; test Wanted with a Seeker, not an Owner-only Person.

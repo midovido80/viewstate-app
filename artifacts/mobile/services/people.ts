@@ -2,6 +2,11 @@ import {
   PROPERTY_SOURCE_ROLES,
   type PropertySourceRole,
 } from '@workspace/property-domain';
+import {
+  matchesFlexibleSearch,
+  personClassificationSearchValues,
+  type FlexibleSearchField,
+} from '@/services/flexibleSearch';
 
 const SEEKER_CLASSIFICATIONS = ['rent_seeker', 'buy_seeker', 'investor'] as const;
 
@@ -17,6 +22,14 @@ export const PERSON_CLASSIFICATIONS = [
 ] as const;
 
 export type PersonClassification = typeof PERSON_CLASSIFICATIONS[number];
+
+/** A broker can record a request they are representing without changing their role. */
+export function canOwnPropertyRequirement(person?: { classifications?: readonly string[] } | null): boolean {
+  return person?.classifications?.some(role =>
+    role === 'seeker' || role === 'broker'
+      || SEEKER_CLASSIFICATIONS.some(seekerRole => seekerRole === role),
+  ) ?? false;
+}
 
 export { PROPERTY_SOURCE_ROLES };
 export type { PropertySourceRole };
@@ -127,9 +140,17 @@ export function getPersonSearchText(person: Person): string {
 }
 
 export function personMatchesSearch(person: Person, query: string): boolean {
+  const fields: FlexibleSearchField[] = [
+    { field: 'name', value: person.name },
+    { field: 'phone', value: person.displayPhone },
+    { field: 'phone', value: person.normalizedPhone },
+    ...personClassificationSearchValues(person.classifications)
+      .map(value => ({ field: 'classification', value })),
+  ];
   const literalQuery = query.toLocaleLowerCase();
   const normalizedQuery = normalizePersonPhone(query);
-  return getPersonSearchText(person).includes(literalQuery)
+  return matchesFlexibleSearch(fields, query)
+    || getPersonSearchText(person).toLocaleLowerCase().includes(literalQuery)
     || (normalizedQuery.replace('+', '').length > 0
       && person.normalizedPhone.includes(normalizedQuery));
 }
@@ -153,12 +174,12 @@ export interface PersonStore {
   getPropertySourcesForPerson(personId: string): Promise<PropertySource[]>;
 }
 
-/** Source roles are deliberately a subset of the people classifications. */
+/** A source role describes the relationship, not the Person's classifications. */
 export function personCanBePropertySource(
-  person: Person,
+  _person: Person,
   role: PropertySourceRole,
 ): boolean {
-  return person.classifications.includes(role);
+  return PROPERTY_SOURCE_ROLES.includes(role);
 }
 
 /**

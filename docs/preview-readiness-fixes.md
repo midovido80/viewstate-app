@@ -1,0 +1,12 @@
+# Preview readiness corrections
+
+Base: `6d40ef55f49feb0de3f2740f813ee2d1644f5a44`. Scope is limited to the four defects reported by the personal Replit audit.
+
+1. Remove the root navigator's unconditional Home replacement when account/guest initialization finishes. Expo Router retains the requested property URL. Existing auth/onboarding gates, scoped storage and the OAuth callback redirect remain unchanged. A small startup loading indicator replaces the two blank initialization returns.
+2. Include PACI count, facility cleaning and kitchen privacy in visible commercial comparison rows, including the compact table. Unknown commercial evidence is eligible for the existing confirmation display; unrelated optional amenities remain hidden. The matching evaluator, score, eligibility and thresholds do not change.
+3. One read-only matching-budget formatter handles upper-only (Up to / حتى), lower-only (From / من), open and unspecified budgets, including explicit zero. Both-bound formatting is retained. Group summaries, both card perspectives and comparison rows use it; saved bounds are never filled or rewritten.
+4. Exclude executable Node `.test.ts` files from the property-domain declaration build. The domain production sources are still checked; the unchanged Node test command still executes the suites. CI now runs the standalone package typecheck explicitly, without installing or upgrading dependencies.
+
+Validation: 916 mobile tests and 29 domain tests; standalone property-domain, mobile/workspace typechecks; Android/iOS JS export. Focused tests render the actual result card and assert the three commercial rows without expanding Full comparison, budget bounds/zero/missing, and truthful match statuses. Browser QA uses the exact production root/gate and a read-only property fixture in an isolated local Guest context: opening and hard-reloading `/property/qa-readiness-property` retains the detail URL and rendered property. Actual Matching screen exercised in English/Arabic for Match All and Quick Matching with the three rows and upper-only budget visible. QA adapters are outside this repository and write no business records. This does not claim real Google login, Replit acceptance, or native-device acceptance.
+
+No data/schema migration, provider/allowlist/permissions, Expo ownership, signing, billing, dependency/lockfile, main/Pilot merge, Replit update, or APK build is included. Recovery source stays at the base SHA.

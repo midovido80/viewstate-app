@@ -60,6 +60,7 @@ export function projectDraftToProperty(
     id: draft.propertyCoreId,
     propertyType: draft.propertyType,
     locationArea: { id: draft.locationAreaId },
+    ...(draft.block === undefined ? {} : { block: draft.block }),
     ...(draft.description === undefined ? {} : { description: draft.description }),
     ...(draft.privateNotes === undefined ? {} : { privateNotes: draft.privateNotes }),
     ...(draft.ownerSource === undefined ? {} : { ownerSource: draft.ownerSource }),
@@ -98,6 +99,7 @@ export function projectDraftToProperty(
   }
 
   const property: Property = {
+    ...(draft.listingTitle?.trim() ? {listingTitle:draft.listingTitle.trim()} : {}),
     core,
     activeOffer,
     ...(typeDetails === undefined ? {} : { typeDetails }),

@@ -1,3 +1,4 @@
+import {readBusiness,sameBusiness,validateBusiness,type BusinessSnapshot} from './workspaceSnapshot';
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +25,6 @@ import {
   assertValidPerson,
   enrichPersonIdentity,
   getPersonSearchText,
-  personCanBePropertySource,
   personMatchesSearch,
 } from '@/services/people';
 import {
@@ -40,6 +40,7 @@ import {
   SQLiteRequirementStore,
   WEB_REQUIREMENTS_KEY,
   WebRequirementStore,
+  type RequirementRecoveryReport,
   type RequirementPersistenceOptions,
   type RequirementStore,
 } from '@/services/requirementPersistence';
@@ -53,6 +54,7 @@ export interface PropertyStore {
   compareAndUpdate(expected: Property, replacement: Property): Promise<boolean>;
   canSafelyUpdate(): boolean;
   canPermanentlyDelete(): boolean;
+  getDeletedPropertyIds?(): Promise<string[]>;
   getProperties(): Promise<Property[]>;
   searchProperties(query: string): Promise<Property[]>;
   deleteProperty(expected: Property): Promise<PropertyDeletionResult>;
@@ -83,6 +85,7 @@ export interface PropertyDeletionCapability {
 }
 
 interface KeyValueStorage {
+  removeItem?(key:string):Promise<void>;
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 }
@@ -192,6 +195,25 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
     });
   }
 
+  /** Sync adapter only: expected snapshot and all replacements share one SQLite transaction. */
+  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+    validateBusiness(next);if(!this.db)throw new Error('DB not initialized');
+    await nativeMutations.enqueue(async()=>{await this.db!.withTransactionAsync(async()=>{
+      if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
+      const db=this.db!;
+      await db.runAsync('DELETE FROM person_property_links');await db.runAsync('DELETE FROM property_sources');
+      await db.runAsync('DELETE FROM seeker_requirements');await db.runAsync('DELETE FROM properties');await db.runAsync('DELETE FROM people');
+      for(const p of next.people){await db.runAsync('INSERT INTO people (id,data,search_text) VALUES (?,?,?)',[p.id,JSON.stringify(p),getPersonSearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO person_creation_chronology (id,created_at) VALUES (?,?)',[p.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      const deleted = new Set([...(await this.getDeletedPropertyIds()), ...(next.deletedPropertyIds ?? [])]);
+      if(next.properties.some(p => deleted.has(p.core.id))) throw new Error('PROPERTY_ID_DELETED');
+      for(const id of deleted) await db.runAsync('INSERT OR IGNORE INTO deleted_property_ids (id,generation) VALUES (?,1)',[id]);
+      for(const p of next.properties){await db.runAsync('INSERT INTO properties (id,data,search_text) VALUES (?,?,?)',[p.core.id,JSON.stringify(p),getPropertySearchText(p)]);await db.runAsync('INSERT OR IGNORE INTO property_creation_chronology (id,created_at) VALUES (?,?)',[p.core.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const r of next.requirements){await db.runAsync('INSERT INTO seeker_requirements (id,data) VALUES (?,?)',[r.id,JSON.stringify(r)]);await db.runAsync('INSERT OR IGNORE INTO requirement_creation_chronology (id,created_at) VALUES (?,?)',[r.id,UNKNOWN_CREATION_TIMESTAMP]);}
+      for(const l of next.links)await db.runAsync('INSERT INTO person_property_links (person_id,property_core_id) VALUES (?,?)',[l.personId,l.propertyCoreId]);
+      for(const source of next.sources)await db.runAsync('INSERT INTO property_sources (property_core_id,person_id,role) VALUES (?,?,?)',[source.propertyCoreId,source.personId,source.role]);
+    });});
+  }
+
   async saveProperty(property: Property) {
     if (!this.db) throw new Error('DB not initialized');
     const searchText = getPropertySearchText(property);
@@ -263,6 +285,11 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
 
   canPermanentlyDelete() {
     return true;
+  }
+
+  async getDeletedPropertyIds(): Promise<string[]> {
+    if (!this.db) throw new Error('DB not initialized');
+    return (await this.db.getAllAsync<{id:string}>('SELECT id FROM deleted_property_ids ORDER BY id')).map(row => row.id);
   }
 
   async getProperties(): Promise<Property[]> {
@@ -452,7 +479,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
   }
 
   private parseRequirementForConsolidation(row: { id: string; data: string }): {
-    id: string; seekerId: string; literal: Record<string, unknown>;
+    id: string; seekerId?: string; literal: Record<string, unknown>;
   } | null {
     try {
       const literal = JSON.parse(row.data) as unknown;
@@ -461,7 +488,11 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
       });
       return value.ok && value.value.id === row.id
         && typeof literal === 'object' && literal !== null && !Array.isArray(literal)
-        ? { id: value.value.id, seekerId: value.value.seekerId, literal: literal as Record<string, unknown> }
+        ? {
+          id: value.value.id,
+          ...(value.value.seekerId ? { seekerId: value.value.seekerId } : {}),
+          literal: literal as Record<string, unknown>,
+        }
         : null;
     } catch {
       return null;
@@ -504,8 +535,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         if (!source || !validatePropertySource(source).ok) return true;
         const person = readablePeople.get(source.personId);
         return !person
-          || !readablePropertyIds.has(source.propertyCoreId)
-          || !personCanBePropertySource(person, source.role);
+          || !readablePropertyIds.has(source.propertyCoreId);
       } catch {
         return true;
       }
@@ -566,7 +596,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         await this.db!.runAsync('UPDATE property_sources SET person_id = ? WHERE person_id = ?', [survivor.id, loser.id]);
       }
       for (const item of parsedRequirements) {
-        if (item.requirement && loserIds.has(item.requirement.seekerId)) {
+        if (item.requirement?.seekerId && loserIds.has(item.requirement.seekerId)) {
           const replacement = { ...item.requirement.literal, seekerId: survivor.id };
           await this.db!.runAsync(
             'UPDATE seeker_requirements SET data = ? WHERE id = ? AND data = ?',
@@ -698,9 +728,7 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
         ]);
         if (!person || !property) throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
         const sourcePerson = this.parsePersonRow(person);
-        if (!sourcePerson || !personCanBePropertySource(sourcePerson, source.role)) {
-          throw new Error('PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED');
-        }
+        if (!sourcePerson) throw new Error('UNREADABLE_PERSON_STORAGE');
         await this.db!.runAsync(
           `INSERT INTO property_sources (property_core_id, person_id, role) VALUES (?, ?, ?)
            ON CONFLICT(property_core_id) DO UPDATE SET person_id = excluded.person_id, role = excluded.role`,
@@ -797,6 +825,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   async init() {
+    await this.recoverWorkspace();
     if (!this.initialization) {
       const attempt = migrateStage01B1WebProperties(this.storage, this.KEY)
         .then(() => this.withChronologyMutationLock(() =>
@@ -868,6 +897,32 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     return locks.request('viewstate-chronology-mutation', { mode: 'exclusive' }, work);
   }
 
+  async recoverWorkspace(){
+    const key='@viewstate_sync_web_journal_v1',raw=await this.storage.getItem(key);if(!raw)return;
+    const journal=JSON.parse(raw) as {version:number;rows:{key:string;before:string|null;after:string}[]};
+    if(journal.version!==1||!Array.isArray(journal.rows)||journal.rows.some(r=>![this.KEY,this.PEOPLE_KEY,this.PERSON_PROPERTY_LINKS_KEY,this.PROPERTY_SOURCES_KEY,WEB_REQUIREMENTS_KEY,this.DELETED_KEY].includes(r.key)))throw new Error('SYNC_JOURNAL_DAMAGED');
+    const values=await Promise.all(journal.rows.map(r=>this.storage.getItem(r.key)));
+    if(!values.every((v,i)=>v===journal.rows[i].after)){
+      if(!values.every((v,i)=>v===journal.rows[i].before||v===journal.rows[i].after))throw new Error('SYNC_JOURNAL_CONCURRENT_CHANGE');
+      for(const row of journal.rows){if(row.before===null&&this.storage.removeItem)await this.storage.removeItem(row.key);else await this.storage.setItem(row.key,row.before??(row.key===this.DELETED_KEY?'{"version":1,"ids":[]}':'[]'));}
+    }
+    await this.storage.setItem(key,'');
+  }
+  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+    validateBusiness(next);
+    await this.withChronologyMutationLock(()=>this.withPeopleMutationLock(()=>this.withMutationLock(async()=>{
+      await this.recoverWorkspace();if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
+      const deleted=[...new Set([...(await this.getDeletedIds()), ...(next.deletedPropertyIds ?? [])])];
+      if(next.properties.some(p=>deleted.includes(p.core.id)))throw new Error('PROPERTY_ID_DELETED');
+      const rows=await Promise.all([[this.KEY,next.properties],[this.PEOPLE_KEY,next.people],[WEB_REQUIREMENTS_KEY,next.requirements],[this.PERSON_PROPERTY_LINKS_KEY,next.links],[this.PROPERTY_SOURCES_KEY,next.sources],[this.DELETED_KEY,{version:1,ids:deleted}]].map(async([key,value])=>({key:key as string,before:await this.storage.getItem(key as string),after:JSON.stringify(value)})));
+      const journal=JSON.stringify({version:1,rows});await this.storage.setItem('@viewstate_sync_web_journal_v1',journal);
+      if(await this.storage.getItem('@viewstate_sync_web_journal_v1')!==journal)throw new Error('SYNC_JOURNAL_FAILED');
+      try{for(const row of rows)await this.storage.setItem(row.key,row.after);for(const row of rows)if(await this.storage.getItem(row.key)!==row.after)throw new Error('SYNC_LOCAL_WRITE_FAILED');}
+      catch(error){await this.recoverWorkspace();throw error;}
+      await this.storage.setItem('@viewstate_sync_web_journal_v1','');
+    })));
+  }
+
   async saveProperty(property: Property) {
     await this.withChronologyMutationLock(() =>
       this.withMutationLock(async () => {
@@ -931,8 +986,10 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   canPermanentlyDelete() {
-    return false;
+    return this.lockManager !== null;
   }
+
+  async getDeletedPropertyIds(): Promise<string[]> { return [...await this.getDeletedIds()].sort(); }
 
   async getProperties(): Promise<Property[]> {
     const [properties, chronology] = await Promise.all([
@@ -968,9 +1025,23 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
-    // Permanent browser deletion is intentionally unavailable: AsyncStorage
-    // cannot provide the required crash-atomic fence and array mutation.
-    return { status: 'unsupported' };
+    if (!this.canPermanentlyDelete()) return { status: 'unsupported' };
+    const before = await readBusiness(this);
+    const matches = before.properties.filter(p => p.core.id === expected.core.id);
+    if (!matches.length) return { status: 'missing' };
+    if (matches.length !== 1) return { status: 'duplicate' };
+    if (JSON.stringify(matches[0]) !== JSON.stringify(expected)) return { status: 'stale' };
+    const id = expected.core.id;
+    // The existing verified workspace journal makes all related arrays and the
+    // deletion fence one recoverable operation, under the same writer locks.
+    await this.replaceWorkspace(before, {
+      ...before,
+      properties: before.properties.filter(p => p.core.id !== id),
+      deletedPropertyIds: [...new Set([...(before.deletedPropertyIds ?? []), id])],
+      links: before.links.filter(l => l.propertyCoreId !== id),
+      sources: before.sources.filter(s => s.propertyCoreId !== id),
+    });
+    return { status: 'deleted', count: 1 };
   }
 
   async deletePropertiesSnapshot(
@@ -1114,7 +1185,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
 
   private async getRawRequirementsForConsolidation(): Promise<{
     raw: string | null;
-    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId: string } }>;
+    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId?: string } }>;
     unreadableSeekerIds: Array<string | null>;
     rawValues: unknown[];
   }> {
@@ -1193,8 +1264,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     if (sources.some(source => {
       const sourcePerson = people.find(person => person.id === source.personId);
       return !propertyIds.has(source.propertyCoreId)
-        || !sourcePerson
-        || !personCanBePropertySource(sourcePerson, source.role);
+        || !sourcePerson;
     })) {
       throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
     }
@@ -1211,7 +1281,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       ? { ...source, personId: survivor.id } : source);
     const nextRequirements = requirements.rawValues.map(value => {
       const item = requirements.values.find(candidate => candidate.value === value);
-      return item && losers.has(item.requirement.seekerId)
+      return item?.requirement.seekerId && losers.has(item.requirement.seekerId)
         ? { ...item.value, seekerId: survivor.id } : value;
     });
     // Dependents first leaves the old person available if a later write fails.
@@ -1342,9 +1412,6 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       if (!sourcePerson || !property) {
         throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
       }
-      if (!personCanBePropertySource(sourcePerson, source.role)) {
-        throw new Error('PROPERTY_SOURCE_ROLE_CLASSIFICATION_REQUIRED');
-      }
       const next = [
         ...sources.filter(item => item.propertyCoreId !== source.propertyCoreId),
         source,
@@ -1384,6 +1451,10 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   getRequirementsForSeeker = (seekerId: string) =>
     this.requirements.getRequirementsForSeeker(seekerId);
 
+  getRequirementRecoveryReport(): RequirementRecoveryReport {
+    return this.requirements.getRecoveryReport();
+  }
+
   updateRequirement = (
     expected: Parameters<RequirementStore['updateRequirement']>[0],
     replacement: Parameters<RequirementStore['updateRequirement']>[1],
@@ -1394,3 +1465,7 @@ export const store: PropertyStore & PersonStore & RequirementStore & {
   getIntegrityStatus(): LocalStoreIntegrityStatus;
 } =
   Platform.OS === 'web' ? new WebStore() : new SQLiteStore();
+
+export function getRequirementRecoveryReport(): RequirementRecoveryReport | null {
+  return store instanceof WebStore ? store.getRequirementRecoveryReport() : null;
+}

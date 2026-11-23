@@ -1,6 +1,9 @@
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: [['babel-preset-expo', { unstable_transformImportMeta: true }]],
+    presets: [[
+      require.resolve('babel-preset-expo', { paths: [require.resolve('expo/package.json')] }),
+      { unstable_transformImportMeta: true },
+    ]],
   };
 };

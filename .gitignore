@@ -60,3 +60,6 @@ attached_assets/
 *.ipa
 *.xcarchive/
 test-output/
+
+# Supabase CLI transient local cache
+/supabase/.temp/

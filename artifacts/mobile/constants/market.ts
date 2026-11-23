@@ -88,6 +88,8 @@ export function formatRentalCadence(
     ? translate('price.cadence.monthly')
     : rentalPeriodId === 'yearly'
       ? translate('price.cadence.recorded_yearly')
+      : rentalPeriodId === 'daily'
+        ? translate('studio.daily')
       : rentalPeriodId
         ? `${translate('price.cadence.recorded')}: ${toEnglishDigits(rentalPeriodId)}`
         : translate('price.cadence.missing');

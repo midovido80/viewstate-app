@@ -1,0 +1,8 @@
+# Publishable values only. Never set a Supabase secret/service-role key here.
+# This checkpoint deliberately does not activate accounts in the root UI yet.
+EXPO_PUBLIC_SUPABASE_URL=https://taduvwcajtjpceavlxrc.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+
+# Native callback for the next binary: viewstate://auth/callback
+# Each web Preview needs its own exact HTTPS-origin/auth/callback allowlist entry.
+# Google OAuth client secrets belong only in Supabase's Google provider settings.
