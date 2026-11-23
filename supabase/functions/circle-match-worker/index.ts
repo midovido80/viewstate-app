@@ -28,6 +28,7 @@ async function deliver(claim: PushClaim, accessToken?: string, noticeId?: string
       body: JSON.stringify(claim.ticket ? { ids: [claim.ticket] } : {
         to: claim.token, title: 'ViewState', body: message[claim.kind],
         channelId: 'trust-circle-alerts', sound: 'default', priority: 'high', ttl: 3600,
+        tag: `viewstate:${noticeId ?? claim.id}`,
         data: {
           kind: claim.kind === 'app_update' ? 'viewstate-app-update' : `trust-circle-${claim.kind}`,
           ...(noticeId && claim.kind !== 'app_update' ? { noticeId } : {}),
@@ -94,15 +95,22 @@ Deno.serve(async request => {
       // The scheduled worker delivers these rows with normal retries.
       return Response.json({ queued });
     }
-    for (const circle of await rpc<string[]>('vs_circle_worker_jobs')) {
+    for (const job of await rpc<{ circle_id: string; claim_id: string }[]>('vs_circle_worker_jobs')) {
+      const circle = job.circle_id;
       try {
         const snapshot = await rpc<CircleSnapshot>('vs_circle_worker_snapshot', { p_circle: circle });
         const pairs = matchCircleSnapshot(snapshot);
         if (await rpc<boolean>('vs_circle_worker_commit', {
           p_circle: circle, p_revision: snapshot.revision, p_pairs: pairs,
-        })) evaluated++;
+        })) {
+          evaluated++;
+          await rpc('vs_circle_worker_complete', { p_circle: circle, p_revision: snapshot.revision, p_claim: job.claim_id });
+        }
+        else await rpc('vs_circle_worker_retry', { p_circle: circle, p_claim: job.claim_id });
       } catch {
         errors++;
+        try { await rpc('vs_circle_worker_retry', { p_circle: circle, p_claim: job.claim_id }); }
+        catch { errors++; }
       }
     }
     const expoToken = Deno.env.get('EXPO_ACCESS_TOKEN');

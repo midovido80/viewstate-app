@@ -148,6 +148,7 @@ export interface SyncStorage {
   setItem(key: string, value: string): Promise<void>;
 }
 export const SYNC_STATE_KEY = "@viewstate_sync_state_v1";
+export const SYNC_RECOVERY_KEY = "@viewstate_sync_damaged_recovery_v1";
 export interface SyncState {
   version: 1;
   base: CloudWorkspace;
@@ -164,6 +165,7 @@ export interface SyncState {
     )
   >;
   lastSuccess?: string;
+  recovering?: true;
 }
 export interface SyncLocal {
   read(): Promise<SyncRecords>;
@@ -233,13 +235,31 @@ export function createWorkspaceSync(
         conflicts: [],
         resolutions: {},
       };
-    const s = JSON.parse(raw) as SyncState;
+    let s: SyncState;
+    try {
+      s = JSON.parse(raw) as SyncState;
+    } catch {
+      throw new Error("SYNC_STATE_DAMAGED");
+    }
+    const object = (value: unknown): value is Record<string, unknown> =>
+      !!value && typeof value === "object" && !Array.isArray(value);
     if (
+      !object(s) ||
       s.version !== 1 ||
       !Number.isSafeInteger(s.base?.revision) ||
-      !s.base.records ||
+      s.base.revision < 0 ||
+      !object(s.base.records) ||
       !Array.isArray(s.conflicts) ||
-      !s.resolutions
+      !s.conflicts.every((c) => object(c) && typeof c.key === "string") ||
+      !object(s.resolutions) ||
+      !Object.values(s.resolutions).every(
+        (r) =>
+          object(r) &&
+          ["local", "remote", "repair_missing_person"].includes(
+            r.choice as string,
+          ),
+      ) ||
+      (s.recovering !== undefined && s.recovering !== true)
     )
       throw new Error("SYNC_STATE_DAMAGED");
     return s;
@@ -260,6 +280,36 @@ export function createWorkspaceSync(
       assertActive();
       const remote = await cloud.read();
       assertActive();
+      if (state.recovering) {
+        state.conflicts = [
+          ...new Set([
+            ...Object.keys(snapshot),
+            ...Object.keys(remote.records),
+          ]),
+        ]
+          .filter(
+            (key) =>
+              stableSync(snapshot[key]) !== stableSync(remote.records[key]),
+          )
+          .filter((key) => {
+            const resolution = state.resolutions[key];
+            return (
+              !resolution ||
+              stableSync(resolution.local) !== stableSync(snapshot[key]) ||
+              stableSync(resolution.remote) !== stableSync(remote.records[key])
+            );
+          })
+          .map((key) => ({
+            key,
+            base: undefined,
+            local: snapshot[key],
+            remote: remote.records[key],
+          }));
+        if (state.conflicts.length) {
+          await save(state);
+          return state;
+        }
+      }
       const merged = prepareMerge(state, snapshot, remote),
         base = merged.base;
       if (merged.conflicts.length) {
@@ -339,6 +389,60 @@ export function createWorkspaceSync(
   }
   return {
     readState,
+    async recoverDamagedState() {
+      if (running) await running.catch(() => undefined);
+      try {
+        return await readState();
+      } catch (error) {
+        if ((error as Error).message !== "SYNC_STATE_DAMAGED") throw error;
+      }
+      const raw = await storage.getItem(SYNC_STATE_KEY);
+      const snapshot = await local.read();
+      assertActive();
+      const remote = await cloud.read();
+      assertActive();
+      const backup = JSON.stringify({
+        version: 1,
+        damaged: raw,
+        local: snapshot,
+        remote,
+      });
+      // Keep the first evidence intact if recovery is interrupted and retried.
+      const backupKey = SYNC_RECOVERY_KEY + ":" + new Date().toISOString();
+      await storage.setItem(backupKey, backup);
+      assertActive();
+      if ((await storage.getItem(backupKey)) !== backup)
+        throw new Error("SYNC_STATE_WRITE_FAILED");
+      if (
+        (await storage.getItem(SYNC_STATE_KEY)) !== raw ||
+        stableSync(await local.read()) !== stableSync(snapshot)
+      )
+        throw new Error("SYNC_CONFLICT_CHANGED");
+      const state: SyncState = {
+        version: 1,
+        base: remote,
+        resolutions: {},
+        recovering: true,
+        conflicts: [
+          ...new Set([
+            ...Object.keys(snapshot),
+            ...Object.keys(remote.records),
+          ]),
+        ]
+          .filter(
+            (key) =>
+              stableSync(snapshot[key]) !== stableSync(remote.records[key]),
+          )
+          .map((key) => ({
+            key,
+            base: undefined,
+            local: snapshot[key],
+            remote: remote.records[key],
+          })),
+      };
+      await save(state);
+      return state;
+    },
     sync() {
       if (!running)
         running = run().finally(() => {

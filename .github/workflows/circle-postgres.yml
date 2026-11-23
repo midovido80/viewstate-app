@@ -1,13 +1,9 @@
 name: Circle PostgreSQL Permissions
 on:
   pull_request:
-    paths:
-      - 'supabase/migrations/*circle*'
-      - 'supabase/functions/circle-match-worker/**'
-      - 'tests/circle-postgres/**'
-      - 'scripts/enable-circle-worker-delivery.sql'
-      - 'artifacts/mobile/services/circleMatchingSource.ts'
-      - '.github/workflows/circle-postgres.yml'
+  push:
+    branches:
+      - "codex/latest-pilot-2026-11-23"
   workflow_dispatch:
 permissions:
   contents: read

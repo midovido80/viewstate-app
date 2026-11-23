@@ -1,5 +1,5 @@
 import { createWorkspaceAccountRequest } from '@/services/workspaceSyncDevice';
-import { setCircleForegroundOwner, setCirclePush, showRegisteredCirclePush } from '@/services/circlePush';
+import { setCircleForegroundOwner, prepareCirclePushSignOut, retryCirclePushRevocations, showRegisteredCirclePush } from '@/services/circlePush';
 import type { CloudRequest } from '@/services/workspaceCloud';
 import {WorkspaceConnection} from '@/components/account/WorkspaceConnection';
 import { WelcomeExperience as Welcome } from '@/components/account/WelcomeExperience';
@@ -14,7 +14,7 @@ import { flushPropertyEditDraftWrites } from '@/services/propertyUpdateRecovery'
 import { flushPropertyEnrichmentDraftWrites } from '@/services/propertyEnrichmentRecovery';
 import { transferGuestDevice } from '@/services/guestTransferDevice';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useI18n } from './I18nContext';
@@ -153,17 +153,38 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   }, []);
   const readyOwner = stage === 'ready' ? active?.lease.account.userId : undefined;
   useEffect(() => {
+    const retry = () => {
+      const owner = current.current, accountDevice = device.current;
+      void retryCirclePushRevocations(owner && accountDevice ? createWorkspaceAccountRequest(owner.resources, accountDevice) : undefined,
+        owner?.lease.account.userId).catch(() => undefined);
+    };
+    retry();
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') retry(); });
+    return () => subscription.remove();
+  }, []);
+  useEffect(() => {
     setCircleForegroundOwner(readyOwner);
-    if (readyOwner) void showRegisteredCirclePush(readyOwner).catch(() => undefined);
+    if (readyOwner) {
+      void showRegisteredCirclePush(readyOwner).catch(() => undefined);
+      if (active && device.current) void retryCirclePushRevocations(createWorkspaceAccountRequest(active.resources, device.current), readyOwner).catch(() => undefined);
+    }
     return () => setCircleForegroundOwner(undefined);
   }, [readyOwner]);
   const signOut = async () => {
+    if (busy) return;
+    setBusy(true);
     const owner = current.current;
     const accountDevice = device.current;
     if (owner && accountDevice) {
       setCircleForegroundOwner(undefined);
-      const revoke = setCirclePush(createWorkspaceAccountRequest(owner.resources, accountDevice),
-        owner.lease.account.userId, false).catch(() => undefined);
+      try { await prepareCirclePushSignOut(owner.lease.account.userId); }
+      catch {
+        setCircleForegroundOwner(owner.lease.account.userId);
+        if (mounted.current) { setBusy(false); setError(L('تعذّر حفظ إلغاء التنبيهات على الجهاز. أعد محاولة تسجيل الخروج.', 'Could not save notification revocation on this device. Retry sign out.')); }
+        return;
+      }
+      const revoke = retryCirclePushRevocations(createWorkspaceAccountRequest(owner.resources, accountDevice),
+        owner.lease.account.userId).catch(() => undefined);
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([revoke, new Promise<void>(resolve => { timer = setTimeout(resolve, 1500); })]);
       if (timer) clearTimeout(timer);

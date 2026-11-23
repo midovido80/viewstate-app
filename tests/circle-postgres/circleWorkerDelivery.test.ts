@@ -44,6 +44,9 @@ test('worker gates calls and tracks Expo tickets and receipts independently', as
     assert.deepEqual(bodies.filter(({ path }) => path === 'send').map(({ body }) => body.data), [
       { kind: 'trust-circle-match', noticeId: 'match-notice' }, { kind: 'trust-circle-cooperation' }, { kind: 'viewstate-app-update' },
     ]);
+    assert.deepEqual(bodies.filter(({ path }) => path === 'send').map(({ body }) => body.tag), [
+      'viewstate:match-notice', 'viewstate:coop', 'viewstate:update',
+    ]);
     assert.deepEqual(bodies.find(({ path }) => path === 'getReceipts')?.body, { ids: ['invite-ticket'] });
     assert.deepEqual(Object.fromEntries(bodies.filter(({ path }) => path === 'vs_circle_notification_result')
       .map(({ body }) => [String(body.p_id), [body.p_attempt, body.p_status, body.p_ticket]])), {
@@ -52,6 +55,11 @@ test('worker gates calls and tracks Expo tickets and receipts independently', as
       coop: [1, 'unregistered', null],
       update: [1, 'ticket', 'match-ticket'],
     });
+    await serve(new Request(url, { method: 'POST', headers: { Authorization: 'Bearer test-secret' } }));
+    assert.deepEqual(bodies.filter(({ path }) => path === 'send').slice(-3).map(({ body }) => body.tag), [
+      'viewstate:match-notice', 'viewstate:coop', 'viewstate:update',
+    ], 'ambiguous retries reuse the same Android tray identity');
+    assert.ok(bodies.filter(({ path }) => path === 'send').every(({ body }) => body.collapseId === undefined));
     const announcement = await serve(new Request(url, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-secret', 'x-viewstate-operation': 'announce-update' },

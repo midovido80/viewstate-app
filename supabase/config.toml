@@ -1,0 +1,7 @@
+project_id = "viewstate"
+
+[functions.circle-invite]
+verify_jwt = false
+
+[functions.circle-match-worker]
+verify_jwt = false
