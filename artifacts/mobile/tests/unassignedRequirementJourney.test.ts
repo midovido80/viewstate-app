@@ -1,3 +1,4 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -46,22 +47,22 @@ test('capture routes save first and offer one authoritative post-save linking de
     readFile(resolveSourcePath('../app/person/[personId].tsx', import.meta.url), 'utf8'),
     readFile(resolveSourcePath('../app/capture/summary.tsx', import.meta.url), 'utf8'),
   ]);
-  assert.match(studio, /pathname: '\/requirement\/view\/\[requirementId\]'/);
-  assert.match(studio, /postSave: '1'/);
-  assert.doesNotMatch(studio, /mode === 'wanted' && !selectedPersonId/);
-  assert.match(generic, /pathname: '\/requirement\/view\/\[requirementId\]'/);
-  assert.match(generic, /postSave: '1'/);
-  assert.match(details, /requirement-link-existing/);
-  assert.match(details, /requirement-add-person/);
-  assert.match(details, /requirement-link-later/);
-  assert.match(details, /Not linked to a Person yet/);
-  assert.match(details, /Linked to: \$\{linkedPerson\.name\}/);
-  assert.match(details, /store\.getPerson\(saved\.seekerId\)/);
-  assert.match(personCreate, /returnRequirementId/);
-  assert.match(personCreate, /linkRequirementToSeeker/);
-  assert.match(personDetails, /type PersonLoadState = 'loading' \| 'ready' \| 'missing' \| 'error'/);
-  assert.match(personDetails, /loadState === 'loading'/);
-  assert.doesNotMatch(personDetails, /error \|\| t\('people\.not_found'\)/);
-  assert.match(summary, /getPropertyCardSummary\(previewProperty/);
-  assert.match(summary, /propertyLabel=\{previewSubtypeLabel \?\?/);
+  sourceMatch(studio, /pathname: '\/requirement\/view\/\[requirementId\]'/);
+  sourceMatch(studio, /postSave: '1'/);
+  sourceDoesNotMatch(studio, /mode === 'wanted' && !selectedPersonId/);
+  sourceMatch(generic, /pathname: '\/requirement\/view\/\[requirementId\]'/);
+  sourceMatch(generic, /postSave: '1'/);
+  sourceMatch(details, /requirement-link-existing/);
+  sourceMatch(details, /requirement-add-person/);
+  sourceMatch(details, /requirement-link-later/);
+  sourceMatch(details, /Not linked to a Person yet/);
+  sourceMatch(details, /Linked to: \$\{linkedPerson\.name\}/);
+  sourceMatch(details, /store\.getPerson\(saved\.seekerId\)/);
+  sourceMatch(personCreate, /returnRequirementId/);
+  sourceMatch(personCreate, /linkRequirementToSeeker/);
+  sourceMatch(personDetails, /type PersonLoadState = 'loading' \| 'ready' \| 'missing' \| 'error'/);
+  sourceMatch(personDetails, /loadState === 'loading'/);
+  sourceDoesNotMatch(personDetails, /error \|\| t\('people\.not_found'\)/);
+  sourceMatch(summary, /getPropertyCardSummary\(previewProperty/);
+  sourceMatch(summary, /propertyLabel=\{previewSubtypeLabel \?\?/);
 });

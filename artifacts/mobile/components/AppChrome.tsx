@@ -1,3 +1,7 @@
+import { isRequirementEditorPath, isCircleWorkspacePath } from '@/services/screenInsets';
+import { HomeQuickAdd } from '@/components/assistant/HomeQuickAdd';
+import { homeQuickRoute } from '@/services/assistantHome';
+import { circleUnreadCount, isNotificationScreen } from '@/services/notificationFeed';
 import { useAppUpdate } from '@/contexts/AppUpdateContext';
 import { useCircleNotifications } from '@/contexts/CircleNotificationsContext';
 import React, { createContext, useContext, useState } from 'react';
@@ -5,7 +9,6 @@ import {
   Keyboard,
   Modal,
   Pressable,
-  ScrollView,
   Text,
   View,
 } from 'react-native';
@@ -30,12 +33,14 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { language, setLanguage, fonts } = useI18n(),
     notices = useMatchNotifications();
-  const unread = useCircleNotifications().inbox.unread + notices.unread + Number(useAppUpdate().available);
-  const [sheet, setSheet] = useState<'settings' | 'notifications' | null>(null);
+  const { inbox } = useCircleNotifications();
+  const standalone = isNotificationScreen(pathname) || isRequirementEditorPath(pathname) || isCircleWorkspacePath(pathname) || pathname === '/intake' || pathname.startsWith('/intake-review/');
+  const unread = circleUnreadCount(inbox.unread, inbox.entries) + notices.unread + Number(useAppUpdate().available);
+  const [sheet, setSheet] = useState(false);
   const ar = language === 'ar';
-  const open = (value: 'settings' | 'notifications') => {
+  const openSettings = () => {
     Keyboard.dismiss();
-    setSheet(value);
+    setSheet(true);
   };
   const tool = (
     icon: 'settings' | 'bell' | 'home',
@@ -74,59 +79,62 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
     </Pressable>
   );
   return (
-    <ChromeContext.Provider value={true}>
+    <ChromeContext.Provider value={!standalone}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View
-          testID="app-global-toolbar"
-          style={{
-            paddingTop: insets.top,
-            backgroundColor: n.blue,
-            paddingHorizontal: 6,
-            direction: 'ltr',
-          }}
-        >
+        {!standalone && <>
           <View
+            testID="app-global-toolbar"
             style={{
-              height: 48,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              paddingTop: insets.top,
+              backgroundColor: n.blue,
+              paddingHorizontal: 6,
+              direction: 'ltr',
             }}
           >
-            <View style={{ flexDirection: 'row', width: 96 }}>
-              {tool('settings', ar ? 'الإعدادات' : 'Settings', () =>
-                open('settings'),
-              )}
-              {tool('bell', ar ? 'الإشعارات' : 'Notifications', () =>
-                open('notifications'),
-              )}
+            <View
+              style={{
+                height: 48,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flexDirection: 'row', width: 96 }}>
+                {tool('settings', ar ? 'الإعدادات' : 'Settings', openSettings)}
+                {tool('bell', ar ? 'الإشعارات' : 'Notifications', () => {
+                  Keyboard.dismiss();
+                  router.push('/notifications');
+                })}
+              </View>
+              <View pointerEvents="none" style={{ position: 'absolute', left: 96, right: 96, alignItems: 'center' }}>
+                <ViewStateBrand inverse compact />
+              </View>
+              <HomeQuickAdd compact onAction={action => {
+                Keyboard.dismiss();
+                const href = homeQuickRoute(action);
+                if (href) router.push(href as never);
+                else router.navigate({ pathname: '/', params: { quickAction: action, quickActionKey: String(Date.now()) } } as never);
+              }} />
             </View>
-            <View pointerEvents="none" style={{ position: 'absolute', left: 96, right: 96, alignItems: 'center' }}>
-              <ViewStateBrand inverse compact />
-            </View>
-            {tool('home', ar ? 'الرئيسية' : 'Home', () => {
-              Keyboard.dismiss();
-              if (pathname !== '/') router.dismissTo('/' as never);
-            })}
           </View>
-        </View>
-        <View style={{ backgroundColor: n.background, paddingHorizontal: 18, paddingVertical: 5 }}>
-          <Pressable testID="next-global-search" accessibilityRole="button"
-            accessibilityLabel={ar ? 'ابحث عن عقار أو شخص أو طلب' : 'Search properties, people or requests'}
-            onPress={() => router.push('/search' as never)}
-            style={{ minHeight: 44, borderRadius: 10, backgroundColor: n.white, borderWidth: 1, borderColor: n.border, paddingHorizontal: 12, direction: 'ltr', flexDirection: ar ? 'row-reverse' : 'row', alignItems: 'center', gap: 9 }}>
-            <Feather name="search" size={18} color={n.muted} />
-            <Text style={{ flex: 1, color: n.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: ar ? 'right' : 'left' }}>{ar ? 'ابحث عن عقار أو شخص أو طلب' : 'Search properties, people or requests'}</Text>
-          </Pressable>
-        </View>
-        <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
+          <View style={{ backgroundColor: n.background, paddingHorizontal: 18, paddingVertical: 5 }}>
+            <Pressable testID="next-global-search" accessibilityRole="button"
+              accessibilityLabel={ar ? 'ابحث عن عقار أو شخص أو طلب' : 'Search properties, people or requests'}
+              onPress={() => router.push('/search' as never)}
+              style={{ minHeight: 44, borderRadius: 10, backgroundColor: n.white, borderWidth: 1, borderColor: n.border, paddingHorizontal: 12, direction: 'ltr', flexDirection: ar ? 'row-reverse' : 'row', alignItems: 'center', gap: 9 }}>
+              <Feather name="search" size={18} color={n.muted} />
+              <Text style={{ flex: 1, color: n.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: ar ? 'right' : 'left' }}>{ar ? 'ابحث عن عقار أو شخص أو طلب' : 'Search properties, people or requests'}</Text>
+            </Pressable>
+          </View>
+        </>}
+        <SafeAreaInsetsContext.Provider value={{ ...insets, top: standalone ? insets.top : 0 }}>
           {children}
         </SafeAreaInsetsContext.Provider>
         <Modal
-          visible={sheet !== null}
+          visible={sheet && !standalone}
           transparent
           animationType="slide"
-          onRequestClose={() => setSheet(null)}
+          onRequestClose={() => setSheet(false)}
         >
           <View
             style={{
@@ -137,7 +145,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           >
             <Pressable
               accessibilityLabel={ar ? 'إغلاق' : 'Close'}
-              onPress={() => setSheet(null)}
+              onPress={() => setSheet(false)}
               style={{ flex: 1 }}
             />
             <View
@@ -159,7 +167,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                 }}
               >
                 <Pressable
-                  onPress={() => setSheet(null)}
+                  onPress={() => setSheet(false)}
                   accessibilityRole="button"
                   accessibilityLabel={ar ? 'إغلاق' : 'Close'}
                   style={{ padding: 10 }}
@@ -173,17 +181,10 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                     color: colors.foreground,
                   }}
                 >
-                  {sheet === 'settings'
-                    ? ar
-                      ? 'الإعدادات'
-                      : 'Settings'
-                    : ar
-                      ? 'الإشعارات'
-                      : 'Notifications'}
+                  {ar ? 'الإعدادات' : 'Settings'}
                 </Text>
               </View>
-              {sheet === 'settings' ? (
-                <>
+
                   <Text
                     style={{
                       fontFamily: fonts.semiBold,
@@ -227,7 +228,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => {
-                      setSheet(null);
+                      setSheet(false);
                       router.push('/account' as never);
                     }}
                     style={{ minHeight: 44, justifyContent: 'center' }}
@@ -241,48 +242,8 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                     >
                       {ar ? 'كل إعدادات الحساب' : 'All account settings'}
                     </Text>
-                  </Pressable>                  <Pressable accessibilityRole="button" onPress={() => { setSheet(null); router.push('/next-guide' as never); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: ar ? 'right' : 'left' }}>{ar ? 'دليل البداية' : 'Getting started'}</Text></Pressable>
+                  </Pressable>                  <Pressable accessibilityRole="button" onPress={() => { setSheet(false); router.push('/next-guide' as never); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: ar ? 'right' : 'left' }}>{ar ? 'دليل البداية' : 'Getting started'}</Text></Pressable>
 
-                </>
-              ) : (
-                <>
-                  <Text
-                    style={{
-                      fontFamily: fonts.regular,
-                      color: colors.foreground,
-                      textAlign: ar ? 'right' : 'left',
-                    }}
-                  >
-                    {!notices.historyReady && !unread
-                      ? ar
-                        ? 'جارٍ تحميل الإشعارات…'
-                        : 'Loading notifications…'
-                      : unread
-                        ? `${unread} ${ar ? 'إشعار غير مقروء' : 'unread notifications'}`
-                        : ar
-                          ? 'لا توجد إشعارات غير مقروءة'
-                          : 'No unread notifications'}
-                  </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setSheet(null);
-                      router.push('/notifications' as never);
-                    }}
-                    style={{ minHeight: 44, justifyContent: 'center' }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: fonts.semiBold,
-                        color: colors.primary,
-                        textAlign: ar ? 'right' : 'left',
-                      }}
-                    >
-                      {ar ? 'عرض كل الإشعارات' : 'View all notifications'}
-                    </Text>
-                  </Pressable>
-                </>
-              )}
             </View>
           </View>
         </Modal>

@@ -1,37 +1,38 @@
-import { useImportAutosave } from "@/hooks/useImportAutosave";
-import { useCallback, useMemo, useState } from "react";
-import { useFocusEffect, useRouter } from "expo-router";
-import { Text, View } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
-import { Platform } from "react-native";
-import { useUserData } from "@/contexts/UserDataContext";
-import { useI18n } from "@/contexts/I18nContext";
-import { useDraftBack, useLocalFormDraft } from "@/hooks/useDraftBack";
-import { TextInput } from "@/components/FormField";
-import { Button } from "@/components/Button";
-import { NextPage, NextSurface } from "@/components/next/NextSurfaces";
-import { nextDesign as n } from "@/constants/nextDesign";
-import { createImportInbox, type ImportEntry } from "@/services/importInbox";
-import { generateDomainId } from "@/services/identity";
-import { incomingImportNative } from "@/services/incomingImportNative";
-import { createWebFileAttachments } from "@/services/attachments";
+import { useImportAutosave } from '@/hooks/useImportAutosave';
+import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Text, View } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
+import { useUserData } from '@/contexts/UserDataContext';
+import { useI18n } from '@/contexts/I18nContext';
+import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
+import { TextInput } from '@/components/FormField';
+import { Button } from '@/components/Button';
+import { NextPage, NextSurface } from '@/components/next/NextSurfaces';
+import { ImportWizardPage } from '@/components/ImportWizardPage';
+import { nextDesign as n } from '@/constants/nextDesign';
+import { createImportInbox, type ImportEntry } from '@/services/importInbox';
+import { generateDomainId } from '@/services/identity';
+import { incomingImportNative } from '@/services/incomingImportNative';
+import { createWebFileAttachments } from '@/services/attachments';
 
 export default function ImportInbox() {
   const { storage, media } = useUserData(),
     { language, fonts, isRTL } = useI18n(),
     router = useRouter();
-  const copy = (ar: string, en: string) => (language === "ar" ? ar : en);
+  const copy = (ar: string, en: string) => (language === 'ar' ? ar : en);
   const inbox = useMemo(() => createImportInbox(storage), [storage]);
-  const [text, setText] = useState(""),
-    [files, setFiles] = useState<ImportEntry["files"]>([]);
+  const [text, setText] = useState(''),
+    [files, setFiles] = useState<ImportEntry['files']>([]);
   const [id, setId] = useState(() => generateDomainId());
   const [entries, setEntries] = useState<ImportEntry[]>([]),
     [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState('');
   const persist = useLocalFormDraft({
-    identity: "message-import-compose",
+    identity: 'message-import-compose',
     value: { id, text, files },
     restore: (v) => {
       setId(v.id);
@@ -42,12 +43,12 @@ export default function ImportInbox() {
   useImportAutosave(JSON.stringify({ id, text, files }), persist, () =>
     setError(
       copy(
-        "تعذر حفظ المسودة تلقائيًا؛ أعد المحاولة قبل الخروج.",
-        "Could not autosave. Retry before leaving.",
+        'تعذر حفظ المسودة تلقائيًا؛ أعد المحاولة قبل الخروج.',
+        'Could not autosave. Retry before leaving.',
       ),
     ),
   );
-  const { back } = useDraftBack({ persist, fallback: "/" });
+  const { back } = useDraftBack({ persist, fallback: '/' });
   const refresh = useCallback(async () => {
     try {
       setEntries(await inbox.read());
@@ -55,8 +56,8 @@ export default function ImportInbox() {
     } catch {
       setError(
         copy(
-          "تعذر قراءة صندوق الاستيراد. لم تُحذف أي بيانات.",
-          "Could not read the inbox. No data was deleted.",
+          'تعذر قراءة صندوق الاستيراد. لم تُحذف أي بيانات.',
+          'Could not read the inbox. No data was deleted.',
         ),
       );
     }
@@ -78,21 +79,21 @@ export default function ImportInbox() {
     color: n.ink,
     backgroundColor: n.white,
     fontFamily: fonts.regular,
-    textAlign: isRTL ? ("right" as const) : ("left" as const),
+    textAlign: isRTL ? ('right' as const) : ('left' as const),
   };
   const addFiles = async () => {
     if (busy) return;
     setBusy(true);
-    setError("");
+    setError('');
     try {
       const picked = await DocumentPicker.getDocumentAsync({
         type: [
-          "image/jpeg",
-          "image/png",
-          "image/webp",
-          "video/mp4",
-          "video/quicktime",
-          "application/pdf",
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'video/mp4',
+          'video/quicktime',
+          'application/pdf',
         ],
         multiple: true,
         copyToCacheDirectory: true,
@@ -102,14 +103,14 @@ export default function ImportInbox() {
         picked.assets.length + files.length > 20 ||
         picked.assets.some((f) => (f.size ?? 0) > 50 * 1024 * 1024)
       )
-        throw Error("IMPORT_SIZE");
+        throw Error('IMPORT_SIZE');
       let next = [...files];
-      if (Platform.OS === "web") {
+      if (Platform.OS === 'web') {
         const browserFiles = picked.assets
           .map((a) => a.file)
           .filter((f): f is File => !!f);
         if (browserFiles.length !== picked.assets.length)
-          throw Error("FILE_MISSING");
+          throw Error('FILE_MISSING');
         next = [
           ...files,
           ...(await createWebFileAttachments(
@@ -123,13 +124,13 @@ export default function ImportInbox() {
       } else {
         const fileStore = media.createExpoFileStore(FileSystem);
         for (const asset of picked.assets) {
-          const mimeType = asset.mimeType ?? "";
+          const mimeType = asset.mimeType ?? '';
           if (
             !/^(image\/(jpeg|png|webp)|video\/(mp4|quicktime)|application\/pdf)$/.test(
               mimeType,
             )
           )
-            throw Error("UNSUPPORTED");
+            throw Error('UNSUPPORTED');
           const attachmentId = generateDomainId();
           const uri = await fileStore.copyToProperty(
             `import-${id}`,
@@ -141,11 +142,11 @@ export default function ImportInbox() {
             uri,
             originalName: asset.name,
             mimeType,
-            kind: mimeType.startsWith("image/")
-              ? "image"
-              : mimeType.startsWith("video/")
-                ? "video"
-                : "pdf",
+            kind: mimeType.startsWith('image/')
+              ? 'image'
+              : mimeType.startsWith('video/')
+                ? 'video'
+                : 'pdf',
             order: next.length,
           });
         }
@@ -156,8 +157,8 @@ export default function ImportInbox() {
     } catch {
       setError(
         copy(
-          "تعذر إضافة الملفات. الحد ٢٠ ملفًا، و٥٠ ميجابايت للملف. أعد المحاولة.",
-          "Could not add files. Limit: 20 files, 50 MB each. Please retry.",
+          'تعذر إضافة الملفات. الحد ٢٠ ملفًا، و٥٠ ميجابايت للملف. أعد المحاولة.',
+          'Could not add files. Limit: 20 files, 50 MB each. Please retry.',
         ),
       );
     } finally {
@@ -167,25 +168,25 @@ export default function ImportInbox() {
   const review = async () => {
     if (busy || (!text.trim() && !files.length)) return;
     setBusy(true);
-    setError("");
+    setError('');
     try {
       await persist();
       const entry: ImportEntry = {
         id,
         text,
         files,
-        status: "received",
+        status: 'received',
         createdAt: new Date().toISOString(),
       };
       await inbox.add(entry);
       await inbox.update(entry);
-      await persist.replace({ id: generateDomainId(), text: "", files: [] });
+      await persist.replace({ id: generateDomainId(), text: '', files: [] });
       router.push(`/intake-review/${encodeURIComponent(id)}` as never);
     } catch {
       setError(
         copy(
-          "تعذر تأكيد الحفظ. الرسالة باقية؛ أعد المحاولة.",
-          "Saving could not be confirmed. Your message is retained; retry.",
+          'تعذر تأكيد الحفظ. الرسالة باقية؛ أعد المحاولة.',
+          'Saving could not be confirmed. Your message is retained; retry.',
         ),
       );
     } finally {
@@ -193,38 +194,71 @@ export default function ImportInbox() {
     }
   };
   return (
-    <NextPage
-      title={copy("استيراد رسالة أو إعلان", "Import a message or listing")}
+    <ImportWizardPage
+      title={copy('استيراد رسالة أو إعلان', 'Import a message or listing')}
       back={back}
       subtitle={copy(
-        "من واتساب أو واتساب بيزنس أو أي تطبيق يتيح المشاركة. نجهز مسودة للمراجعة؛ لا نسجل عقارًا تلقائيًا.",
-        "From WhatsApp, WhatsApp Business or another sharing app. Review a draft before creating any record.",
+        'من واتساب أو واتساب بيزنس أو أي تطبيق يتيح المشاركة. نجهز مسودة للمراجعة؛ لا نسجل عقارًا تلقائيًا.',
+        'From WhatsApp, WhatsApp Business or another sharing app. Review a draft before creating any record.',
       )}
+      footer={
+        <>
+          {error ? (
+            <Text
+              accessibilityRole="alert"
+              style={{
+                color: n.red,
+                fontFamily: fonts.regular,
+                textAlign: isRTL ? 'right' : 'left',
+              }}
+            >
+              {error}
+            </Text>
+          ) : null}
+          <Button
+            loading={busy}
+            disabled={busy || !ready}
+            title={copy('مراجعة الرسالة', 'Review message')}
+            onPress={() => {
+              if (!text.trim() && !files.length) {
+                setError(
+                  copy(
+                    'الصق الرسالة أو أضف مرفقات عشان نراجعها.',
+                    'Paste a message or add attachments to review.',
+                  ),
+                );
+                return;
+              }
+              void review();
+            }}
+          />
+        </>
+      }
     >
-      <NextSurface title={copy("رسالة جديدة", "New message")}>
+      <NextSurface title={copy('رسالة جديدة', 'New message')}>
         <TextInput
-          accessibilityLabel={copy("الرسالة الأصلية", "Original message")}
+          accessibilityLabel={copy('الرسالة الأصلية', 'Original message')}
           multiline
           maxLength={40000}
           editable={!busy}
           value={text}
           onChangeText={setText}
           placeholder={copy(
-            "الصق نص العرض أو طلب العميل هنا…",
-            "Paste an offer or client request…",
+            'الصق نص العرض أو طلب العميل هنا…',
+            'Paste an offer or client request…',
           )}
-          style={[style, { minHeight: 150, textAlignVertical: "top" }]}
+          style={[style, { minHeight: 150, textAlignVertical: 'top' }]}
         />
         <Text
           style={{
             color: n.muted,
             fontFamily: fonts.regular,
-            textAlign: isRTL ? "right" : "left",
+            textAlign: isRTL ? 'right' : 'left',
           }}
         >
           {copy(
-            "الرسالة الأصلية خاصة ولا تدخل في وصف المشاركة. يعمل الاستيراد والحفظ بدون إنترنت.",
-            "Original messages stay private and out of shared descriptions. Import and saving work offline.",
+            'الرسالة الأصلية خاصة ولا تدخل في وصف المشاركة. يعمل الاستيراد والحفظ بدون إنترنت.',
+            'Original messages stay private and out of shared descriptions. Import and saving work offline.',
           )}
         </Text>
         {files.map((f) => (
@@ -235,14 +269,8 @@ export default function ImportInbox() {
         <Button
           variant="outline"
           disabled={busy}
-          title={copy("إضافة صور أو فيديو أو PDF", "Add photos, video or PDF")}
+          title={copy('إضافة صور أو فيديو أو PDF', 'Add photos, video or PDF')}
           onPress={() => void addFiles()}
-        />
-        <Button
-          loading={busy}
-          disabled={busy || !ready || (!text.trim() && !files.length)}
-          title={copy("تجهيز ومراجعة البيانات", "Prepare and review")}
-          onPress={() => void review()}
         />
       </NextSurface>
       {error ? (
@@ -250,12 +278,12 @@ export default function ImportInbox() {
           {error}
         </Text>
       ) : null}
-      <NextSurface title={copy("صندوق الاستيراد", "Import inbox")}>
+      <NextSurface title={copy('صندوق الاستيراد', 'Import inbox')}>
         {!ready ? (
-          <Text>{copy("جارٍ القراءة…", "Loading…")}</Text>
+          <Text>{copy('جارٍ القراءة…', 'Loading…')}</Text>
         ) : !entries.length ? (
           <Text>
-            {copy("لا توجد رسائل مستوردة بعد.", "No imported messages yet.")}
+            {copy('لا توجد رسائل مستوردة بعد.', 'No imported messages yet.')}
           </Text>
         ) : (
           entries
@@ -275,18 +303,18 @@ export default function ImportInbox() {
                   numberOfLines={3}
                   style={{
                     color: n.ink,
-                    textAlign: isRTL ? "right" : "left",
+                    textAlign: isRTL ? 'right' : 'left',
                     fontFamily: fonts.regular,
                   }}
                 >
-                  {e.text || copy("مرفقات بدون نص", "Attachments without text")}
+                  {e.text || copy('مرفقات بدون نص', 'Attachments without text')}
                 </Text>
                 <Button
                   variant="outline"
                   title={
-                    e.status === "transferred"
-                      ? copy("استكمال النموذج المرتبط", "Resume linked form")
-                      : copy("مراجعة", "Review")
+                    e.status === 'transferred'
+                      ? copy('متابعة الاستيراد', 'Continue import')
+                      : copy('مراجعة', 'Review')
                   }
                   onPress={() => router.push(`/intake-review/${e.id}` as never)}
                 />
@@ -297,19 +325,19 @@ export default function ImportInbox() {
       <Text style={{ color: n.muted, fontFamily: fonts.regular }}>
         {incomingImportNative
           ? copy(
-              "يمكنك اختيار ViewState من قائمة مشاركة Android للمحتوى المدعوم.",
-              "Choose ViewState in the Android share menu for supported content.",
+              'يمكنك اختيار ViewState من قائمة مشاركة Android للمحتوى المدعوم.',
+              'Choose ViewState in the Android share menu for supported content.',
             )
           : copy(
-              "المشاركة المباشرة وقراءة الصور تحتاج APK الجديد. يمكنك استخدام اللصق وإضافة المرفقات هنا.",
-              "Direct receiving and image text recognition require the new Android APK. Pasting and attachments work here.",
+              'المشاركة المباشرة وقراءة الصور تحتاج APK الجديد. يمكنك استخدام اللصق وإضافة المرفقات هنا.',
+              'Direct receiving and image text recognition require the new Android APK. Pasting and attachments work here.',
             )}
       </Text>
       <Button
         variant="outline"
-        title={copy("استيراد جهات اتصال الهاتف", "Import phone contacts")}
-        onPress={() => router.push("/person/new?entry=import" as never)}
+        title={copy('استيراد جهات اتصال الهاتف', 'Import phone contacts')}
+        onPress={() => router.push('/person/new?entry=import' as never)}
       />
-    </NextPage>
+    </ImportWizardPage>
   );
 }

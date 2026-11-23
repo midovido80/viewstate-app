@@ -1,5 +1,9 @@
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { AppUpdateAction } from '@/components/AppUpdateAction';
+import { CircleNotificationSettings } from '@/components/CircleNotificationSettings';
+import { useAppUpdate } from '@/contexts/AppUpdateContext';
+import { nextDesign } from '@/constants/nextDesign';
 import { TextInput } from '@/components/FormField';
-import { Platform} from 'react-native';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import { enableMatchSound, playMatchCue } from '@/services/matchNoticeDevice';
 import React, { useEffect, useState } from 'react';
@@ -27,7 +31,8 @@ export function SettingsSection() {
 }
 
 export function NotificationsSection() {
-  const { state, setNotification } = useAccountFoundation(); const { canWrite, busy } = useCanWrite(); const { L } = useL();
+  const { state, setNotification } = useAccountFoundation(); const { canWrite, busy } = useCanWrite(); const { L, fonts, align } = useL();
+  const update = useAppUpdate();
   const notices = useMatchNotifications(), [error, setError] = useState<string | null>(null);
   const [start, setStart] = useState(notices.state.settings.quietStart), [end, setEnd] = useState(notices.state.settings.quietEnd);
   useEffect(() => { setStart(notices.state.settings.quietStart); setEnd(notices.state.settings.quietEnd); }, [notices.state.settings.quietStart, notices.state.settings.quietEnd]);
@@ -38,21 +43,33 @@ export function NotificationsSection() {
     void options({ [key]: value });
   };
   const off = !canWrite || busy, n = state.notifications, ready = notices.historyReady;
-  return <AccountScreen title={L('الإشعارات', 'Notifications')} subtitle={L('تنبيهات محلية أثناء فتح التطبيق؛ لا إشعارات في الخلفية أو عند إغلاقه حاليًا.', 'Local alerts while the app is open; no background or closed-app delivery yet.')}>
-    <Card>
-      <ToggleRow first title={L('السماح بالتنبيهات داخل التطبيق', 'Allow in-app alerts')} value={n.enabled} disabled={off} onChange={v => void change('enabled', v)} />
-      <ToggleRow title={L('تنبيه بنتائج المطابقة الجديدة', 'New matching opportunities')} value={n.matches} disabled={off || !n.enabled} onChange={v => void change('matches', v)} />
-      <ToggleRow title={Platform.OS === 'web' ? L('صوت المطابقة', 'Matching sound') : L('صوت واهتزاز المطابقة', 'Matching sound and vibration')} value={notices.state.settings.sound} disabled={off || !ready} onChange={v => { if (v) void enableMatchSound(); void options({ sound: v }); }} />
-      <ToggleRow title={L('ساعات الهدوء للصوت والاهتزاز', 'Quiet hours for sound and vibration')} value={notices.state.settings.quiet} disabled={off || !ready} onChange={v => void options({ quiet: v })} />
-    </Card>
-    {notices.state.settings.quiet && <Card padded>
-      <Note>{L('من — إلى، بتوقيت الكويت، نظام 24 ساعة. نفس التوقيت يعني صمتًا طوال اليوم.', 'From — to, Kuwait time, 24-hour format. Equal times mean silence all day.')}</Note>
-      <TextInput accessibilityLabel={L('بداية الهدوء', 'Quiet hours start')} value={start} editable={ready} onChangeText={setStart} onBlur={() => time('quietStart', start)} placeholder="22:00" style={{ minHeight: 48, borderWidth: 1, borderColor: '#C8D9EF', borderRadius: 10, padding: 12, writingDirection: 'ltr' }} />
-      <TextInput accessibilityLabel={L('نهاية الهدوء', 'Quiet hours end')} value={end} editable={ready} onChangeText={setEnd} onBlur={() => time('quietEnd', end)} placeholder="08:00" style={{ minHeight: 48, borderWidth: 1, borderColor: '#C8D9EF', borderRadius: 10, padding: 12, writingDirection: 'ltr' }} />
-    </Card>}
-    <Card><Row first icon="volume-2" title={Platform.OS === 'web' ? L('تجربة صوت التنبيه', 'Test alert sound') : L('تجربة صوت التنبيه', 'Test alert sound')} onPress={() => { void (async () => { const enabled = await enableMatchSound(); if (!enabled) { setError(L('تعذر تفعيل الصوت. قد تحتاج نسخة تطبيق تتضمن حزمة الصوت.', 'Audio is unavailable. A build containing the audio module may be required.')); return; } if (await playMatchCue(true) === 'unavailable') setError(L('تعذر تشغيل الصوت. راجع مستوى صوت الجهاز.', 'Could not play audio. Check device volume.')); })().catch(() => setError(L('تعذر تشغيل التنبيه.', 'Could not play alert cue.'))); }} /></Card>
-    <ErrorText>{error}</ErrorText>
-    {notices.error && <Note>{L('تعذر تحميل سجل التنبيهات؛ راجع الاتصال بالمعاينة الآمنة وأعد المحاولة.', 'Alert history could not be loaded. Retry in the secure Preview.')}</Note>}
-    <Note>{Platform.OS === 'web' ? L('قد تحتاج تفعيل الصوت مجددًا بعد إعادة فتح المتصفح. لا نصدر أصواتًا عن المطابقات القديمة عند أول تشغيل.', 'You may need to enable audio again after reopening the browser. Existing matches are silent on first setup.') : L('التنبيه أثناء فتح التطبيق فقط، ويتبع مستوى صوت الجهاز. لا نطلب إذن الميكروفون.', 'Alerts play only while the app is open, at device volume. No microphone permission is requested.')}</Note>
+  return <AccountScreen title={L('إعدادات الإشعارات', 'Notification settings')}>
+    <View style={notificationStyles.content}>
+      <Card>
+        <Text accessibilityRole="header" style={[notificationStyles.title, { fontFamily: fonts.bold, textAlign: align }]}>{L('داخل التطبيق', 'In-app alerts')}</Text>
+        <ToggleRow first title={L('السماح بالتنبيهات داخل التطبيق', 'Allow in-app alerts')} value={n.enabled} disabled={off} onChange={v => void change('enabled', v)} />
+        <ToggleRow title={L('تنبيهات المطابقة', 'Matching alerts')} value={n.matches} disabled={off || !n.enabled} onChange={v => void change('matches', v)} />
+        <ToggleRow title={Platform.OS === 'web' ? L('صوت المطابقة', 'Matching sound') : L('الصوت والاهتزاز', 'Sound and vibration')} value={notices.state.settings.sound} disabled={off || !ready} onChange={v => { if (v) void enableMatchSound(); void options({ sound: v }); }} />
+        <ToggleRow title={L('ساعات الهدوء للصوت والاهتزاز', 'Quiet hours for sound and vibration')} value={notices.state.settings.quiet} disabled={off || !ready} onChange={v => void options({ quiet: v })} />
+      </Card>
+      {notices.state.settings.quiet && <Card padded>
+        <Note>{L('من — إلى، بتوقيت الكويت، نظام 24 ساعة. نفس التوقيت يعني صمتًا طوال اليوم.', 'From — to, Kuwait time, 24-hour format. Equal times mean silence all day.')}</Note>
+        <TextInput accessibilityLabel={L('بداية الهدوء', 'Quiet hours start')} value={start} editable={ready} onChangeText={setStart} onBlur={() => time('quietStart', start)} placeholder="22:00" style={{ minHeight: 48, borderWidth: 1, borderColor: '#C8D9EF', borderRadius: 10, padding: 12, writingDirection: 'ltr' }} />
+        <TextInput accessibilityLabel={L('نهاية الهدوء', 'Quiet hours end')} value={end} editable={ready} onChangeText={setEnd} onBlur={() => time('quietEnd', end)} placeholder="08:00" style={{ minHeight: 48, borderWidth: 1, borderColor: '#C8D9EF', borderRadius: 10, padding: 12, writingDirection: 'ltr' }} />
+      </Card>}
+      <Card><Row first icon="volume-2" title={L('اختبار صوت المطابقة', 'Test matching sound')} onPress={() => { void (async () => { const enabled = await enableMatchSound(); if (!enabled) { setError(L('تعذر تفعيل الصوت. قد تحتاج نسخة تطبيق تتضمن حزمة الصوت.', 'Audio is unavailable. A build containing the audio module may be required.')); return; } if (await playMatchCue(true) === 'unavailable') setError(L('تعذر تشغيل الصوت. راجع مستوى صوت الجهاز.', 'Could not play audio. Check device volume.')); })().catch(() => setError(L('تعذر تشغيل التنبيه.', 'Could not play alert cue.'))); }} /></Card>
+      <ErrorText>{error}</ErrorText>
+      {notices.error && <Note>{L('تعذّر تحميل سجل التنبيهات. تأكد من الاتصال وحاول مرة ثانية.', 'Alert history could not be loaded. Check your connection and try again.')}</Note>}
+      <CircleNotificationSettings />
+      {update.supported && <Card>
+        <Text accessibilityRole="header" style={[notificationStyles.title, { fontFamily: fonts.bold, textAlign: align }]}>{L('تحديثات التطبيق', 'App updates')}</Text>
+        <AppUpdateAction mode="settings" />
+      </Card>}
+    </View>
   </AccountScreen>;
 }
+
+const notificationStyles = StyleSheet.create({
+  content: { gap: 12 },
+  title: { fontSize: 17, color: nextDesign.ink, paddingHorizontal: 14, paddingTop: 14 },
+});

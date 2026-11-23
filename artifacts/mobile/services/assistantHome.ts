@@ -4,10 +4,10 @@ import type { Person } from './people';
 import type { AssistantInventory, Followup } from './dailyAssistant';
 import { normalizeFlexibleSearchText, flexibleSearchTerms } from './flexibleSearch';
 
-export type HomeQuickAction = 'person' | 'property' | 'import' | 'share' | 'matching';
+export type HomeQuickAction = 'person' | 'property' | 'appointment' | 'import' | 'share' | 'matching';
 /** Existing capture entry points only. No alternative capture forms. */
 export function homeQuickRoute(action: HomeQuickAction): string | null {
-  return action === 'person' ? '/person/new' : action === 'property' ? '/capture/transaction' : action === 'matching' ? '/matching' : action === 'import' ? '/intake' : null;
+  return action === 'person' ? '/person/new' : action === 'property' ? '/capture/transaction?mode=offered&entry=listing' : action === 'matching' ? '/matching' : action === 'import' ? '/intake' : null;
 }
 export interface HomeMatch { person: Person; requirement: SeekerRequirement; result: MatchResult }
 /** Read-only projection of the existing engine's shortlists. Never rescoring or accepting another engine. */

@@ -1,4 +1,4 @@
-import type { Person, PropertySourceRole } from '@/services/people';
+import { PROPERTY_SOURCE_ROLES, type Person, type PropertySourceRole } from '@/services/people';
 import { matchesFlexibleSearch } from '@/services/flexibleSearch';
 
 export type PropertySourceClassificationFilter = 'all' | PropertySourceRole;
@@ -26,7 +26,7 @@ export function suggestPropertySourceRole(
 ): PropertySourceRole {
   if (classification !== 'all') return classification;
   if (person.classifications.includes(previous)) return previous;
-  return person.classifications.find((value): value is PropertySourceRole => value !== 'seeker') ?? previous;
+  return person.classifications.find((value): value is PropertySourceRole => PROPERTY_SOURCE_ROLES.some(role => role === value)) ?? previous;
 }
 
 export function retainVisibleSourceSelection(people: readonly Person[], selectedId: string): string {

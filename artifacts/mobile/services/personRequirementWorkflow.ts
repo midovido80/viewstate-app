@@ -1,4 +1,4 @@
-import type { KitchenSpec } from '@workspace/property-domain';
+import type { KitchenSpec } from "@workspace/property-domain";
 import {
   cloneCommercialServices,
   normalizeSeekerRequirement,
@@ -13,12 +13,12 @@ import {
   type FloorUse,
   type RequirementAreaMode,
   type RequirementRentalPeriodId,
-} from '@workspace/property-domain';
-import { getAreaById } from '@/constants/kuwait-areas';
+} from "@workspace/property-domain";
+import { getAreaById } from "@/constants/kuwait-areas";
 
 export interface RequirementFormValues {
   readonly kitchens?: readonly KitchenSpec[];
-  readonly unspecifiedFields?: SeekerRequirement['unspecifiedFields'];
+  readonly unspecifiedFields?: SeekerRequirement["unspecifiedFields"];
   readonly purpose: RequirementPurpose;
   readonly propertyType: PropertyType;
   readonly preferredAreaIds: readonly string[];
@@ -28,12 +28,13 @@ export interface RequirementFormValues {
   readonly currencyCode: string;
   readonly notes: string;
   readonly commercialActivity?: string;
-  readonly commercialServices?: SeekerRequirement['commercialServices'];
+  readonly commercialServices?: SeekerRequirement["commercialServices"];
   readonly preferredNearbyServices?: readonly string[];
   readonly bedroomsMinimum?: number;
   readonly bathroomsMinimum?: number;
   readonly occupancy?: RequirementOccupancy;
   readonly rentalPeriodId?: RequirementRentalPeriodId;
+  readonly preserveUnknownRentalPeriod?: boolean;
   readonly swimmingPool?: boolean;
   readonly gym?: boolean;
   readonly seaView?: boolean;
@@ -49,7 +50,10 @@ export interface RequirementFormValues {
 
 export type RequirementFormResult =
   | { readonly ok: true; readonly value: SeekerRequirement }
-  | { readonly ok: false; readonly issues: readonly RequirementValidationIssue[] };
+  | {
+      readonly ok: false;
+      readonly issues: readonly RequirementValidationIssue[];
+    };
 
 export type OptionalRequirementNumberResult =
   | { readonly ok: true; readonly value: number | undefined }
@@ -70,19 +74,19 @@ export function toggleRequirementAmenity(
 } {
   if (preferred.includes(amenity)) {
     return {
-      preferred: preferred.filter(value => value !== amenity),
+      preferred: preferred.filter((value) => value !== amenity),
       excluded,
     };
   }
   if (excluded.includes(amenity)) {
     return {
       preferred,
-      excluded: excluded.filter(value => value !== amenity),
+      excluded: excluded.filter((value) => value !== amenity),
     };
   }
   return {
     preferred: [...preferred, amenity],
-    excluded: excluded.filter(value => value !== amenity),
+    excluded: excluded.filter((value) => value !== amenity),
   };
 }
 
@@ -91,11 +95,18 @@ export function parseOptionalRequirementNumber(
   input: string,
   options: { readonly integer?: boolean } = {},
 ): OptionalRequirementNumberResult {
-  const trimmed = input.trim().replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٫,]/g, '.');
+  const trimmed = input
+    .trim()
+    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/[٫,]/g, ".");
   if (!trimmed) return { ok: true, value: undefined };
   if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return { ok: false };
   const value = Number(trimmed);
-  if (!Number.isFinite(value) || (options.integer && !Number.isSafeInteger(value))) {
+  if (
+    !Number.isFinite(value) ||
+    (options.integer && !Number.isSafeInteger(value))
+  ) {
     return { ok: false };
   }
   return { ok: true, value };
@@ -115,19 +126,37 @@ export function buildPersonRequirement(
     preferredAreaIds: [...values.preferredAreaIds],
     ...(values.preferredAreaMode !== undefined
       ? { preferredAreaMode: values.preferredAreaMode }
-      : (values.preferredAreaIds.length > 0 ? { preferredAreaMode: 'specific_areas' as const } : {})),
+      : values.preferredAreaIds.length > 0
+        ? { preferredAreaMode: "specific_areas" as const }
+        : {}),
     budget: {
       minimum: values.minimumBudget,
       maximum: values.maximumBudget,
       currencyCode: values.currencyCode,
     },
     notes: values.notes,
-    ...(values.commercialActivity !== undefined ? { commercialActivity: values.commercialActivity } : {}),
-    ...(values.commercialServices !== undefined ? { commercialServices: cloneCommercialServices(values.commercialServices) } : {}),
-    ...(values.unspecifiedFields !== undefined ? { unspecifiedFields: [...values.unspecifiedFields] } : {}),
-    ...(values.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...values.preferredNearbyServices] } : {}),
-    ...(values.bedroomsMinimum !== undefined ? { bedroomsMinimum: values.bedroomsMinimum } : {}),
-    ...(values.bathroomsMinimum !== undefined ? { bathroomsMinimum: values.bathroomsMinimum } : {}),
+    ...(values.commercialActivity !== undefined
+      ? { commercialActivity: values.commercialActivity }
+      : {}),
+    ...(values.commercialServices !== undefined
+      ? {
+          commercialServices: cloneCommercialServices(
+            values.commercialServices,
+          ),
+        }
+      : {}),
+    ...(values.unspecifiedFields !== undefined
+      ? { unspecifiedFields: [...values.unspecifiedFields] }
+      : {}),
+    ...(values.preferredNearbyServices !== undefined
+      ? { preferredNearbyServices: [...values.preferredNearbyServices] }
+      : {}),
+    ...(values.bedroomsMinimum !== undefined
+      ? { bedroomsMinimum: values.bedroomsMinimum }
+      : {}),
+    ...(values.bathroomsMinimum !== undefined
+      ? { bathroomsMinimum: values.bathroomsMinimum }
+      : {}),
     ...(values.centralAC !== undefined ? { centralAC: values.centralAC } : {}),
     ...(values.preferredAmenities !== undefined
       ? { preferredAmenities: [...values.preferredAmenities] }
@@ -135,72 +164,137 @@ export function buildPersonRequirement(
     ...(values.preferredAmenityExclusions !== undefined
       ? { preferredAmenityExclusions: [...values.preferredAmenityExclusions] }
       : {}),
-    ...(values.kitchens !== undefined ? { kitchens: values.kitchens.map(item=>({...item})) } : {}),
+    ...(values.kitchens !== undefined
+      ? { kitchens: values.kitchens.map((item) => ({ ...item })) }
+      : {}),
     ...(values.catalogPreferences !== undefined
       ? { catalogPreferences: [...values.catalogPreferences] }
       : {}),
-    ...(values.propertyUse !== undefined ? { propertyUse: values.propertyUse } : {}),
+    ...(values.propertyUse !== undefined
+      ? { propertyUse: values.propertyUse }
+      : {}),
     ...(values.floorUse !== undefined ? { floorUse: values.floorUse } : {}),
-    ...(values.masterBedroomsMinimum !== undefined ? { masterBedroomsMinimum: values.masterBedroomsMinimum } : {}),
-    ...(values.driverRoom !== undefined ? { driverRoom: values.driverRoom } : {}),
+    ...(values.masterBedroomsMinimum !== undefined
+      ? { masterBedroomsMinimum: values.masterBedroomsMinimum }
+      : {}),
+    ...(values.driverRoom !== undefined
+      ? { driverRoom: values.driverRoom }
+      : {}),
   };
-  const candidate = values.purpose === 'rent' ? {
-    ...base,
-    ...(values.occupancy !== undefined ? { occupancy: values.occupancy } : {}),
-    rentalPeriodId: values.rentalPeriodId ?? 'monthly',
-    ...(values.swimmingPool !== undefined ? { swimmingPool: values.swimmingPool } : {}),
-    ...(values.gym !== undefined ? { gym: values.gym } : {}),
-    ...(values.seaView !== undefined ? { seaView: values.seaView } : {}),
-  } : base;
+  const candidate =
+    values.purpose === "rent"
+      ? {
+          ...base,
+          ...(values.occupancy !== undefined
+            ? { occupancy: values.occupancy }
+            : {}),
+          ...(values.rentalPeriodId
+            ? { rentalPeriodId: values.rentalPeriodId }
+            : values.preserveUnknownRentalPeriod
+              ? {}
+              : { rentalPeriodId: "monthly" as const }),
+          ...(values.swimmingPool !== undefined
+            ? { swimmingPool: values.swimmingPool }
+            : {}),
+          ...(values.gym !== undefined ? { gym: values.gym } : {}),
+          ...(values.seaView !== undefined ? { seaView: values.seaView } : {}),
+        }
+      : base;
   const result = normalizeSeekerRequirement(candidate, {
-    isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
+    isCanonicalAreaId: (areaId) => getAreaById(areaId) !== undefined,
   });
   const strict = validateSeekerRequirement(candidate, {
-    isCanonicalAreaId: areaId => getAreaById(areaId) !== undefined,
+    isCanonicalAreaId: (areaId) => getAreaById(areaId) !== undefined,
   });
   if (!strict.ok) return strict;
   return result.ok ? { ok: true, value: result.value } : result;
 }
 
-export function formValuesFromRequirement(requirement: SeekerRequirement): RequirementFormValues {
+export function formValuesFromRequirement(
+  requirement: SeekerRequirement,
+): RequirementFormValues {
   return {
     purpose: requirement.purpose,
     propertyType: requirement.propertyType,
     preferredAreaIds: [...requirement.preferredAreaIds],
     ...(requirement.preferredAreaMode !== undefined
       ? { preferredAreaMode: requirement.preferredAreaMode }
-      : (requirement.preferredAreaIds.length > 0 ? { preferredAreaMode: 'specific_areas' as const } : {})),
+      : requirement.preferredAreaIds.length > 0
+        ? { preferredAreaMode: "specific_areas" as const }
+        : {}),
     minimumBudget: requirement.budget.minimum,
     maximumBudget: requirement.budget.maximum,
     currencyCode: requirement.budget.currencyCode,
     notes: requirement.notes,
-    ...(requirement.commercialActivity !== undefined ? { commercialActivity: requirement.commercialActivity } : {}),
-    ...(requirement.commercialServices !== undefined ? { commercialServices: cloneCommercialServices(requirement.commercialServices) } : {}),
-    ...(requirement.unspecifiedFields !== undefined ? { unspecifiedFields: [...requirement.unspecifiedFields] } : {}),
-    ...(requirement.preferredNearbyServices !== undefined ? { preferredNearbyServices: [...requirement.preferredNearbyServices] } : {}),
-    ...(requirement.bedroomsMinimum !== undefined ? { bedroomsMinimum: requirement.bedroomsMinimum } : {}),
-    ...(requirement.bathroomsMinimum !== undefined ? { bathroomsMinimum: requirement.bathroomsMinimum } : {}),
-    ...(requirement.centralAC !== undefined ? { centralAC: requirement.centralAC } : {}),
+    ...(requirement.commercialActivity !== undefined
+      ? { commercialActivity: requirement.commercialActivity }
+      : {}),
+    ...(requirement.commercialServices !== undefined
+      ? {
+          commercialServices: cloneCommercialServices(
+            requirement.commercialServices,
+          ),
+        }
+      : {}),
+    ...(requirement.unspecifiedFields !== undefined
+      ? { unspecifiedFields: [...requirement.unspecifiedFields] }
+      : {}),
+    ...(requirement.preferredNearbyServices !== undefined
+      ? { preferredNearbyServices: [...requirement.preferredNearbyServices] }
+      : {}),
+    ...(requirement.bedroomsMinimum !== undefined
+      ? { bedroomsMinimum: requirement.bedroomsMinimum }
+      : {}),
+    ...(requirement.bathroomsMinimum !== undefined
+      ? { bathroomsMinimum: requirement.bathroomsMinimum }
+      : {}),
+    ...(requirement.centralAC !== undefined
+      ? { centralAC: requirement.centralAC }
+      : {}),
     ...(requirement.preferredAmenities !== undefined
       ? { preferredAmenities: [...requirement.preferredAmenities] }
       : {}),
     ...(requirement.preferredAmenityExclusions !== undefined
-      ? { preferredAmenityExclusions: [...requirement.preferredAmenityExclusions] }
+      ? {
+          preferredAmenityExclusions: [
+            ...requirement.preferredAmenityExclusions,
+          ],
+        }
       : {}),
-    ...(requirement.kitchens !== undefined ? { kitchens: requirement.kitchens.map(item=>({...item})) } : {}),
+    ...(requirement.kitchens !== undefined
+      ? { kitchens: requirement.kitchens.map((item) => ({ ...item })) }
+      : {}),
     ...(requirement.catalogPreferences !== undefined
       ? { catalogPreferences: [...requirement.catalogPreferences] }
       : {}),
-    ...(requirement.propertyUse !== undefined ? { propertyUse: requirement.propertyUse } : {}),
-    ...(requirement.floorUse !== undefined ? { floorUse: requirement.floorUse } : {}),
-    ...(requirement.masterBedroomsMinimum !== undefined ? { masterBedroomsMinimum: requirement.masterBedroomsMinimum } : {}),
-    ...(requirement.driverRoom !== undefined ? { driverRoom: requirement.driverRoom } : {}),
-    ...(requirement.purpose === 'rent' ? {
-      rentalPeriodId: requirement.rentalPeriodId ?? 'monthly',
-      ...(requirement.occupancy !== undefined ? { occupancy: requirement.occupancy } : {}),
-      ...(requirement.swimmingPool !== undefined ? { swimmingPool: requirement.swimmingPool } : {}),
-      ...(requirement.gym !== undefined ? { gym: requirement.gym } : {}),
-      ...(requirement.seaView !== undefined ? { seaView: requirement.seaView } : {}),
-    } : {}),
+    ...(requirement.propertyUse !== undefined
+      ? { propertyUse: requirement.propertyUse }
+      : {}),
+    ...(requirement.floorUse !== undefined
+      ? { floorUse: requirement.floorUse }
+      : {}),
+    ...(requirement.masterBedroomsMinimum !== undefined
+      ? { masterBedroomsMinimum: requirement.masterBedroomsMinimum }
+      : {}),
+    ...(requirement.driverRoom !== undefined
+      ? { driverRoom: requirement.driverRoom }
+      : {}),
+    ...(requirement.purpose === "rent"
+      ? {
+          ...(requirement.rentalPeriodId
+            ? { rentalPeriodId: requirement.rentalPeriodId }
+            : { preserveUnknownRentalPeriod: true }),
+          ...(requirement.occupancy !== undefined
+            ? { occupancy: requirement.occupancy }
+            : {}),
+          ...(requirement.swimmingPool !== undefined
+            ? { swimmingPool: requirement.swimmingPool }
+            : {}),
+          ...(requirement.gym !== undefined ? { gym: requirement.gym } : {}),
+          ...(requirement.seaView !== undefined
+            ? { seaView: requirement.seaView }
+            : {}),
+        }
+      : {}),
   };
 }

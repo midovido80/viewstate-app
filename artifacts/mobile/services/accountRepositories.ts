@@ -15,7 +15,7 @@ export function createAccountRepositories<Store extends object>(
   const changes=new Set<()=>void>(),syncChanges=new Set<()=>void>();
   let queue:Promise<unknown>=Promise.resolve();
   const coordinate=<T>(work:()=>Promise<T>):Promise<T>=>{const run=queue.catch(()=>undefined).then(()=>{scope.assertActive();return exclusive(work);});queue=run;return run;};
-  const mutating=new Set(['init','saveProperty','compareAndUpdate','deleteProperty','deletePropertiesSnapshot','savePerson','updatePerson','deletePerson','linkPersonToProperty','unlinkPersonFromProperty','setPropertySource','removePropertySource','saveRequirement','updateRequirement','update','undo','setItem','removeItem']);
+  const mutating=new Set(['init','saveProperty','compareAndUpdate','deleteProperty','deletePropertiesSnapshot','replaceWorkspace','savePerson','updatePerson','deletePerson','linkPersonToProperty','unlinkPersonFromProperty','setPropertySource','removePropertySource','saveRequirement','updateRequirement','update','undo','setItem','removeItem']);
   const serialized=<T extends object>(target:T):T=>new Proxy(target,{get(obj,key,receiver){const value=Reflect.get(obj,key,receiver);if(typeof value!=='function')return value;return mutating.has(String(key))?(...args:unknown[])=>coordinate(async()=>Reflect.apply(value,obj,args)).then(result=>{if(key!=='init'&&(!['setItem','removeItem'].includes(String(key))||['@viewstate_daily_assistant_v1','@viewstate_account_foundation_v1'].includes(String(args[0]))))for(const listener of changes)listener();return result;}):(...args:unknown[])=>Reflect.apply(value,obj,args);}});
   const storage=serialized(rawStorage),rawStore=scope.guard(createStore(rawStorage,scope.databaseName));
   return {

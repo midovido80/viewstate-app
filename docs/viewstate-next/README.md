@@ -2,6 +2,14 @@
 
 Status: native foundation, workflow/presentation updates and approved private message import. **Full visual parity and device acceptance remain unverified.**
 
+The later [sync conflict repair](sync-conflict-repair-20261122.ar.md) fixes validation errors reported as unrelated conflicts, adds an explicit missing-client repair, and preserves requests when deleting contacts. Android OTA publication and isolated engine/UI verification are recorded there; actual phone acceptance remains pending.
+
+The [22 November card layout update](card-layout-update-20261122.ar.md) records the later Android OTA for contact/property cards and named conflict differences. The 14 device conflicts remain unresolved pending their actual local/cloud values; this update does not choose versions automatically.
+
+## Request repair and property audit — 22 November 2026
+
+[Property repair release](property-repair-release-20261122.ar.md) records the five property fixes, all preceding request repairs, hosted migration, worker version 6, Android OTA and update announcement. [Request repair delivery](request-repair-delivery-20261122.ar.md) preserves the earlier verification checkpoint. [Offered-property audit](property-add-audit-20261119.ar.md) is the historical diagnosis; its five findings are now fixed and verified.
+
 ## Approved boundary
 
 - Repository: `midovido80/viewstate-app`.
@@ -67,3 +75,4 @@ Still required:
 5. Founder acceptance, then separately authorize package identity/Google setup and APK creation.
 
 Main/pilot, account/backend configuration, EAS identity/signing and deployment remain outside this work package.
+Latest import lifecycle verification: [Arabic release report, 22 November 2026](import-lifecycle-release-20261122.ar.md). This later package passed isolated browser import/edit/save/cancel/delete tests for both properties and requests; earlier package limitations below remain historical evidence for their own scope.

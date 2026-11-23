@@ -1,3 +1,4 @@
+import { RequirementServiceGroup, RequirementServiceRow } from '@/components/RequirementServiceRows';
 import { Text, View } from 'react-native';
 import type { CommercialRequirementServices as Services } from '@workspace/property-domain';
 import { FieldValidationContext, TextInput } from '@/components/FormField';
@@ -20,15 +21,31 @@ export function CommercialRequirementServices({ register, value, onChange, offic
   const validCount = parseOptionalRequirementNumber(count, { integer: true }).ok;
   return <View ref={view => register?.('commercial-services', view)} collapsable={false} testID="commercial-requirement-services" style={{ gap: 12 }}>
     {office && <>
-      <Text style={[textStyle, { fontSize: 19, fontFamily: fonts.bold }]}>{ar ? 'الخدمات المطلوبة' : 'Required services'}</Text>
+      <Text style={[textStyle, { fontSize: 19, fontFamily: fonts.bold }]}>{ar ? 'شنو الخدمات المطلوبة؟' : 'Which services are required?'}</Text>
       <Text style={textStyle}>{COMMERCIAL_SERVICE_LABELS.automaticNumberCount[index]}</Text>
       <FieldValidationContext.Provider value={!validCount}><TextInput value={count} onChangeText={onCountChange} keyboardType="number-pad" placeholder={ar ? 'أدخل العدد يدويًا' : 'Enter the count manually'} accessibilityLabel={COMMERCIAL_SERVICE_LABELS.automaticNumberCount[index]} testID="requirement-automatic-number-count" /></FieldValidationContext.Provider>
       {!validCount && <Text style={{ color: colors.destructive }} accessibilityRole="alert">{ar ? 'أدخل عددًا صحيحًا لا يقل عن صفر.' : 'Enter a non-negative whole number.'}</Text>}
-      <ChoiceGrid>
-        <ChoiceTile icon="wind" label={`${ar ? 'تكييف مركزي' : 'Central AC'}${centralAC === false ? (ar ? ' · يجب ألا يتوفر' : ' · Must not have') : ''}`} selected={centralAC !== undefined} onPress={() => onCentralACChange(centralAC === undefined ? true : undefined)} testID="commercial-service-central-ac" />
-        {(['cleaning', 'security', 'cameras', 'elevators'] as const).map(field => <ChoiceTile key={field} icon={{ cleaning: 'refresh-cw', security: 'shield', cameras: 'video', elevators: 'chevrons-up' }[field] as 'refresh-cw' | 'shield' | 'video' | 'chevrons-up'} label={`${COMMERCIAL_SERVICE_LABELS[field][index]}${value[field] === false ? (ar ? ' · يجب ألا يتوفر' : ' · Must not have') : ''}`} selected={value[field] !== undefined} onPress={() => { const next = { ...value }; if (next[field] !== undefined) delete next[field]; else next[field] = true; onChange(next); }} testID={`commercial-service-${field}`} />)}
-        {(['bathrooms', 'kitchen'] as const).map(field => <ChoiceTile key={field} icon={field === 'bathrooms' ? 'droplet' : 'coffee'} label={COMMERCIAL_SERVICE_LABELS[field][index]} selected={field === 'bathrooms' ? bathroomsEnabled : kitchenEnabled} onPress={() => onToggleFacility(field)} testID={`commercial-service-${field}`} />)}
-      </ChoiceGrid>
+      <RequirementServiceGroup title={ar ? 'خدمات المبنى' : 'Building services'}>
+        <RequirementServiceRow label={ar ? 'تكييف مركزي' : 'Central AC'}
+          state={centralAC === undefined ? 'unset' : centralAC ? 'required' : 'excluded'}
+          onPress={() => onCentralACChange(centralAC === true ? undefined : true)}
+          onExclude={() => onCentralACChange(centralAC === false ? undefined : false)} testID="commercial-service-central-ac" />
+        {(['cleaning', 'security', 'cameras', 'elevators'] as const).map(field => {
+          const set = (status: boolean | undefined) => {
+            const next = { ...value };
+            if (status === undefined) delete next[field];
+            else next[field] = status;
+            onChange(next);
+          };
+          return <RequirementServiceRow key={field} label={COMMERCIAL_SERVICE_LABELS[field][index]}
+            state={value[field] === undefined ? 'unset' : value[field] ? 'required' : 'excluded'}
+            onPress={() => set(value[field] === true ? undefined : true)}
+            onExclude={() => set(value[field] === false ? undefined : false)} testID={'commercial-service-' + field} />;
+        })}
+        {(['bathrooms', 'kitchen'] as const).map(field => <RequirementServiceRow key={field} label={COMMERCIAL_SERVICE_LABELS[field][index]}
+          state={(field === 'bathrooms' ? bathroomsEnabled : kitchenEnabled) ? 'required' : 'unset'}
+          onPress={() => onToggleFacility(field)} testID={'commercial-service-' + field} />)}
+      </RequirementServiceGroup>
       {(['bathrooms', 'kitchen'] as const).map(field => (field === 'bathrooms' ? bathroomsEnabled : kitchenEnabled) && <View key={field} ref={view => register?.(`commercial-${field}`, view)} collapsable={false} style={{ gap: 8 }} testID={`commercial-service-${field}-options`}>
         <Text style={textStyle}>{COMMERCIAL_SERVICE_LABELS[field][index]} — {ar ? 'اختر خاص أو مشترك' : 'Choose private or shared'}<Text style={{ color: colors.destructive }}> *</Text></Text>
         <ChoiceGrid>{(['private', 'shared'] as const).map(kind => <ChoiceTile key={kind} icon={kind === 'private' ? 'lock' : 'users'} label={kind === 'private' ? (ar ? 'خاص' : 'Private') : (ar ? 'مشترك' : 'Shared')} selected={value[field] === kind} onPress={() => onChange({ ...value, [field]: kind })} testID={`commercial-${field}-${kind}`} role="radio" />)}</ChoiceGrid>

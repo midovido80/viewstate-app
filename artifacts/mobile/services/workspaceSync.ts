@@ -1,3 +1,7 @@
+import {
+  WorkspaceValidationError,
+  type WorkspaceValidationIssue,
+} from "./workspaceValidation";
 /** Deterministic three-way merge. Local data itself is the durable pending queue. */
 export type SyncRecords = Record<string, unknown>;
 export interface CloudWorkspace {
@@ -9,6 +13,7 @@ export interface SyncConflict {
   base: unknown;
   local: unknown;
   remote: unknown;
+  validationIssues?: WorkspaceValidationIssue[];
 }
 export function stableSync(value: unknown): string {
   if (value === undefined) return "undefined";
@@ -30,6 +35,35 @@ export function stableSync(value: unknown): string {
     );
   return JSON.stringify(value);
 }
+
+function mergeRecordValue(
+  base: unknown,
+  local: unknown,
+  remote: unknown,
+): { value: unknown; conflict: boolean } {
+  if (stableSync(local) === stableSync(remote))
+    return { value: local, conflict: false };
+  if (stableSync(local) === stableSync(base))
+    return { value: remote, conflict: false };
+  if (stableSync(remote) === stableSync(base))
+    return { value: local, conflict: false };
+  const object = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  // Arrays, concurrent creations and delete-versus-edit need an explicit decision.
+  if (!object(base) || !object(local) || !object(remote))
+    return { value: local, conflict: true };
+  const entries: [string, unknown][] = [];
+  for (const field of new Set([
+    ...Object.keys(base),
+    ...Object.keys(local),
+    ...Object.keys(remote),
+  ])) {
+    const next = mergeRecordValue(base[field], local[field], remote[field]);
+    if (next.conflict) return { value: local, conflict: true };
+    if (next.value !== undefined) entries.push([field, next.value]);
+  }
+  return { value: Object.fromEntries(entries), conflict: false };
+}
 export function mergeWorkspace(
   base: SyncRecords,
   local: SyncRecords,
@@ -37,25 +71,59 @@ export function mergeWorkspace(
 ) {
   // Permanent deletion is monotonic across devices, including a stale remote edit
   // or a first sync with no local base. Keep ID-only fences in the private workspace.
-  const deleted = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]
-    .filter(key => key.startsWith("property/") && [base, local, remote].some(records => {
-      const value = records[key] as {deleted?: unknown; version?: unknown} | undefined;
-      return value?.deleted === true && value.version === 1 && Object.keys(value).length === 2;
-    })).map(key => key.slice("property/".length)));
+  const deleted = new Set(
+    [...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]
+      .filter(
+        (key) =>
+          key.startsWith("property/") &&
+          [base, local, remote].some((records) => {
+            const value = records[key] as
+              { deleted?: unknown; version?: unknown } | undefined;
+            return (
+              value?.deleted === true &&
+              value.version === 1 &&
+              Object.keys(value).length === 2
+            );
+          }),
+      )
+      .map((key) => key.slice("property/".length)),
+  );
   const clean = (input: SyncRecords): SyncRecords => {
-    const next = {...input};
+    const next = { ...input };
     for (const id of deleted) {
-      delete next[`property/${id}`]; delete next[`source/${id}`]; delete next[`availability/${id}`];
-      next[`property/${id}`] = {version: 1, deleted: true};
+      delete next[`property/${id}`];
+      delete next[`source/${id}`];
+      delete next[`availability/${id}`];
+      next[`property/${id}`] = { version: 1, deleted: true };
     }
-    const removedTasks = new Set(Object.entries(input).filter(([key,value]) => key.startsWith("task/") && deleted.has((value as {propertyId?:string})?.propertyId ?? "")).map(([key]) => key.slice("task/".length)));
-    for (const [key,value] of Object.entries(next)) {
-      const record = value as {propertyId?: string; propertyCoreId?: string; taskId?: string} | null;
-      if ((key.startsWith("link/") && deleted.has(record?.propertyCoreId ?? "")) || (key.startsWith("task/") && deleted.has(record?.propertyId ?? "")) || (key.startsWith("contact/") && removedTasks.has(record?.taskId ?? ""))) delete next[key];
+    const removedTasks = new Set(
+      Object.entries(input)
+        .filter(
+          ([key, value]) =>
+            key.startsWith("task/") &&
+            deleted.has((value as { propertyId?: string })?.propertyId ?? ""),
+        )
+        .map(([key]) => key.slice("task/".length)),
+    );
+    for (const [key, value] of Object.entries(next)) {
+      const record = value as {
+        propertyId?: string;
+        propertyCoreId?: string;
+        taskId?: string;
+      } | null;
+      if (
+        (key.startsWith("link/") &&
+          deleted.has(record?.propertyCoreId ?? "")) ||
+        (key.startsWith("task/") && deleted.has(record?.propertyId ?? "")) ||
+        (key.startsWith("contact/") && removedTasks.has(record?.taskId ?? ""))
+      )
+        delete next[key];
     }
     return next;
   };
-  base = clean(base); local = clean(local); remote = clean(remote);
+  base = clean(base);
+  local = clean(local);
+  remote = clean(remote);
   const records: SyncRecords = {},
     conflicts: SyncConflict[] = [];
   for (const key of new Set([
@@ -66,13 +134,10 @@ export function mergeWorkspace(
     const b = base[key],
       l = local[key],
       r = remote[key];
-    let chosen: unknown;
-    if (stableSync(l) === stableSync(r)) chosen = l;
-    else if (stableSync(l) === stableSync(b)) chosen = r;
-    else if (stableSync(r) === stableSync(b)) chosen = l;
-    else {
+    const result = mergeRecordValue(b, l, r);
+    const chosen = result.value;
+    if (result.conflict) {
       conflicts.push({ key, base: b, local: l, remote: r });
-      chosen = l;
     }
     if (chosen !== undefined) records[key] = chosen;
   }
@@ -89,7 +154,14 @@ export interface SyncState {
   conflicts: SyncConflict[];
   resolutions: Record<
     string,
-    { remote: unknown; local: unknown; choice: "local" | "remote" }
+    { remote: unknown; local: unknown } & (
+      | { choice: "local" | "remote" }
+      | {
+          choice: "repair_missing_person";
+          replacement: unknown;
+          missingPersonId: string;
+        }
+    )
   >;
   lastSuccess?: string;
 }
@@ -105,6 +177,45 @@ export interface SyncCloud {
     expectedRevision: number,
     records: SyncRecords,
   ): Promise<{ accepted: boolean; workspace: CloudWorkspace }>;
+}
+function prepareMerge(
+  state: SyncState,
+  snapshot: SyncRecords,
+  remote: CloudWorkspace,
+) {
+  const effective = { ...snapshot },
+    base = { ...state.base.records };
+  for (const [key, resolution] of Object.entries(state.resolutions)) {
+    if (resolution.choice === "repair_missing_person") continue;
+    if (
+      stableSync(snapshot[key]) === stableSync(resolution.local) &&
+      stableSync(remote.records[key]) === stableSync(resolution.remote)
+    ) {
+      base[key] = remote.records[key];
+      if (resolution.choice === "remote") {
+        if (remote.records[key] === undefined) delete effective[key];
+        else effective[key] = remote.records[key];
+      }
+    }
+  }
+  const unassignedCheck = mergeWorkspace(base, effective, remote.records);
+  for (const [key, resolution] of Object.entries(state.resolutions)) {
+    if (resolution.choice !== "repair_missing_person") continue;
+    // Retry a cloud-acknowledged repair after an interrupted local apply as the same operation.
+    const remoteMatches =
+      stableSync(remote.records[key]) === stableSync(resolution.remote) ||
+      stableSync(remote.records[key]) === stableSync(resolution.replacement);
+    if (
+      stableSync(snapshot[key]) !== stableSync(resolution.local) ||
+      !remoteMatches ||
+      unassignedCheck.records[`person/${resolution.missingPersonId}`] !==
+        undefined
+    )
+      continue;
+    base[key] = remote.records[key];
+    effective[key] = resolution.replacement;
+  }
+  return { ...mergeWorkspace(base, effective, remote.records), base };
 }
 export function createWorkspaceSync(
   storage: SyncStorage,
@@ -149,21 +260,8 @@ export function createWorkspaceSync(
       assertActive();
       const remote = await cloud.read();
       assertActive();
-      const effective = { ...snapshot },
-        base = { ...state.base.records };
-      for (const [key, resolution] of Object.entries(state.resolutions)) {
-        if (
-          stableSync(snapshot[key]) === stableSync(resolution.local) &&
-          stableSync(remote.records[key]) === stableSync(resolution.remote)
-        ) {
-          base[key] = remote.records[key];
-          if (resolution.choice === "remote") {
-            if (remote.records[key] === undefined) delete effective[key];
-            else effective[key] = remote.records[key];
-          }
-        }
-      }
-      const merged = mergeWorkspace(base, effective, remote.records);
+      const merged = prepareMerge(state, snapshot, remote),
+        base = merged.base;
       if (merged.conflicts.length) {
         state = { ...state, conflicts: merged.conflicts };
         await save(state);
@@ -173,27 +271,40 @@ export function createWorkspaceSync(
         await local.validate?.(merged.records);
       } catch (error) {
         if (
-          /SYNC_(INVALID_(REQUIREMENT|SOURCE|LINK)|CONTACT_CONFLICT)/.test(
+          /SYNC_(INVALID_(REQUIREMENT|PROPERTY|SOURCE|LINK|WORKSPACE|DELETION)|CONTACT_CONFLICT)/.test(
             (error as Error).message,
           )
         ) {
           state = {
             ...state,
-            conflicts: [
-              ...new Set([
-                ...Object.keys(snapshot),
-                ...Object.keys(remote.records),
-              ]),
-            ]
-              .filter(
-                (key) =>
-                  stableSync(snapshot[key]) !== stableSync(remote.records[key]),
+            conflicts: (error instanceof WorkspaceValidationError
+              ? [...new Set(error.issues.flatMap((issue) => issue.keys))]
+              : [
+                  ...new Set([
+                    ...Object.keys(snapshot),
+                    ...Object.keys(remote.records),
+                  ]),
+                ]
+            )
+              .filter((key) =>
+                error instanceof WorkspaceValidationError
+                  ? snapshot[key] !== undefined ||
+                    remote.records[key] !== undefined
+                  : stableSync(snapshot[key]) !==
+                    stableSync(remote.records[key]),
               )
               .map((key) => ({
                 key,
                 base: base[key],
                 local: snapshot[key],
                 remote: remote.records[key],
+                ...(error instanceof WorkspaceValidationError
+                  ? {
+                      validationIssues: error.issues.filter((issue) =>
+                        issue.keys.includes(key),
+                      ),
+                    }
+                  : {}),
               })),
           };
           if (state.conflicts.length) {
@@ -234,6 +345,47 @@ export function createWorkspaceSync(
           running = undefined;
         });
       return running;
+    },
+    async repairMissingRequirementPerson(key: string) {
+      if (running) await running;
+      const state = await readState();
+      const conflict = state.conflicts.find((item) => item.key === key);
+      if (
+        !key.startsWith("requirement/") ||
+        !conflict?.validationIssues?.some(
+          (issue) => issue.code === "missing_requirement_person",
+        )
+      )
+        throw new Error("SYNC_CONFLICT_CHANGED");
+      const snapshot = await local.read();
+      assertActive();
+      const remote = await cloud.read();
+      assertActive();
+      if (
+        stableSync(snapshot[key]) !== stableSync(conflict.local) ||
+        stableSync(remote.records[key]) !== stableSync(conflict.remote)
+      )
+        throw new Error("SYNC_CONFLICT_CHANGED");
+      const merged = prepareMerge(state, snapshot, remote);
+      const request = merged.records[key] as
+        Record<string, unknown> | undefined;
+      if (
+        merged.conflicts.length ||
+        !request ||
+        typeof request.seekerId !== "string" ||
+        merged.records[`person/${request.seekerId}`] !== undefined
+      )
+        throw new Error("SYNC_CONFLICT_CHANGED");
+      const replacement = { ...request };
+      delete replacement.seekerId;
+      state.resolutions[key] = {
+        local: snapshot[key],
+        remote: remote.records[key],
+        choice: "repair_missing_person",
+        replacement,
+        missingPersonId: request.seekerId,
+      };
+      await save(state);
     },
     async resolve(key: string, choice: "local" | "remote") {
       if (running) await running;

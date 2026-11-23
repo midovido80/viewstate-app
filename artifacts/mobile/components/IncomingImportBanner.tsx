@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Feather } from "@expo/vector-icons";
 import { AppState, Pressable, Text, View } from "react-native";
 import * as FileSystem from "expo-file-system";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
+import { isRequirementEditorPath, isCircleWorkspacePath } from "@/services/screenInsets";
+import { isNotificationScreen } from "@/services/notificationFeed";
 import { useUserData } from "@/contexts/UserDataContext";
 import { useI18n } from "@/contexts/I18nContext";
 import {
@@ -17,6 +20,7 @@ export function IncomingImportBanner() {
   const { storage, media } = useUserData(),
     router = useRouter(),
     { language, fonts } = useI18n();
+  const pathname = usePathname();
   const inbox = useMemo(() => createImportInbox(storage), [storage]);
   const [count, setCount] = useState(0),
     [error, setError] = useState(false);
@@ -51,6 +55,7 @@ export function IncomingImportBanner() {
         for (const raw of deliveries) {
           if (!active.current) return;
           const delivery = parseNativeDelivery(JSON.parse(raw));
+          if(await inbox.isCancelled(delivery.id)){await incomingImportNative.acknowledge(delivery.id);continue;}
           const existing = (await inbox.read()).find(
             (e) => e.id === delivery.id,
           );
@@ -139,11 +144,12 @@ export function IncomingImportBanner() {
       app.remove();
     };
   }, [inbox, read, receive]);
-  if (!count && !error) return null;
+  if (isNotificationScreen(pathname) || isRequirementEditorPath(pathname) || isCircleWorkspacePath(pathname) || pathname === '/intake' || pathname.startsWith('/intake-review/') || (!count && !error)) return null;
   return (
-    <View style={{ backgroundColor: n.soft, padding: 10, gap: 8 }}>
+    <View style={{ backgroundColor: n.soft, paddingHorizontal: 14, gap: 4 }}>
       <Pressable
         accessibilityRole="button"
+        testID="incoming-import-review"
         onPress={() =>
           error
             ? void read()
@@ -152,13 +158,15 @@ export function IncomingImportBanner() {
                 .catch(() => setError(true))
             : router.push("/intake" as never)
         }
-        style={{ minHeight: 44, justifyContent: "center" }}
+        style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8, direction: language === "ar" ? "rtl" : "ltr" }}
       >
+        <Feather name={error ? "alert-circle" : "inbox"} size={18} color={n.navy} />
         <Text
           style={{
             color: n.navy,
             textAlign: language === "ar" ? "right" : "left",
             fontFamily: fonts.medium,
+            flex: 1,
           }}
         >
           {error
@@ -166,9 +174,10 @@ export function IncomingImportBanner() {
               ? "تعذر استقبال المشاركة — اضغط لإعادة المحاولة"
               : "Could not receive share — tap to retry"
             : language === "ar"
-              ? `${count} عناصر استيراد بانتظار المراجعة`
+              ? `راجع الوارد (${count})`
               : `${count} imports to review`}
         </Text>
+        <Feather name={language === "ar" ? "chevron-left" : "chevron-right"} size={16} color={n.navy} />
       </Pressable>
       {error && canDismiss && incomingImportNative ? (
         <Pressable

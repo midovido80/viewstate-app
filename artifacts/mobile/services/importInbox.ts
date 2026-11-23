@@ -1,6 +1,7 @@
 import { SerialTaskQueue } from "./serialTaskQueue";
 import { sameImportText, type ImportFacts } from "./messageImport";
 import type { LocalAttachment } from "./attachmentOperations";
+import { IMPORT_INBOX_KEY } from "./importCancellationState";
 
 export interface ImportEntry {
   id: string;
@@ -45,7 +46,7 @@ export function importTarget(entry: Pick<ImportEntry, "targetPath">): {
     throw Error("IMPORT_TARGET_INVALID");
   return { pathname: value.pathname, params: value.params };
 }
-const KEY = "@viewstate/import-inbox/v1";
+const KEY = IMPORT_INBOX_KEY;
 const queues = new WeakMap<object, SerialTaskQueue>();
 const listeners = new WeakMap<object, Set<() => void>>();
 function validEntry(v: any): v is ImportEntry {
@@ -85,24 +86,40 @@ function validEntry(v: any): v is ImportEntry {
 export function createImportInbox(storage: ImportStorage) {
   if (!queues.has(storage)) queues.set(storage, new SerialTaskQueue());
   if (!listeners.has(storage)) listeners.set(storage, new Set());
-  const read = async (): Promise<ImportEntry[]> => {
+  const readEnvelope = async (): Promise<{
+    entries: ImportEntry[];
+    cancelledIds: string[];
+  }> => {
     const raw = await storage.getItem(KEY);
-    if (!raw) return [];
+    if (!raw) return { entries: [], cancelledIds: [] };
     const parsed = JSON.parse(raw);
     if (
       parsed?.version !== 1 ||
       !Array.isArray(parsed.entries) ||
-      !parsed.entries.every(validEntry)
+      !parsed.entries.every(validEntry) ||
+      (parsed.cancelledIds !== undefined &&
+        (!Array.isArray(parsed.cancelledIds) ||
+          parsed.cancelledIds.some((id: unknown) => typeof id !== "string")))
     )
       throw Error("IMPORT_INBOX_UNREADABLE");
-    return parsed.entries;
+    return { entries: parsed.entries, cancelledIds: parsed.cancelledIds ?? [] };
   };
-  const change = async (work: (entries: ImportEntry[]) => ImportEntry[]) => {
+  const read = async () => (await readEnvelope()).entries;
+  const change = async (
+    work: (entries: ImportEntry[], cancelledIds: string[]) => ImportEntry[],
+  ) => {
     let result: ImportEntry[] = [];
     const commit = async () => {
-      result = work(await read());
+      const envelope = await readEnvelope();
+      result = work(envelope.entries, envelope.cancelledIds);
       if (!result.every(validEntry)) throw Error("IMPORT_ENTRY_INVALID");
-      const raw = JSON.stringify({ version: 1, entries: result });
+      const raw = JSON.stringify({
+        version: 1,
+        entries: result,
+        ...(envelope.cancelledIds.length
+          ? { cancelledIds: envelope.cancelledIds }
+          : {}),
+      });
       await storage.setItem(KEY, raw);
       if ((await storage.getItem(KEY)) !== raw)
         throw Error("IMPORT_WRITE_UNCONFIRMED");
@@ -117,6 +134,8 @@ export function createImportInbox(storage: ImportStorage) {
   };
   return {
     read,
+    isCancelled: async (id: string) =>
+      (await readEnvelope()).cancelledIds.includes(id),
     subscribe(fn: () => void) {
       listeners.get(storage)!.add(fn);
       return () => {
@@ -124,11 +143,14 @@ export function createImportInbox(storage: ImportStorage) {
       };
     },
     add: (entry: ImportEntry) =>
-      change((entries) =>
-        entries.some((e) => e.id === entry.id) ? entries : [...entries, entry],
+      change((entries, cancelled) =>
+        cancelled.includes(entry.id) || entries.some((e) => e.id === entry.id)
+          ? entries
+          : [...entries, entry],
       ),
     update: (entry: ImportEntry) =>
-      change((entries) => {
+      change((entries, cancelled) => {
+        if (cancelled.includes(entry.id)) throw Error("IMPORT_CANCELLED");
         const previous = entries.find((e) => e.id === entry.id);
         if (!previous) throw Error("IMPORT_ENTRY_MISSING");
         if (
@@ -140,6 +162,11 @@ export function createImportInbox(storage: ImportStorage) {
       }),
     remove: (id: string) =>
       change((entries) => entries.filter((e) => e.id !== id)),
+    cancel: (id: string) =>
+      change((entries, cancelled) => {
+        if (!cancelled.includes(id)) cancelled.push(id);
+        return entries.filter((entry) => entry.id !== id);
+      }),
     duplicates: async (entry: ImportEntry) =>
       (await read()).filter(
         (e) => e.id !== entry.id && sameImportText(e.text, entry.text),

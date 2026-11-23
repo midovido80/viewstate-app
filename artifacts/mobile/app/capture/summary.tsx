@@ -1,25 +1,33 @@
-import { useUserData } from '@/contexts/UserDataContext';
-import { PropertyReview, PropertyReviewFooter } from '@/components/PropertyReview';
-import { getFloorTypeLabel } from '@/services/propertySectorSelection';
-import { useRef, useState } from 'react';
-import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useScreenInsets } from '@/hooks/useScreenInsets';
-import { useCapture } from '@/contexts/CaptureContext';
-import { useI18n, Translations } from '@/contexts/I18nContext';
-import { useColors } from '@/hooks/useColors';
-import { CaptureHeader } from '@/components/CaptureHeader';
-import { Button } from '@/components/Button';
-import { getAreaById } from '@/constants/kuwait-areas';
-import { formatPrice, formatRentalPrice, formatRentalCadence } from '@/constants/market';
-import { SingleFlight } from '@/services/serialTaskQueue';
+import { withActiveImport } from '@/services/importLifecycle';
+import { useUserData } from "@/contexts/UserDataContext";
+import {
+  PropertyReview,
+  PropertyReviewFooter,
+} from "@/components/PropertyReview";
+import { getFloorTypeLabel } from "@/services/propertySectorSelection";
+import { useRef, useState } from "react";
+import { View, StyleSheet, Text, ScrollView, Alert } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useScreenInsets } from "@/hooks/useScreenInsets";
+import { useCapture } from "@/contexts/CaptureContext";
+import { useI18n, Translations } from "@/contexts/I18nContext";
+import { useColors } from "@/hooks/useColors";
+import { CaptureHeader } from "@/components/CaptureHeader";
+import { Button } from "@/components/Button";
+import { getAreaById } from "@/constants/kuwait-areas";
+import {
+  formatPrice,
+  formatRentalPrice,
+  formatRentalCadence,
+} from "@/constants/market";
+import { SingleFlight } from "@/services/serialTaskQueue";
 
-import { ModernPropertyForm } from '@/components/ModernPropertyForm';
+import { ModernPropertyForm } from "@/components/ModernPropertyForm";
 import {
   applyFloorTransition,
   createFloorTransitionProposal,
   type FloorTransitionProposal,
-} from '@/services/amenityTypeTransitions';
+} from "@/services/amenityTypeTransitions";
 import {
   buildPropertyWithCaptureDetails,
   captureDetailsScopeKey,
@@ -27,28 +35,45 @@ import {
   isBasicApartmentFollowUpCapture,
   shouldSaveBasicCapture,
   type CaptureDetailValues,
-} from '@/services/propertyCaptureDetails';
+} from "@/services/propertyCaptureDetails";
 import {
   finalizeCapturedDetails,
   loadPreparedCapturedDetails,
   prepareCapturedDetails,
-} from '@/services/propertyCaptureSave';
-import type { Property, PropertyDetailField } from '@workspace/property-domain';
-import { ensureStudioPropertySourceLink, getStudioPersonSourceRole } from '@/services/studioSave';
-import { formatPropertyDetailValue, propertyDetailLabels } from '@/services/propertyDetailPresentation';
-import { PROPERTY_FORM_CATALOG } from '@/services/propertyFormCatalog';
-import { projectRecordIntent } from '@/services/recordIntentPresentation';
-import { getPropertyCardSummary } from '@/services/cardSummaryPresentation';
+} from "@/services/propertyCaptureSave";
+import type { Property, PropertyDetailField } from "@workspace/property-domain";
+import {
+  ensureStudioPropertySourceLink,
+  getStudioPersonSourceRole,
+} from "@/services/studioSave";
+import {
+  formatPropertyDetailValue,
+  propertyDetailLabels,
+} from "@/services/propertyDetailPresentation";
+import { PROPERTY_FORM_CATALOG } from "@/services/propertyFormCatalog";
+import { projectRecordIntent } from "@/services/recordIntentPresentation";
+import { getPropertyCardSummary } from "@/services/cardSummaryPresentation";
 
 export default function SummaryScreen() {
-  const { store, recovery: { finalizeCapturedDetails, loadPreparedCapturedDetails, prepareCapturedDetails } } = useUserData();
+  const {
+    store,
+    storage,
+    recovery: {
+      finalizeCapturedDetails,
+      loadPreparedCapturedDetails,
+      prepareCapturedDetails,
+    },
+  } = useUserData();
   const router = useRouter();
-  const { linkPersonId, sourceRole, apartmentSubtype } = useLocalSearchParams<{
+  const { linkPersonId, sourceRole, apartmentSubtype, importId } = useLocalSearchParams<{
+    importId?: string;
     linkPersonId?: string;
     sourceRole?: string;
     apartmentSubtype?: string;
   }>();
-  const selectedSourceRole = Array.isArray(sourceRole) ? sourceRole[0] : sourceRole;
+  const selectedSourceRole = Array.isArray(sourceRole)
+    ? sourceRole[0]
+    : sourceRole;
   const colors = useColors();
   const insets = useScreenInsets();
   const {
@@ -64,7 +89,9 @@ export default function SummaryScreen() {
   } = useCapture();
   const { t, isRTL, language, fonts } = useI18n();
   const [submitting, setSubmitting] = useState(false);
-  const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<Set<PropertyDetailField>>(new Set());
+  const [invalidQuickPickFields, setInvalidQuickPickFields] = useState<
+    Set<PropertyDetailField>
+  >(new Set());
   // Studio has its own save workflow. The apartment subtype wizard routes
   // standard apartments through this Summary screen.
   const isBasicApartmentFollowUp = isBasicApartmentFollowUpCapture(
@@ -78,11 +105,12 @@ export default function SummaryScreen() {
   detailsRef.current = captureDetails;
 
   const handleDetailChange = (field: PropertyDetailField, value: string) => {
-    if (field !== 'floorUse') {
+    if (field !== "floorUse") {
       updateCaptureDetails({ [field]: value });
       return;
     }
-    const from = detailsRef.current.floorUse as 'residential' | 'commercial' | undefined;
+    const from = detailsRef.current.floorUse as
+      "residential" | "commercial" | undefined;
     if (!from || from === value) {
       updateCaptureDetails({ floorUse: value });
       return;
@@ -90,31 +118,43 @@ export default function SummaryScreen() {
     const proposal = createFloorTransitionProposal(
       captureDetailsScopeKey(draft.propertyCoreId),
       detailsRef.current,
-      value as 'residential' | 'commercial',
+      value as "residential" | "commercial",
     );
     if (!proposal || proposal.affected.length === 0) {
       updateCaptureDetails({ floorUse: value });
       return;
     }
     pendingFloorTransition.current = proposal;
-    const affectedDetails = proposal.affected.map(item => {
-      const rawValue = item.value === 'true'
-        ? true
-        : item.value === 'false'
-          ? false
-          : item.value;
-      return `${propertyDetailLabels[item.field][language === 'ar' ? 1 : 0]}: ${
-         formatPropertyDetailValue(item.field, rawValue, language, key => t(key as keyof Translations))
-      }`;
-    }).join('\n');
+    const affectedDetails = proposal.affected
+      .map((item) => {
+        const rawValue =
+          item.value === "true"
+            ? true
+            : item.value === "false"
+              ? false
+              : item.value;
+        return `${propertyDetailLabels[item.field][language === "ar" ? 1 : 0]}: ${formatPropertyDetailValue(
+          item.field,
+          rawValue,
+          language,
+          (key) => t(key as keyof Translations),
+        )}`;
+      })
+      .join("\n");
     Alert.alert(
-      t('transition.floor.title'),
-      `${t('transition.floor.message')}\n\n${affectedDetails}\n\n${t('transition.draft_only')}`,
+      t("transition.floor.title"),
+      `${t("transition.floor.message")}\n\n${affectedDetails}\n\n${t("transition.draft_only")}`,
       [
-        { text: t('capture.cancel'), style: 'cancel', onPress: () => { pendingFloorTransition.current = null; } },
         {
-          text: t('transition.remove_confirm'),
-          style: 'destructive',
+          text: t("capture.cancel"),
+          style: "cancel",
+          onPress: () => {
+            pendingFloorTransition.current = null;
+          },
+        },
+        {
+          text: t("transition.remove_confirm"),
+          style: "destructive",
           onPress: () => {
             if (pendingFloorTransition.current !== proposal) return;
             const next = applyFloorTransition(
@@ -127,34 +167,47 @@ export default function SummaryScreen() {
           },
         },
       ],
-      { cancelable: true, onDismiss: () => { pendingFloorTransition.current = null; } },
+      {
+        cancelable: true,
+        onDismiss: () => {
+          pendingFloorTransition.current = null;
+        },
+      },
     );
   };
-  
+
   const handleFinish = async (includeCapturedDetails = false) => {
     await submitFlight.current.run(async () => {
       setSubmitting(true);
       try {
         if (draftLoadFailed) {
-          Alert.alert(t('errors.draft_read_title'), t('errors.draft_read'));
+          Alert.alert(t("errors.draft_read_title"), t("errors.draft_read"));
           return;
         }
 
         if (
-          isBasicApartmentFollowUp
-          && !includeCapturedDetails
-          && hasCaptureEnrichmentValues(captureDetails, draft.description?.value)
+          isBasicApartmentFollowUp &&
+          !includeCapturedDetails &&
+          hasCaptureEnrichmentValues(captureDetails, draft.description?.value)
         ) {
           Alert.alert(
-            language === 'ar' ? 'توجد تفاصيل محفوظة في المسودة' : 'This draft has saved details',
-            language === 'ar'
-              ? 'تحتوي هذه المسودة على مواصفات أو موقع دقيق أو مرفقات. تم إيقاف الحفظ الأساسي لحمايتها. احفظ التفاصيل مع العقار الآن أو ألغِ للاحتفاظ بالمسودة.'
-              : 'This draft contains specifications, precise location, or attachments. BASIC save is paused to protect them. Save the details with the property now, or cancel to keep the draft.',
+            language === "ar"
+              ? "توجد تفاصيل محفوظة في المسودة"
+              : "This draft has saved details",
+            language === "ar"
+              ? "تحتوي هذه المسودة على مواصفات أو موقع دقيق أو مرفقات. تم إيقاف الحفظ الأساسي لحمايتها. احفظ التفاصيل مع العقار الآن أو ألغِ للاحتفاظ بالمسودة."
+              : "This draft contains specifications, precise location, or attachments. BASIC save is paused to protect them. Save the details with the property now, or cancel to keep the draft.",
             [
-              { text: language === 'ar' ? 'الاحتفاظ بالمسودة' : 'Keep draft', style: 'cancel' },
               {
-                text: language === 'ar' ? 'حفظ التفاصيل الآن' : 'Save details now',
-                onPress: () => { void handleFinish(true); },
+                text: language === "ar" ? "الاحتفاظ بالمسودة" : "Keep draft",
+                style: "cancel",
+              },
+              {
+                text:
+                  language === "ar" ? "حفظ التفاصيل الآن" : "Save details now",
+                onPress: () => {
+                  void handleFinish(true);
+                },
               },
             ],
           );
@@ -167,154 +220,237 @@ export default function SummaryScreen() {
           isBasicApartmentFollowUp,
           includeCapturedDetails,
         );
-        const hasPendingRecovery = saveRecoveryStatus === 'retry_required'
-          || saveRecoveryStatus === 'cleanup_pending';
+        const hasPendingRecovery =
+          saveRecoveryStatus === "retry_required" ||
+          saveRecoveryStatus === "cleanup_pending";
         const projection = hasPendingRecovery ? null : projectToProperty();
         if (projection && !projection.ok) {
-          const hasInvalidPrice = projection.issues.some(issue => issue.code === 'invalid_price');
+          const hasInvalidPrice = projection.issues.some(
+            (issue) => issue.code === "invalid_price",
+          );
           Alert.alert(
-            t('errors.validation_title'),
-            t(hasInvalidPrice ? 'errors.invalid_price' : 'errors.capture_incomplete'),
+            t("errors.validation_title"),
+            t(
+              hasInvalidPrice
+                ? "errors.invalid_price"
+                : "errors.capture_incomplete",
+            ),
           );
           return;
         }
         if (!saveBasicOnly && invalidQuickPickFields.size > 0) {
-          Alert.alert(t('errors.validation_title'), t('errors.capture_incomplete'));
+          Alert.alert(
+            t("errors.validation_title"),
+            t("errors.capture_incomplete"),
+          );
           return;
         }
         let candidate: Property | undefined;
         try {
-          candidate = (!saveBasicOnly || !isBasicApartmentFollowUp) && projection && projection.ok
-            ? buildPropertyWithCaptureDetails(projection.property, captureDetails, true)
-            : undefined;
+          candidate =
+            (!saveBasicOnly || !isBasicApartmentFollowUp) &&
+            projection &&
+            projection.ok
+              ? buildPropertyWithCaptureDetails(
+                  projection.property,
+                  captureDetails,
+                  true,
+                )
+              : undefined;
         } catch (error) {
-          const message = error instanceof Error && error.message === 'FLOOR_USE_REQUIRED'
-            ? (language === 'ar'
-              ? 'اختر الاستخدام السكني أو التجاري للدور قبل حفظ تفاصيله.'
-              : 'Choose Residential or Commercial Floor use before saving Floor details.')
-            : error instanceof Error && error.message === 'FLOOR_CAPTURE_DETAIL_INCOMPATIBLE'
-              ? (language === 'ar'
-                ? 'بعض تفاصيل الدور لا تتوافق مع الاستخدام المحدد. صحح التفاصيل ثم أعد المحاولة.'
-                : 'Some Floor details do not match the selected use. Correct them before saving.')
-              : t('errors.capture_incomplete');
-          Alert.alert(t('errors.validation_title'), message);
+          const message =
+            error instanceof Error && error.message === "FLOOR_USE_REQUIRED"
+              ? language === "ar"
+                ? "اختر الاستخدام السكني أو التجاري للدور قبل حفظ تفاصيله."
+                : "Choose Residential or Commercial Floor use before saving Floor details."
+              : error instanceof Error &&
+                  error.message === "FLOOR_CAPTURE_DETAIL_INCOMPATIBLE"
+                ? language === "ar"
+                  ? "بعض تفاصيل الدور لا تتوافق مع الاستخدام المحدد. صحح التفاصيل ثم أعد المحاولة."
+                  : "Some Floor details do not match the selected use. Correct them before saving."
+                : t("errors.capture_incomplete");
+          Alert.alert(t("errors.validation_title"), message);
           return;
         }
 
         // Resolve the exact role before saving: Person-origin Offered capture
         // must not create an unowned Property if its source context is stale.
-        let resolvedSourceRole: ReturnType<typeof getStudioPersonSourceRole> = null;
+        let resolvedSourceRole: ReturnType<typeof getStudioPersonSourceRole> =
+          null;
         if (linkPersonId) {
           try {
             const linkedPerson = await store.getPerson(linkPersonId);
             if (!linkedPerson) {
-              Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
+              Alert.alert(
+                t("errors.storage_title"),
+                t("people.link_failed_message"),
+              );
               return;
             }
-            resolvedSourceRole = getStudioPersonSourceRole(linkedPerson, selectedSourceRole);
+            resolvedSourceRole = getStudioPersonSourceRole(
+              linkedPerson,
+              selectedSourceRole,
+            );
           } catch {
-            Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
+            Alert.alert(
+              t("errors.storage_title"),
+              t("people.link_failed_message"),
+            );
             return;
           }
           if (!resolvedSourceRole) {
-            Alert.alert(t('errors.storage_title'), t('people.link_failed_message'));
+            Alert.alert(
+              t("errors.storage_title"),
+              t("people.link_failed_message"),
+            );
             return;
           }
         }
 
-        const recoveryPropertyCoreId = draft.propertyCoreId;
         let preparedDetails = null;
         if (candidate && projection?.ok) {
           try {
-            preparedDetails = await prepareCapturedDetails(projection.property, candidate);
+            preparedDetails = await prepareCapturedDetails(
+              projection.property,
+              candidate,
+            );
           } catch (error) {
-            console.error('Captured detail preparation failed:', error);
-            Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
+            console.error("Captured detail preparation failed:", error);
+            Alert.alert(t("errors.storage_title"), t("errors.storage_save"));
             return;
           }
         }
 
         const result = await savePropertyWithRecovery(
           projection && projection.ok ? projection.property : undefined,
+          linkPersonId && resolvedSourceRole
+            ? { personId: linkPersonId, role: resolvedSourceRole }
+            : undefined,
         );
 
-        if (result.status === 'save_failed') {
-          console.error('Property save failed:', result.error);
-          Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
+        if (result.status === "save_failed") {
+          console.error("Property save failed:", result.error);
+          Alert.alert(t("errors.storage_title"), t("errors.storage_save"));
           return;
         }
 
-        if (result.status === 'cleanup_failed') {
-          console.error('Post-save draft cleanup failed:', result.error);
-          Alert.alert(t('errors.cleanup_title'), t('errors.cleanup_after_save'));
+        if (result.status === "cleanup_failed") {
+          console.error("Post-save draft cleanup failed:", result.error);
+          Alert.alert(
+            t("errors.cleanup_title"),
+            t("errors.cleanup_after_save"),
+          );
           return;
         }
 
-        if (result.status === 'retry_required') {
-          Alert.alert(t('errors.recovery_retry_title'), t('errors.recovery_retry'));
+        if (result.status === "retry_required") {
+          Alert.alert(
+            t("errors.recovery_retry_title"),
+            t("errors.recovery_retry"),
+          );
           return;
         }
 
-        if (result.status === 'conflict' || result.status === 'unresolved_draft') {
-          Alert.alert(t('errors.recovery_conflict_title'), t('errors.recovery_conflict'));
+        if (
+          result.status === "conflict" ||
+          result.status === "unresolved_draft"
+        ) {
+          Alert.alert(
+            t("errors.recovery_conflict_title"),
+            t("errors.recovery_conflict"),
+          );
           return;
         }
 
-        if (result.status === 'complete') {
+        if (result.status === "complete") {
+          const recoveryPropertyCoreId = result.propertyCoreId;
           try {
-            const evidence = preparedDetails
-              ?? (recoveryPropertyCoreId
+            const evidence =
+              preparedDetails ??
+              (recoveryPropertyCoreId
                 ? await loadPreparedCapturedDetails(recoveryPropertyCoreId)
                 : null);
             if (evidence) {
               await finalizeCapturedDetails(store, evidence);
             }
-            const detailsCleared = await clearCaptureDetails(recoveryPropertyCoreId);
+            const detailsCleared = await clearCaptureDetails(
+              recoveryPropertyCoreId,
+            );
             if (!detailsCleared && Object.keys(captureDetails).length > 0) {
-              throw new Error('CAPTURE_DETAILS_CLEANUP_FAILED');
+              throw new Error("CAPTURE_DETAILS_CLEANUP_FAILED");
             }
           } catch (error) {
-            console.error('Captured detail save failed:', error);
-            Alert.alert(t('errors.storage_title'), t('errors.storage_save'));
-            router.replace(`/property/${encodeURIComponent(recoveryPropertyCoreId ?? '')}/enrich` as never);
+            console.error("Captured detail save failed:", error);
+            Alert.alert(t("errors.storage_title"), t("errors.storage_save"));
+            router.replace(
+              `/property/${encodeURIComponent(recoveryPropertyCoreId ?? "")}/enrich` as never,
+            );
             return;
           }
         }
 
-        const savedId = projection && projection.ok ? projection.property.core.id : draft.propertyCoreId;
-        if (linkPersonId && savedId) {
-          try {
-            if (!resolvedSourceRole) throw new Error('SOURCE_ROLE_MISMATCH');
-            await ensureStudioPropertySourceLink(savedId, linkPersonId, resolvedSourceRole, store);
-          } catch {
-            Alert.alert(t('people.link_failed'), t('people.link_failed_message'));
-            return;
-          }
-        }
+        const savedId = result.propertyCoreId;
         router.replace({
-          pathname: '/capture/success',
-          params: savedId ? {
-            propertyCoreId: savedId,
-            ...(saveBasicOnly ? { basicCaptureFollowUp: '1' } : {}),
-            ...(linkPersonId ? { linkPersonId } : {}),
-            ...(selectedSourceRole ? { sourceRole: selectedSourceRole } : {}),
-          } : {},
+          pathname: "/capture/success",
+          params: savedId
+            ? {
+                propertyCoreId: savedId,
+                ...(saveBasicOnly ? { basicCaptureFollowUp: "1" } : {}),
+                ...(linkPersonId ? { linkPersonId } : {}),
+                ...(selectedSourceRole
+                  ? { sourceRole: selectedSourceRole }
+                  : {}),
+              }
+            : {},
         } as never);
       } finally {
         setSubmitting(false);
       }
     });
   };
+  const handleFinishWithImport = async (...args: Parameters<typeof handleFinish>) => { try { await withActiveImport(storage, importId, () => handleFinish(importId ? true : args[0])); } catch { Alert.alert(language === 'ar' ? 'هذا الاستيراد ملغي أو غير متاح. ارجع لصندوق الاستيراد.' : 'This import is cancelled or unavailable. Return to the import inbox.'); } };
 
   const area = draft.locationAreaId ? getAreaById(draft.locationAreaId) : null;
   const areaDisplay = area
-    ? (language === 'ar' ? area.ar : area.en)
-    : (draft.locationAreaId || '');
+    ? language === "ar"
+      ? area.ar
+      : area.en
+    : draft.locationAreaId || "";
 
-  const SummaryRow = ({ label, value }: { label: string, value: string }) => (
-    <View style={[styles.row, { borderBottomColor: colors.border, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-      <Text style={[styles.rowLabel, { color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text>
-      <Text style={[styles.rowValue, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'left' : 'right' }]}>{value}</Text>
+  const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+    <View
+      style={[
+        styles.row,
+        {
+          borderBottomColor: colors.border,
+          flexDirection: isRTL ? "row-reverse" : "row",
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.rowLabel,
+          {
+            color: colors.mutedForeground,
+            fontFamily: fonts.medium,
+            textAlign: isRTL ? "right" : "left",
+          },
+        ]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.rowValue,
+          {
+            color: colors.foreground,
+            fontFamily: fonts.semiBold,
+            textAlign: isRTL ? "left" : "right",
+          },
+        ]}
+      >
+        {value}
+      </Text>
     </View>
   );
   const previewProperty = (() => {
@@ -322,58 +458,139 @@ export default function SummaryScreen() {
     const preview = projectToProperty();
     if (!preview.ok) return null;
     try {
-      return buildPropertyWithCaptureDetails(preview.property, captureDetails, false);
+      return buildPropertyWithCaptureDetails(
+        preview.property,
+        captureDetails,
+        false,
+      );
     } catch {
       return null;
     }
   })();
-  const previewDetails = (previewProperty?.typeDetails ?? {}) as unknown as Record<string, unknown>;
+  const previewDetails = (previewProperty?.typeDetails ??
+    {}) as unknown as Record<string, unknown>;
   const previewSubtypeLabel = previewProperty
     ? getPropertyCardSummary(previewProperty, {
-      language,
-      translate: key => t(key as keyof Translations),
-      formatPrice: (amount, currencyCode) => formatPrice(amount, currencyCode, language),
-      formatRentalPrice: (amount, currencyCode, period) =>
-        formatRentalPrice(amount, currencyCode, period, language, key => t(key as keyof Translations)),
-    }).subtypeLabel
+        language,
+        translate: (key) => t(key as keyof Translations),
+        formatPrice: (amount, currencyCode) =>
+          formatPrice(amount, currencyCode, language),
+        formatRentalPrice: (amount, currencyCode, period) =>
+          formatRentalPrice(amount, currencyCode, period, language, (key) =>
+            t(key as keyof Translations),
+          ),
+      }).subtypeLabel
     : undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CaptureHeader title={language === 'ar' ? 'مراجعة العقار' : 'Property review'} step={4} totalSteps={4} review />
-      
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <PropertyReview
-          propertyLabel={previewSubtypeLabel ?? (draft.propertyType ? (draft.propertyType === 'floor' ? getFloorTypeLabel(captureDetails.floorUse, language, t('propertyType.floor')) : t(`propertyType.${draft.propertyType}` as keyof Translations)) : '')}
-          intent={projectRecordIntent('offered', draft.transaction, language).label}
-          area={areaDisplay}
-          price={draft.transaction === 'sale' && draft.salePrice ? formatPrice(draft.salePrice.amount, draft.salePrice.currencyCode, language) : draft.transaction === 'rent' && draft.rentalPrice ? formatPrice(draft.rentalPrice.amount, draft.rentalPrice.currencyCode, language) : undefined}
-          priceLabel={language === 'ar' ? (draft.transaction === 'sale' ? 'السعر' : 'الإيجار') : (draft.transaction === 'sale' ? 'Price' : 'Rent')}
-          cadence={draft.transaction === 'rent' ? formatRentalCadence(draft.rentalPeriodId, t) : undefined}
-        >
-          {!isBasicApartmentFollowUp && Object.keys(previewDetails).some(field => field !== 'propertyType' && previewDetails[field] !== undefined && previewDetails[field] !== '') ? PROPERTY_FORM_CATALOG.map(({ field }) => [field, previewDetails[field]] as const)
-            .filter(([, value]) => value !== undefined && value !== '')
-            .map(([field, value]) => (
-              <SummaryRow
-                key={field}
-                label={propertyDetailLabels[field as PropertyDetailField]?.[language === 'ar' ? 1 : 0] ?? field}
-                value={formatPropertyDetailValue(
-                  field as PropertyDetailField,
-                  typeof value === 'object' && value && 'value' in value
-                    ? String((value as { value: unknown }).value)
-                    : String(value),
-                  language,
-                  key => t(key as keyof Translations),
-                )}
-              />
-            )) : null}
-        </PropertyReview>
+      <CaptureHeader
+        importBusy={submitting}
+        importPending={saveRecoveryStatus!=='none'}
+        title={language === "ar" ? "مراجعة العقار" : "Property review"}
+        step={4}
+        totalSteps={4}
+        onImportEdit={()=>router.back()}
+        review
+      />
 
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
+        <PropertyReview
+          propertyLabel={
+            previewSubtypeLabel ??
+            (draft.propertyType
+              ? draft.propertyType === "floor"
+                ? getFloorTypeLabel(
+                    captureDetails.floorUse,
+                    language,
+                    t("propertyType.floor"),
+                  )
+                : t(`propertyType.${draft.propertyType}` as keyof Translations)
+              : "")
+          }
+          intent={
+            projectRecordIntent("offered", draft.transaction, language).label
+          }
+          area={areaDisplay}
+          price={
+            draft.transaction === "sale" && draft.salePrice
+              ? formatPrice(
+                  draft.salePrice.amount,
+                  draft.salePrice.currencyCode,
+                  language,
+                )
+              : draft.transaction === "rent" && draft.rentalPrice
+                ? formatPrice(
+                    draft.rentalPrice.amount,
+                    draft.rentalPrice.currencyCode,
+                    language,
+                  )
+                : undefined
+          }
+          priceLabel={
+            language === "ar"
+              ? draft.transaction === "sale"
+                ? "السعر"
+                : "الإيجار"
+              : draft.transaction === "sale"
+                ? "Price"
+                : "Rent"
+          }
+          cadence={
+            draft.transaction === "rent"
+              ? formatRentalCadence(draft.rentalPeriodId, t)
+              : undefined
+          }
+        >
+          {(!isBasicApartmentFollowUp || !!importId) &&
+          Object.keys(previewDetails).some(
+            (field) =>
+              field !== "propertyType" &&
+              previewDetails[field] !== undefined &&
+              previewDetails[field] !== "",
+          )
+            ? PROPERTY_FORM_CATALOG.map(
+                ({ field }) => [field, previewDetails[field]] as const,
+              )
+                .filter(([, value]) => value !== undefined && value !== "")
+                .map(([field, value]) => (
+                  <SummaryRow
+                    key={field}
+                    label={
+                      propertyDetailLabels[field as PropertyDetailField]?.[
+                        language === "ar" ? 1 : 0
+                      ] ?? field
+                    }
+                    value={formatPropertyDetailValue(
+                      field as PropertyDetailField,
+                      typeof value === "object" && value && "value" in value
+                        ? String((value as { value: unknown }).value)
+                        : value,
+                      language,
+                      (key) => t(key as keyof Translations),
+                    )}
+                  />
+                ))
+            : null}
+        </PropertyReview>
       </ScrollView>
-      
+
       <PropertyReviewFooter
-        title={t(saveRecoveryStatus === 'cleanup_pending' ? 'summary.retry_cleanup' : saveRecoveryStatus === 'retry_required' ? 'summary.retry_save' : 'summary.submit')}
-        onPress={() => { void handleFinish(); }} loading={submitting} testID="btn-submit"
+        title={t(
+          saveRecoveryStatus === "cleanup_pending"
+            ? "summary.retry_cleanup"
+            : saveRecoveryStatus === "retry_required"
+              ? "summary.retry_save"
+              : "summary.submit",
+        )}
+        onPress={() => {
+          void handleFinishWithImport();
+        }}
+        loading={submitting}
+        testID="btn-submit"
       />
     </View>
   );
@@ -390,7 +607,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   detailsCard: {
     borderWidth: 1,
@@ -402,8 +619,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     padding: 16,
     borderBottomWidth: 1,
   },
@@ -419,5 +636,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     borderTopWidth: 1,
-  }
+  },
 });

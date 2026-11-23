@@ -16,6 +16,25 @@ export async function circleRpc<T>(request: CloudRequest, name: `vs_circle_${str
   return (body ? JSON.parse(body) : null) as T;
 }
 
+export type TrustCircle = { id: string; name: string; owner_id: string };
+
+export function listTrustCircles(request: CloudRequest) {
+  return circleRpc<TrustCircle[]>(request, 'vs_circle_list');
+}
+
+export async function publishCircleProperty(
+  request: CloudRequest,
+  circleId: string,
+  facts: NonNullable<ReturnType<typeof circlePropertyFacts>>,
+  operationId: string,
+) {
+  const target = { p_circle: circleId, p_source: facts.core.id };
+  const revision = await circleRpc<number>(request, 'vs_circle_my_publication', target);
+  await circleRpc(request, 'vs_circle_publish', {
+    ...target, p_facts: facts, p_expected: revision, p_operation: operationId,
+  });
+}
+
 /** Only the domain's matching projection is published. Never send the private record. */
 export function circlePropertyFacts(property: Property) {
   const offer = property.activeOffer;

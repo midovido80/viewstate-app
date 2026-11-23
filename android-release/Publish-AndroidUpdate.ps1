@@ -32,11 +32,8 @@ try {
     if ($SourceFolder) {
         $source = Get-PilotSource (Resolve-Path -LiteralPath $SourceFolder).Path
     } else {
-        $downloads = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads'
-        $source = Get-ChildItem -LiteralPath $downloads -Directory -Filter 'viewstate-next*' |
-            Sort-Object LastWriteTime -Descending |
-            ForEach-Object { Get-PilotSource $_.FullName } |
-            Select-Object -First 1
+        $repository = Split-Path -Parent $PSScriptRoot
+        $source = Get-PilotSource $repository
     }
 
     if ($Check) {

@@ -18,6 +18,7 @@ export function useLocalFormDraft<T extends object>({
   complete = false,
   completed,
   onPersist,
+  migrate,
 }: {
   identity: string;
   value: T;
@@ -26,6 +27,7 @@ export function useLocalFormDraft<T extends object>({
   complete?: boolean;
   completed?: () => boolean;
   onPersist?: () => void;
+  migrate?: (value: T) => T;
 }) {
   const { storage } = useUserData();
   const repo = useMemo(
@@ -39,8 +41,17 @@ export function useLocalFormDraft<T extends object>({
     completed,
     ready,
     onPersist,
+    migrate,
   });
-  current.current = { value, restore, complete, completed, ready, onPersist };
+  current.current = {
+    value,
+    restore,
+    complete,
+    completed,
+    ready,
+    onPersist,
+    migrate,
+  };
   const unreadable = useRef(false),
     discarded = useRef(false);
   const hydration = useRef<Promise<void>>(Promise.resolve());
@@ -55,6 +66,7 @@ export function useLocalFormDraft<T extends object>({
     hydration.current = repo
       .read<T>()
       .then((saved) => {
+        if (saved) saved = current.current.migrate?.(saved) ?? saved;
         if (
           saved &&
           Object.entries(initial).some(
@@ -99,7 +111,14 @@ export function useLocalFormDraft<T extends object>({
     }
     if (!now.ready) return true;
     if (unreadable.current) throw Error("FORM_SESSION_UNREADABLE");
-    await repo.write(now.value);
+    try {
+      await repo.write(now.value);
+    } catch (error) {
+      if ((error as Error).message !== "IMPORT_CANCELLED") throw error;
+      discarded.current = true;
+      await repo.clear();
+      return true;
+    }
     now.onPersist?.();
     return true;
   }, [repo]);

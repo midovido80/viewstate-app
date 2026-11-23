@@ -90,7 +90,7 @@ export default function PropertyShareScreen() {
   const { store, media: { access } } = useUserData();
   const account = useRealAccount(), guest = useGuestAccount();
   const signature = (include: boolean) => account ? accountShareSignature(account.profile, include, language) : include && guest ? '\n\n' + [language === 'ar' ? 'للتواصل' : 'Contact', guest.identity.name, guest.identity.phone].filter(Boolean).join('\n') : '';
-  const [includeMyDetails, setIncludeMyDetails] = useState(true);
+  const [includeMyDetails, setIncludeMyDetails] = useState(false);
   const [excludedDetails, setExcludedDetails] = useState<PropertyDetailField[]>([]);
   const [recipientPicker, setRecipientPicker] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
@@ -354,13 +354,13 @@ export default function PropertyShareScreen() {
         }} />
       ))}
     </AssistantSheet>}
-    {followupPrompt && <AssistantSheet title={language === 'ar' ? 'هل أرسلت العقار للعميل؟' : 'Did you send the property to the client?'} onClose={() => setFollowupPrompt(false)}>
-      <AssistantText>{language === 'ar' ? 'فتح المشاركة لا يؤكد الإرسال. إذا أرسلته، يمكنك إضافة متابعة مرتبطة بالعميل والعقار.' : 'Opening sharing does not confirm delivery. If you sent it, add a follow-up linked to this client and property.'}</AssistantText>
-      <Action label={language === 'ar' ? 'أرسلت — إضافة متابعة' : 'Sent — add follow-up'} icon="calendar" tone="primary" onPress={() => {
+    {followupPrompt && <AssistantSheet title={language === 'ar' ? 'متابعة العميل' : 'Client follow-up'} onClose={() => setFollowupPrompt(false)}>
+      <AssistantText>{language === 'ar' ? 'تقدر تضيف تذكير مرتبط بالعميل والعقار. تأكيد الإرسال موجود في التطبيق اللي شاركت منه.' : 'You can add a reminder linked to this client and property. Check the sharing app for delivery status.'}</AssistantText>
+      <Action label={language === 'ar' ? 'إضافة متابعة' : 'Add follow-up'} icon="calendar" tone="primary" onPress={() => {
         setFollowupPrompt(false);
         if (recipient && id) router.push({ pathname: '/', params: { followupPersonId: recipient.id, followupPropertyId: id } } as never);
       }} />
-      <Action label={language === 'ar' ? 'لم أرسل / لاحقًا' : 'Not sent / later'} tone="quiet" onPress={() => setFollowupPrompt(false)} />
+      <Action label={language === 'ar' ? 'لاحقًا' : 'Later'} tone="quiet" onPress={() => setFollowupPrompt(false)} />
     </AssistantSheet>}
   </View>;
 }

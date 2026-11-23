@@ -129,7 +129,7 @@ test("approved whole-building example normalizes and reaches the discussion shor
     assert.equal(location.offered, language === "en" ? "Jabriya" : "الجابرية");
     assert.equal(location.statusLabel, language === "en" ? "For discussion" : "بديل للمناقشة");
     assert.ok(area.offered.includes(language === "en" ? "50 m² less (about 7.14%)" : "أقل بـ50 م² (نحو 7.14٪)"));
-    assert.equal(budget.requested, "6000–7000 KWD");
+    assert.equal(budget.requested, language === "ar" ? "من 6,000 إلى 7,000 د.ك" : "6000–7000 KWD");
     assert.equal(budget.offered, "6800 KWD");
     assert.equal(budget.statusLabel, language === "en" ? "Meets" : "متوافق");
   }

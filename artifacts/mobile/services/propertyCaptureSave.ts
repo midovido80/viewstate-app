@@ -56,6 +56,13 @@ async function clearEvidenceIfCurrentOrAbsent(
   return clearConfirmedPropertyEnrichmentDraft(evidence, storage);
 }
 
+export async function discardUnstoredCaptureDetails(propertyCoreId:string,store:{getProperty(id:string):Promise<unknown>},storage:EnrichmentStorage):Promise<void>{
+  if(await store.getProperty(propertyCoreId))throw Error('IMPORT_ALREADY_SAVED');
+  const pointer=await loadPointer(storage);
+  if(!pointer||pointer.propertyCoreId!==propertyCoreId)return;
+  if(!await clearEvidenceIfCurrentOrAbsent(pointer.evidence,storage)||!await clearPointer(pointer,storage))throw Error('CAPTURE_DETAILS_CLEANUP_FAILED');
+}
+
 /**
  * The visible Capture Save remains BASIC-first. Details are then committed
  * through the same durable candidate/evidence/CAS contract used by editing.

@@ -1,3 +1,7 @@
+import {
+  assertImportNotCancelled,
+  formImportId,
+} from "./importCancellationState";
 export interface FormSessionStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
@@ -10,6 +14,7 @@ export function createFormSession(
   identity: string,
 ) {
   const key = "@viewstate/form-session/v1/" + encodeURIComponent(identity);
+  const importId = formImportId(identity);
   const queue = <T>(work: () => Promise<T>): Promise<T> => {
     let map = queues.get(storage);
     if (!map) {
@@ -24,6 +29,14 @@ export function createFormSession(
     key,
     read: <T>() =>
       queue(async (): Promise<T | null> => {
+        if (importId) {
+          try {
+            await assertImportNotCancelled(storage, importId);
+          } catch (error) {
+            if ((error as Error).message === "IMPORT_CANCELLED") return null;
+            throw error;
+          }
+        }
         const raw = await storage.getItem(key);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
@@ -39,7 +52,17 @@ export function createFormSession(
     write: (value: unknown) => {
       const raw = JSON.stringify({ version: 1, value });
       return queue(async () => {
+        if (importId) await assertImportNotCancelled(storage, importId);
         await storage.setItem(key, raw);
+        if (importId) {
+          try {
+            await assertImportNotCancelled(storage, importId);
+          } catch (error) {
+            if (storage.removeItem) await storage.removeItem(key);
+            else await storage.setItem(key, "");
+            throw error;
+          }
+        }
         if ((await storage.getItem(key)) !== raw)
           throw Error("FORM_SESSION_UNCONFIRMED");
       });

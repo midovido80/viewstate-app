@@ -1,4 +1,5 @@
 import { changeListingStatus, listingStatus, type ListingStatus } from '@/services/propertyLifecycle';
+import { PropertyCircleShare } from '@/components/PropertyCircleShare';
 import { usePropertyWizardValidation } from '@/hooks/usePropertyWizardValidation';
 import { propertyCompletionNotice } from '@/services/propertyFormLayout';
 import { missingCompletionFields } from '@/services/requiredMatchingFields';
@@ -124,6 +125,12 @@ function readNumericDetail(value: unknown): number | undefined {
   return typeof unwrapped === 'number' && Number.isFinite(unwrapped) ? unwrapped : undefined;
 }
 
+type EditablePropertyText = 'listingTitle' | 'block' | 'description' | 'privateNotes' | 'paciNumber' | 'mapsLink';
+
+function propertyTextChanges(text: Partial<Record<EditablePropertyText, string>>) {
+  return text.block === '' ? { ...text, block: undefined } : text;
+}
+
 export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolean } = {}) {
   const { store, storage, recovery: { createEditDraft, deleteSavedProperty, clearConfirmedPropertyEnrichmentDraft, loadPropertyEnrichmentDraft, discardPropertyEditDraft, executePropertyUpdateRecovery, loadPropertyEditDraft, loadPropertyUpdateOperation, persistPropertyUpdateOperation, savePropertyEditDraft }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore, openAttachment } } = useUserData();
   const { propertyCoreId, edit, completion, matchingReturn } = useLocalSearchParams<{
@@ -142,6 +149,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const insets = useScreenInsets();
   const { t, language, isRTL, fonts } = useI18n();
   const [property, setProperty] = useState<Property | null>(null);
+  const [circleShareOpen, setCircleShareOpen] = useState(false);
   const standardApartment = Boolean(property?.core.propertyType === 'apartment' && !isOfferedStudio(property));
   const [hasEnrichmentDraft, setHasEnrichmentDraft] = useState(false);
   const [legacyEnrichmentDraft, setLegacyEnrichmentDraft] = useState<PropertyEnrichmentDraftV1 | null>(null);
@@ -162,6 +170,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [saveCompletionVisible, setSaveCompletionVisible] = useState(false);
   const saveFlight = useRef(false);
   const draftMutationFlight = useRef<Promise<boolean>>(Promise.resolve(true));
+  const pendingText = useRef<Partial<Record<EditablePropertyText, string>>>({});
+  const [editorText, setEditorText] = useState(pendingText.current);
   const [areaOpen, setAreaOpen] = useState(false);
   const [areaSearch, setAreaSearch] = useState('');
   const [leaveVisible, setLeaveVisible] = useState(false);
@@ -179,6 +189,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   const [sourcePerson, setSourcePerson] = useState<Person | null>(null);
   const [sourcePeople, setSourcePeople] = useState<Person[]>([]);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const returnToSource = useRef(false);
   const [sourcePersonId, setSourcePersonId] = useState('');
   const [sourceClassification, setSourceClassification] = useState<PropertySourceClassificationFilter>('all');
   const [sourceSearch, setSourceSearch] = useState('');
@@ -340,7 +351,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     return area ? (language === 'ar' ? area.ar : area.en) : areaId;
   };
 
-  const openSource = async () => {
+  const openSource = useCallback(async () => {
     setError('');
     try {
       setSourcePeople(await store.getPeople());
@@ -352,7 +363,13 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     } catch {
       setError(t('source.load_failed'));
     }
-  };
+  }, [source, store, t]);
+
+  useFocusEffect(useCallback(() => {
+    if (!returnToSource.current) return;
+    returnToSource.current = false;
+    void openSource();
+  }, [openSource]));
 
   const visibleSourcePeople = filterPropertySourcePeople(sourcePeople, sourceClassification, sourceSearch);
   const visibleSourceSelection = retainVisibleSourceSelection(visibleSourcePeople, sourcePersonId);
@@ -427,6 +444,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       }
       setDraft(next);
       draftRef.current = next;
+      pendingText.current = {};
+      setEditorText(pendingText.current);
       cleanChoicesRef.current = standardApartment ? createEditDraft(property).choices : null;
       setEditDirty(standardApartment && propertyEditChoicesAreDirty(cleanChoicesRef.current, next.choices));
       setMapsFieldError('');
@@ -464,6 +483,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
       const changes = typeof changesOrUpdater === 'function'
         ? changesOrUpdater(previous.choices)
         : changesOrUpdater;
+      if (Object.keys(changes).length === 0) return true;
       try {
         assertPropertyDetailsEditClassification(previous.baseline, { ...previous.choices, ...changes,
           canonicalDetails: { ...previous.choices.canonicalDetails, ...changes.canonicalDetails },
@@ -519,6 +539,26 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     });
     draftMutationFlight.current = mutation.catch(() => false);
     return mutation;
+  };
+
+  const updateText = (field: EditablePropertyText, value: string) => {
+    pendingText.current = { ...pendingText.current, [field]: value };
+    setEditorText(pendingText.current);
+    void updateChoices(current => {
+      const changes = propertyTextChanges(pendingText.current);
+      return Object.entries(changes).some(([key, text]) => current[key as EditablePropertyText] !== text)
+        ? changes : {};
+    });
+  };
+
+  const flushEditorText = async () => {
+    const saved = await draftMutationFlight.current;
+    const current = draftRef.current;
+    if (!current) return false;
+    const changes = propertyTextChanges(pendingText.current);
+    const unsaved = Object.entries(changes).some(([field, value]) =>
+      current.choices[field as EditablePropertyText] !== value);
+    return unsaved ? updateChoices(changes) : saved;
   };
 
   const resolveFactConflict = async (
@@ -884,7 +924,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
   };
 
   const { back: leaveEditor, exit: exitEditor } = useDraftBack({ enabled: mode === 'edit', step: () => { if(formPage>0){setFormPage((formPage-1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});return true;}return false; }, persist: async () => {
-    const saved = await draftMutationFlight.current;
+    const saved = await flushEditorText();
     if (!saved) return false;
     await flushPropertyEditDraftWrites();
     return true;
@@ -940,7 +980,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
     setSaving(true);
     setError('');
     try {
-      const latestMutationSaved = await draftMutationFlight.current;
+      const latestMutationSaved = await flushEditorText();
       if (!latestMutationSaved) {
         setError(t('edit.draft_conflict'));
         return;
@@ -1632,7 +1672,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </View>
             ) : null}
             <PropertyFormCard title={language === 'ar' ? 'البيانات الأساسية' : 'Basic information'} icon="map-pin" testID="property-edit-basic-card">
-            <Text style={{fontFamily:fonts.semiBold,color:colors.foreground,textAlign:isRTL?'right':'left'}}>{language==='ar'?'عنوان العقار':'Property title'}</Text><TextInput value={choices.listingTitle ?? ''} maxLength={160} onChangeText={listingTitle=>updateChoices({listingTitle})} style={propertyFormInputStyle} testID="edit-listing-title" />
+            <Text style={{fontFamily:fonts.semiBold,color:colors.foreground,textAlign:isRTL?'right':'left'}}>{language==='ar'?'عنوان العقار':'Property title'}</Text>
+            <TextInput value={editorText.listingTitle ?? choices.listingTitle ?? ''} maxLength={160}
+              onChangeText={value => updateText('listingTitle', value)} accessibilityLabel={language === 'ar' ? 'عنوان العقار' : 'Property title'}
+              style={[propertyFormInputStyle, { textAlign: isRTL ? 'right' : 'left', writingDirection: isRTL ? 'rtl' : 'ltr' }]} testID="edit-listing-title" />
             {shownTransaction==='rent' && <View><Text style={{fontFamily:fonts.semiBold,color:colors.foreground,textAlign:isRTL?'right':'left'}}>{language==='ar'?'حالة العرض':'Availability'}</Text><ChoiceGrid>{(['available','rented'] as const).map(status=><Choice key={status} selected={(choices.rentalAvailability??'available')===status} onPress={()=>updateChoices({rentalAvailability:status})} title={status==='rented'?(language==='ar'?'مؤجر':'Rented'):(language==='ar'?'معروض للإيجار':'Offered for rent')} testID={`edit-availability-${status}`} />)}</ChoiceGrid></View>}
 
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('detail.type')}</Text>
@@ -1654,8 +1697,8 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             </TouchableOpacity>
 </RequiredField>} block={<>            <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{language === 'ar' ? 'القطعة' : 'Block'}</Text>
             <TextInput
-              value={choices.block ?? ''}
-              onChangeText={value => updateChoices({ block: value || undefined })}
+              value={editorText.block ?? choices.block ?? ''}
+              onChangeText={value => updateText('block', value)}
               keyboardType="number-pad"
               testID="edit-block"
               style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
@@ -1725,24 +1768,24 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <PropertyFormCard page={1} title={language === 'ar' ? 'تفاصيل إضافية' : 'Additional details'} icon="file-text">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.description')}</Text>
             <TextInput
-              value={choices.description ?? ''}
-              onChangeText={value => updateChoices({ description: value })}
+              value={editorText.description ?? choices.description ?? ''}
+              onChangeText={value => updateText('description', value)}
               multiline
               style={[styles.input, propertyFormInputStyle, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-description"
             />
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.private_notes')}</Text>
             <TextInput
-              value={choices.privateNotes ?? ''}
-              onChangeText={value => updateChoices({ privateNotes: value })}
+              value={editorText.privateNotes ?? choices.privateNotes ?? ''}
+              onChangeText={value => updateText('privateNotes', value)}
               multiline
               style={[styles.input, propertyFormInputStyle, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-private-notes"
             />
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.paci')}</Text>
             <TextInput
-              value={choices.paciNumber ?? ''}
-              onChangeText={value => updateChoices({ paciNumber: value })}
+              value={editorText.paciNumber ?? choices.paciNumber ?? ''}
+              onChangeText={value => updateText('paciNumber', value)}
               style={[styles.input, propertyFormInputStyle, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, textAlign: isRTL ? 'right' : 'left' }]}
               testID="property-edit-paci"
             />
@@ -1750,9 +1793,9 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             <LocationAttachmentCard title={language === 'ar' ? 'الموقع' : 'Location'} testID="property-edit-location-card">
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold }]}>{t('enrich.maps_link')}</Text>
             <TextInput
-              value={choices.mapsLink ?? ''}
+              value={editorText.mapsLink ?? choices.mapsLink ?? ''}
               onChangeText={value => {
-                updateChoices({ mapsLink: value });
+                updateText('mapsLink', value);
                 setMapsFieldError(getPropertyEditMapsFieldError(value, language));
               }}
               placeholder={language === 'ar' ? 'الصق الرابط هنا' : 'Paste link here'}
@@ -1827,7 +1870,7 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
           </>
         ) : null}
       </ScrollView></View></RequiredFormProvider></PropertyPageContext.Provider>
-      {mode==='edit' && <PropertyWizardFooter page={formPage} previous={leaveEditor} busy={saving} message={error || (requiredForm.attempted ? propertyCompletionNotice(missingCompletionFields(requiredForm.fields), language) : undefined)} next={()=>{if(formPage===2){void save();return;} void draftMutationFlight.current.then(ok=>{if(!ok){setError(t('edit.draft_conflict'));return;}const latest=draftRef.current;if(!latest)return;if(formPage===0 && validateWizard(propertyCompletionFields({type:latest.baseline.core.propertyType,area:latest.choices.locationAreaId,price:latest.choices.priceAmount,size:latest.choices.areaSquareMeters,values:latest.choices.canonicalDetails??{}})).length)return;setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});});}} />}
+      {mode==='edit' && <PropertyWizardFooter page={formPage} previous={leaveEditor} busy={saving} message={error || (requiredForm.attempted ? propertyCompletionNotice(missingCompletionFields(requiredForm.fields), language) : undefined)} next={()=>{if(formPage===2){void save();return;} void flushEditorText().then(ok=>{if(!ok){setError(t('edit.draft_conflict'));return;}const latest=draftRef.current;if(!latest)return;if(formPage===0 && validateWizard(propertyCompletionFields({type:latest.baseline.core.propertyType,area:latest.choices.locationAreaId,price:latest.choices.priceAmount,size:latest.choices.areaSquareMeters,values:latest.choices.canonicalDetails??{}})).length)return;setFormPage((formPage+1) as PropertyPage);requiredForm.scrollRef.current?.scrollTo({y:0,animated:false});});}} />}
 
       <Modal visible={areaOpen} animationType="slide" onRequestClose={() => setAreaOpen(false)}>
         <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -1870,6 +1913,10 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
             </TouchableOpacity>
           </View>
           <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 10 }}>
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>
+              {language === 'ar' ? 'اربط العقار بالشخص اللي وصلك العرض منه. المصدر محفوظ عندك بشكل خاص.' : 'Link the person who gave you the listing. The source stays private in your records.'}
+            </Text>
+            {error ? <Text accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{error}</Text> : null}
             <Text style={[styles.label, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>{language === 'ar' ? 'تصنيف جهة الاتصال' : 'Contact classification'}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', direction: isRTL ? 'rtl' : 'ltr', gap: 8 }} testID="property-source-classification-filters">
               {(['all', ...PROPERTY_SOURCE_ROLES] as const).map(classification => <ChoiceChip key={classification}
@@ -1915,7 +1962,14 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
               </TouchableOpacity>
             ))}
             {visibleSourcePeople.length === 0 ? (
-              <Text testID="property-source-no-results" style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{sourcePeople.length === 0 ? t('source.people_empty') : language === 'ar' ? 'لا توجد جهات اتصال تطابق التصنيف والبحث المختارين.' : 'No contacts match this classification and search.'}</Text>
+              <View style={{ gap: 12 }}>
+                <Text testID="property-source-no-results" style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{sourcePeople.length === 0 ? t('source.people_empty') : language === 'ar' ? 'لا توجد جهات اتصال تطابق التصنيف والبحث المختارين.' : 'No contacts match this classification and search.'}</Text>
+                <Button title={language === 'ar' ? 'إضافة شخص جديد' : 'Add a new person'} variant="outline" testID="property-source-add-person" onPress={() => {
+                  returnToSource.current = true;
+                  setSourceOpen(false);
+                  router.push({ pathname: '/person/new', params: { entry: 'property-source', propertyId: id, sourceRole } });
+                }} />
+              </View>
             ) : null}
           </ScrollView>
           <View style={{ padding: 20, paddingBottom: Math.max(insets.bottom, 20), gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
@@ -2180,7 +2234,12 @@ export function PropertyDetailScreen({ forceEdit = false }: { forceEdit?: boolea
         </View>
       </Modal>
 
-      {mode === 'detail' && <View style={{paddingHorizontal:12,paddingVertical:6,backgroundColor:colors.card}}><Button title={language==='ar'?'مطابقة الآن':'Match now'} onPress={()=>router.push(matchingTarget({ kind: 'property', id: property.core.id }) as never)} testID="property-detail-match-now" /></View>}
+      {mode === 'detail' && <View style={{ paddingHorizontal: 12, paddingVertical: 6, gap: 6, backgroundColor: colors.card }}>
+        <Button title={language === 'ar' ? 'مشاركة في دائرة الثقة' : 'Share to Trust Circles'} onPress={() => setCircleShareOpen(true)} testID="property-detail-circle-share" />
+        <Button title={language === 'ar' ? 'طابق العقار' : 'Match property'} variant="outline"
+          onPress={() => router.push(matchingTarget({ kind: 'property', id: property.core.id }) as never)} testID="property-detail-match-now" />
+      </View>}
+      {circleShareOpen && <PropertyCircleShare key={property.core.id} property={property} onClose={() => setCircleShareOpen(false)} />}
       {mode === 'detail' && (
         <View style={{ flexShrink: 0, paddingHorizontal: 12, paddingBottom: Math.max(insets.bottom, 10), paddingTop: 8, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: colors.border, direction: 'ltr', flexDirection: isRTL ? 'row' : 'row-reverse', gap: 10 }}>
           {Platform.OS === 'web' ? (

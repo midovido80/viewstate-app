@@ -1,23 +1,25 @@
-import { NextFirstUse } from "./NextFirstUse";
-import { NextRecentWork } from "./NextRecentWork";
-import React from "react";
+import { TrustCircleHero } from './TrustCircleHero';
+import { AppUpdateAction } from '@/components/AppUpdateAction';
+import { NextFirstUse } from './NextFirstUse';
+import { NextRecentWork } from './NextRecentWork';
+import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
   View,
-} from "react-native";
-import Svg, { Circle } from "react-native-svg";
-import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import type { Property, SeekerRequirement } from "@workspace/property-domain";
-import type { Person } from "@/services/people";
-import { useI18n } from "@/contexts/I18nContext";
-import { useScreenInsets } from "@/hooks/useScreenInsets";
-import { nextDesign as n } from "@/constants/nextDesign";
-import { formatPrice, formatRentalPrice } from "@/constants/market";
-import { matchingTarget } from "@/services/matchingScope";
+} from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import type { Property, SeekerRequirement } from '@workspace/property-domain';
+import type { Person } from '@/services/people';
+import { useI18n } from '@/contexts/I18nContext';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
+import { nextDesign as n } from '@/constants/nextDesign';
+import { formatPrice, formatRentalPrice } from '@/constants/market';
+import { matchingTarget } from '@/services/matchingScope';
+import type { HomeQuickAction } from '@/services/assistantHome';
 
 /** A new presentation surface over the original catalog, matching and task commands.
  * No sample records, alternate repositories, or demo scoring enter the real app.
@@ -33,6 +35,8 @@ export function NextHomeCanvas({
   retryMatches,
   tasks,
   taskCount,
+  hasSavedTasks,
+  onQuickAction,
   openTasks,
   addTask,
   openCalendar,
@@ -45,10 +49,12 @@ export function NextHomeCanvas({
   people: readonly Person[];
   date: string;
   matches: number;
-  matchStatus: "loading" | "ready" | "error";
+  matchStatus: 'loading' | 'ready' | 'error';
   retryMatches: () => void;
   tasks: React.ReactNode;
   taskCount: number;
+  hasSavedTasks: boolean;
+  onQuickAction: (action: HomeQuickAction) => void;
   openTasks: () => void;
   addTask: () => void;
   openCalendar: () => void;
@@ -58,9 +64,15 @@ export function NextHomeCanvas({
   const router = useRouter(),
     { language, fonts, isRTL, t } = useI18n(),
     insets = useScreenInsets();
-  const ar = language === "ar",
-    align = isRTL ? ("right" as const) : ("left" as const);
-  const row = isRTL ? ("row-reverse" as const) : ("row" as const);
+  const firstUse =
+    ready &&
+    !hasSavedTasks &&
+    !properties.length &&
+    !people.length &&
+    !requirements.length;
+  const ar = language === 'ar',
+    align = isRTL ? ('right' as const) : ('left' as const);
+  const row = isRTL ? ('row-reverse' as const) : ('row' as const);
   const text = { color: n.ink, fontFamily: fonts.regular, textAlign: align };
   const heading = {
     ...text,
@@ -74,7 +86,7 @@ export function NextHomeCanvas({
       testID={id}
       accessibilityRole="button"
       onPress={onPress}
-      style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}
+      style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 }}
     >
       <Text style={{ color: n.blue, fontFamily: fonts.semiBold, fontSize: 14 }}>
         {label}
@@ -92,103 +104,33 @@ export function NextHomeCanvas({
         paddingTop: 8,
         paddingBottom: insets.bottom + 28,
         gap: 14,
-        width: "100%",
+        width: '100%',
         maxWidth: 760,
-        alignSelf: "center",
+        alignSelf: 'center',
       }}
     >
-      <View style={{ gap: 6 }}>
-        <Text style={{ ...text, fontSize: 16, fontFamily: fonts.bold }}>{date}</Text>
-        <Pressable
-          testID="home-compact-calendar"
-          accessibilityRole="button"
-          onPress={openCalendar}
-          style={{
-            paddingHorizontal: 12,
-            borderRadius: 12,
-            backgroundColor: n.soft,
-            direction: "ltr",
-            flexDirection: row,
-            alignItems: "center",
-            gap: 9,
-            minHeight: 44,
-          }}
-        >
-          <Feather name="calendar" color={n.blue} size={19} />
-          <Text style={{ ...text, flex: 1, fontFamily: fonts.semiBold }}>
-            {ar ? "التقويم والمتابعات" : "Calendar & follow-ups"}
-          </Text>
-          <Feather
-            name={ar ? "chevron-left" : "chevron-right"}
-            color={n.blue}
-            size={17}
-          />
-        </Pressable>
-        <Text
-          accessibilityRole="header"
-          style={{ ...heading, fontSize: 19, lineHeight: 26 }}
-        >
-          {ar
-            ? "شغلك العقاري، في مكان واحد."
-            : "Your property work, in one place."}
-        </Text>
-
-      </View>
-      <NextFirstUse />
-      {notice}
-      <Pressable
-        testID="next-home-trust-circle"
-        accessibilityRole="button"
-        accessibilityLabel={ar ? "دائرة الثقة" : "Trust Circle"}
-        onPress={() => router.push("/trust-circle" as never)}
-        style={({ pressed }) => ({
-          alignItems: "center", justifyContent: "center", minHeight: 138,
-          backgroundColor: n.soft, borderColor: n.border, borderWidth: 1,
-          borderRadius: 16, opacity: pressed ? 0.8 : 1,
-        })}
-      >
-        <View style={{ width: 132, height: 120, alignItems: "center", justifyContent: "center" }}>
-          <Svg pointerEvents="none" width={132} height={120} viewBox="0 0 132 120" style={{ position: "absolute" }}>
-            <Circle cx={66} cy={60} r={48} fill="none" stroke={n.blue} strokeWidth={2} />
-            {[[66, 12], [100, 26], [114, 60], [100, 94], [66, 108], [32, 94], [18, 60], [32, 26]].map(([cx, cy]) =>
-              <Circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={6} fill={n.blue} stroke={n.soft} strokeWidth={2} />)}
-          </Svg>
-          <Text style={{ color: n.navy, fontFamily: fonts.bold, fontSize: 15, textAlign: "center" }}>
-            {ar ? "دائرة الثقة" : "Trust Circle"}
-          </Text>
-        </View>
-      </Pressable>
-      <Pressable
-        testID="next-paste-message"
-        accessibilityRole="button"
-        onPress={() => router.push("/intake" as never)}
+      <AppUpdateAction mode="banner" />
+      <View
         style={{
-          direction: "ltr",
+          direction: 'ltr',
           flexDirection: row,
-          alignItems: "center",
-          gap: 10,
-          borderWidth: 1,
-          borderColor: "#25D36644",
-          backgroundColor: "#25D3661A",
-          borderRadius: 12,
-          padding: 14,
-          minHeight: 48,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
         }}
       >
-        <Feather name="message-circle" size={19} color="#17643B" />
-        <View style={{ flex: 1 }}>
-          <Text style={{ ...text, color: "#17643B", fontFamily: fonts.bold, fontSize: 14 }}>
-            {ar ? "استيراد رسالة أو إعلان" : "Import a message or listing"}
-          </Text>
-          <Text style={small}>{ar ? "من واتساب أو أي تطبيق آخر" : "From WhatsApp or another app"}</Text>
-        </View>
-      </Pressable>
-      <NextRecentWork
-        loading={!ready}
-        properties={properties}
-        people={people}
-        requirements={requirements}
-      />
+        <Text
+          style={{ ...text, flex: 1, fontFamily: fonts.semiBold, fontSize: 14 }}
+        >
+          {date}
+        </Text>
+        {action(
+          ar ? 'المساعدة' : 'Help',
+          () => router.push('/next-guide' as never),
+          'home-help',
+        )}
+      </View>
+      <TrustCircleHero />
       <View
         testID="home-best-matches"
         style={{
@@ -201,31 +143,33 @@ export function NextHomeCanvas({
         }}
       >
         <Text accessibilityRole="header" style={heading}>
-          {ar ? "فرص تستحق المتابعة" : "Opportunities worth following up"}
+          {ar
+            ? 'مطابقة عقاراتك وطلبات عملائك'
+            : 'Opportunities worth following up'}
         </Text>
         <Text style={small}>
           {ar
-            ? "أفضل النتائج من العروض وطلبات العملاء المحفوظة."
-            : "Top results from your saved offers and client requests."}
+            ? 'نتائج سجلاتك الخاصة. فرص زملائك تلقاها داخل دائرة الثقة.'
+            : 'Top results from your saved offers and client requests.'}
         </Text>
-        {matchStatus === "loading" ? (
+        {matchStatus === 'loading' ? (
           <ActivityIndicator color={n.blue} />
-        ) : matchStatus === "error" ? (
+        ) : matchStatus === 'error' ? (
           <>
             <Text accessibilityRole="alert" style={small}>
               {ar
-                ? "تعذر تحميل المطابقات. بياناتك ما زالت محفوظة."
-                : "Matches could not load. Your records remain saved."}
+                ? 'تعذر تحميل المطابقات. بياناتك ما زالت محفوظة.'
+                : 'Matches could not load. Your records remain saved.'}
             </Text>
-            {action(ar ? "إعادة المحاولة" : "Retry", retryMatches)}
+            {action(ar ? 'إعادة المحاولة' : 'Retry', retryMatches)}
           </>
         ) : (
           <View
             style={{
-              direction: "ltr",
+              direction: 'ltr',
               flexDirection: row,
-              alignItems: "center",
-              justifyContent: "space-between",
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
             <Text
@@ -234,26 +178,38 @@ export function NextHomeCanvas({
               {matches}
             </Text>
             {action(
-              ar ? "شوف المناسب ولماذا" : "See what fits and why",
-              () => router.push(matchingTarget({ kind: "best" }) as never),
-              "next-home-open-matches",
+              ar ? 'شوف المناسب ولماذا' : 'See what fits and why',
+              () => router.push(matchingTarget({ kind: 'best' }) as never),
+              'next-home-open-matches',
             )}
           </View>
         )}
       </View>
+      {notice}
+      {firstUse && <NextFirstUse onAction={onQuickAction} />}
       <View style={{ gap: 8 }}>
         <View
           style={{
-            direction: "ltr",
+            direction: 'ltr',
             flexDirection: row,
-            alignItems: "center",
-            justifyContent: "space-between",
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
           <Text accessibilityRole="header" style={heading}>
-            {ar ? "متابعاتك القادمة" : "Upcoming follow-ups"}
+            {firstUse
+              ? ar
+                ? 'اليوم'
+                : 'Today'
+              : ar
+                ? 'متابعاتك القادمة'
+                : 'Upcoming follow-ups'}
           </Text>
-          {action(ar ? "عرض الكل" : "View all", openTasks)}
+          {action(
+            ar ? 'التقويم' : 'Calendar',
+            openCalendar,
+            'home-compact-calendar',
+          )}
         </View>
         <View
           testID="assistant-task-list"
@@ -262,7 +218,7 @@ export function NextHomeCanvas({
             borderWidth: 1,
             borderColor: n.border,
             borderRadius: 16,
-            overflow: "hidden",
+            overflow: 'hidden',
           }}
         >
           {!ready ? (
@@ -272,29 +228,80 @@ export function NextHomeCanvas({
           ) : (
             <Text style={{ ...small, padding: 18 }}>
               {ar
-                ? "لا توجد متابعات قادمة. أضف موعدك التالي."
-                : "No upcoming follow-ups. Add your next appointment."}
+                ? 'ستظهر مواعيدك ومتابعاتك هنا.'
+                : 'Your appointments and follow-ups will appear here.'}
             </Text>
           )}
-          {action(ar ? "إضافة متابعة" : "Add follow-up", addTask)}
+          {!firstUse && (
+            <View
+              style={{
+                direction: 'ltr',
+                flexDirection: row,
+                justifyContent: 'space-between',
+                paddingHorizontal: 10,
+              }}
+            >
+              {action(ar ? 'إضافة متابعة' : 'Add follow-up', addTask)}
+              {action(ar ? 'عرض الكل' : 'View all', openTasks)}
+            </View>
+          )}
         </View>
-
       </View>
-      <View style={{ direction: "ltr", flexDirection: row, gap: 6 }}>
+      <Pressable
+        testID="next-paste-message"
+        accessibilityRole="button"
+        onPress={() => router.push('/intake' as never)}
+        style={{
+          direction: 'ltr',
+          flexDirection: row,
+          alignItems: 'center',
+          gap: 10,
+          borderWidth: 1,
+          borderColor: '#25D36644',
+          backgroundColor: '#25D3661A',
+          borderRadius: 12,
+          padding: 14,
+          minHeight: 48,
+        }}
+      >
+        <Feather name="message-circle" size={19} color="#17643B" />
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              ...text,
+              color: '#17643B',
+              fontFamily: fonts.bold,
+              fontSize: 14,
+            }}
+          >
+            {ar ? 'استيراد رسالة أو إعلان' : 'Import a message or listing'}
+          </Text>
+          <Text style={small}>
+            {ar ? 'من واتساب أو أي تطبيق آخر' : 'From WhatsApp or another app'}
+          </Text>
+        </View>
+      </Pressable>
+      <NextRecentWork
+        loading={!ready}
+        properties={properties}
+        people={people}
+        requirements={requirements}
+      />
+      <View style={{ direction: 'ltr', flexDirection: row, gap: 6 }}>
         {[
           [
             properties.length,
-            ar ? "عقارات" : "Properties",
-            () => router.push("/properties" as never),
+            ar ? 'عقارات' : 'Properties',
+            () => router.push('/properties' as never),
           ],
           [
             people.length,
-            ar ? "أشخاص" : "People",
-            () => router.push("/people" as never),
+            ar ? 'أشخاص' : 'People',
+            () => router.push('/people' as never),
           ],
           [
             requirements.length,
-            ar ? "طلبات عملاء" : "Client requests",
+            ar ? 'طلبات عملاء' : 'Client requests',
             openRequests,
           ],
         ].map(([count, label, onPress]) => (
@@ -306,16 +313,16 @@ export function NextHomeCanvas({
               flex: 1,
               minHeight: 70,
               gap: 3,
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             <Text
               style={{ color: n.ink, fontFamily: fonts.bold, fontSize: 22 }}
             >
-              {ready ? String(count) : "—"}
+              {ready ? String(count) : '—'}
             </Text>
-            <Text style={{ ...small, textAlign: "center" }}>
+            <Text style={{ ...small, textAlign: 'center' }}>
               {String(label)}
             </Text>
           </Pressable>

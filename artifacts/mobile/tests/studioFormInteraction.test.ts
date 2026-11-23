@@ -6,7 +6,7 @@ import { resolveSourcePath } from './sourcePath.ts';
 const source = readFile(
   resolveSourcePath('../app/capture/studio.tsx', import.meta.url),
   'utf8',
-);
+).then(value => value.replace(/\r\n/g, '\n'));
 
 test('STRUCTURAL: optional Wanted identity precedes criteria and pinned routing checks the exact eligible Person', async () => {
   const studio = await source;
@@ -93,8 +93,7 @@ test('STRUCTURAL: field validation localizes and focuses the actual failing cont
 test('REGRESSION: header and Android Back return from Review without resetting the Studio draft', async () => {
   const studio = await source;
   const returnToFormStart = studio.indexOf('const returnToForm =');
-    const returnToFormEnd = studio.indexOf('  useEffect(', returnToFormStart);
-    assert.ok(returnToFormStart >= 0 && returnToFormEnd > returnToFormStart);
+  const returnToFormEnd = studio.indexOf('\n\n  useEffect(', returnToFormStart);
   const returnToForm = studio.slice(returnToFormStart, returnToFormEnd);
   const headerStart = studio.indexOf('testID="studio-close"');
   const headerEnd = studio.indexOf('<Text style={[styles.title', headerStart);

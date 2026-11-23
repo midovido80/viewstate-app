@@ -21,3 +21,10 @@ export function isMissingPositiveAmount(value: unknown): boolean {
   return value === undefined || value === null || String(value).trim() === ''
     || !Number.isFinite(Number(value)) || Number(value) <= 0;
 }
+
+export function isRequirementEditorPath(pathname: string): boolean {
+  return /^\/requirement\/[^/]+$/.test(pathname);
+}
+export function isCircleWorkspacePath(pathname: string): boolean {
+  return pathname === '/circle' || pathname === '/trust-circle' || pathname.startsWith('/circle-invite/');
+}

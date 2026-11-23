@@ -5,7 +5,7 @@ import { useI18n, type Translations } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAreaById } from '@/constants/kuwait-areas';
-import { formatPrice } from '@/constants/market';
+import { formatPrice, formatRentalPrice } from '@/constants/market';
 import { propertyDetailLabels, formatPropertyDetailValue } from '@/services/propertyDetailPresentation';
 import { getRequirementDetailsRows } from '@/services/requirementDetailsPresentation';
 
@@ -33,7 +33,7 @@ export function CircleSharedDetails({ property, requirement, onClose }: {
     rows.push(
       { section: 'overview', field: 'type', label: ar ? 'نوع العقار' : 'Property type', value: translate(`propertyType.${property.core.propertyType}`) },
       { section: 'location', field: 'area', label: ar ? 'المنطقة' : 'Area', value: area?.[language] ?? property.core.locationArea.id },
-      { section: 'overview', field: 'price', label: ar ? 'السعر' : 'Price', value: formatPrice(price.amount, price.currencyCode, language) },
+      { section: 'overview', field: 'price', label: ar ? 'السعر' : 'Price', value: offer.transaction === 'rent' ? formatRentalPrice(price.amount, price.currencyCode, offer.rentalPeriodId, language, translate) : formatPrice(price.amount, price.currencyCode, language) },
     );
     if (property.areaSquareMeters !== undefined) rows.push({
       section: 'specifications', field: 'squareMeters', label: ar ? 'المساحة' : 'Size', value: `${property.areaSquareMeters} ${ar ? 'م²' : 'm²'}`,
@@ -52,9 +52,9 @@ export function CircleSharedDetails({ property, requirement, onClose }: {
       <Text accessibilityRole="header" style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 20, textAlign: isRTL ? 'right' : 'left' }}>{title}</Text>
       <ScrollView contentContainerStyle={{ paddingBottom: 12 }}>
         <View style={{ backgroundColor: colors.card, borderRadius: 12, paddingHorizontal: 14 }}>
-          {rows.map(row => <View key={`${row.section}:${row.field}`} style={{ paddingVertical: 10, gap: 3, borderBottomWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }}>{row.label}</Text>
-            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{row.value}</Text>
+          {rows.map(row => <View key={`${row.section}:${row.field}`} style={{ paddingVertical: 12, gap: 12, direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', borderBottomWidth: 1, borderColor: colors.border }}>
+            <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{row.label}</Text>
+            <Text style={{ color: colors.foreground, fontFamily: fonts.semiBold, flex: 1.25, textAlign: isRTL ? 'left' : 'right' }}>{'\u2068' + row.value + '\u2069'}</Text>
           </View>)}
         </View>
       </ScrollView>

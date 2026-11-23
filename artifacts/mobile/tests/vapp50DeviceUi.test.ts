@@ -1,3 +1,4 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -139,11 +140,11 @@ test('BEHAVIOR: stale hydration completion cannot apply after cleanup', async ()
 
 test('SOURCE ASSERTION: I18nProvider wires the production hydration coordinator', async () => {
   const source = await readFile('contexts/I18nContext.tsx', 'utf8');
-  assert.match(source, /AsyncStorage\.getItem\('@viewstate_language'\)/);
-  assert.match(source, /hydrateLanguagePreference\(\{/);
-  assert.match(source, /getSelectionVersion: \(\) => userSelectionVersion\.current/);
-  assert.match(source, /userSelectionVersion\.current \+= 1/);
-  assert.match(source, /onReadError: console\.error/);
+  sourceMatch(source, /AsyncStorage\.getItem\('@viewstate_language'\)/);
+  sourceMatch(source, /hydrateLanguagePreference\(\{/);
+  sourceMatch(source, /getSelectionVersion: \(\) => userSelectionVersion\.current/);
+  sourceMatch(source, /userSelectionVersion\.current \+= 1/);
+  sourceMatch(source, /onReadError: console\.error/);
 });
 
 test('SOURCE ASSERTION: Requirement route is headerless while Add and Edit remain localized', async () => {
@@ -152,14 +153,14 @@ test('SOURCE ASSERTION: Requirement route is headerless while Add and Edit remai
     readFile('app/requirement/[requirementId].tsx', 'utf8'),
     readFile('app/person/[personId].tsx', 'utf8'),
   ]);
-  assert.match(layout, /name="requirement\/\[requirementId\]" options=\{\{ headerShown: false \}\}/);
-  assert.match(requirement, /editing \? t\('requirements\.edit'\) : t\('requirements\.add'\)/);
-  assert.match(person, /testID="person-primary-action"/);
+  sourceMatch(layout, /name="requirement\/\[requirementId\]" options=\{\{ headerShown: false \}\}/);
+  sourceMatch(requirement, /editing \? t\('requirements\.edit'\) : t\('requirements\.add'\)/);
+  sourceMatch(person, /testID="person-primary-action"/);
   assert.equal((person.match(/testID="person-primary-action"/g) ?? []).length, 1);
-  assert.match(person, /const primaryActionTitle = \(classification: PersonClassification\)/);
-  assert.match(person, /person\.classifications\.length > 1/);
-  assert.match(person, /person\.classifications\.map\(classification =>/);
-  assert.doesNotMatch(person, /person-add-requirement|person-add-wanted-studio/);
+  sourceMatch(person, /const primaryActionTitle = \(classification: PersonClassification\)/);
+  sourceMatch(person, /person\.classifications\.length > 1/);
+  sourceMatch(person, /person\.classifications\.map\(classification =>/);
+  sourceDoesNotMatch(person, /person-add-requirement|person-add-wanted-studio/);
 });
 
 test('SOURCE ASSERTION: Search presentation never falls back to internal IDs', async () => {
@@ -167,35 +168,36 @@ test('SOURCE ASSERTION: Search presentation never falls back to internal IDs', a
     readFile('app/search.tsx', 'utf8'),
     readFile('contexts/I18nContext.tsx', 'utf8'),
   ]);
-  assert.doesNotMatch(search, /description\?\.value \?\? property\.core\.id/);
-  assert.doesNotMatch(search, /: property\.core\.locationArea\.id/);
-  assert.doesNotMatch(search, /: areaId;/);
+  sourceDoesNotMatch(search, /description\?\.value \?\? property\.core\.id/);
+  sourceDoesNotMatch(search, /: property\.core\.locationArea\.id/);
+  sourceDoesNotMatch(search, /: areaId;/);
   // Optional public descriptions are omitted, not described as unavailable.
   // The localized match explanation still supplies useful result context.
-  assert.doesNotMatch(search, /search\.property_description_unknown/);
-  assert.match(search, /matchReasonLabel/);
-  assert.match(search, /search\.area_unknown/);
-  assert.match(i18n, /'search\.property_description_unknown'/);
+  sourceDoesNotMatch(search, /search\.property_description_unknown/);
+  sourceMatch(search, /matchReasonLabel/);
+  sourceMatch(search, /search\.area_unknown/);
+  sourceMatch(i18n, /'search\.property_description_unknown'/);
 });
 
 test('SOURCE ASSERTION: Contact review and results use bounded lists without changing phone semantics', async () => {
   const source = await readFile('components/BatchContactImportModal.tsx', 'utf8');
-  assert.match(source, /data=\{Object\.values\(selected\)\}/);
-  assert.match(source, /data=\{summary\?\.results \?\? \[\]\}/);
-  assert.match(source, /style=\{styles\.flexList\}/);
-  assert.match(source, /keyboardShouldPersistTaps="handled"/);
-  assert.match(source, /normalizePhoneForCountry\(phone\.phone, item\.country \?\? 'KW'\)/);
-  assert.match(source, /createContactBatchSubmissionGuard/);
+  sourceMatch(source, /data=\{Object\.values\(selected\)\}/);
+  sourceMatch(source, /data=\{summary\?\.results \?\? \[\]\}/);
+  sourceMatch(source, /style=\{styles\.flexList\}/);
+  sourceMatch(source, /keyboardShouldPersistTaps="handled"/);
+  sourceMatch(source, /normalizePhoneForCountry\(raw, item\.country \?\? 'KW'\)/);
+  sourceMatch(source, /contactPhonePresentation\(raw, resolved\.normalizedPhone\)/);
+  sourceMatch(source, /createContactBatchSubmissionGuard/);
 });
 
 test('SOURCE ASSERTION: Matching UI delegates to one versioned engine without data writes', async () => {
   const source = await readFile('app/(tabs)/matching.tsx', 'utf8');
-  assert.match(source, /MatchingResultsGroups/);
+  sourceMatch(source, /MatchingResultsGroups/);
   const grouped = await readFile('components/MatchingResultsGroups.tsx', 'utf8');
-  assert.match(grouped, /MatchingResultCard/);
-  assert.doesNotMatch(grouped, /saveRequirement|updateRequirement|saveProperty|setItem|evaluateMatch|BrokerInitiatedMatching/);
-  assert.match(source, /matching\.saved\.matchAllDescription/);
-  assert.match(source, /runSavedMatchingScope/);
-  assert.match(await readFile('services/matchingScope.ts', 'utf8'), /MATCH_ENGINE_VERSION/);
-  assert.doesNotMatch(source, /saveRequirement|updateRequirement|saveProperty|setItem/);
+  sourceMatch(grouped, /MatchingResultCard/);
+  sourceDoesNotMatch(grouped, /saveRequirement|updateRequirement|saveProperty|setItem|evaluateMatch|BrokerInitiatedMatching/);
+  sourceMatch(source, /matching\.saved\.matchAllDescription/);
+  sourceMatch(source, /runSavedMatchingScope/);
+  sourceMatch(await readFile('services/matchingScope.ts', 'utf8'), /MATCH_ENGINE_VERSION/);
+  sourceDoesNotMatch(source, /saveRequirement|updateRequirement|saveProperty|setItem/);
 });

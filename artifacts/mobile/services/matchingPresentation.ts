@@ -15,7 +15,9 @@ type Language = "en" | "ar";
 export function formatMatchingBudget(requirement: Pick<import('@workspace/property-domain').SeekerRequirement, 'budget' | 'unspecifiedFields'>, language: Language): string {
   const { minimum, maximum, currencyCode } = requirement.budget;
   const ar = language === 'ar';
-  if (minimum !== undefined && maximum !== undefined) return `${minimum}–${maximum} ${currencyCode}`;
+  if (minimum !== undefined && maximum !== undefined) return ar
+    ? `من ${minimum.toLocaleString('en-KW')} إلى ${formatPrice(maximum, currencyCode, language)}`
+    : `${minimum}–${maximum} ${currencyCode}`;
   if (maximum !== undefined) return `${ar ? 'حتى' : 'Up to'} ${formatPrice(maximum, currencyCode, language)}`;
   if (minimum !== undefined) return `${ar ? 'من' : 'From'} ${formatPrice(minimum, currencyCode, language)}`;
   return requirement.unspecifiedFields?.includes('budget') ? (ar ? 'ميزانية مفتوحة' : 'Open budget') : (ar ? 'غير محدد' : 'Not specified');

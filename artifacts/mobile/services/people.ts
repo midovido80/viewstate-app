@@ -1,6 +1,6 @@
 import {
   PROPERTY_SOURCE_ROLES,
-  type PropertySourceRole,
+  PropertySourceRole,
 } from '@workspace/property-domain';
 import {
   matchesFlexibleSearch,
@@ -23,12 +23,14 @@ export const PERSON_CLASSIFICATIONS = [
 
 export type PersonClassification = typeof PERSON_CLASSIFICATIONS[number];
 
+export function isPropertySeeker(person?: { classifications?: readonly string[] } | null): boolean {
+  const roles = person?.classifications ?? [];
+  return roles.includes('seeker') || SEEKER_CLASSIFICATIONS.some(role => roles.includes(role));
+}
+
 /** A broker can record a request they are representing without changing their role. */
 export function canOwnPropertyRequirement(person?: { classifications?: readonly string[] } | null): boolean {
-  return person?.classifications?.some(role =>
-    role === 'seeker' || role === 'broker'
-      || SEEKER_CLASSIFICATIONS.some(seekerRole => seekerRole === role),
-  ) ?? false;
+  return isPropertySeeker(person) || (person?.classifications?.includes('broker') ?? false);
 }
 
 export { PROPERTY_SOURCE_ROLES };
@@ -68,11 +70,6 @@ export interface PersonInput {
 }
 
 const classificationSet = new Set<string>(PERSON_CLASSIFICATIONS);
-
-export function isPropertySeeker(person: Person): boolean {
-  return person.classifications.includes('seeker')
-    || SEEKER_CLASSIFICATIONS.some(role => person.classifications.includes(role));
-}
 
 function normalizePhoneDigit(character: string): string {
   const code = character.charCodeAt(0);

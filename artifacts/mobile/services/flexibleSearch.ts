@@ -28,9 +28,14 @@ export const FLEXIBLE_SEARCH_ALIASES: readonly (readonly string[])[] = [
 
 const CLASSIFICATION_TERMS: Readonly<Record<string, readonly string[]>> = {
   seeker: ['seeker', 'باحث'],
+  rent_seeker: ['looking to rent', 'باحث عن إيجار'],
+  buy_seeker: ['looking to buy', 'باحث عن شراء'],
+  investor: ['property investor', 'مستثمر عقاري'],
+  owner_agent: ['owner agent', 'وكيل المالك'],
+  property_management: ['property management', 'إدارة أملاك'],
   owner: ['owner', 'مالك'],
-  broker: ['broker', 'دلال'],
-  real_estate_company: ['real estate company', 'شركة عقارية'],
+  broker: ['broker', 'دلال', 'وسيط عقاري'],
+  real_estate_company: ['real estate company', 'شركة عقارية', 'مسؤول بيع أو تأجير'],
   building_guard: ['building guard', 'حارس'],
 };
 

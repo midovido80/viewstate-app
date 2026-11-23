@@ -1,10 +1,11 @@
+import { isPropertySeeker } from '@/services/people';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 
-import { isPropertySeeker, type Person } from '@/services/people';
+import type { Person } from '@/services/people';
 import { useI18n } from '@/contexts/I18nContext';
 import { getPropertyCardSummary } from '@/services/cardSummaryPresentation';
 import { formatPrice, formatRentalPrice } from '@/constants/market';
@@ -23,7 +24,8 @@ export function useDailyAssistant() {
   const [state, setState] = useState<AssistantState>(initialAssistant);
   const [catalog, setCatalog] = useState<Catalog>({ people: [], properties: [], requirements: [] });
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [notice, setNotice] = useState(''), [canUndo, setCanUndo] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; tone: 'success' | 'neutral' } | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
   const [now, setNow] = useState(() => new Date()), [selectedDay, setSelectedDay] = useState(() => kuwaitDay());
   const mounted = useRef(true), running = useRef(false), generation = useRef(0), lastDay = useRef(kuwaitDay());
   const buildInventory = useCallback((value: Catalog): AssistantInventory => {
@@ -68,7 +70,7 @@ export function useDailyAssistant() {
     const sub = AppState.addEventListener('change', status => { if (status === 'active') tick(); });
     return () => { clearInterval(interval); sub.remove(); };
   }, []);
-  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 7000); return () => clearTimeout(timer); }, [notice]);
+  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(null), 7000); return () => clearTimeout(timer); }, [notice]);
   const mutate = useCallback(async (change: (current: AssistantState, targets: AssistantInventory) => AssistantState,
     message: string, sourcePropertyId?: string): Promise<boolean> => {
     if (running.current || !ready) return false;
@@ -82,7 +84,7 @@ export function useDailyAssistant() {
         if (p && source) p.sourcePersonId = source.personId;
       }
       const next = await assistantRepository.update(current => change(current, targets));
-      if (mounted.current) { setState(next); setCatalog(records); setNotice(message); setCanUndo(assistantRepository.canUndo()); }
+      if (mounted.current) { setState(next); setCatalog(records); setNotice({ text: message, tone: 'success' }); setCanUndo(assistantRepository.canUndo()); }
       return true;
     } catch (cause) {
       if (mounted.current) {
@@ -96,10 +98,10 @@ export function useDailyAssistant() {
   const undo = useCallback(async () => {
     if (running.current || !ready) return;
     running.current = true; setBusy(true);
-    try { const value = await assistantRepository.undo(); if (mounted.current) { setState(value); setCanUndo(false); setNotice(copy('undone')); setError(''); } }
+    try { const value = await assistantRepository.undo(); if (mounted.current) { setState(value); setCanUndo(false); setNotice({ text: copy('undone'), tone: 'success' }); setError(''); } }
     catch (cause) { if (mounted.current) { setError(explain(cause)); setCanUndo(false); } }
     finally { running.current = false; if (mounted.current) setBusy(false); }
   }, [ready, copy, explain]);
   return { state, catalog, inventory, ready, busy, error, notice, canUndo, now, selectedDay, setSelectedDay, copy, explain, reload, mutate, undo,
-    notify: setNotice, clearError: () => setError('') };
+    notify: (text: string) => setNotice({ text, tone: 'neutral' }), clearError: () => setError('') };
 }

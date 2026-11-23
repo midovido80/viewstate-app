@@ -1,4 +1,5 @@
 import { CircleRequirementAction } from '@/components/CircleRequirementAction';
+import { deleteRequirementRecord } from '@/services/requirementDeletion';
 import { canOwnPropertyRequirement } from '@/services/people';
 import { NextReadChips } from '@/components/next/NextSurfaces';
 import { matchingTarget } from '@/services/matchingScope';
@@ -43,6 +44,7 @@ export default function RequirementDetailsScreen() {
   const [state, setState] = useState<LoadState>('loading');
   const [attempt, setAttempt] = useState(0);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [deleteOpen,setDeleteOpen]=useState(false),[deleting,setDeleting]=useState(false),[deleteError,setDeleteError]=useState('');
   const [seekers, setSeekers] = useState<Person[]>([]);
   const [selectedSeekerId, setSelectedSeekerId] = useState('');
   const [linkBusy, setLinkBusy] = useState(false);
@@ -264,6 +266,23 @@ export default function RequirementDetailsScreen() {
               </View>
             );
           })}
+          <Button title={language==='ar'?'حذف الطلب':'Delete request'} variant="outline" style={{borderColor:colors.destructive}} textStyle={{color:colors.destructive}} testID="requirement-delete-action" disabled={deleting||linkBusy} onPress={()=>{setDeleteError('');setDeleteOpen(true);}}/>
+          <Modal visible={deleteOpen} transparent animationType="none" onRequestClose={()=>!deleting&&setDeleteOpen(false)}>
+            <View style={{flex:1,justifyContent:'center',padding:24,paddingTop:insets.top+24,paddingBottom:insets.bottom+24,backgroundColor:'#00000066'}}>
+              <View style={{backgroundColor:colors.card,borderRadius:16,padding:24,gap:16}} accessibilityViewIsModal>
+                <Text style={{fontFamily:fonts.bold,fontSize:20,color:colors.foreground,textAlign:align}}>{language==='ar'?'حذف هذا الطلب؟':'Delete this request?'}</Text>
+                <Text style={{fontFamily:fonts.regular,color:colors.foreground,textAlign:align}}>{language==='ar'?'بينحذف هذا الطلب من سجلاتك. الشخص والعقارات والطلبات الثانية تبقى محفوظة.':'This request will be removed. Contacts, properties and other requests stay saved.'}</Text>
+                {!!deleteError&&<Text accessibilityRole="alert" style={{color:colors.destructive}}>{deleteError}</Text>}
+                <Button title={language==='ar'?'رجوع':'Back'} variant="outline" disabled={deleting} onPress={()=>setDeleteOpen(false)}/>
+                <Button title={language==='ar'?'حذف الطلب':'Delete request'} testID="requirement-delete-confirm" style={{backgroundColor:colors.destructive,borderColor:colors.destructive}} loading={deleting} disabled={deleting} onPress={()=>void(async()=>{
+                  if(deleting)return;setDeleting(true);setDeleteError('');
+                  try{const result=await deleteRequirementRecord(store,record);if(result==='stale'){setDeleteError(language==='ar'?'الطلب تغيّر. أعد فتح التفاصيل وراجع النسخة الحالية قبل الحذف.':'The request changed. Reopen its details before deleting.');return;}setDeleteOpen(false);router.replace('/properties' as never);}
+                  catch{setDeleteError(language==='ar'?'ما اكتمل الحذف. الطلب ما زال محفوظًا؛ حاول مرة ثانية.':'Could not finish deletion. The request is retained; retry.');}
+                  finally{setDeleting(false);}
+                })()}/>
+              </View>
+            </View>
+          </Modal>
           {!record.seekerId ? (
             <View style={styles.linkActions}>
               {linkError ? <Text style={{ color: colors.destructive, fontFamily: fonts.medium }}>{linkError}</Text> : null}

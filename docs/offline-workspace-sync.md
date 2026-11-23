@@ -25,7 +25,9 @@ Sync runs on activation, relevant local writes, web online events, and foregroun
 
 ## Conflicts and server storage
 
-Three-way merge compares base/local/cloud per record. Independent changes merge; same-record edits and delete-versus-edit conflicts preserve both sides. Nothing conflicting is published or applied until an explicit resolution. Resolution is rejected if either side changed since review. Merged data and relationships are validated before publication. The non-blocking conflict sheet offers device/cloud versions and exact details; ordinary local work remains available.
+Validation errors now identify the affected record keys and fields rather than reporting every unpublished record as a conflict. The review distinguishes a never-uploaded cloud version from deletion. An explicit missing-client repair retains the request while removing its dangling owner link, with guarded replay after interruption. Contact deletion also preserves linked requests as unassigned, transactionally on SQLite and through the existing recoverable Web journal. See the [22 November repair and verification](viewstate-next/sync-conflict-repair-20261122.ar.md).
+
+Three-way merge compares base/local/cloud and merges independent object fields within an existing record. Conflicting edits to the same field, differing arrays, concurrent creations and delete-versus-edit preserve both sides for explicit review. Merged data and relationships are validated before publication; an invalid merged property or requirement becomes a resolvable conflict rather than a generic sync failure. Nothing conflicting is published or applied until an explicit resolution. Resolution is rejected if either side changed since review. The non-blocking conflict sheet offers device/cloud versions and exact details; ordinary local work remains available. The status banner respects the system safe area and distinguishes local preservation from successful synchronization.
 
 Supabase project: `taduvwcajtjpceavlxrc` (`viewstate-app-pilot`), matching the application's documented personal Auth endpoint. Additive migrations applied:
 

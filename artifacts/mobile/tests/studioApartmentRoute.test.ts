@@ -165,9 +165,9 @@ function findByTestId(tree: unknown, testID: string): { props: Record<string, un
   if (!tree || typeof tree !== 'object') throw new Error(`Missing testID ${testID}`);
   const element = tree as { props?: Record<string, unknown> };
   if (element.props?.testID === testID) return element as { props: Record<string, unknown> };
-  const options = element.props?.options as {testID?: string; value:string; label:string; selected:boolean}[] | undefined;
+  const options = element.props?.options as {testID?: string; value:string; label:string; selected:boolean; onPress?:()=>void}[] | undefined;
   const option = options?.find(item => item.testID === testID);
-  if (option) return {props:{...option, title:option.label,onSelect:()=> (element.props!.onSelect as (value:string)=>void)(option.value)}};
+  if (option) return {props:{...option, title:option.label,onSelect:()=> option.onPress ? option.onPress() : (element.props!.onSelect as (value:string)=>void)(option.value)}};
   const children = element.props?.children;
   for (const child of Array.isArray(children) ? children : [children]) {
     try {
@@ -240,20 +240,15 @@ test('production Wanted chooser requires an explicit Rent or Buy choice and keep
     transactionHarness.language = language;
     const initialTransaction = renderRoute(transactionRoute, transactionHarness);
     assert.equal(findByTestId(initialTransaction, 'btn-next').props.disabled, true);
-    (findByTestId(initialTransaction, 'select-wanted').props.onSelect as () => void)();
-    const selectedTransaction = renderRoute(transactionRoute, transactionHarness);
-    assert.equal(findByTestId(selectedTransaction, 'select-sale').props.title, language === 'ar' ? 'للشراء' : 'To buy');
-    assert.equal(findByTestId(selectedTransaction, 'select-rent').props.title, language === 'ar' ? 'للإيجار' : 'For rent');
-    (findByTestId(selectedTransaction, transaction === 'rent' ? 'select-rent' : 'select-sale').props.onSelect as () => void)();
-    (findByTestId(renderRoute(transactionRoute, transactionHarness), 'select-offered').props.onSelect as () => void)();
-    const offeredTransaction = renderRoute(transactionRoute, transactionHarness);
-    assert.equal(findByTestId(offeredTransaction, 'select-sale').props.title, language === 'ar' ? 'للبيع' : 'For sale');
-    assert.equal(findByTestId(offeredTransaction, transaction === 'rent' ? 'select-rent' : 'select-sale').props.selected, true);
-    (findByTestId(offeredTransaction, 'select-wanted').props.onSelect as () => void)();
-    const wantedAgain = renderRoute(transactionRoute, transactionHarness);
-    assert.equal(findByTestId(wantedAgain, 'select-sale').props.title, language === 'ar' ? 'للشراء' : 'To buy');
-    assert.equal(findByTestId(wantedAgain, transaction === 'rent' ? 'select-rent' : 'select-sale').props.selected, true);
-    (findByTestId(wantedAgain, 'btn-next').props.onPress as () => void)();
+    assert.throws(() => findByTestId(initialTransaction, 'select-wanted'), /Missing testID/);
+    assert.throws(() => findByTestId(initialTransaction, 'select-offered'), /Missing testID/);
+    assert.equal(findByTestId(initialTransaction, 'select-sale').props.title, language === 'ar' ? 'للشراء' : 'To buy');
+    assert.equal(findByTestId(initialTransaction, 'select-rent').props.title, language === 'ar' ? 'للإيجار' : 'For rent');
+    const transactionId = transaction === 'rent' ? 'select-rent' : 'select-sale';
+    (findByTestId(initialTransaction, transactionId).props.onSelect as () => void)();
+    const chosenTransaction = renderRoute(transactionRoute, transactionHarness);
+    assert.equal(findByTestId(chosenTransaction, transactionId).props.selected, true);
+    (findByTestId(chosenTransaction, 'btn-next').props.onPress as () => void)();
 
     assert.deepEqual(transactionHarness.pushes[0], {
       pathname: '/capture/property-type',
@@ -519,12 +514,27 @@ test('production sector Floor transition preserves the old draft until confirmat
   assert.equal(harness.pushes[0].pathname, '/capture');
 });
 
- test('both type dropdowns are available and commercial complex cannot be newly rented', async () => {
+ test('Wanted shows two visible type groups, Offered retains grouped dropdowns, and commercial complex cannot be newly rented', async () => {
  const route=await import('../app/capture/property-type.tsx');
  for(const mode of ['offered','wanted']) {
   const harness=routeHarness({mode,transaction:'rent'});const screen=renderRoute(route,harness);
-  assert.ok(findByTestId(screen,'property-type-residential'));
-  assert.ok(findByTestId(screen,'property-type-commercial'));
+  if (mode === 'wanted') {
+   assert.throws(() => findByType(screen, 'CompactDropdown'));
+   assert.ok(findByType(screen, 'SelectCard'));
+   const headings: unknown[] = [];
+   const visit = (node: any) => {
+     if (Array.isArray(node)) { node.forEach(visit); return; }
+     if (!node?.props) return;
+     if (node.props.accessibilityRole === 'header') headings.push(node.props.children);
+     visit(node.props.children);
+   };
+   visit(screen);
+   assert.deepEqual(headings.flat(Infinity), ['Residential', 'Commercial']);
+   assert.throws(() => findByTestId(screen, 'property-type-residential'));
+  } else {
+   assert.ok(findByTestId(screen,'property-type-residential'));
+   assert.ok(findByTestId(screen,'property-type-commercial'));
+  }
   assert.throws(()=>findByTestId(screen,'select-type-commercial_complex'));
   (findByTestId(screen,'select-type-villa').props.onSelect as ()=>void)();
   (findByTestId(renderRoute(route,harness),'select-type-shop').props.onSelect as ()=>void)();

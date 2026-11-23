@@ -1,3 +1,5 @@
+import { ImportCancelActions } from '@/components/ImportCancelActions';
+import { withActiveImport } from '@/services/importLifecycle';
 import { canOwnPropertyRequirement } from '@/services/people';
 import { importedSessionIdentity } from '@/services/importFormSessions';
 import { PropertyPageContext, PropertyPageSection, PropertyWizardFooter, PropertyWizardProgress, type PropertyPage } from '@/components/PropertyWizard';
@@ -179,7 +181,7 @@ export default function StudioCaptureRoute() {
   return <StudioCaptureForm key={key ? `import:${key}` : 'original'} />;
 }
 function StudioCaptureForm() {
-  const { store, recovery: { saveStudioPropertyFromPersonSource, retryStudioPropertyRecovery, saveStudioProperty }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore } } = useUserData();
+  const { store, storage, recovery: { saveStudioPropertyFromPersonSource, retryStudioPropertyRecovery, saveStudioProperty }, media: { createExpoFileStore, createIndexedDbWebAttachmentBlobStore } } = useUserData();
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
   const matchingReturn = readMatchingReturn(firstParam(params.matchingReturn))?.token;
@@ -210,7 +212,7 @@ function StudioCaptureForm() {
   const [baselineProperty, setBaselineProperty] = useState<Property | null>(null);
   const [baselineRequirement, setBaselineRequirement] = useState<SeekerRequirement | null>(null);
   const [editOwnerPerson, setEditOwnerPerson] = useState<Person | null>(null);
-  const [recordLoaded, setRecordLoaded] = useState(!editing);
+  const [recordLoaded, setRecordLoaded] = useState(false);
   const [people, setPeople] = useState<Person[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(true);
   const [selectedPersonId, setSelectedPersonId] = useState(seekerParam ?? '');
@@ -884,6 +886,7 @@ function StudioCaptureForm() {
       setSaving(false);
     }
   };
+  const doSaveWithImport = async (...args: Parameters<typeof doSave>) => { try { await withActiveImport(storage, firstParam(params.importId), () => doSave(...args)); } catch { setError(language === 'ar' ? 'هذا الاستيراد ملغي أو غير متاح. ارجع لصندوق الاستيراد.' : 'This import is cancelled or unavailable. Return to the import inbox.'); } };
 
   const retryPropertySave = async () => {
     if (!propertyRecovery || flight.current) return;
@@ -1561,7 +1564,8 @@ function StudioCaptureForm() {
         </Text>
       </View>
       {mode === 'wanted' && <View testID="requirement-pinned-property-type" style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#EDF4FF', borderBottomWidth: 1, borderBottomColor: '#C6D8F1' }}><Text style={{ color: '#173F78', fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{language === 'ar' ? 'العقار المطلوب: شقة · استوديو' : 'Required property: Apartment · Studio'}</Text></View>}
-      {!savedProperty && !savedRequirement && <Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" disabled={saving || !!uncertainRequirement.current || !!propertyRecovery} onPress={() => persistStudio.confirmDiscard(() => studioExit(() => router.canGoBack() ? router.back() : router.replace('/properties' as never)))} testID="studio-discard-draft" />}
+      <ImportCancelActions importId={firstParam(params.importId)} busy={saving} pending={!!uncertainRequirement.current||!!propertyRecovery} saved={!!savedProperty||!!savedRequirement||editing} discard={persistStudio.discard} exit={studioExit} onEdit={step==='review'||formPage===2?()=>{setStep('form');setFormPage(0);}:undefined}/>
+      {!firstParam(params.importId) && !savedProperty && !savedRequirement && <Button title={language === 'ar' ? 'إلغاء المسودة' : 'Discard draft'} variant="outline" disabled={saving || !!uncertainRequirement.current || !!propertyRecovery} onPress={() => persistStudio.confirmDiscard(() => studioExit(() => router.canGoBack() ? router.back() : router.replace('/properties' as never)))} testID="studio-discard-draft" />}
       {loading ? (
         <View style={styles.loading}><ActivityIndicator color={colors.primary} /></View>
       ) : !recordLoaded ? (
@@ -1682,16 +1686,16 @@ function StudioCaptureForm() {
               ) : (
                 <Button
                   title={saving ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : t(editing ? 'studio.save_changes' : 'studio.save')}
-                  onPress={() => void doSave()}
+                  onPress={() => void doSaveWithImport()}
                   disabled={saving || !!propertyRecovery || !!committedRequirement.current || !!savedProperty || !!savedRequirement}
                   testID="studio-save"
                 />
               )}
             </View>}
           </KeyboardAwareScrollViewCompat></PropertyPageContext.Provider>
-          {mode==='offered'&&!savedProperty && <PropertyWizardFooter page={formPage} previous={handleHeaderBack} busy={saving||!recordLoaded} message={error || undefined} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);scrollRef.current?.scrollTo({y:0,animated:false});}else void doSave();}} />}
+          {mode==='offered'&&!savedProperty && <PropertyWizardFooter page={formPage} previous={handleHeaderBack} busy={saving||!recordLoaded} message={error || undefined} next={()=>{if(formPage<2){setFormPage((formPage+1) as PropertyPage);scrollRef.current?.scrollTo({y:0,animated:false});}else void doSaveWithImport();}} />}
           {propertyReview && <PropertyReviewFooter title={saving ? (language === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : t('summary.submit')}
-            onPress={() => void doSave()} loading={saving}
+            onPress={() => void doSaveWithImport()} loading={saving}
             disabled={saving || !!propertyRecovery || !!committedRequirement.current || !!savedProperty || !!savedRequirement} testID="studio-save" />}
         </>
       )}

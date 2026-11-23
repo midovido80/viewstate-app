@@ -1,3 +1,4 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -93,11 +94,11 @@ test('BEHAVIOR: Standard wanted Apartment form exposes multi-bedroom, bathroom, 
   assert.equal(genericCatalog.includes('hasParking'), false);
 
   const requirementScreen = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  assert.match(requirementScreen, /purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam/);
-  assert.match(requirementScreen, /setPurpose\(initialPurpose\); setPropertyType\(initialPropertyType\); setApartmentSubtype\(initialApartmentSubtype\)/);
-  assert.match(requirementScreen, /leadingFields\.filter\(field => field !== 'apartmentSubtype' &&/);
-  assert.match(requirementScreen, /testID="requirement-bedrooms-quick-pick"/);
-  assert.match(requirementScreen, /testID="requirement-bathrooms-quick-pick"/);
-  assert.match(requirementScreen, /testID="requirement-floor-number"/);
-  assert.match(requirementScreen, /getRequirementPresentationFields\(propertyType, floorUse, apartmentSubtype\)/);
+  sourceMatch(requirementScreen, /purpose: purposeParam, propertyType: propertyTypeParam, apartmentSubtype: apartmentSubtypeParam/);
+  sourceMatch(requirementScreen, /setPurpose\(initialPurpose\); setPropertyType\(initialPropertyType\); setApartmentSubtype\(initialApartmentSubtype\)/);
+  sourceMatch(requirementScreen, /leadingFields\.filter\(field => field !== 'apartmentSubtype' &&/);
+  sourceMatch(requirementScreen, /testID="requirement-bedrooms-quick-pick"/);
+  sourceMatch(requirementScreen, /testID="requirement-bathrooms-quick-pick"/);
+  sourceMatch(requirementScreen, /testID="requirement-floor-number"/);
+  sourceMatch(requirementScreen, /getRequirementPresentationFields\(propertyType, floorUse, apartmentSubtype\)/);
 });

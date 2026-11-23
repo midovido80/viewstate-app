@@ -9,6 +9,7 @@ export type CircleNoticeTarget = {
   kind: 'invite' | 'circle' | 'listing' | 'requirement' | 'cooperation' | 'test';
   circleId?: string;
   targetId?: string;
+  matchId?: string;
 };
 type Inbox = {
   unread: number;

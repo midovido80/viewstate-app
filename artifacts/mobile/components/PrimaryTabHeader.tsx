@@ -1,4 +1,5 @@
 import { useAppUpdate } from '@/contexts/AppUpdateContext';
+import { circleUnreadCount } from '@/services/notificationFeed';
 import { useCircleNotifications } from '@/contexts/CircleNotificationsContext';
 import { useAppChrome } from '@/components/AppChrome';
 import React from 'react';
@@ -17,7 +18,8 @@ export function PrimaryTabHeader({ title, compactSearch = false, action }: { tit
   const chrome=useAppChrome();
   const router = useRouter(), colors = useColors(), insets = useScreenInsets();
   const { t, isRTL, fonts, language } = useI18n(), notices = useMatchNotifications();
-  const unread = useCircleNotifications().inbox.unread + notices.unread + Number(useAppUpdate().available);
+  const { inbox } = useCircleNotifications();
+  const unread = circleUnreadCount(inbox.unread, inbox.entries) + notices.unread + Number(useAppUpdate().available);
   const row = isRTL ? 'row-reverse' : 'row';
   return <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
     {!chrome && <View style={[styles.brandRow, { flexDirection: row }]}>

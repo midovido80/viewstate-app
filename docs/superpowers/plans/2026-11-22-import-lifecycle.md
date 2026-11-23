@@ -1,0 +1,11 @@
+# WhatsApp import lifecycle
+
+Approved behavior: edit extracted data, save through the existing validated property/request forms, explicitly cancel an unsaved import without creating a record, and delete a saved record from its details page.
+
+1. Add a durable cancellation receipt to the account-local inbox. Serialize import cancellation/save, retain a cleanup journal for interrupted cancellation, and reject late autosave/handoff writes for cancelled imports. Clear only the review and linked form sessions and the owned capture draft; never clear another draft or delete a saved record as cancellation.
+2. Add a shared confirmation/control for import cancellation to review, property, studio and request forms. Keep the validated final save buttons and expose edit actions on their review stages. Preserve import identity through property navigation. Guard final import saves with the lifecycle lock.
+3. Add request deletion from its saved details page using the existing workspace snapshot/CAS transaction pattern. Property deletion remains its existing implementation. Deletion must reject stale views and preserve unrelated people/properties/requests.
+4. Regression tests: property/request cancellation before/after handoff, late autosave, cancelled delivery replay, interruption/retry, saved-record protection, unrelated draft protection, real request deletion/CAS/rollback. Browser: import, edit, save, cancel/reload and saved-details deletion for both intents.
+5. Run the mobile suite, TypeScript, formatting and Android export; review the scoped change and publish to the existing pilot OTA channel. Read the release back before reporting publication. Physical phone acceptance remains a separate evidence tier.
+
+Implementation and verification completed: 1103 mobile tests, mobile TypeScript, new-file formatting, whitespace check with CRLF handling, Web and Android/Hermes exports. Fresh exported-app browser checks passed property/request edit/save/delete, cancellation before/after handoff and reload, interrupted cancellation recovery, retained unrelated drafts, and no browser page errors. No backend change is needed. Publication/readback status is recorded in the linked release report: `docs/viewstate-next/import-lifecycle-release-20261122.ar.md`.

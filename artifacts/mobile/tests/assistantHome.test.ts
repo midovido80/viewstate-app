@@ -10,9 +10,13 @@ const request = (id = '11111111-1111-4111-8111-111111111111', seekerId = 'one'):
 const person = (id: string): Person => ({ id, name: id, classifications: ['seeker'], displayPhone: '', normalizedPhone: '', notes: '' });
 const result = (propertyId: string, score: number, requirementId = request().id): MatchResult => ({ engineVersion: MATCH_ENGINE_VERSION, requirementId, propertyId, eligible: true, qualifies: true, score, priceAmount: 490, category: 'direct', differenceCount: 0, unknownCount: 0, includedWeight: 100, locationRank: 0, ineligibilityReasons: [], explanations: [] });
 const run = (matches: MatchResult[], requirementId = request().id): BrokerMatchingRunResult => ({ engineVersion: MATCH_ENGINE_VERSION, requirementId, evaluatedCandidateCount: matches.length, matches, needsConfirmation: [] });
-test('Home quick actions use the existing canonical forms and leave sharing/import to explicit flows', () => {
-  assert.equal(homeQuickRoute('property'), '/capture/transaction'); assert.equal(homeQuickRoute('person'), '/person/new'); assert.equal(homeQuickRoute('matching'), '/matching');
-  assert.equal(homeQuickRoute('share'), null); assert.equal(homeQuickRoute('import'), '/intake');
+test('Home task rows open the existing forms, with listing mode selected for Add a property', () => {
+  assert.equal(homeQuickRoute('property'), '/capture/transaction?mode=offered&entry=listing');
+  assert.equal(homeQuickRoute('person'), '/person/new');
+  assert.equal(homeQuickRoute('matching'), '/matching');
+  assert.equal(homeQuickRoute('import'), '/intake');
+  assert.equal(homeQuickRoute('appointment'), null);
+  assert.equal(homeQuickRoute('share'), null);
 });
 test('Home top five retain highest scores, deduplicate person/property across requirements, and exclude stale or unresolved matches', () => {
   const a = request(), b = request('22222222-2222-4222-8222-222222222222'), c = request('33333333-3333-4333-8333-333333333333', 'two');

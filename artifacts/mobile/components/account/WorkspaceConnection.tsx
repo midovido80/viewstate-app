@@ -24,6 +24,15 @@ import { createWorkspaceSyncDevice } from "@/services/workspaceSyncDevice";
 import type { UserResources } from "@/contexts/UserDataContext";
 import type { createGoogleAccountDevice } from "@/services/googleAccountDevice";
 import type { SyncConflict } from "@/services/workspaceSync";
+import {
+  canChooseSyncVersion,
+  syncMissingVersionLabel,
+  syncValidationIssueMessage,
+  syncConflictDifferences,
+  syncConflictName,
+} from "@/services/syncConflictPresentation";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 type Device = Awaited<ReturnType<typeof createGoogleAccountDevice>>;
 export function WorkspaceConnection({
   resources,
@@ -37,6 +46,10 @@ export function WorkspaceConnection({
   const { language, isRTL, fonts, t } = useI18n(),
     colors = useColors(),
     ar = language === "ar";
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [resolving, setResolving] = useState(false);
+  const [resolutionError, setResolutionError] = useState("");
   const [status, setStatus] = useState<
       "local" | "synced" | "offline" | "error" | "conflict"
     >("local"),
@@ -145,8 +158,12 @@ export function WorkspaceConnection({
         : "Offline — keep working. Changes are saved on this device."
       : status === "conflict"
         ? ar
-          ? `${conflicts.length} تعارض يحتاج مراجعة — شغلك المحلي محفوظ`
-          : `${conflicts.length} conflicts to review — local work is preserved`
+          ? conflicts.some((conflict) => conflict.validationIssues?.length)
+            ? `${conflicts.length} سجل يحتاج تصحيح قبل المزامنة — شغلك المحلي محفوظ`
+            : `${conflicts.length} تعارض يحتاج مراجعة — شغلك المحلي محفوظ`
+          : conflicts.some((conflict) => conflict.validationIssues?.length)
+            ? `${conflicts.length} records need correction before sync — local work is preserved`
+            : `${conflicts.length} conflicts to review — local work is preserved`
         : status === "error"
           ? ar
             ? "المزامنة تحتاج مراجعة — بياناتك محفوظة ويمكنك متابعة العمل."
@@ -212,12 +229,47 @@ export function WorkspaceConnection({
       )[key.split("/")[0]] ?? (ar ? "سجل متابعة" : "Follow-up record")
     );
   }
-  async function resolve(conflict: SyncConflict, choice: "local" | "remote") {
+  async function resolve(
+    conflict: SyncConflict,
+    choice: "local" | "remote" | "repair_missing_person",
+  ) {
     const sync = engine.current;
-    if (!sync) return;
-    await sync.resolve(conflict.key, choice);
-    setConflicts((current) => current.filter((c) => c.key !== conflict.key));
-    retry.current();
+    if (!sync || resolving) return;
+    setResolving(true);
+    setResolutionError("");
+    try {
+      if (choice === "repair_missing_person")
+        await sync.repairMissingRequirementPerson(conflict.key);
+      else await sync.resolve(conflict.key, choice);
+      const next = await sync.sync();
+      setConflicts(next.conflicts);
+      setStatus(next.conflicts.length ? "conflict" : "synced");
+      if (!next.conflicts.length) {
+        setOpen(false);
+        setExpandedRaw(null);
+      }
+      if (next.conflicts.some((item) => item.key === conflict.key))
+        setResolutionError(
+          next.conflicts.find((item) => item.key === conflict.key)
+            ?.validationIssues?.length
+            ? syncValidationIssueMessage(
+                next.conflicts.find((item) => item.key === conflict.key)!
+                  .validationIssues![0],
+                language,
+              )
+            : ar
+              ? "تغيرت النسخة أو تعارضت مع سجل مرتبط. راجع القيم الحالية وحاول مرة ثانية."
+              : "The version or a linked record changed. Review the current values and retry.",
+        );
+    } catch {
+      setResolutionError(
+        ar
+          ? "ما اكتملت المزامنة. بياناتك على الجهاز محفوظة؛ حاول مرة ثانية."
+          : "Sync did not complete. Your device data is preserved; retry.",
+      );
+    } finally {
+      setResolving(false);
+    }
   }
   return (
     <>
@@ -229,6 +281,7 @@ export function WorkspaceConnection({
             status === "conflict" ? setOpen(true) : retry.current()
           }
           style={{
+            paddingTop: insets.top + 7,
             paddingHorizontal: 14,
             paddingVertical: 7,
             backgroundColor:
@@ -236,6 +289,11 @@ export function WorkspaceConnection({
           }}
         >
           <Text style={[text, { fontSize: 12, lineHeight: 19 }]}>{copy}</Text>
+          {status === "conflict" && (
+            <Text style={[text, { fontFamily: fonts.bold }]}>
+              {ar ? "مراجعة التعارضات" : "Review conflicts"}
+            </Text>
+          )}
         </Pressable>
       )}
       <Modal
@@ -247,9 +305,9 @@ export function WorkspaceConnection({
           style={{
             flex: 1,
             backgroundColor: colors.background,
-            paddingTop: 42,
+            paddingTop: insets.top + 16,
             paddingHorizontal: 18,
-            paddingBottom: 24,
+            paddingBottom: Math.max(insets.bottom, 24),
             gap: 12,
           }}
         >
@@ -262,10 +320,117 @@ export function WorkspaceConnection({
               : "Neither conflicting version was overwritten. Review the values and choose which version to use."}
           </Text>
           <ScrollView>
+            {!!resolutionError && (
+              <Text
+                accessibilityRole="alert"
+                style={[text, { color: colors.destructive }]}
+              >
+                {resolutionError}
+              </Text>
+            )}
             {conflicts.map((conflict) => (
               <View key={conflict.key} style={{ paddingVertical: 12, gap: 8 }}>
                 <Text style={[text, { fontFamily: fonts.semiBold }]}>
                   {recordTitle(conflict.key)}
+                  {syncConflictName(conflict)
+                    ? ` — ${syncConflictName(conflict)}`
+                    : ""}
+                </Text>
+                {conflict.validationIssues?.map((issue, index) => (
+                  <Text
+                    key={`${issue.code}-${index}`}
+                    style={[text, { color: colors.destructive }]}
+                  >
+                    {syncValidationIssueMessage(issue, language)}
+                  </Text>
+                ))}
+                {conflict.validationIssues?.some(
+                  (issue) => issue.code === "missing_requirement_person",
+                ) && (
+                  <Button
+                    title={
+                      ar
+                        ? "إصلاح الربط والاحتفاظ بالطلب"
+                        : "Keep request and repair missing link"
+                    }
+                    testID={`sync-repair-missing-person-${conflict.key}`}
+                    loading={resolving}
+                    disabled={resolving}
+                    onPress={() =>
+                      void resolve(conflict, "repair_missing_person")
+                    }
+                  />
+                )}
+                {!!conflict.validationIssues?.length &&
+                  conflict.local !== undefined && (
+                    <Button
+                      title={ar ? "مراجعة بيانات السجل" : "Review record data"}
+                      variant="outline"
+                      disabled={resolving}
+                      testID={`sync-review-record-${conflict.key}`}
+                      onPress={() => {
+                        setOpen(false);
+                        const [kind, ...parts] = conflict.key.split("/");
+                        const id = encodeURIComponent(parts.join("/"));
+                        router.push(
+                          (kind === "requirement"
+                            ? `/requirement/${id}?edit=1`
+                            : kind === "property"
+                              ? `/property/${id}?edit=1`
+                              : kind === "person"
+                                ? `/person/${id}`
+                                : "/properties") as never,
+                        );
+                      }}
+                    />
+                  )}
+                <Text style={text}>
+                  {ar ? "الحقول المختلفة:" : "Different fields:"}{" "}
+                  {(conflict.validationIssues?.length
+                    ? conflict.validationIssues.flatMap((issue) =>
+                        issue.paths.map((path) => ({ path: path.split(".") })),
+                      )
+                    : syncConflictDifferences(conflict.local, conflict.remote)
+                  )
+                    .map(({ path }) => {
+                      const field = path[path.length - 1];
+                      if (!field)
+                        return ar
+                          ? "إضافة أو حذف سجل"
+                          : "Record creation or deletion";
+                      const labels: Record<string, string> = ar
+                        ? {
+                            name: "الاسم",
+                            listingTitle: "عنوان العقار",
+                            notes: "الملاحظات",
+                            privateNotes: "الملاحظات الخاصة",
+                            displayPhone: "رقم الهاتف",
+                            normalizedPhone: "الرقم الدولي",
+                            classifications: "الأدوار",
+                            amount: "القيمة",
+                            currencyCode: "العملة",
+                            rentalPeriodId: "دورية الإيجار",
+                            transaction: "نوع المعاملة",
+                            minimum: "الحد الأدنى",
+                            maximum: "الحد الأعلى",
+                            preferredAreaIds: "المناطق",
+                            seekerId: "صاحب الطلب",
+                            preferredAreaMode: "نطاق المناطق",
+                            propertyType: "نوع العقار",
+                            budget: "الميزانية",
+                            catalogPreferences: "تفضيلات المواصفات",
+                          }
+                        : {};
+                      return (
+                        labels[field] ??
+                        (field in propertyDetailLabels
+                          ? propertyDetailLabels[field as PropertyDetailField][
+                              ar ? 1 : 0
+                            ]
+                          : path.join(" / "))
+                      );
+                    })
+                    .join(ar ? "، " : ", ")}
                 </Text>
                 {(["local", "remote"] as const).map((choice) => (
                   <View
@@ -289,9 +454,7 @@ export function WorkspaceConnection({
                     </Text>
                     <Text selectable style={text}>
                       {conflict[choice] === undefined
-                        ? ar
-                          ? "تم حذف السجل"
-                          : "Record deleted"
+                        ? syncMissingVersionLabel(conflict, choice, language)
                         : preview(conflict[choice], conflict.key)}
                     </Text>
                     {conflict[choice] !== undefined && (
@@ -316,23 +479,26 @@ export function WorkspaceConnection({
                         )}
                       </>
                     )}
-                    <Button
-                      variant="outline"
-                      title={
-                        choice === "local"
-                          ? ar
-                            ? "اعتماد نسخة الجهاز"
-                            : "Use device version"
-                          : ar
-                            ? "اعتماد نسخة السحابة"
-                            : "Use cloud version"
-                      }
-                      onPress={() =>
-                        void resolve(conflict, choice).catch(() =>
-                          setStatus("error"),
-                        )
-                      }
-                    />
+                    {canChooseSyncVersion(conflict) && (
+                      <Button
+                        disabled={resolving}
+                        variant="outline"
+                        title={
+                          choice === "local"
+                            ? ar
+                              ? "اعتماد نسخة الجهاز"
+                              : "Use device version"
+                            : ar
+                              ? "اعتماد نسخة السحابة"
+                              : "Use cloud version"
+                        }
+                        onPress={() =>
+                          void resolve(conflict, choice).catch(() =>
+                            setStatus("error"),
+                          )
+                        }
+                      />
+                    )}
                   </View>
                 ))}
               </View>

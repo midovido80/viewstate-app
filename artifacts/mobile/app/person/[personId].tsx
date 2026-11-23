@@ -1,3 +1,7 @@
+import { PhoneNumberText } from '@/components/PhoneNumberText';
+import { CircleInviteComposer } from '@/components/CircleInviteComposer';
+import { canInvitePerson } from '@/services/circleInvitations';
+import { contactPhonePresentation } from '@/services/phoneEntry';
 import { canOwnPropertyRequirement } from '@/services/people';
 import { createFormSession } from '@/services/formSession';
 import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
@@ -406,7 +410,6 @@ export default function PersonDetailScreen() {
       sourceRoles.includes(classification as PropertySource['role']),
   );
   const actionForClassification = (classification: PersonClassification) => {
-    if (['rent_seeker', 'buy_seeker', 'investor'].includes(classification)) classification = 'seeker';
     if (classification === 'seeker') {
       router.push(getPersonWantedRequirementRoute(person.id) as never);
     } else if (classification === 'owner') {
@@ -424,7 +427,6 @@ export default function PersonDetailScreen() {
     }
   };
   const primaryActionTitle = (classification: PersonClassification) => {
-    if (['rent_seeker', 'buy_seeker', 'investor'].includes(classification)) classification = 'seeker';
     if (classification === 'seeker') return language === 'ar' ? 'إضافة طلب' : 'Add Requirement';
     if (classification === 'owner') return language === 'ar' ? 'إضافة عقار معروض' : 'Add Offered Property';
     return language === 'ar' ? 'إضافة أو ربط عقار' : 'Add or Link Property';
@@ -510,7 +512,7 @@ export default function PersonDetailScreen() {
                 <View style={{ width: 54, height: 54, borderRadius: 14, backgroundColor: '#EDF2FF', alignItems: 'center', justifyContent: 'center' }}><Feather name="user" size={26} color="#2454ED" /></View>
                 <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
                   <Text style={[styles.name, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>{person.name}</Text>
-                  <Text style={[styles.phone, styles.ltrText, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{toEnglishDigits(person.displayPhone)}</Text>
+                  <PhoneNumberText style={[styles.phone, styles.ltrText, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>{contactPhonePresentation(person.displayPhone, person.normalizedPhone)}</PhoneNumberText>
                   <View style={{ direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row', flexWrap: 'wrap', gap: 8 }}>{person.classifications.map(classification => <View key={classification} style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF' }}><Text style={{ color: colors.primary, fontFamily: fonts.medium }}>{t(`people.classification.${classification}` as keyof Translations)}</Text></View>)}</View>
                 </View>
               </View>
@@ -518,6 +520,7 @@ export default function PersonDetailScreen() {
                 <ApprovedAction title={t('people.call')} onPress={() => void call()} variant="green" icon="phone" testID="person-call" />
                 <ApprovedAction title={t('people.whatsapp')} onPress={() => void openWhatsApp()} variant="green" icon="message-circle" testID="person-whatsapp" />
               </View>
+              {canInvitePerson(person.classifications) && <PersonCircleInvite person={person} />}
             </View>
             <ApprovedAction title={language === 'ar' ? 'إضافة متابعة' : 'Add follow-up'} variant="outline" icon="calendar" layout="block" testID="person-add-followup" onPress={() => router.push({ pathname: '/', params: { followupPersonId: person.id } } as never)} />
             {confirmation ? (
@@ -766,6 +769,14 @@ export default function PersonDetailScreen() {
   );
 }
 
+function PersonCircleInvite({ person }: { person: Person }) {
+  const [open, setOpen] = useState(false);
+  const { language } = useI18n();
+  return <View style={{ marginTop: 12 }}>
+    <Button testID="person-circle-invite" variant="outline" title={language === 'ar' ? 'دعوة لدائرة الثقة' : 'Invite to Trust Circle'} onPress={() => setOpen(true)} />
+    {open && <CircleInviteComposer person={person} onClose={() => setOpen(false)} />}
+  </View>;
+}
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 20 },

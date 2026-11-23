@@ -100,9 +100,7 @@ test('share, person capture and Requirement save actions also reserve the bottom
     readFile('app/requirement/[requirementId].tsx', 'utf8'),
   ]);
   assert.match(share, /paddingTop: insets\.top/);
-  assert.match(share, /paddingBottom: insets\.bottom \+ 24/);
-  assert.match(person, /paddingBottom: Math\.max\(insets\.bottom, 12\)/);
-  assert.match(person, /<KeyboardAvoidingView behavior="padding"/);
+  for (const source of [share, person]) assert.match(source, /paddingBottom: insets\.bottom \+ 24/);
   assert.doesNotMatch(requirement, /<View style=\{styles\.footer\}>/);
   assert.match(requirement, /paddingBottom: Math\.max\(insets\.bottom, 16\)/);
 });

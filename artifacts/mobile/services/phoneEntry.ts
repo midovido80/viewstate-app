@@ -198,3 +198,24 @@ export function buildContactImportCandidates(
     }];
   });
 }
+/** Display the actual dialing identity when it is known, while keeping historical local records readable. */
+export function contactPhonePresentation(original: string, normalized?: string): string {
+  const source = normalized?.startsWith('+') ? normalized : original;
+  if (!hasExplicitInternationalPrefix(source)) return Array.from(original, toAsciiDigit).join('');
+  const digits = explicitInternationalDigits(source);
+  const country = PHONE_COUNTRIES.find(item => digits.startsWith(item.dialCode));
+  if (!country) return '+' + digits;
+  const local = digits.slice(country.dialCode.length);
+  const formatted = country.code === 'KW' && local.length === 8 ? local.slice(0, 4) + ' ' + local.slice(4) : local;
+  return ['+' + country.dialCode, formatted].filter(Boolean).join(' ');
+}
+
+export function phoneCountryMatches(country: { code: string; dialCode: string }, label: string, query: string): boolean {
+  const value = Array.from(query.trim().toLocaleLowerCase(), toAsciiDigit).join('');
+  if (!value) return true;
+  if (/^\+?\d+$/.test(value)) {
+    const prefix = value.replace(/^(?:\+|00)/, '');
+    return country.dialCode.startsWith(prefix);
+  }
+  return country.code.toLocaleLowerCase().startsWith(value) || label.toLocaleLowerCase().includes(value);
+}

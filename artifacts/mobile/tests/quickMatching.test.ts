@@ -96,8 +96,8 @@ test('matching budgets display missing bounds, open budget and explicit zero wit
   const text=(minimum:number|undefined,maximum:number|undefined,open=false)=>formatMatchingBudget({budget:{minimum,maximum,currencyCode:'KWD'},...(open?{unspecifiedFields:['budget']}:{})},language);
   assert.equal(text(undefined,450),language==='ar'?'حتى 450 د.ك':'Up to 450 KWD');
   assert.equal(text(350,undefined),language==='ar'?'من 350 د.ك':'From 350 KWD');
-  assert.equal(text(350,450),'350–450 KWD');
-  assert.equal(text(0,450),'0–450 KWD');
+  assert.equal(text(350,450),language==='ar'?'من 350 إلى 450 د.ك':'350–450 KWD');
+  assert.equal(text(0,450),language==='ar'?'من 0 إلى 450 د.ك':'0–450 KWD');
   assert.equal(text(undefined,undefined,true),language==='ar'?'ميزانية مفتوحة':'Open budget');
   assert.equal(text(undefined,undefined),language==='ar'?'غير محدد':'Not specified');
  }

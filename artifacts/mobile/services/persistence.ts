@@ -656,13 +656,42 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
   }
 
   async deletePerson(id: string): Promise<boolean> {
-    if (!this.db) throw new Error('DB not initialized');
+    if (!this.db) throw new Error("DB not initialized");
     let deleted = false;
     await nativeMutations.enqueue(async () => {
       await this.db!.withTransactionAsync(async () => {
-        await this.db!.runAsync('DELETE FROM person_property_links WHERE person_id = ?', [id]);
-        await this.db!.runAsync('DELETE FROM property_sources WHERE person_id = ?', [id]);
-        const result = await this.db!.runAsync('DELETE FROM people WHERE id = ?', [id]);
+        const existing = await this.db!.getFirstAsync<{ id: string }>(
+          "SELECT id FROM people WHERE id = ?",
+          [id],
+        );
+        if (!existing) return;
+        const requests = await this.db!.getAllAsync<{
+          id: string;
+          data: string;
+        }>("SELECT id, data FROM seeker_requirements");
+        for (const row of requests) {
+          const request = this.parseRequirementForConsolidation(row);
+          if (!request) throw new Error("UNREADABLE_REQUIREMENT_STORAGE");
+          if (request.seekerId !== id) continue;
+          const replacement = { ...request.literal };
+          delete replacement.seekerId;
+          await this.db!.runAsync(
+            "UPDATE seeker_requirements SET data = ? WHERE id = ? AND data = ?",
+            [JSON.stringify(replacement), row.id, row.data],
+          );
+        }
+        await this.db!.runAsync(
+          "DELETE FROM person_property_links WHERE person_id = ?",
+          [id],
+        );
+        await this.db!.runAsync(
+          "DELETE FROM property_sources WHERE person_id = ?",
+          [id],
+        );
+        const result = await this.db!.runAsync(
+          "DELETE FROM people WHERE id = ?",
+          [id],
+        );
         deleted = result.changes === 1;
       });
     });
@@ -799,11 +828,12 @@ export class SQLiteStore implements PropertyStore, PersonStore, RequirementStore
 }
 
 export class WebStore implements PropertyStore, PersonStore, RequirementStore {
-  private readonly KEY = '@viewstate_properties';
-  private readonly DELETED_KEY = '@viewstate_deleted_property_ids_v1';
-  private readonly PEOPLE_KEY = '@viewstate_people_v1';
-  private readonly PERSON_PROPERTY_LINKS_KEY = '@viewstate_person_property_links_v1';
-  private readonly PROPERTY_SOURCES_KEY = '@viewstate_property_sources_v1';
+  private readonly KEY = "@viewstate_properties";
+  private readonly DELETED_KEY = "@viewstate_deleted_property_ids_v1";
+  private readonly PEOPLE_KEY = "@viewstate_people_v1";
+  private readonly PERSON_PROPERTY_LINKS_KEY =
+    "@viewstate_person_property_links_v1";
+  private readonly PROPERTY_SOURCES_KEY = "@viewstate_property_sources_v1";
   private initialization: Promise<void> | null = null;
   private integrityWarnings: UnreadableRecord[] = [];
   private readonly requirementsEnabled: boolean;
@@ -819,7 +849,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       storage,
       () => this.lockManager,
       this,
-      warning => appendUnreadableRecord(this.integrityWarnings, warning),
+      (warning) => appendUnreadableRecord(this.integrityWarnings, warning),
       options,
     );
   }
@@ -828,15 +858,18 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     await this.recoverWorkspace();
     if (!this.initialization) {
       const attempt = migrateStage01B1WebProperties(this.storage, this.KEY)
-        .then(() => this.withChronologyMutationLock(() =>
-          migrateWebStoreChronology({
-            storage: this.storage,
-            propertiesKey: this.KEY,
-            peopleKey: this.PEOPLE_KEY,
-            requirementsKey: this.requirementsEnabled
-              ? WEB_REQUIREMENTS_KEY
-              : undefined,
-          })))
+        .then(() =>
+          this.withChronologyMutationLock(() =>
+            migrateWebStoreChronology({
+              storage: this.storage,
+              propertiesKey: this.KEY,
+              peopleKey: this.PEOPLE_KEY,
+              requirementsKey: this.requirementsEnabled
+                ? WEB_REQUIREMENTS_KEY
+                : undefined,
+            }),
+          ),
+        )
         .then(() => undefined);
       this.initialization = attempt;
       attempt.catch(() => {
@@ -859,7 +892,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     const data = await this.storage.getItem(this.KEY);
     if (data === null) return [];
     const parsed = JSON.parse(data) as unknown;
-    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    if (!Array.isArray(parsed)) throw new Error("UNREADABLE_PROPERTY_STORAGE");
     return parsed as Property[];
   }
 
@@ -869,58 +902,150 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       this.getAllRaw(),
       this.getDeletedIds(),
     ]);
-    return all.filter(property => !deletedIds.has(property.core.id));
+    return all.filter((property) => !deletedIds.has(property.core.id));
   }
 
   private get lockManager(): LockManager | null {
     if (this.suppliedLocks !== undefined) return this.suppliedLocks;
-    const manager = typeof navigator === 'undefined'
-      ? undefined
-      : (navigator as Navigator & { locks?: unknown }).locks;
-    if (!manager || typeof (manager as { request?: unknown }).request !== 'function') return null;
+    const manager =
+      typeof navigator === "undefined"
+        ? undefined
+        : (navigator as Navigator & { locks?: unknown }).locks;
+    if (
+      !manager ||
+      typeof (manager as { request?: unknown }).request !== "function"
+    )
+      return null;
     return manager as LockManager;
   }
 
   private async withMutationLock<T>(work: () => Promise<T>): Promise<T> {
     const locks = this.lockManager;
     if (!locks) {
-      throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
+      throw new Error("SAFE_WEB_MUTATION_UNSUPPORTED");
     }
-    return locks.request('viewstate-properties-mutation', { mode: 'exclusive' }, work);
+    return locks.request(
+      "viewstate-properties-mutation",
+      { mode: "exclusive" },
+      work,
+    );
   }
 
-  private async withChronologyMutationLock<T>(work: () => Promise<T>): Promise<T> {
+  private async withChronologyMutationLock<T>(
+    work: () => Promise<T>,
+  ): Promise<T> {
     const locks = this.lockManager;
     // Without Web Locks, browser mutations are already disabled. Initialization
     // may still safely perform its one-time migration because no writer can race it.
     if (!locks) return work();
-    return locks.request('viewstate-chronology-mutation', { mode: 'exclusive' }, work);
+    return locks.request(
+      "viewstate-chronology-mutation",
+      { mode: "exclusive" },
+      work,
+    );
   }
 
-  async recoverWorkspace(){
-    const key='@viewstate_sync_web_journal_v1',raw=await this.storage.getItem(key);if(!raw)return;
-    const journal=JSON.parse(raw) as {version:number;rows:{key:string;before:string|null;after:string}[]};
-    if(journal.version!==1||!Array.isArray(journal.rows)||journal.rows.some(r=>![this.KEY,this.PEOPLE_KEY,this.PERSON_PROPERTY_LINKS_KEY,this.PROPERTY_SOURCES_KEY,WEB_REQUIREMENTS_KEY,this.DELETED_KEY].includes(r.key)))throw new Error('SYNC_JOURNAL_DAMAGED');
-    const values=await Promise.all(journal.rows.map(r=>this.storage.getItem(r.key)));
-    if(!values.every((v,i)=>v===journal.rows[i].after)){
-      if(!values.every((v,i)=>v===journal.rows[i].before||v===journal.rows[i].after))throw new Error('SYNC_JOURNAL_CONCURRENT_CHANGE');
-      for(const row of journal.rows){if(row.before===null&&this.storage.removeItem)await this.storage.removeItem(row.key);else await this.storage.setItem(row.key,row.before??(row.key===this.DELETED_KEY?'{"version":1,"ids":[]}':'[]'));}
+  async recoverWorkspace() {
+    const key = "@viewstate_sync_web_journal_v1",
+      raw = await this.storage.getItem(key);
+    if (!raw) return;
+    const journal = JSON.parse(raw) as {
+      version: number;
+      rows: { key: string; before: string | null; after: string }[];
+    };
+    if (
+      journal.version !== 1 ||
+      !Array.isArray(journal.rows) ||
+      journal.rows.some(
+        (r) =>
+          ![
+            this.KEY,
+            this.PEOPLE_KEY,
+            this.PERSON_PROPERTY_LINKS_KEY,
+            this.PROPERTY_SOURCES_KEY,
+            WEB_REQUIREMENTS_KEY,
+            this.DELETED_KEY,
+          ].includes(r.key),
+      )
+    )
+      throw new Error("SYNC_JOURNAL_DAMAGED");
+    const values = await Promise.all(
+      journal.rows.map((r) => this.storage.getItem(r.key)),
+    );
+    if (!values.every((v, i) => v === journal.rows[i].after)) {
+      if (
+        !values.every(
+          (v, i) => v === journal.rows[i].before || v === journal.rows[i].after,
+        )
+      )
+        throw new Error("SYNC_JOURNAL_CONCURRENT_CHANGE");
+      for (const row of journal.rows) {
+        if (row.before === null && this.storage.removeItem)
+          await this.storage.removeItem(row.key);
+        else
+          await this.storage.setItem(
+            row.key,
+            row.before ??
+              (row.key === this.DELETED_KEY ? '{"version":1,"ids":[]}' : "[]"),
+          );
+      }
     }
-    await this.storage.setItem(key,'');
+    await this.storage.setItem(key, "");
   }
-  async replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>{
+  async replaceWorkspace(
+    expected: BusinessSnapshot,
+    next: BusinessSnapshot,
+  ): Promise<void> {
     validateBusiness(next);
-    await this.withChronologyMutationLock(()=>this.withPeopleMutationLock(()=>this.withMutationLock(async()=>{
-      await this.recoverWorkspace();if(!sameBusiness(await readBusiness(this),expected))throw new Error('SYNC_LOCAL_CHANGED');
-      const deleted=[...new Set([...(await this.getDeletedIds()), ...(next.deletedPropertyIds ?? [])])];
-      if(next.properties.some(p=>deleted.includes(p.core.id)))throw new Error('PROPERTY_ID_DELETED');
-      const rows=await Promise.all([[this.KEY,next.properties],[this.PEOPLE_KEY,next.people],[WEB_REQUIREMENTS_KEY,next.requirements],[this.PERSON_PROPERTY_LINKS_KEY,next.links],[this.PROPERTY_SOURCES_KEY,next.sources],[this.DELETED_KEY,{version:1,ids:deleted}]].map(async([key,value])=>({key:key as string,before:await this.storage.getItem(key as string),after:JSON.stringify(value)})));
-      const journal=JSON.stringify({version:1,rows});await this.storage.setItem('@viewstate_sync_web_journal_v1',journal);
-      if(await this.storage.getItem('@viewstate_sync_web_journal_v1')!==journal)throw new Error('SYNC_JOURNAL_FAILED');
-      try{for(const row of rows)await this.storage.setItem(row.key,row.after);for(const row of rows)if(await this.storage.getItem(row.key)!==row.after)throw new Error('SYNC_LOCAL_WRITE_FAILED');}
-      catch(error){await this.recoverWorkspace();throw error;}
-      await this.storage.setItem('@viewstate_sync_web_journal_v1','');
-    })));
+    await this.withChronologyMutationLock(() =>
+      this.withPeopleMutationLock(() =>
+        this.withMutationLock(async () => {
+          await this.recoverWorkspace();
+          if (!sameBusiness(await readBusiness(this), expected))
+            throw new Error("SYNC_LOCAL_CHANGED");
+          const deleted = [
+            ...new Set([
+              ...(await this.getDeletedIds()),
+              ...(next.deletedPropertyIds ?? []),
+            ]),
+          ];
+          if (next.properties.some((p) => deleted.includes(p.core.id)))
+            throw new Error("PROPERTY_ID_DELETED");
+          const rows = await Promise.all(
+            [
+              [this.KEY, next.properties],
+              [this.PEOPLE_KEY, next.people],
+              [WEB_REQUIREMENTS_KEY, next.requirements],
+              [this.PERSON_PROPERTY_LINKS_KEY, next.links],
+              [this.PROPERTY_SOURCES_KEY, next.sources],
+              [this.DELETED_KEY, { version: 1, ids: deleted }],
+            ].map(async ([key, value]) => ({
+              key: key as string,
+              before: await this.storage.getItem(key as string),
+              after: JSON.stringify(value),
+            })),
+          );
+          const journal = JSON.stringify({ version: 1, rows });
+          await this.storage.setItem("@viewstate_sync_web_journal_v1", journal);
+          if (
+            (await this.storage.getItem("@viewstate_sync_web_journal_v1")) !==
+            journal
+          )
+            throw new Error("SYNC_JOURNAL_FAILED");
+          try {
+            for (const row of rows)
+              await this.storage.setItem(row.key, row.after);
+            for (const row of rows)
+              if ((await this.storage.getItem(row.key)) !== row.after)
+                throw new Error("SYNC_LOCAL_WRITE_FAILED");
+          } catch (error) {
+            await this.recoverWorkspace();
+            throw error;
+          }
+          await this.storage.setItem("@viewstate_sync_web_journal_v1", "");
+        }),
+      ),
+    );
   }
 
   async saveProperty(property: Property) {
@@ -928,17 +1053,17 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       this.withMutationLock(async () => {
         const all = await this.getAllRaw();
         if ((await this.getDeletedIds()).has(property.core.id)) {
-          throw new Error('PROPERTY_ID_DELETED');
+          throw new Error("PROPERTY_ID_DELETED");
         }
-        const existing = all.findIndex(p => p.core.id === property.core.id);
+        const existing = all.findIndex((p) => p.core.id === property.core.id);
         if (existing >= 0) {
           if (JSON.stringify(all[existing]) !== JSON.stringify(property)) {
-            throw new Error('PROPERTY_ID_ALREADY_EXISTS');
+            throw new Error("PROPERTY_ID_ALREADY_EXISTS");
           }
-          const chronology = await getWebChronology(this.storage, 'property');
+          const chronology = await getWebChronology(this.storage, "property");
           await addWebChronology(
             this.storage,
-            'property',
+            "property",
             property.core.id,
             chronology.get(property.core.id) ?? UNKNOWN_CREATION_TIMESTAMP,
           );
@@ -946,32 +1071,39 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
         }
         await addWebChronology(
           this.storage,
-          'property',
+          "property",
           property.core.id,
           createCreationTimestamp(),
         );
         all.unshift(property);
         await this.storage.setItem(this.KEY, JSON.stringify(all));
-      }));
+      }),
+    );
   }
 
   async getProperty(id: string): Promise<Property | null> {
-    const matching = (await this.getAll()).filter(property => property.core.id === id);
-    if (matching.length > 1) throw new Error('DUPLICATE_PROPERTY');
+    const matching = (await this.getAll()).filter(
+      (property) => property.core.id === id,
+    );
+    if (matching.length > 1) throw new Error("DUPLICATE_PROPERTY");
     return matching[0] ?? null;
   }
 
-  async compareAndUpdate(expected: Property, replacement: Property): Promise<boolean> {
-    if (expected.core.id !== replacement.core.id || !this.canSafelyUpdate()) return false;
+  async compareAndUpdate(
+    expected: Property,
+    replacement: Property,
+  ): Promise<boolean> {
+    if (expected.core.id !== replacement.core.id || !this.canSafelyUpdate())
+      return false;
     return this.withMutationLock(async () => {
       const all = await this.getAllRaw();
       if ((await this.getDeletedIds()).has(expected.core.id)) return false;
       const matching = all
         .map((property, index) => ({ property, index }))
-        .filter(item => item.property.core.id === expected.core.id);
+        .filter((item) => item.property.core.id === expected.core.id);
       if (
-        matching.length !== 1
-        || JSON.stringify(matching[0].property) !== JSON.stringify(expected)
+        matching.length !== 1 ||
+        JSON.stringify(matching[0].property) !== JSON.stringify(expected)
       ) {
         return false;
       }
@@ -989,24 +1121,25 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     return this.lockManager !== null;
   }
 
-  async getDeletedPropertyIds(): Promise<string[]> { return [...await this.getDeletedIds()].sort(); }
+  async getDeletedPropertyIds(): Promise<string[]> {
+    return [...(await this.getDeletedIds())].sort();
+  }
 
   async getProperties(): Promise<Property[]> {
     const [properties, chronology] = await Promise.all([
       this.getAll(),
-      getWebChronology(this.storage, 'property'),
+      getWebChronology(this.storage, "property"),
     ]);
-    return sortByChronology(properties, property => ({
+    return sortByChronology(properties, (property) => ({
       id: property.core.id,
-      createdAt: chronology.get(property.core.id)
-        ?? UNKNOWN_CREATION_TIMESTAMP,
+      createdAt: chronology.get(property.core.id) ?? UNKNOWN_CREATION_TIMESTAMP,
     }));
   }
 
   async searchProperties(query: string): Promise<Property[]> {
     const all = await this.getProperties();
     const q = query.toLowerCase();
-    return all.filter(p => {
+    return all.filter((p) => {
       return getPropertySearchText(p).includes(q);
     });
   }
@@ -1016,32 +1149,40 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     if (raw === null) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     if (
-      !parsed || typeof parsed !== 'object' || Array.isArray(parsed)
-      || (parsed as { version?: unknown }).version !== 1
-      || !Array.isArray((parsed as { ids?: unknown }).ids)
-      || !(parsed as { ids: unknown[] }).ids.every(id => typeof id === 'string')
-    ) throw new Error('UNREADABLE_DELETION_SAFEGUARD');
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      (parsed as { version?: unknown }).version !== 1 ||
+      !Array.isArray((parsed as { ids?: unknown }).ids) ||
+      !(parsed as { ids: unknown[] }).ids.every((id) => typeof id === "string")
+    )
+      throw new Error("UNREADABLE_DELETION_SAFEGUARD");
     return new Set((parsed as { ids: string[] }).ids);
   }
 
   async deleteProperty(expected: Property): Promise<PropertyDeletionResult> {
-    if (!this.canPermanentlyDelete()) return { status: 'unsupported' };
+    if (!this.canPermanentlyDelete()) return { status: "unsupported" };
     const before = await readBusiness(this);
-    const matches = before.properties.filter(p => p.core.id === expected.core.id);
-    if (!matches.length) return { status: 'missing' };
-    if (matches.length !== 1) return { status: 'duplicate' };
-    if (JSON.stringify(matches[0]) !== JSON.stringify(expected)) return { status: 'stale' };
+    const matches = before.properties.filter(
+      (p) => p.core.id === expected.core.id,
+    );
+    if (!matches.length) return { status: "missing" };
+    if (matches.length !== 1) return { status: "duplicate" };
+    if (JSON.stringify(matches[0]) !== JSON.stringify(expected))
+      return { status: "stale" };
     const id = expected.core.id;
     // The existing verified workspace journal makes all related arrays and the
     // deletion fence one recoverable operation, under the same writer locks.
     await this.replaceWorkspace(before, {
       ...before,
-      properties: before.properties.filter(p => p.core.id !== id),
-      deletedPropertyIds: [...new Set([...(before.deletedPropertyIds ?? []), id])],
-      links: before.links.filter(l => l.propertyCoreId !== id),
-      sources: before.sources.filter(s => s.propertyCoreId !== id),
+      properties: before.properties.filter((p) => p.core.id !== id),
+      deletedPropertyIds: [
+        ...new Set([...(before.deletedPropertyIds ?? []), id]),
+      ],
+      links: before.links.filter((l) => l.propertyCoreId !== id),
+      sources: before.sources.filter((s) => s.propertyCoreId !== id),
     });
-    return { status: 'deleted', count: 1 };
+    return { status: "deleted", count: 1 };
   }
 
   async deletePropertiesSnapshot(
@@ -1050,13 +1191,13 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   ): Promise<PropertyDeletionResult> {
     // Do not add a caller assertion or lock-based escape hatch here. Only the
     // native SQLite adapter has a transaction spanning fence and exact deletes.
-    return { status: 'unsupported' };
+    return { status: "unsupported" };
   }
 
   async getPropertyInventory(): Promise<PropertyInventory> {
     const all = await this.getAll();
-    const ids = all.map(property => property.core.id);
-    if (new Set(ids).size !== ids.length) throw new Error('DUPLICATE_PROPERTY');
+    const ids = all.map((property) => property.core.id);
+    if (new Set(ids).size !== ids.length) throw new Error("DUPLICATE_PROPERTY");
     return { count: ids.length, ids: [...ids].sort() };
   }
 
@@ -1064,7 +1205,7 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     const raw = await this.storage.getItem(this.PEOPLE_KEY);
     if (raw === null) return [];
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PERSON_STORAGE');
+    if (!Array.isArray(parsed)) throw new Error("UNREADABLE_PERSON_STORAGE");
     return parsed as Person[];
   }
 
@@ -1072,7 +1213,8 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     const raw = await this.storage.getItem(this.PERSON_PROPERTY_LINKS_KEY);
     if (raw === null) return [];
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    if (!Array.isArray(parsed))
+      throw new Error("UNREADABLE_PERSON_PROPERTY_LINK_STORAGE");
     return parsed as PersonPropertyLink[];
   }
 
@@ -1080,21 +1222,29 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     const raw = await this.storage.getItem(this.PROPERTY_SOURCES_KEY);
     if (raw === null) return [];
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    if (!Array.isArray(parsed))
+      throw new Error("UNREADABLE_PROPERTY_SOURCE_STORAGE");
     const sources = parsed as PropertySource[];
-    if (sources.some(source => !validatePropertySource(source).ok)) {
-      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    if (sources.some((source) => !validatePropertySource(source).ok)) {
+      throw new Error("UNREADABLE_PROPERTY_SOURCE_STORAGE");
     }
-    if (new Set(sources.map(source => source.propertyCoreId)).size !== sources.length) {
-      throw new Error('DUPLICATE_PROPERTY_SOURCE');
+    if (
+      new Set(sources.map((source) => source.propertyCoreId)).size !==
+      sources.length
+    ) {
+      throw new Error("DUPLICATE_PROPERTY_SOURCE");
     }
     return sources;
   }
 
   private async withPeopleMutationLock<T>(work: () => Promise<T>): Promise<T> {
     const locks = this.lockManager;
-    if (!locks) throw new Error('SAFE_WEB_MUTATION_UNSUPPORTED');
-    return locks.request(PERSON_REQUIREMENT_MUTATION_LOCK, { mode: 'exclusive' }, work);
+    if (!locks) throw new Error("SAFE_WEB_MUTATION_UNSUPPORTED");
+    return locks.request(
+      PERSON_REQUIREMENT_MUTATION_LOCK,
+      { mode: "exclusive" },
+      work,
+    );
   }
 
   async savePerson(person: Person): Promise<Person> {
@@ -1102,25 +1252,33 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     return this.withChronologyMutationLock(() =>
       this.withPeopleMutationLock(async () => {
         const all = await this.getAllPeople();
-        if (all.some(candidate => {
-          try { assertValidPerson(candidate); return false; } catch { return true; }
-        })) throw new Error('UNREADABLE_PERSON_STORAGE');
-        const existing = all.find(item => item.id === person.id);
+        if (
+          all.some((candidate) => {
+            try {
+              assertValidPerson(candidate);
+              return false;
+            } catch {
+              return true;
+            }
+          })
+        )
+          throw new Error("UNREADABLE_PERSON_STORAGE");
+        const existing = all.find((item) => item.id === person.id);
         if (existing) {
           if (JSON.stringify(existing) !== JSON.stringify(person)) {
-            throw new Error('PERSON_ID_ALREADY_EXISTS');
+            throw new Error("PERSON_ID_ALREADY_EXISTS");
           }
-          const chronology = await getWebChronology(this.storage, 'person');
+          const chronology = await getWebChronology(this.storage, "person");
           await addWebChronology(
             this.storage,
-            'person',
+            "person",
             person.id,
             chronology.get(person.id) ?? UNKNOWN_CREATION_TIMESTAMP,
           );
           return existing;
         }
-        const samePhone = all.find(candidate =>
-          candidate.normalizedPhone === person.normalizedPhone,
+        const samePhone = all.find(
+          (candidate) => candidate.normalizedPhone === person.normalizedPhone,
         );
         if (samePhone) {
           const enriched = enrichPersonIdentity(samePhone, person);
@@ -1130,16 +1288,24 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
           }
           return enriched;
         }
-        await addWebChronology(this.storage, 'person', person.id, createCreationTimestamp());
+        await addWebChronology(
+          this.storage,
+          "person",
+          person.id,
+          createCreationTimestamp(),
+        );
         all.unshift(person);
         await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(all));
         return person;
-      }));
+      }),
+    );
   }
 
   async getPerson(id: string): Promise<Person | null> {
-    const matching = (await this.getAllPeople()).filter(person => person.id === id);
-    if (matching.length > 1) throw new Error('DUPLICATE_PERSON');
+    const matching = (await this.getAllPeople()).filter(
+      (person) => person.id === id,
+    );
+    if (matching.length > 1) throw new Error("DUPLICATE_PERSON");
     return matching[0] ?? null;
   }
 
@@ -1148,21 +1314,36 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     assertValidPerson(replacement);
     return this.withPeopleMutationLock(async () => {
       const all = await this.getAllPeople();
-      if (all.some(candidate => {
-        try { assertValidPerson(candidate); return false; } catch { return true; }
-      })) throw new Error('UNREADABLE_PERSON_STORAGE');
+      if (
+        all.some((candidate) => {
+          try {
+            assertValidPerson(candidate);
+            return false;
+          } catch {
+            return true;
+          }
+        })
+      )
+        throw new Error("UNREADABLE_PERSON_STORAGE");
       const matching = all
         .map((person, index) => ({ person, index }))
-        .filter(item => item.person.id === expected.id);
+        .filter((item) => item.person.id === expected.id);
       if (
-        matching.length !== 1
-        || JSON.stringify(matching[0].person) !== JSON.stringify(expected)
-      ) return false;
-      const collision = all.find(item =>
-        item.id !== replacement.id && item.normalizedPhone === replacement.normalizedPhone
+        matching.length !== 1 ||
+        JSON.stringify(matching[0].person) !== JSON.stringify(expected)
+      )
+        return false;
+      const collision = all.find(
+        (item) =>
+          item.id !== replacement.id &&
+          item.normalizedPhone === replacement.normalizedPhone,
       );
       if (collision) {
-        await this.consolidateWebPeople([replacement, collision], all, replacement);
+        await this.consolidateWebPeople(
+          [replacement, collision],
+          all,
+          replacement,
+        );
         return true;
       }
       all[matching[0].index] = replacement;
@@ -1174,44 +1355,59 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   async getPeople(): Promise<Person[]> {
     const [people, chronology] = await Promise.all([
       this.getAllPeople(),
-      getWebChronology(this.storage, 'person'),
+      getWebChronology(this.storage, "person"),
     ]);
-    return sortByChronology(people, person => ({
+    return sortByChronology(people, (person) => ({
       id: person.id,
-      createdAt: chronology.get(person.id)
-        ?? UNKNOWN_CREATION_TIMESTAMP,
+      createdAt: chronology.get(person.id) ?? UNKNOWN_CREATION_TIMESTAMP,
     }));
   }
 
   private async getRawRequirementsForConsolidation(): Promise<{
     raw: string | null;
-    values: Array<{ value: Record<string, unknown>; requirement: { id: string; seekerId?: string } }>;
+    values: Array<{
+      value: Record<string, unknown>;
+      requirement: { id: string; seekerId?: string };
+    }>;
     unreadableSeekerIds: Array<string | null>;
     rawValues: unknown[];
   }> {
     const raw = await this.storage.getItem(WEB_REQUIREMENTS_KEY);
-    if (raw === null) return { raw, values: [], unreadableSeekerIds: [], rawValues: [] };
+    if (raw === null)
+      return { raw, values: [], unreadableSeekerIds: [], rawValues: [] };
     try {
       const array = JSON.parse(raw) as unknown;
-      if (!Array.isArray(array)) throw new Error('invalid');
+      if (!Array.isArray(array)) throw new Error("invalid");
       const unreadableSeekerIds: Array<string | null> = [];
-      const values = array.flatMap(value => {
+      const values = array.flatMap((value) => {
         const normalized = normalizeSeekerRequirement(value, {
-          isCanonicalAreaId: id => getAreaById(id) !== undefined,
+          isCanonicalAreaId: (id) => getAreaById(id) !== undefined,
         });
-        if (!normalized.ok || typeof value !== 'object' || value === null || Array.isArray(value)) {
+        if (
+          !normalized.ok ||
+          typeof value !== "object" ||
+          value === null ||
+          Array.isArray(value)
+        ) {
           unreadableSeekerIds.push(
-            typeof value === 'object' && value !== null
-              && typeof (value as { seekerId?: unknown }).seekerId === 'string'
-              ? (value as { seekerId: string }).seekerId : null,
+            typeof value === "object" &&
+              value !== null &&
+              typeof (value as { seekerId?: unknown }).seekerId === "string"
+              ? (value as { seekerId: string }).seekerId
+              : null,
           );
           return [];
         }
-        return [{ value: value as Record<string, unknown>, requirement: normalized.value }];
+        return [
+          {
+            value: value as Record<string, unknown>,
+            requirement: normalized.value,
+          },
+        ];
       });
       return { raw, values, unreadableSeekerIds, rawValues: array };
     } catch {
-      throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
+      throw new Error("UNREADABLE_REQUIREMENT_STORAGE");
     }
   }
 
@@ -1220,24 +1416,47 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     suppliedPeople?: Person[],
     replacement?: Person,
   ): Promise<Person> {
-    const people = suppliedPeople ?? await this.getAllPeople();
-    if (people.some(person => {
-      try { assertValidPerson(person); return false; } catch { return true; }
-    })) throw new Error('UNREADABLE_PERSON_STORAGE');
-    const matching = people.filter(person => candidates.some(candidate => candidate.id === person.id));
+    const people = suppliedPeople ?? (await this.getAllPeople());
+    if (
+      people.some((person) => {
+        try {
+          assertValidPerson(person);
+          return false;
+        } catch {
+          return true;
+        }
+      })
+    )
+      throw new Error("UNREADABLE_PERSON_STORAGE");
+    const matching = people.filter((person) =>
+      candidates.some((candidate) => candidate.id === person.id),
+    );
     if (matching.length < 2) return candidates[0];
-    const chronology = await getWebChronology(this.storage, 'person');
-    const survivor = [...matching].sort((a, b) =>
-      (chronology.get(a.id) ?? UNKNOWN_CREATION_TIMESTAMP) - (chronology.get(b.id) ?? UNKNOWN_CREATION_TIMESTAMP)
-      || a.id.localeCompare(b.id))[0];
-    const effective = matching.map(person =>
-      replacement?.id === person.id ? replacement : person);
-    const effectiveSurvivor = effective.find(person => person.id === survivor.id)!;
+    const chronology = await getWebChronology(this.storage, "person");
+    const survivor = [...matching].sort(
+      (a, b) =>
+        (chronology.get(a.id) ?? UNKNOWN_CREATION_TIMESTAMP) -
+          (chronology.get(b.id) ?? UNKNOWN_CREATION_TIMESTAMP) ||
+        a.id.localeCompare(b.id),
+    )[0];
+    const effective = matching.map((person) =>
+      replacement?.id === person.id ? replacement : person,
+    );
+    const effectiveSurvivor = effective.find(
+      (person) => person.id === survivor.id,
+    )!;
     const merged = effective.reduce(
-      (current, person) => current.id === person.id ? current : enrichPersonIdentity(current, person),
+      (current, person) =>
+        current.id === person.id
+          ? current
+          : enrichPersonIdentity(current, person),
       effectiveSurvivor,
     );
-    const losers = new Set(matching.filter(person => person.id !== survivor.id).map(person => person.id));
+    const losers = new Set(
+      matching
+        .filter((person) => person.id !== survivor.id)
+        .map((person) => person.id),
+    );
     const [links, sources, requirements, properties] = await Promise.all([
       this.getAllPersonPropertyLinks(),
       this.getAllPropertySources(),
@@ -1245,63 +1464,103 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
       this.getAll(),
     ]);
     if (requirements.unreadableSeekerIds.length > 0) {
-      throw new Error('UNREADABLE_REQUIREMENT_STORAGE');
+      throw new Error("UNREADABLE_REQUIREMENT_STORAGE");
     }
-    if (links.some(link => !link || typeof link.personId !== 'string'
-      || typeof link.propertyCoreId !== 'string' || !link.personId || !link.propertyCoreId)) {
-      throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    if (
+      links.some(
+        (link) =>
+          !link ||
+          typeof link.personId !== "string" ||
+          typeof link.propertyCoreId !== "string" ||
+          !link.personId ||
+          !link.propertyCoreId,
+      )
+    ) {
+      throw new Error("UNREADABLE_PERSON_PROPERTY_LINK_STORAGE");
     }
-    if (properties.some(property => !validateProperty(property).ok)) {
-      throw new Error('UNREADABLE_PROPERTY_STORAGE');
+    if (properties.some((property) => !validateProperty(property).ok)) {
+      throw new Error("UNREADABLE_PROPERTY_STORAGE");
     }
-    const propertyIds = new Set(properties.map(property => property.core.id));
-    const personIds = new Set(people.map(person => person.id));
-    if (links.some(link =>
-      !personIds.has(link.personId) || !propertyIds.has(link.propertyCoreId)
-    )) {
-      throw new Error('UNREADABLE_PERSON_PROPERTY_LINK_STORAGE');
+    const propertyIds = new Set(properties.map((property) => property.core.id));
+    const personIds = new Set(people.map((person) => person.id));
+    if (
+      links.some(
+        (link) =>
+          !personIds.has(link.personId) ||
+          !propertyIds.has(link.propertyCoreId),
+      )
+    ) {
+      throw new Error("UNREADABLE_PERSON_PROPERTY_LINK_STORAGE");
     }
-    if (sources.some(source => {
-      const sourcePerson = people.find(person => person.id === source.personId);
-      return !propertyIds.has(source.propertyCoreId)
-        || !sourcePerson;
-    })) {
-      throw new Error('UNREADABLE_PROPERTY_SOURCE_STORAGE');
+    if (
+      sources.some((source) => {
+        const sourcePerson = people.find(
+          (person) => person.id === source.personId,
+        );
+        return !propertyIds.has(source.propertyCoreId) || !sourcePerson;
+      })
+    ) {
+      throw new Error("UNREADABLE_PROPERTY_SOURCE_STORAGE");
     }
     const nextPeople = people
-      .filter(person => !losers.has(person.id))
-      .map(person => person.id === survivor.id ? merged : person);
+      .filter((person) => !losers.has(person.id))
+      .map((person) => (person.id === survivor.id ? merged : person));
     const linkSet = new Set<string>();
-    const nextLinks = links.flatMap(link => {
-      const next = losers.has(link.personId) ? { ...link, personId: survivor.id } : link;
+    const nextLinks = links.flatMap((link) => {
+      const next = losers.has(link.personId)
+        ? { ...link, personId: survivor.id }
+        : link;
       const key = `${next.personId}\u0000${next.propertyCoreId}`;
       return linkSet.has(key) ? [] : (linkSet.add(key), [next]);
     });
-    const nextSources = sources.map(source => losers.has(source.personId)
-      ? { ...source, personId: survivor.id } : source);
-    const nextRequirements = requirements.rawValues.map(value => {
-      const item = requirements.values.find(candidate => candidate.value === value);
+    const nextSources = sources.map((source) =>
+      losers.has(source.personId)
+        ? { ...source, personId: survivor.id }
+        : source,
+    );
+    const nextRequirements = requirements.rawValues.map((value) => {
+      const item = requirements.values.find(
+        (candidate) => candidate.value === value,
+      );
       return item?.requirement.seekerId && losers.has(item.requirement.seekerId)
-        ? { ...item.value, seekerId: survivor.id } : value;
+        ? { ...item.value, seekerId: survivor.id }
+        : value;
     });
     // Dependents first leaves the old person available if a later write fails.
     // Best-effort rollback restores exact prior bytes before surfacing failure.
     const writes: Array<[string, string | null, string]> = [
-      [this.PERSON_PROPERTY_LINKS_KEY, await this.storage.getItem(this.PERSON_PROPERTY_LINKS_KEY), JSON.stringify(nextLinks)],
-      [this.PROPERTY_SOURCES_KEY, await this.storage.getItem(this.PROPERTY_SOURCES_KEY), JSON.stringify(nextSources)],
-      [WEB_REQUIREMENTS_KEY, requirements.raw, JSON.stringify(nextRequirements)],
-      [this.PEOPLE_KEY, await this.storage.getItem(this.PEOPLE_KEY), JSON.stringify(nextPeople)],
+      [
+        this.PERSON_PROPERTY_LINKS_KEY,
+        await this.storage.getItem(this.PERSON_PROPERTY_LINKS_KEY),
+        JSON.stringify(nextLinks),
+      ],
+      [
+        this.PROPERTY_SOURCES_KEY,
+        await this.storage.getItem(this.PROPERTY_SOURCES_KEY),
+        JSON.stringify(nextSources),
+      ],
+      [
+        WEB_REQUIREMENTS_KEY,
+        requirements.raw,
+        JSON.stringify(nextRequirements),
+      ],
+      [
+        this.PEOPLE_KEY,
+        await this.storage.getItem(this.PEOPLE_KEY),
+        JSON.stringify(nextPeople),
+      ],
     ];
     const completed: Array<[string, string | null]> = [];
     try {
       for (const [key, before, after] of writes) {
-        if (before === null && after === '[]') continue;
+        if (before === null && after === "[]") continue;
         await this.storage.setItem(key, after);
         completed.push([key, before]);
       }
     } catch (error) {
       for (const [key, before] of completed.reverse()) {
-        if (before !== null) await this.storage.setItem(key, before).catch(() => undefined);
+        if (before !== null)
+          await this.storage.setItem(key, before).catch(() => undefined);
       }
       throw error;
     }
@@ -1312,12 +1571,23 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
     if (!this.lockManager) return;
     await this.withPeopleMutationLock(async () => {
       const people = await this.getAllPeople();
-      if (people.some(person => {
-        try { assertValidPerson(person); return false; } catch { return true; }
-      })) return;
+      if (
+        people.some((person) => {
+          try {
+            assertValidPerson(person);
+            return false;
+          } catch {
+            return true;
+          }
+        })
+      )
+        return;
       const groups = new Map<string, Person[]>();
       for (const person of people) {
-        groups.set(person.normalizedPhone, [...(groups.get(person.normalizedPhone) ?? []), person]);
+        groups.set(person.normalizedPhone, [
+          ...(groups.get(person.normalizedPhone) ?? []),
+          person,
+        ]);
       }
       for (const group of groups.values()) {
         if (group.length > 1) await this.consolidateWebPeople(group);
@@ -1326,123 +1596,203 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   async searchPeople(query: string): Promise<Person[]> {
-    return (await this.getPeople()).filter(person => personMatchesSearch(person, query));
+    return (await this.getPeople()).filter((person) =>
+      personMatchesSearch(person, query),
+    );
   }
 
   async deletePerson(id: string): Promise<boolean> {
     return this.withPeopleMutationLock(async () => {
+      await this.recoverWorkspace();
       const people = await this.getAllPeople();
-      const remainingPeople = people.filter(person => person.id !== id);
+      const remainingPeople = people.filter((person) => person.id !== id);
       if (remainingPeople.length === people.length) return false;
       const links = await this.getAllPersonPropertyLinks();
-      const remainingLinks = links.filter(link => link.personId !== id);
-      if (remainingLinks.length !== links.length) {
-        await this.storage.setItem(
-          this.PERSON_PROPERTY_LINKS_KEY,
-          JSON.stringify(remainingLinks),
-        );
-      }
+      const remainingLinks = links.filter((link) => link.personId !== id);
       const sources = await this.getAllPropertySources();
-      const remainingSources = sources.filter(source => source.personId !== id);
-      if (remainingSources.length !== sources.length) {
-        await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(remainingSources));
+      const remainingSources = sources.filter(
+        (source) => source.personId !== id,
+      );
+      const requirements = await this.getRawRequirementsForConsolidation();
+      if (requirements.unreadableSeekerIds.length)
+        throw new Error("UNREADABLE_REQUIREMENT_STORAGE");
+      const nextRequirements = requirements.rawValues.map((value) => {
+        const item = requirements.values.find(
+          (candidate) => candidate.value === value,
+        );
+        if (item?.requirement.seekerId !== id) return value;
+        const replacement = { ...item.value };
+        delete replacement.seekerId;
+        return replacement;
+      });
+      const targets: Array<[string, unknown]> = [
+        [this.PERSON_PROPERTY_LINKS_KEY, remainingLinks],
+        [this.PROPERTY_SOURCES_KEY, remainingSources],
+        [WEB_REQUIREMENTS_KEY, nextRequirements],
+        [this.PEOPLE_KEY, remainingPeople],
+      ];
+      const rows = await Promise.all(
+        targets.map(async ([key, value]) => ({
+          key,
+          before: await this.storage.getItem(key),
+          after: JSON.stringify(value),
+        })),
+      );
+      const journalKey = "@viewstate_sync_web_journal_v1";
+      const journal = JSON.stringify({ version: 1, rows });
+      await this.storage.setItem(journalKey, journal);
+      if ((await this.storage.getItem(journalKey)) !== journal)
+        throw new Error("SYNC_JOURNAL_FAILED");
+      try {
+        for (const row of rows) await this.storage.setItem(row.key, row.after);
+        for (const row of rows)
+          if ((await this.storage.getItem(row.key)) !== row.after)
+            throw new Error("SYNC_LOCAL_WRITE_FAILED");
+      } catch (error) {
+        await this.recoverWorkspace();
+        throw error;
       }
-      await this.storage.setItem(this.PEOPLE_KEY, JSON.stringify(remainingPeople));
+      await this.storage.setItem(journalKey, "");
       return true;
     });
   }
 
   async linkPersonToProperty(link: PersonPropertyLink): Promise<void> {
-    if (!link.personId || !link.propertyCoreId) throw new Error('INVALID_PERSON_PROPERTY_LINK');
+    if (!link.personId || !link.propertyCoreId)
+      throw new Error("INVALID_PERSON_PROPERTY_LINK");
     await this.withPeopleMutationLock(async () => {
       const [people, property] = await Promise.all([
         this.getAllPeople(),
         this.getProperty(link.propertyCoreId),
       ]);
-      if (!people.some(person => person.id === link.personId) || !property) {
-        throw new Error('PERSON_PROPERTY_LINK_TARGET_MISSING');
+      if (!people.some((person) => person.id === link.personId) || !property) {
+        throw new Error("PERSON_PROPERTY_LINK_TARGET_MISSING");
       }
       const links = await this.getAllPersonPropertyLinks();
-      if (links.some(item =>
-        item.personId === link.personId && item.propertyCoreId === link.propertyCoreId
-      )) return;
-      links.push({ personId: link.personId, propertyCoreId: link.propertyCoreId });
-      await this.storage.setItem(this.PERSON_PROPERTY_LINKS_KEY, JSON.stringify(links));
+      if (
+        links.some(
+          (item) =>
+            item.personId === link.personId &&
+            item.propertyCoreId === link.propertyCoreId,
+        )
+      )
+        return;
+      links.push({
+        personId: link.personId,
+        propertyCoreId: link.propertyCoreId,
+      });
+      await this.storage.setItem(
+        this.PERSON_PROPERTY_LINKS_KEY,
+        JSON.stringify(links),
+      );
     });
   }
 
   async unlinkPersonFromProperty(link: PersonPropertyLink): Promise<boolean> {
     return this.withPeopleMutationLock(async () => {
       const links = await this.getAllPersonPropertyLinks();
-      const remaining = links.filter(item =>
-        item.personId !== link.personId || item.propertyCoreId !== link.propertyCoreId
+      const remaining = links.filter(
+        (item) =>
+          item.personId !== link.personId ||
+          item.propertyCoreId !== link.propertyCoreId,
       );
       if (remaining.length === links.length) return false;
-      await this.storage.setItem(this.PERSON_PROPERTY_LINKS_KEY, JSON.stringify(remaining));
+      await this.storage.setItem(
+        this.PERSON_PROPERTY_LINKS_KEY,
+        JSON.stringify(remaining),
+      );
       return true;
     });
   }
 
   async getPersonPropertyLinks(): Promise<PersonPropertyLink[]> {
     const links = await this.getAllPersonPropertyLinks();
-    const pairs = links.map(link => `${link.personId}\u0000${link.propertyCoreId}`);
-    if (new Set(pairs).size !== pairs.length) throw new Error('DUPLICATE_PERSON_PROPERTY_LINK');
+    const pairs = links.map(
+      (link) => `${link.personId}\u0000${link.propertyCoreId}`,
+    );
+    if (new Set(pairs).size !== pairs.length)
+      throw new Error("DUPLICATE_PERSON_PROPERTY_LINK");
     return links;
   }
 
   async getLinksForPerson(personId: string): Promise<PersonPropertyLink[]> {
-    return (await this.getPersonPropertyLinks()).filter(link => link.personId === personId);
+    return (await this.getPersonPropertyLinks()).filter(
+      (link) => link.personId === personId,
+    );
   }
 
-  async getLinksForProperty(propertyCoreId: string): Promise<PersonPropertyLink[]> {
-    return (await this.getPersonPropertyLinks())
-      .filter(link => link.propertyCoreId === propertyCoreId);
+  async getLinksForProperty(
+    propertyCoreId: string,
+  ): Promise<PersonPropertyLink[]> {
+    return (await this.getPersonPropertyLinks()).filter(
+      (link) => link.propertyCoreId === propertyCoreId,
+    );
   }
 
   async setPropertySource(source: PropertySource): Promise<void> {
     const validation = validatePropertySource(source);
-    if (!validation.ok) throw new Error('INVALID_PROPERTY_SOURCE');
+    if (!validation.ok) throw new Error("INVALID_PROPERTY_SOURCE");
     await this.withPeopleMutationLock(async () => {
       const [people, property, sources] = await Promise.all([
         this.getAllPeople(),
         this.getProperty(source.propertyCoreId),
         this.getAllPropertySources(),
       ]);
-      const sourcePerson = people.find(person => person.id === source.personId);
+      const sourcePerson = people.find(
+        (person) => person.id === source.personId,
+      );
       if (!sourcePerson || !property) {
-        throw new Error('PROPERTY_SOURCE_TARGET_MISSING');
+        throw new Error("PROPERTY_SOURCE_TARGET_MISSING");
       }
       const next = [
-        ...sources.filter(item => item.propertyCoreId !== source.propertyCoreId),
+        ...sources.filter(
+          (item) => item.propertyCoreId !== source.propertyCoreId,
+        ),
         source,
       ];
-      await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(next));
+      await this.storage.setItem(
+        this.PROPERTY_SOURCES_KEY,
+        JSON.stringify(next),
+      );
     });
   }
 
-  async getPropertySource(propertyCoreId: string): Promise<PropertySource | null> {
-    const matching = (await this.getAllPropertySources())
-      .filter(source => source.propertyCoreId === propertyCoreId);
-    if (matching.length > 1) throw new Error('DUPLICATE_PROPERTY_SOURCE');
+  async getPropertySource(
+    propertyCoreId: string,
+  ): Promise<PropertySource | null> {
+    const matching = (await this.getAllPropertySources()).filter(
+      (source) => source.propertyCoreId === propertyCoreId,
+    );
+    if (matching.length > 1) throw new Error("DUPLICATE_PROPERTY_SOURCE");
     return matching[0] ?? null;
   }
 
   async removePropertySource(propertyCoreId: string): Promise<boolean> {
     return this.withPeopleMutationLock(async () => {
       const sources = await this.getAllPropertySources();
-      const remaining = sources.filter(source => source.propertyCoreId !== propertyCoreId);
+      const remaining = sources.filter(
+        (source) => source.propertyCoreId !== propertyCoreId,
+      );
       if (remaining.length === sources.length) return false;
-      await this.storage.setItem(this.PROPERTY_SOURCES_KEY, JSON.stringify(remaining));
+      await this.storage.setItem(
+        this.PROPERTY_SOURCES_KEY,
+        JSON.stringify(remaining),
+      );
       return true;
     });
   }
 
-  async getPropertySourcesForPerson(personId: string): Promise<PropertySource[]> {
-    return (await this.getAllPropertySources()).filter(source => source.personId === personId);
+  async getPropertySourcesForPerson(
+    personId: string,
+  ): Promise<PropertySource[]> {
+    return (await this.getAllPropertySources()).filter(
+      (source) => source.personId === personId,
+    );
   }
 
-  saveRequirement = (requirement: Parameters<RequirementStore['saveRequirement']>[0]) =>
-    this.requirements.saveRequirement(requirement);
+  saveRequirement = (
+    requirement: Parameters<RequirementStore["saveRequirement"]>[0],
+  ) => this.requirements.saveRequirement(requirement);
 
   getRequirement = (id: string) => this.requirements.getRequirement(id);
 
@@ -1456,13 +1806,14 @@ export class WebStore implements PropertyStore, PersonStore, RequirementStore {
   }
 
   updateRequirement = (
-    expected: Parameters<RequirementStore['updateRequirement']>[0],
-    replacement: Parameters<RequirementStore['updateRequirement']>[1],
+    expected: Parameters<RequirementStore["updateRequirement"]>[0],
+    replacement: Parameters<RequirementStore["updateRequirement"]>[1],
   ) => this.requirements.updateRequirement(expected, replacement);
 }
 
 export const store: PropertyStore & PersonStore & RequirementStore & {
   getIntegrityStatus(): LocalStoreIntegrityStatus;
+  replaceWorkspace(expected:BusinessSnapshot,next:BusinessSnapshot):Promise<void>;
 } =
   Platform.OS === 'web' ? new WebStore() : new SQLiteStore();
 

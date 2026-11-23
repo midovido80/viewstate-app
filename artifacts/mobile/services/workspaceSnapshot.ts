@@ -20,6 +20,10 @@ import {
   type AssistantState,
 } from "./dailyAssistant";
 import { stableSync, type SyncRecords } from "./workspaceSync";
+import {
+  WorkspaceValidationError,
+  type WorkspaceValidationIssue,
+} from "./workspaceValidation";
 export interface BusinessSnapshot {
   deletedPropertyIds?: string[];
   properties: Property[];
@@ -47,8 +51,15 @@ export async function readBusiness(
   ).filter((s): s is PropertySource => s !== null);
   if (store.getIntegrityStatus().hasUnreadableRecords)
     throw new Error("SYNC_UNREADABLE_LOCAL_DATA");
-  const deletedPropertyIds = await store.getDeletedPropertyIds?.() ?? [];
-  return { properties, people, requirements, links, sources, ...(deletedPropertyIds.length ? {deletedPropertyIds} : {}) };
+  const deletedPropertyIds = (await store.getDeletedPropertyIds?.()) ?? [];
+  return {
+    properties,
+    people,
+    requirements,
+    links,
+    sources,
+    ...(deletedPropertyIds.length ? { deletedPropertyIds } : {}),
+  };
 }
 export function validateBusiness(data: BusinessSnapshot) {
   if (
@@ -58,36 +69,85 @@ export function validateBusiness(data: BusinessSnapshot) {
     )
   )
     throw new Error("SYNC_INVALID_WORKSPACE");
+  const issues: WorkspaceValidationIssue[] = [];
+  let errorCode = "";
+  const add = (
+    error: string,
+    code: string,
+    keys: string[],
+    paths: string[] = [],
+  ) => {
+    errorCode ||= error;
+    issues.push({ code, keys, paths });
+  };
   const people = new Set<string>(),
-    phones = new Set<string>(),
+    phones = new Map<string, string>(),
     properties = new Set<string>(),
     requests = new Set<string>(),
     sources = new Set<string>(),
     links = new Set<string>();
   const deleted = new Set(data.deletedPropertyIds ?? []);
-  if (deleted.size !== (data.deletedPropertyIds ?? []).length || [...deleted].some(id => typeof id !== "string" || !id || id.length > 500)) throw new Error("SYNC_INVALID_DELETION");
+  if (
+    deleted.size !== (data.deletedPropertyIds ?? []).length ||
+    [...deleted].some((id) => typeof id !== "string" || !id || id.length > 500)
+  )
+    throw new Error("SYNC_INVALID_DELETION");
   for (const p of data.people) {
-    assertValidPerson(p);
-    if (people.has(p.id) || phones.has(p.normalizedPhone))
-      throw new Error("SYNC_CONTACT_CONFLICT");
+    try {
+      assertValidPerson(p);
+    } catch {
+      add("SYNC_CONTACT_CONFLICT", "invalid_person", [`person/${p.id}`]);
+    }
+    if (people.has(p.id) || phones.has(p.normalizedPhone)) {
+      add(
+        "SYNC_CONTACT_CONFLICT",
+        "duplicate_person_phone",
+        [
+          ...new Set([
+            `person/${p.id}`,
+            `person/${phones.get(p.normalizedPhone) ?? p.id}`,
+          ]),
+        ],
+        ["normalizedPhone"],
+      );
+    }
     people.add(p.id);
-    phones.add(p.normalizedPhone);
+    phones.set(p.normalizedPhone, p.id);
   }
   for (const p of data.properties) {
-    if (!validateProperty(p).ok || properties.has(p.core.id) || deleted.has(p.core.id))
-      throw new Error("SYNC_INVALID_PROPERTY");
+    const validation = validateProperty(p);
+    if (!validation.ok || properties.has(p.core.id) || deleted.has(p.core.id))
+      add(
+        "SYNC_INVALID_PROPERTY",
+        "invalid_property",
+        [`property/${p.core.id}`],
+        validation.ok
+          ? []
+          : validation.issues.map((issue) => issue.path.join(".")),
+      );
     properties.add(p.core.id);
   }
   for (const r of data.requirements) {
-    if (
-      !validateSeekerRequirement(r, {
-        allowLegacyCatalogAliases: true,
-        allowLegacyEmptyAreaScope: true,
-      }).ok ||
-      requests.has(r.id) ||
-      (r.seekerId && !people.has(r.seekerId))
-    )
-      throw new Error("SYNC_INVALID_REQUIREMENT");
+    const validation = validateSeekerRequirement(r, {
+      allowLegacyCatalogAliases: true,
+      allowLegacyEmptyAreaScope: true,
+    });
+    if (!validation.ok || requests.has(r.id))
+      add(
+        "SYNC_INVALID_REQUIREMENT",
+        "invalid_requirement",
+        [`requirement/${r.id}`],
+        validation.ok
+          ? []
+          : validation.issues.map((issue) => issue.path.join(".")),
+      );
+    if (r.seekerId && !people.has(r.seekerId))
+      add(
+        "SYNC_INVALID_REQUIREMENT",
+        "missing_requirement_person",
+        [`requirement/${r.id}`],
+        ["seekerId"],
+      );
     requests.add(r.id);
   }
   for (const s of data.sources) {
@@ -97,7 +157,12 @@ export function validateBusiness(data: BusinessSnapshot) {
       !properties.has(s.propertyCoreId) ||
       sources.has(s.propertyCoreId)
     )
-      throw new Error("SYNC_INVALID_SOURCE");
+      add(
+        "SYNC_INVALID_SOURCE",
+        "invalid_source",
+        [`source/${s.propertyCoreId}`],
+        ["personId", "propertyCoreId"],
+      );
     sources.add(s.propertyCoreId);
   }
   for (const l of data.links) {
@@ -107,16 +172,25 @@ export function validateBusiness(data: BusinessSnapshot) {
       !properties.has(l.propertyCoreId) ||
       links.has(key)
     )
-      throw new Error("SYNC_INVALID_LINK");
+      add(
+        "SYNC_INVALID_LINK",
+        "invalid_link",
+        [
+          `link/${encodeURIComponent(l.personId)}/${encodeURIComponent(l.propertyCoreId)}`,
+        ],
+        ["personId", "propertyCoreId"],
+      );
     links.add(key);
   }
+  if (issues.length) throw new WorkspaceValidationError(errorCode, issues);
 }
 export function businessRecords(
   data: BusinessSnapshot,
   assistant: AssistantState,
 ): SyncRecords {
   const out: SyncRecords = {};
-  for (const id of data.deletedPropertyIds ?? []) out[`property/${id}`] = {version: 1, deleted: true};
+  for (const id of data.deletedPropertyIds ?? [])
+    out[`property/${id}`] = { version: 1, deleted: true };
   for (const p of data.properties) out[`property/${p.core.id}`] = p;
   for (const p of data.people) out[`person/${p.id}`] = p;
   for (const r of data.requirements) out[`requirement/${r.id}`] = r;
@@ -162,7 +236,12 @@ export function fromBusinessRecords(
       ["__proto__", "constructor", "prototype"].includes(id)
     )
       throw new Error("SYNC_INVALID_RECORD_ID");
-    if (kind === "property" && (value as {deleted?:unknown})?.deleted === true && (value as {version?:unknown})?.version === 1 && Object.keys(value as object).length === 2) {
+    if (
+      kind === "property" &&
+      (value as { deleted?: unknown })?.deleted === true &&
+      (value as { version?: unknown })?.version === 1 &&
+      Object.keys(value as object).length === 2
+    ) {
       (data.deletedPropertyIds ??= []).push(id);
     } else if (kind === "property") {
       const p = value as Property;

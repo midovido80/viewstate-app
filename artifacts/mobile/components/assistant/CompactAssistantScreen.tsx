@@ -197,14 +197,15 @@ export default function CompactAssistantScreen() {
     return <View style={s.field}><Txt bold>{language === 'ar' ? 'التاريخ والساعة' : 'Date & time'}</Txt><Action icon="calendar" label={dateLabel(value) + ' · ' + followupTimeLabel(time, clockFormat, language === 'ar')} onPress={() => openCalendar(target)} tone="quiet" />{fieldError === 'time' || fieldError === 'conflict' ? <Txt color={c.red}>{formError}</Txt> : null}</View>;
   }
   useEffect(() => {
-    if (!params.quickAction || !h.ready) return;
+    if (!params.quickAction || !h.ready || h.busy) return;
     if(params.quickAction === 'calendar') openCalendar();
     else quickAction(params.quickAction as HomeQuickAction);
     router.setParams({ quickAction: undefined, quickActionKey: undefined });
-  }, [params.quickAction, params.quickActionKey, h.ready]);
+  }, [params.quickAction, params.quickActionKey, h.ready, h.busy]);
   function quickAction(action: HomeQuickAction) {
     const href = homeQuickRoute(action);
     if (href) { setMode(null); router.push(href as never); }
+    else if (action === 'appointment') openEditor('viewing');
     else if (action === 'share') { if (!h.ready) { h.notify(C(h.error ? 'loadError' : 'loading')); return; } setPickerQuery(''); setMode('share'); }
     else h.notify(C('importLater'));
   }
@@ -220,7 +221,7 @@ export default function CompactAssistantScreen() {
   }
   let modalTitle: string = '', modalBody: React.ReactNode = null, modalFooter: React.ReactNode = null;
   if (mode === 'editor') {
-    modalTitle = C(expected ? 'edit' : 'addFollowup');
+    modalTitle = !expected && draft.kind === 'viewing' ? (language === 'ar' ? 'موعد جديد' : 'New appointment') : C(expected ? 'edit' : 'addFollowup');
     modalBody = <>
       <Txt bold>{C('type')}</Txt><View style={[s.choiceRow, { flexDirection: row }]}>{(['call', 'viewing', 'available', 'note'] as const).map(kind => <Pressable key={kind} accessibilityRole="button" accessibilityState={{ selected: draft.kind === kind }} disabled={!!expected?.history.length && expected.kind !== kind} onPress={() => setDraft(d => ({ ...d, kind }))} style={[s.choice, draft.kind === kind && { backgroundColor: c.pale, borderColor: c.blue }]}><Txt>{C(kind)}</Txt></Pressable>)}</View>
       {!!expected?.history.length && <Txt muted size={12}>{C('editKindLocked')}</Txt>}
@@ -315,11 +316,16 @@ export default function CompactAssistantScreen() {
     <NextHomeCanvas ready={h.ready} properties={h.catalog.properties} requirements={h.catalog.requirements} people={h.catalog.people}
       date={dateLabel(today)} matches={matches.items.length} matchStatus={matches.status} retryMatches={matches.retry}
       tasks={upcoming.map(taskRow)} taskCount={upcoming.length}
+      hasSavedTasks={h.state.tasks.length > 0} onQuickAction={quickAction}
       openTasks={() => { setQuery(''); setMode('allTasks'); }}
       addTask={() => openEditor()} openCalendar={() => openCalendar()}
       openRequests={() => setMode('requirements')}
       notice={<>{h.error && !mode ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}
-        {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { flexDirection: row, alignItems: 'center' }]}><View style={s.grow}><Txt color={c.red}>{h.notice}</Txt></View>{h.canUndo && <Action label={C('undo')} onPress={() => void h.undo()} tone="danger" disabled={h.busy} />}</View> : null}</>} />
+        {h.notice ? <View accessibilityLiveRegion="polite" style={[s.alert, { backgroundColor: h.notice.tone === 'success' ? c.greenBg : c.neutral, flexDirection: row, alignItems: 'center', gap: 8 }]}>
+          {h.notice.tone === 'success' && <Feather name="check-circle" size={18} color={c.green} />}
+          <View style={s.grow}><Txt color={h.notice.tone === 'success' ? c.green : c.ink}>{h.notice.text}</Txt></View>
+          {h.canUndo && h.notice.tone === 'success' && <Action label={C('undo')} onPress={() => void h.undo()} tone="success" disabled={h.busy} />}
+        </View> : null}</>} />
     {mode && <AssistantSheet title={modalTitle} onClose={close} busy={h.busy} footer={modalFooter}>{modalBody}{formError ? <AlertNote>{formError}</AlertNote> : null}{h.error ? <AlertNote onRetry={() => void h.reload()} retryLabel={C('retry')}>{h.error}</AlertNote> : null}</AssistantSheet>}
   </View>;
 }

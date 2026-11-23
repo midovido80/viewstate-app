@@ -1,3 +1,5 @@
+import { getAreaById } from '@/constants/kuwait-areas';
+import { formatMatchingBudget } from '@/services/matchingPresentation';
 import { CircleMatchingPanel } from '@/components/CircleMatchingPanel';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { matchingTarget, resolveMatchingScope, matchingScopeKey, matchingRestoreFits, runSavedMatchingScope } from '@/services/matchingScope';
@@ -253,6 +255,30 @@ export default function MatchingScreen() {
   };
 
   const resultGroups = resultScopeKey === scopeKey ? matchAllGroups : null;
+  const activeUnlinked = resultScopeKey === scopeKey ? unlinkedRun : null;
+  const savedResults = resultGroups?.some(group =>
+    group.requirementGroups.some(request => request.matches.length > 0 || request.needsConfirmation.length > 0));
+  const unlinkedResults = activeUnlinked && [...activeUnlinked.run.matches, ...activeUnlinked.run.needsConfirmation];
+  const completedEmpty = !loading && !error && (
+    unlinkedResults ? unlinkedResults.length === 0 : resultGroups !== null ? !savedResults : quickResults?.length === 0
+  );
+  const scopedRequest = requirements.find(item => item.id === requestedRequirementId);
+  const scopedProperty = properties.find(item => item.core.id === requestedPropertyId);
+  const scopeLabel = scopedRequest
+    ? [t('propertyType.' + scopedRequest.propertyType), t('matching.purpose.' + scopedRequest.purpose),
+      ...scopedRequest.preferredAreaIds.map(id => getAreaById(id)?.[language])].filter(Boolean).join(' · ')
+    : scopedProperty ? [t('propertyType.' + scopedProperty.core.propertyType),
+      getAreaById(scopedProperty.core.locationArea.id)?.[language]].filter(Boolean).join(' · ') : '';
+  const ar = language === 'ar';
+  const switchToAll = () => {
+    clearRun();
+    setMode('saved');
+    setPolicies({});
+    setExcluded({});
+    currentScopeRef.current = '__changing_scope__';
+    matchAllRequested.current = true;
+    router.setParams(matchingTarget({ kind: 'all' }).params);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -289,20 +315,36 @@ export default function MatchingScreen() {
         {account && scope.kind === 'all' && inventoryScope !== 'private' && <CircleMatchingPanel
           request={account.request} owner={account.profile.user_id} requirements={requirements} properties={properties} />}
         {(!account || scope.kind !== 'all' || inventoryScope !== 'circle') && <>
-        {account && (scope.kind === 'requirement' || scope.kind === 'property') && <Button
-          title={language === 'ar' ? 'طابق في دائرة الثقة' : 'Match in a Trust Circle'}
-          testID="matching-open-circle"
-          onPress={() => router.push({ pathname: '/trust-circle', params: scope.kind === 'requirement'
-            ? { requestId: scope.id } : { propertyId: scope.id } } as never)} />}
-        {scope.kind !== 'all' && <Button title={language === 'ar' ? 'مطابقة الكل' : 'Match all'} onPress={() => { clearRun(); setMode('saved'); setPolicies({}); setExcluded({}); currentScopeRef.current = '__changing_scope__'; matchAllRequested.current=true; router.setParams(matchingTarget({ kind: 'all' }).params); }} testID="matching-clear-scope" />}
+        {scopedRecord && <View style={[styles.scopeCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID="matching-scope-summary">
+          <Text style={{ color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }}>
+            {scopeLabel || (ar ? 'السجل المحدد' : 'Selected record')}
+          </Text>
+          {scopedRequest && <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
+            {formatMatchingBudget(scopedRequest, language)}
+            {scopedRequest.purpose === 'rent' ? ' · ' + (scopedRequest.rentalPeriodId === 'daily' ? (ar ? 'يوميًا' : 'daily')
+              : scopedRequest.rentalPeriodId === 'yearly' ? (ar ? 'سنويًا' : 'yearly') : (ar ? 'شهريًا' : 'monthly')) : ''}
+          </Text>}
+          <Text style={{ color: colors.mutedForeground, textAlign: isRTL ? 'right' : 'left' }}>
+            {ar ? 'نطاق البحث · سجلاتي' : 'Search scope · My records'}
+          </Text>
+          <TouchableOpacity accessibilityRole="button" onPress={switchToAll} testID="matching-clear-scope" style={styles.quietAction}>
+            <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{ar ? 'تغيير النطاق إلى كل السجلات' : 'Switch to all records'}</Text>
+          </TouchableOpacity>
+          {account && <TouchableOpacity accessibilityRole="button" testID="matching-open-circle" style={styles.quietAction}
+            onPress={() => router.push({ pathname: '/trust-circle', params: scope.kind === 'requirement' ? { requestId: scope.id } : { propertyId: requestedPropertyId } } as never)}>
+            <Text style={{ color: colors.primary, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }}>{ar ? 'طابق في دائرة الثقة' : 'Match in a Trust Circle'}</Text>
+          </TouchableOpacity>}
+        </View>}
+        {scope.kind !== 'all' && !scopedRecord && <Button title={ar ? 'تغيير النطاق إلى كل السجلات' : 'Switch to all records'}
+          variant="outline" onPress={switchToAll} testID="matching-clear-scope" />}
 
-        <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        {!scopedRecord && <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <View style={styles.headerCopy}>
             <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('matching.subtitle')}
             </Text>
           </View>
-        </View>
+        </View>}
 
         {scope.kind === 'all' && <View style={[styles.modeSwitch, { backgroundColor: colors.muted }]}>
           <TouchableOpacity
@@ -329,20 +371,20 @@ export default function MatchingScreen() {
           </TouchableOpacity>
         </View>}
 
-        {mode === 'saved' || scope.kind !== 'all' ? (
+        {!scopedRecord && (mode === 'saved' || scope.kind !== 'all' ? (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
               {requestedPropertyId ? (language === 'ar' ? 'طلبات مناسبة لهذا العقار' : 'Client requests for this property') : requestedRequirementId ? (language === 'ar' ? 'عقارات مناسبة لهذا الطلب' : 'Properties for this request') : t('matching.saved.matchAllTitle')}
             </Text>
             <Text style={[styles.helper, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-              {scopedRecord ? (language === 'ar' ? 'النتائج تخص السجل المحدد فقط. اضغط مطابقة الكل لعرض باقي السجلات.' : 'Results are limited to this record. Choose Match all to include other records.') : requirements.length ? t('matching.saved.matchAllDescription') : t('matching.saved.empty')}
+              {scopedRecord ? (language === 'ar' ? 'هنبحث عن مطابقات للسجل اللي فتحته.' : 'This search uses the record you opened.') : requirements.length ? t('matching.saved.matchAllDescription') : t('matching.saved.empty')}
             </Text>
           </View>
         ) : (
           <QuickMatchingForm filters={quickFilters} budgetText={budgetText}
             onChange={next=>{clearRun();setQuickFilters(next);}}
             onBudgetChange={(key,value)=>{clearRun();setBudgetText(current=>({...current,[key]:value}));}} />
-        )}
+        ))}
 
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: colors.card, borderColor: colors.destructive }]} testID="matching-error">
@@ -352,6 +394,10 @@ export default function MatchingScreen() {
             </Text>
           </View>
         ) : null}
+
+        {mode === 'saved' && scope.kind === 'all' && !requirements.length && <Button
+          title={language === 'ar' ? 'إضافة طلب عميل' : 'Add a client request'} variant="outline"
+          onPress={() => router.push({ pathname: '/capture/transaction', params: { mode: 'wanted' } })} testID="matching-add-request" />}
 
         <Button
           title={loading
@@ -364,13 +410,30 @@ export default function MatchingScreen() {
           testID="matching-run"
         />
 
-        {unlinkedRun && resultScopeKey === scopeKey && <View style={styles.resultsSection} testID="matching-unlinked-request"><Text style={{ color: colors.foreground, textAlign:isRTL?'right':'left',fontFamily:fonts.semiBold }}>{language==='ar'?'مطابقات الطلب غير المرتبط بشخص':'Matches for the unlinked request'}</Text>{[...unlinkedRun.run.matches,...unlinkedRun.run.needsConfirmation].map((result,index)=><MatchingResultCard key={result.propertyId} rank={index+1} result={result} requirement={unlinkedRun.requirement} property={properties.find(property=>property.core.id===result.propertyId)} onPress={()=>void openMatchedProperty(result.propertyId)} onViewRequirement={()=>openMatchedRequest(unlinkedRun.requirement.id)} />)}{!unlinkedRun.run.matches.length&&!unlinkedRun.run.needsConfirmation.length&&<Text style={{textAlign:isRTL?'right':'left'}}>{language==='ar'?'لا توجد مطابقات مناسبة حاليًا':'No suitable matches yet'}</Text>}</View>}
-        {resultGroups && !unlinkedRun && <View style={styles.resultsSection} testID="matching-results">
+        {completedEmpty && <View testID={scopedRecord ? 'matching-scoped-empty' : 'matching-no-results'}
+          style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Feather name="search" size={28} color={colors.primary} />
+          <Text style={{ color: colors.foreground, fontSize: 17, fontFamily: fonts.bold, textAlign: 'center' }}>
+            {requestedPropertyId ? (ar ? 'ما لقينا طلبات مطابقة' : 'No matching client requests')
+              : (ar ? 'ما لقينا عقارات مطابقة' : 'No matching properties')}
+          </Text>
+          <Text style={{ color: colors.mutedForeground, textAlign: 'center' }}>
+            {scopedRequest ? (ar ? 'راجع نطاق البحث أو عدّل الطلب.' : 'Review the search scope or edit the request.')
+              : (ar ? 'راجع نطاق البحث وحاول مرة ثانية.' : 'Review the search scope and try again.')}
+          </Text>
+          {scopedRequest && <Button title={ar ? 'تعديل الطلب' : 'Edit request'} variant="outline"
+            onPress={() => router.push({ pathname: '/requirement/[requirementId]', params: { requirementId: scopedRequest.id, edit: '1' } } as never)} />}
+        </View>}
+        {!loading && activeUnlinked && unlinkedResults && unlinkedResults.length > 0 && <View style={styles.resultsSection} testID="matching-unlinked-request">
+          {unlinkedResults.map((result, index) => <MatchingResultCard key={result.propertyId} rank={index + 1} result={result}
+            requirement={activeUnlinked.requirement} property={properties.find(property => property.core.id === result.propertyId)}
+            onPress={() => void openMatchedProperty(result.propertyId)} onViewRequirement={() => openMatchedRequest(activeUnlinked.requirement.id)} />)}
+        </View>}
+        {!loading && resultGroups && !activeUnlinked && savedResults && <View style={styles.resultsSection} testID="matching-results">
           <View style={[styles.resultsHeader, { direction: 'ltr', flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             <Text style={{ color: '#173F78', fontFamily: fonts.bold, fontSize: 19 }}>{t('matching.results.title')}</Text>
             <TouchableOpacity onPress={clearRun} testID="matching-clear" accessibilityRole="button"><Text style={{ color: '#2563EB', fontFamily: fonts.semiBold }}>{t('matching.clear')}</Text></TouchableOpacity>
           </View>
-          {scopedRecord && !resultGroups.some(group => group.requirementGroups.some(request => request.matches.length || request.needsConfirmation.length)) && <Text testID="matching-scoped-empty" style={{ color: colors.mutedForeground, fontFamily: fonts.medium, textAlign: isRTL ? 'right' : 'left' }}>{requestedPropertyId ? (language === 'ar' ? 'لا توجد طلبات مناسبة لهذا العقار حاليًا.' : 'No suitable client requests for this property yet.') : (language === 'ar' ? 'لا توجد عقارات مناسبة لهذا الطلب حاليًا.' : 'No suitable properties for this request yet.')}</Text>}
           <MatchingResultsGroups groups={resultGroups} properties={properties} layout={resultsLayout} onLayoutChange={setResultsLayout} policies={policies} busy={loading}
             onRefine={refine} onReplace={replaceSuggestion} onOpenProperty={id => void openMatchedProperty(id)}
             onShareProperty={(propertyId, personId) => router.push({ pathname: '/property/[propertyCoreId]/share', params: { propertyCoreId: propertyId, recipientId: personId } } as never)}
@@ -379,7 +442,7 @@ export default function MatchingScreen() {
             onOpenRequest={openMatchedRequest} />
           <Text style={[styles.transientNote, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>{t('matching.results.transient')}</Text>
         </View>}
-        {quickResults && scope.kind === 'all' && <View style={styles.resultsSection}>
+        {!loading && quickResults && quickResults.length > 0 && scope.kind === 'all' && <View style={styles.resultsSection}>
           <TouchableOpacity onPress={clearRun} accessibilityRole="button" testID="matching-clear-quick"><Text style={{color:'#245DF4',fontFamily:fonts.semiBold}}>{t('matching.clear')}</Text></TouchableOpacity>
           <QuickMatchingResults key={JSON.stringify(quickFilters)} results={quickResults} layout={resultsLayout} onLayoutChange={setResultsLayout} onOpenProperty={id=>void openMatchedProperty(id)} onOpenPerson={openMatchedPerson} onOpenRequest={openMatchedRequest} />
         </View>}
@@ -395,6 +458,9 @@ export default function MatchingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
+  scopeCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 6, marginBottom: 12 },
+  quietAction: { minHeight: 44, justifyContent: 'center' },
+  emptyCard: { borderWidth: 1, borderRadius: 14, marginTop: 12, padding: 16, alignItems: 'center', gap: 10 },
   header: { alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   headerCopy: { flex: 1 },
   subtitle: { fontSize: 14, lineHeight: 20, marginTop: 4 },

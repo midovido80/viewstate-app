@@ -59,6 +59,8 @@ export function CompactDropdown({
   inlineLabel = false,
   title,
   testID,
+  triggerLabel,
+  iconOnly = false,
 }: {
   label?: string;
   title?: string;
@@ -67,6 +69,8 @@ export function CompactDropdown({
   multiple?: boolean;
   inlineLabel?: boolean;
   testID?: string;
+  triggerLabel?: string;
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     { isRTL, language, fonts } = useI18n(),
@@ -84,7 +88,7 @@ export function CompactDropdown({
     lineHeight: 24,
   };
   return (
-    <View style={{ width: "100%", gap: 8, direction: "ltr", flexDirection: label && inlineLabel ? (isRTL ? "row-reverse" : "row") : "column", alignItems: label && inlineLabel ? "center" : undefined }}>
+    <View style={{ width: iconOnly ? 48 : "100%", gap: 8, direction: "ltr", flexDirection: label && inlineLabel ? (isRTL ? "row-reverse" : "row") : "column", alignItems: label && inlineLabel ? "center" : undefined }}>
       {label && (
         <Text style={[text, { fontFamily: fonts.semiBold, flex: inlineLabel ? 2 : undefined }]}>{label}</Text>
       )}
@@ -105,11 +109,11 @@ export function CompactDropdown({
           alignItems: 'center', gap: 8,
         })}
       >
-        <Text style={[text, { flex: 1 }]}>
-          {selected.map((o) => o.label).join("، ") ||
+        {!iconOnly && <Text style={[text, { flex: 1 }]}>
+          {triggerLabel || selected.map((o) => o.label).join("، ") ||
             (language === "ar" ? "اختر…" : "Choose…")}
-        </Text>
-        <Feather name="chevron-down" size={16} color={n.muted} />
+        </Text>}
+        <Feather name={iconOnly ? "more-horizontal" : "chevron-down"} size={iconOnly ? 22 : 16} color={n.muted} />
       </Pressable>
       <Modal
         visible={open}
@@ -162,7 +166,6 @@ export function CompactDropdown({
                   style={{
                     minHeight: 48,
                     width: numeric ? /^\d+$/.test(o.value) ? '22%' : '100%' : '100%',
-                    flexGrow: numeric && /^\d+$/.test(o.value) ? 1 : 0,
                     borderRadius: numeric ? 10 : 0,
                     backgroundColor: o.selected ? n.soft : n.white,
                     borderWidth: numeric ? 1 : 0,

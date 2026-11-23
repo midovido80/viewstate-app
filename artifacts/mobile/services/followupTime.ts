@@ -12,6 +12,8 @@ export function timeFromParts(hour: number, minute: number, format: ClockFormat,
 export function hasFollowupTime(value: string) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(value); }
 export function followupTimeLabel(value: string, format: ClockFormat, arabic: boolean) {
   if (!hasFollowupTime(value)) return arabic ? 'اختر الساعة' : 'Choose time';
+  if (value === '00:00') return `${format === 12 ? '12:00' : value} ${arabic ? 'منتصف الليل' : 'midnight'}`;
+  if (value === '12:00') return `12:00 ${arabic ? 'ظهرًا' : 'noon'}`;
   const p = timeParts(value, format);
   return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}${format === 12 ? ` ${arabic ? p.period ? 'م' : 'ص' : p.period ? 'PM' : 'AM'}` : ''}`;
 }

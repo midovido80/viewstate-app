@@ -1,6 +1,9 @@
 import { AppUpdateProvider } from '@/contexts/AppUpdateContext';
 import { CircleNotificationsProvider } from '@/contexts/CircleNotificationsContext';
 import { IncomingImportBanner } from '@/components/IncomingImportBanner';
+import { CircleInviteLinkCapture } from '@/components/CircleInviteLinkCapture';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { circleInviteToken, PENDING_CIRCLE_INVITE } from '@/services/circleInvitations';
 import { NextExperienceProvider } from '@/contexts/NextExperienceContext';
 import { AppChrome } from '@/components/AppChrome';
 import { MatchNotificationsProvider } from '@/contexts/MatchNotificationsContext';
@@ -26,7 +29,7 @@ import {
 import { useUserData } from '@/contexts/UserDataContext';
 import { listenForCirclePush } from '@/services/circlePush';
 import { RealAccountGate, useRealAccount } from '@/contexts/RealAccountContext';
-import { Stack, useRootNavigationState, useRouter } from 'expo-router';
+import { Stack, useRootNavigationState, useRouter, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
@@ -39,6 +42,7 @@ import {
 import { I18nProvider, useI18n } from '@/contexts/I18nContext';
 import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
+import { ImportCancellationGate } from '@/components/ImportCancellationGate';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
@@ -54,6 +58,16 @@ function RootLayoutNav({
   const owner = account?.profile.user_id;
   const router = useRouter();
   const navigationReady = Boolean(useRootNavigationState()?.key);
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!owner || !navigationReady || pathname.startsWith('/circle-invite/')) return;
+    let active = true;
+    void AsyncStorage.getItem(PENDING_CIRCLE_INVITE).then(value => {
+      const token = value && circleInviteToken(value);
+      if (active && token) router.push({ pathname: '/circle-invite/[token]', params: { token } } as never);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [owner, navigationReady, pathname]);
   useEffect(() => {
     if (!owner || !navigationReady) return;
     let cancelled = false;
@@ -106,7 +120,7 @@ function RootLayoutNav({
           </Text>
         </View>
       ) : null}
-      <IncomingImportBanner />
+      <ImportCancellationGate><IncomingImportBanner />
       <NextExperienceProvider><AppChrome><Stack screenOptions={{ headerBackTitle: 'Back' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
@@ -115,8 +129,10 @@ function RootLayoutNav({
         <Stack.Screen name="intake" options={{ headerShown: false }} />
         <Stack.Screen name="intake-review/[importId]" options={{ headerShown: false }} />
         <Stack.Screen name="trust-circle" options={{ headerShown: false }} />
+        <Stack.Screen name="circle-invite/[token]" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="notification-match" options={{ headerShown: false }} />
         <Stack.Screen name="account" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="person/new" options={{ headerShown: false }} />
@@ -127,7 +143,7 @@ function RootLayoutNav({
         <Stack.Screen name="property/[propertyCoreId]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/enrich" options={{ headerShown: false }} />
         <Stack.Screen name="property/[propertyCoreId]/share" options={{ headerShown: false }} />
-      </Stack></AppChrome></NextExperienceProvider>
+      </Stack></AppChrome></NextExperienceProvider></ImportCancellationGate>
     </View>
   );
 }
@@ -246,7 +262,7 @@ export default function RootLayout() {
 
   // Load the approved fonts before the auth gate, including first launch and Guest setup.
   if (!fontsLoaded && !fontError) return <AppLoadingScreen />;
-  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><RealAccountGate><ApplicationRoot fontsLoaded={fontsLoaded} fontError={fontError} /></RealAccountGate></I18nProvider></SafeAreaProvider>;
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><I18nProvider><CircleInviteLinkCapture /><RealAccountGate><ApplicationRoot fontsLoaded={fontsLoaded} fontError={fontError} /></RealAccountGate></I18nProvider></SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({

@@ -1,3 +1,4 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { projectDraftToProperty, type Property } from '@workspace/property-domain';
@@ -274,27 +275,27 @@ test('BEHAVIOR: removed attachment metadata persists before retired file deletio
 test('SOURCE ASSERTION: web attachment controls and native media filters are explicit', async () => {
   const source = await readFile('services/attachments.ts', 'utf8');
   const capture = await readFile('app/capture/index.tsx', 'utf8');
-  assert.match(capture, /const selectedPropertyType: PropertyType \| undefined = routePropertyTypeParam === undefined/);
-  assert.match(source, /createWebFileAttachments/);
-  assert.match(source, /WEB_ATTACHMENT_MAX_BYTES/);
-  assert.match(source, /createIndexedDbWebAttachmentBlobStore|indexedDB\.open/);
-  assert.match(source, /viewstate-web-attachment:/);
-  assert.doesNotMatch(source, /btoa\(binary\)/);
-  assert.match(source, /mediaTypes: \('images' \| 'videos'\)\[\] = \['images', 'videos'\]/);
-  assert.match(capture, /capture-add-images/);
-  assert.match(capture, /capture-add-videos/);
-  assert.match(capture, /capture-add-files/);
-  assert.match(capture, /accept="image\/\*"/);
-  assert.match(capture, /accept="video\/\*"/);
-  assert.match(capture, /accept="\.pdf,application\/pdf"/);
-  assert.match(capture, /capture-save-validation-error/);
-  assert.match(capture, /accessibilityRole="alert"/);
-  assert.match(capture, /setSaveError\(message\)/);
-  assert.match(capture, /if \(!isBasicApartmentFollowUp && getCaptureMapsLinkValidationError\(captureDetails\.mapsLink\)\) return;/);
-  assert.match(capture, /if \(!isBasicApartmentFollowUp && Object\.keys\(quickErrors\)\.length > 0\)/);
-  assert.match(capture, /onChangeText=\{value => updateCaptureDetails\(\{ mapsLink: value \|\| undefined \}\)\}/);
-  assert.match(capture, /capture-maps-link-error/);
-  assert.match(capture, /error\.message === 'INVALID_LOCATION_LINK'[\s\S]*t\('enrich\.maps_link_invalid'\)/);
+  sourceMatch(capture, /const selectedPropertyType: PropertyType \| undefined = routePropertyTypeParam === undefined/);
+  sourceMatch(source, /createWebFileAttachments/);
+  sourceMatch(source, /WEB_ATTACHMENT_MAX_BYTES/);
+  sourceMatch(source, /createIndexedDbWebAttachmentBlobStore|indexedDB\.open/);
+  sourceMatch(source, /viewstate-web-attachment:/);
+  sourceDoesNotMatch(source, /btoa\(binary\)/);
+  sourceMatch(source, /mediaTypes: \('images' \| 'videos'\)\[\] = \['images', 'videos'\]/);
+  sourceMatch(capture, /capture-add-images/);
+  sourceMatch(capture, /capture-add-videos/);
+  sourceMatch(capture, /capture-add-files/);
+  sourceMatch(capture, /accept="image\/\*"/);
+  sourceMatch(capture, /accept="video\/\*"/);
+  sourceMatch(capture, /accept="\.pdf,application\/pdf"/);
+  sourceMatch(capture, /capture-save-validation-error/);
+  sourceMatch(capture, /accessibilityRole="alert"/);
+  sourceMatch(capture, /setSaveError\(message\)/);
+  sourceMatch(capture, /if \(!isBasicApartmentFollowUp && getCaptureMapsLinkValidationError\(captureDetails\.mapsLink\)\) return;/);
+  sourceMatch(capture, /if \(!isBasicApartmentFollowUp && Object\.keys\(quickErrors\)\.length > 0\)/);
+  sourceMatch(capture, /onChangeText=\{value => updateCaptureDetails\(\{ mapsLink: value \|\| undefined \}\)\}/);
+  sourceMatch(capture, /capture-maps-link-error/);
+  sourceMatch(capture, /error\.message === 'INVALID_LOCATION_LINK'[\s\S]*t\('enrich\.maps_link_invalid'\)/);
 });
 
 test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Home', async () => {
@@ -318,10 +319,10 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
   assert.equal(isBasicApartmentFollowUpCapture('apartment', 'standard', 'duplex'), true);
   assert.equal(isBasicApartmentFollowUpCapture('apartment', 'studio', 'standard_apartment'), false);
   assert.equal(isBasicApartmentFollowUpCapture('floor', 'standard', undefined), false);
-  assert.match(apartmentSubtype, /updateCaptureDetails\(\{ apartmentSubtype: 'standard_apartment' \}\)/);
-  assert.match(apartmentSubtype, /apartmentSubtype: 'standard_apartment'/);
-  assert.match(apartmentSubtype, /getPropertyFormRoute\(\{/);
-  assert.match(apartmentSubtype, /apartmentSubtype,\s*\.\.\.\(seekerId \? \{ seekerId \} : \{\}\)/);
+  sourceMatch(apartmentSubtype, /updateCaptureDetails\(\{ apartmentSubtype: 'standard_apartment' \}\)/);
+  sourceMatch(apartmentSubtype, /apartmentSubtype: 'standard_apartment'/);
+  sourceMatch(apartmentSubtype, /getPropertyFormRoute\(\{/);
+  sourceMatch(apartmentSubtype, /apartmentSubtype,\s*\.\.\.\(seekerId \? \{ seekerId \} : \{\}\)/);
   assert.deepEqual(getPropertyFormRoute({
     mode: 'offered',
     transaction: 'sale',
@@ -337,40 +338,40 @@ test('BEHAVIOR: standard Apartment BASIC save offers only same-ID details or Hom
       apartmentSubtype: 'standard',
     },
   });
-  assert.match(price, /apartmentSubtype\?: string/);
-  assert.match(price, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
-  assert.match(location, /apartmentSubtype\?: string/);
-  assert.match(location, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
-  assert.match(summary, /isBasicApartmentFollowUpCapture\(\s*draft\.propertyType,\s*apartmentSubtype,\s*captureDetails\.apartmentSubtype/);
-  assert.match(summary, /hasCaptureEnrichmentValues\(captureDetails, draft\.description\?\.value\)/);
-  assert.match(summary, /shouldSaveBasicCapture\(/);
-  assert.match(legacyCapture, /hasCaptureEnrichmentValues\(captureDetails, draft\.description\?\.value \|\| description\)/);
-  assert.match(legacyCapture, /shouldSaveBasicCapture\(/);
-  assert.match(legacyCapture, /\{!isBasicApartmentFollowUp && \(/);
-  assert.match(summary, /candidate = \(!saveBasicOnly \|\| !isBasicApartmentFollowUp\) && projection && projection\.ok/);
-  assert.match(summary, /if \(candidate && projection\?\.ok\)/);
-  assert.match(summary, /savePropertyWithRecovery\(\s*projection && projection\.ok \? projection\.property : undefined/);
-  assert.match(summary, /propertyCoreId: savedId,[\s\S]*basicCaptureFollowUp: '1'/);
-  assert.match(legacyCapture, /candidate = isBasicApartmentFollowUp[\s\S]*buildPropertyWithCaptureDetails/);
-  assert.match(legacyCapture, /!isBasicApartmentFollowUp && getCaptureMapsLinkValidationError/);
-  assert.match(legacyCapture, /basicCaptureFollowUp: '1'/);
-  assert.match(success, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
-  assert.match(basicActions, /btn-add-property-details/);
-  assert.match(basicActions, /btn-finish-later/);
-  assert.doesNotMatch(basicActions, /btn-view-property|btn-view-properties|btn-later/);
-  assert.match(success, /title=\{t\('summary\.add_details'\)\}[\s\S]*encodeURIComponent\(propertyCoreId\).*\/enrich/);
-  assert.match(success, /title=\{t\('summary\.later'\)\}[\s\S]*navigateOnce\(destinations\.home, true\)/);
-  assert.match(success, /testID="btn-add-property-details"/);
-  assert.match(success, /testID="btn-finish-later"/);
-  assert.match(enrichment, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
+  sourceMatch(price, /apartmentSubtype\?: string/);
+  sourceMatch(price, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
+  sourceMatch(location, /apartmentSubtype\?: string/);
+  sourceMatch(location, /pathname: '\/capture\/summary'[\s\S]*\.\.\.\(apartmentSubtype \? \{ apartmentSubtype \} : \{\}\)/);
+  sourceMatch(summary, /isBasicApartmentFollowUpCapture\(\s*draft\.propertyType,\s*apartmentSubtype,\s*captureDetails\.apartmentSubtype/);
+  sourceMatch(summary, /hasCaptureEnrichmentValues\(captureDetails, draft\.description\?\.value\)/);
+  sourceMatch(summary, /shouldSaveBasicCapture\(/);
+  sourceMatch(legacyCapture, /hasCaptureEnrichmentValues\(captureDetails, draft\.description\?\.value \|\| description\)/);
+  sourceMatch(legacyCapture, /shouldSaveBasicCapture\(/);
+  sourceMatch(legacyCapture, /\{!isBasicApartmentFollowUp && \(/);
+  sourceMatch(summary, /candidate = \(!saveBasicOnly \|\| !isBasicApartmentFollowUp\) && projection && projection\.ok/);
+  sourceMatch(summary, /if \(candidate && projection\?\.ok\)/);
+  sourceMatch(summary, /savePropertyWithRecovery\(\s*projection && projection\.ok \? projection\.property : undefined/);
+  sourceMatch(summary, /propertyCoreId: savedId,[\s\S]*basicCaptureFollowUp: '1'/);
+  sourceMatch(legacyCapture, /candidate = isBasicApartmentFollowUp[\s\S]*buildPropertyWithCaptureDetails/);
+  sourceMatch(legacyCapture, /!isBasicApartmentFollowUp && getCaptureMapsLinkValidationError/);
+  sourceMatch(legacyCapture, /basicCaptureFollowUp: '1'/);
+  sourceMatch(success, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
+  sourceMatch(basicActions, /btn-add-property-details/);
+  sourceMatch(basicActions, /btn-finish-later/);
+  sourceDoesNotMatch(basicActions, /btn-view-property|btn-view-properties|btn-later/);
+  sourceMatch(success, /title=\{t\('summary\.add_details'\)\}[\s\S]*encodeURIComponent\(propertyCoreId\).*\/enrich/);
+  sourceMatch(success, /title=\{t\('summary\.later'\)\}[\s\S]*navigateOnce\(destinations\.home, true\)/);
+  sourceMatch(success, /testID="btn-add-property-details"/);
+  sourceMatch(success, /testID="btn-finish-later"/);
+  sourceMatch(enrichment, /router\.replace\(`\/property\/\$\{encodeURIComponent\(id\)\}\/edit\?completion=enrichment`/);
 });
 
 test('Capture Review summary uses the canonical Offered intent label', async () => {
   const summary = await readFile('app/capture/summary.tsx', 'utf8');
   const summaryView = summary.slice(summary.indexOf('<ScrollView'), summary.indexOf('</ScrollView>'));
-  assert.match(summary, /projectRecordIntent\('offered', draft\.transaction, language\)\.label/);
-  assert.match(summaryView, /intent=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
-  assert.doesNotMatch(summaryView, /t\(`transaction\.\$\{draft\.transaction\}/);
+  sourceMatch(summary, /projectRecordIntent\('offered', draft\.transaction, language\)\.label/);
+  sourceMatch(summaryView, /intent=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
+  sourceDoesNotMatch(summaryView, /t\(`transaction\.\$\{draft\.transaction\}/);
 });
 
 test('Capture stage-3 Preview uses the canonical Offered intent presentation', async () => {
@@ -379,18 +380,18 @@ test('Capture stage-3 Preview uses the canonical Offered intent presentation', a
     capture.indexOf('{stage === 3 && ('),
     capture.indexOf('</PropertyReview>', capture.indexOf('{stage === 3 && (')),
   );
-  assert.match(preview, /intent=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
-  assert.doesNotMatch(preview, /t\(`transaction\.\$\{draft\.transaction\}/);
+  sourceMatch(preview, /intent=\{projectRecordIntent\('offered', draft\.transaction, language\)\.label\}/);
+  sourceDoesNotMatch(preview, /t\(`transaction\.\$\{draft\.transaction\}/);
 });
 
 test('REGRESSION: capture success check uses success green with a contrasting foreground', async () => {
   const success = await readFile('app/capture/success.tsx', 'utf8');
   const palette = await readFile('constants/colors.ts', 'utf8');
-  assert.match(success, /backgroundColor: colors\.success/);
-  assert.match(success, /<Feather name="check" size=\{42\} color=\{colors\.primaryForeground\}/);
-  assert.doesNotMatch(success, /backgroundColor: colors\.accent/);
-  assert.match(palette, /success: '#087F5B'/);
-  assert.match(palette, /primaryForeground: '#FFFFFF'/);
+  sourceMatch(success, /backgroundColor: colors\.success/);
+  sourceMatch(success, /<Feather name="check" size=\{42\} color=\{colors\.primaryForeground\}/);
+  sourceDoesNotMatch(success, /backgroundColor: colors\.accent/);
+  sourceMatch(palette, /success: '#087F5B'/);
+  sourceMatch(palette, /primaryForeground: '#FFFFFF'/);
 });
 
 test('BEHAVIOR: full Offered and Wanted route matrix preserves each selected property type', async () => {
@@ -450,9 +451,9 @@ test('BEHAVIOR: full Offered and Wanted route matrix preserves each selected pro
     );
   }
   const capture = await readFile('app/capture/index.tsx', 'utf8');
-  assert.match(capture, /<ModernPropertyForm[\s\S]*onChange=\{\(field: PropertyDetailField, value: string\) => field === 'floorUse' \? chooseFloorUse\(value\)/);
+  sourceMatch(capture, /<ModernPropertyForm[\s\S]*onChange=\{\(field: PropertyDetailField, value: string\) => field === 'floorUse' \? chooseFloorUse\(value\)/);
   const enrichmentFields = await readFile('components/PropertyEnrichmentFields.tsx', 'utf8');
-  assert.match(enrichmentFields, /field === 'floorUse' \? \['residential', 'commercial'\]/);
+  sourceMatch(enrichmentFields, /field === 'floorUse' \? \['residential', 'commercial'\]/);
 });
 
 test('REGRESSION: Standard Apartment BASIC completion persists canonical subtype and reopens its editor directly', async () => {
@@ -549,18 +550,18 @@ test('BEHAVIOR: non-Apartment BASIC capture enables Add details follow-up withou
   assert.equal((villaFull.typeDetails as Record<string, unknown> | undefined)?.bedroomCount, 3);
   assert.equal(shouldSaveBasicCapture({ bedroomCount: '3' }), false);
 
-  assert.match(summary, /candidate = \(!saveBasicOnly \|\| !isBasicApartmentFollowUp\) && projection && projection\.ok/);
-  assert.match(summary, /basicCaptureFollowUp: '1'/);
-  assert.match(capture, /isBasicCaptureFollowUp = shouldSaveBasicCapture\(/);
-  assert.match(capture, /basicCaptureFollowUp: '1'/);
-  assert.match(success, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
+  sourceMatch(summary, /candidate = \(!saveBasicOnly \|\| !isBasicApartmentFollowUp\) && projection && projection\.ok/);
+  sourceMatch(summary, /basicCaptureFollowUp: '1'/);
+  sourceMatch(capture, /isBasicCaptureFollowUp = shouldSaveBasicCapture\(/);
+  sourceMatch(capture, /basicCaptureFollowUp: '1'/);
+  sourceMatch(success, /basicCaptureFollowUp === '1' \|\| basicApartmentFollowUp === '1'/);
   const basicSuccessActions = success
     .split('showCaptureFollowUp && propertyCoreId ?')[1]
     ?.split(') : propertyCoreId ?')[0] ?? '';
   assert.equal((basicSuccessActions.match(/testID="btn-/g) ?? []).length, 2);
-  assert.match(basicSuccessActions, /testID="btn-add-property-details"/);
-  assert.match(basicSuccessActions, /testID="btn-finish-later"/);
-  assert.doesNotMatch(basicSuccessActions, /btn-view-property|btn-view-properties|btn-later/);
+  sourceMatch(basicSuccessActions, /testID="btn-add-property-details"/);
+  sourceMatch(basicSuccessActions, /testID="btn-finish-later"/);
+  sourceDoesNotMatch(basicSuccessActions, /btn-view-property|btn-view-properties|btn-later/);
 });
 
 test('BEHAVIOR: populated Apartment draft details and attachment refs are preserved by same-ID save', async () => {

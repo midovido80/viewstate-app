@@ -1,3 +1,4 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -15,14 +16,14 @@ const source = async (path: string) =>
 
 test('Add entry requires both Offered/Wanted and transaction choices without auto-advance', async () => {
   const transaction = await source('../app/capture/transaction.tsx');
-  assert.match(transaction, /select-offered/);
-  assert.match(transaction, /select-wanted/);
-  assert.match(transaction, /title=\{offerMode === 'wanted' \? label\('To buy', 'للشراء'\) : label\('For sale', 'للبيع'\)\}/);
-  assert.match(transaction, /title=\{label\('For rent', 'للإيجار'\)\}/);
-  assert.doesNotMatch(transaction, /Wanted Purchase|Wanted Rent|Offered Sale|Offered Rent/);
-  assert.match(transaction, /disabled=\{!offerMode \|\| !transaction\}/);
-  assert.match(transaction, /router\.push\(getPropertyTypeSelectionRoute\(/);
-  assert.doesNotMatch(transaction, /onSelect=\{\(\) => \{[^}]*router\.push/s);
+  sourceMatch(transaction, /select-offered/);
+  sourceMatch(transaction, /select-wanted/);
+  sourceMatch(transaction, /title=\{offerMode === 'wanted' \? label\('To buy', 'للشراء'\) : label\('For sale', 'للبيع'\)\}/);
+  sourceMatch(transaction, /title=\{label\('For rent', 'للإيجار'\)\}/);
+  sourceDoesNotMatch(transaction, /Wanted Purchase|Wanted Rent|Offered Sale|Offered Rent/);
+  sourceMatch(transaction, /disabled=\{!offerMode \|\| !transaction\}/);
+  sourceMatch(transaction, /router\.push\(getPropertyTypeSelectionRoute\(/);
+  sourceDoesNotMatch(transaction, /onSelect=\{\(\) => \{[^}]*router\.push/s);
 });
 
 test('shared Property form routing is deterministic for every catalog type/subtype and mode', () => {
@@ -106,27 +107,27 @@ test('shared create and edit routes preserve exact context and keep Studio out o
 
 test('Apartment selection structurally enables Next before choosing a subtype', async () => {
   const propertyType = await source('../app/capture/property-type.tsx');
-  assert.match(propertyType, /disabled=\{!propertyType[^\n]+!mode/);
-  assert.match(propertyType, /getPropertyFormRoute\(/);
-  assert.doesNotMatch(propertyType, /select-apartment-studio|select-apartment-standard/);
-  assert.doesNotMatch(propertyType, /propertyType === 'apartment' && !apartmentSubtype/);
+  sourceMatch(propertyType, /disabled=\{!propertyType[\s\S]*?!mode/);
+  sourceMatch(propertyType, /getPropertyFormRoute\(/);
+  sourceDoesNotMatch(propertyType, /select-apartment-studio|select-apartment-standard/);
+  sourceDoesNotMatch(propertyType, /propertyType === 'apartment' && !apartmentSubtype/);
 });
 
 test('Apartment subtype route structurally preserves dedicated and existing destinations', async () => {
   const subtype = await source('../app/capture/apartment-subtype.tsx');
-  assert.match(subtype, /select-apartment-studio/);
-  assert.match(subtype, /select-apartment-standard/);
-  assert.match(subtype, /getPropertyFormRoute\(/);
-  assert.match(subtype, /target\.kind === 'studio' \|\| target\.kind === 'wanted'/);
-  assert.match(subtype, /router\.navigate\(\{\s*pathname: '\/capture\/property-type'/);
+  sourceMatch(subtype, /select-apartment-studio/);
+  sourceMatch(subtype, /select-apartment-standard/);
+  sourceMatch(subtype, /getPropertyFormRoute\(/);
+  sourceMatch(subtype, /target\.kind === 'studio' \|\| target\.kind === 'wanted'/);
+  sourceMatch(subtype, /router\.navigate\(\{\s*pathname: '\/capture\/property-type'/);
 });
 
 test('Person Details starts the normal wanted classification flow for the existing seeker', async () => {
   const person = await source('../app/person/[personId].tsx');
-  assert.match(person, /testID="person-primary-action"/);
-  assert.match(person, /classification === 'seeker'\)\s*\{\s*router\.push\(getPersonWantedRequirementRoute\(person\.id\)/);
-  assert.match(person, /person\.classifications\.map\(classification =>/);
-  assert.match(person, /person\.classifications\.length > 1/);
-  assert.doesNotMatch(person, /person-add-wanted-studio|person-saved-add-requirement/);
-  assert.match(person, /params: \{ mode: 'wanted', seekerId: personId \}/);
+  sourceMatch(person, /testID="person-primary-action"/);
+  sourceMatch(person, /classification === 'seeker'\)\s*\{\s*router\.push\(getPersonWantedRequirementRoute\(person\.id\)/);
+  sourceMatch(person, /person\.classifications\.map\(classification =>/);
+  sourceMatch(person, /person\.classifications\.length > 1/);
+  sourceDoesNotMatch(person, /person-add-wanted-studio|person-saved-add-requirement/);
+  sourceMatch(person, /params: \{ mode: 'wanted', seekerId: personId \}/);
 });

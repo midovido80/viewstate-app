@@ -1,3 +1,4 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -33,10 +34,10 @@ test('Person Details route opens the normal Wanted chooser for the exact seeker 
   });
 
   const screen = await source('../app/person/[personId].tsx');
-  assert.match(screen, /if \(classification === 'seeker'\) \{\s*router\.push\(getPersonWantedRequirementRoute\(person\.id\)/);
-  assert.match(screen, /person\.classifications\.map\(classification =>/);
-  assert.match(screen, /testID=\{`person-classification-action-\$\{classification\}`\}/);
-  assert.doesNotMatch(screen, /person-add-wanted-studio|person-add-requirement/);
+  sourceMatch(screen, /if \(classification === 'seeker'\) \{\s*router\.push\(getPersonWantedRequirementRoute\(person\.id\)/);
+  sourceMatch(screen, /person\.classifications\.map\(classification =>/);
+  sourceMatch(screen, /testID=\{`person-classification-action-\$\{classification\}`\}/);
+  sourceDoesNotMatch(screen, /person-add-wanted-studio|person-add-requirement/);
 });
 
 test('legacy and normal Property edit URLs forward Studio by same ID; other properties remain generic', async () => {
@@ -46,10 +47,10 @@ test('legacy and normal Property edit URLs forward Studio by same ID; other prop
   assert.equal(getPropertyEditFormHref(propertyId, 'villa'), `/property/${encoded}/edit`);
 
   const screen = await source('../app/property/[propertyCoreId].tsx');
-  assert.match(screen, /return getPropertyEditFormHref\(/);
-  assert.match(screen, /router\.replace\(withMatchingReturn\(getPropertyEditRouteHref\(property\.core\.id, true\)/);
-  assert.match(screen, /const editRequested = .*forceEdit/);
-  assert.match(screen, /router\.push\(withMatchingReturn\(getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
+  sourceMatch(screen, /return getPropertyEditFormHref\(/);
+  sourceMatch(screen, /router\.replace\(withMatchingReturn\(getPropertyEditRouteHref\(property\.core\.id, true\)/);
+  sourceMatch(screen, /const editRequested = .*forceEdit/);
+  sourceMatch(screen, /router\.push\(withMatchingReturn\(getPropertyEditRouteHref\(property\.core\.id, offeredStudio\)/);
 });
 
 test('Person-origin Offered Studio validates its exact source context before Property save', async () => {
@@ -61,11 +62,11 @@ test('Person-origin Offered Studio validates its exact source context before Pro
   const sourceValidation = saveFlow.indexOf('saveStudioPropertyFromPersonSource(');
   const propertySave = saveFlow.indexOf('saveStudioProperty({');
   assert.ok(sourceValidation >= 0 && propertySave >= 0 && sourceValidation < propertySave);
-  assert.match(saveFlow, /if \(linkPersonId && !editing\)/);
-  assert.match(saveFlow, /requestedRole: sourceRole/);
-  assert.match(screen, /sourceContext\.current = sourceSave\.sourceContext/);
-  assert.match(screen, /ensureStudioPropertySourceLink\(property\.core\.id, context\.personId, context\.role, store\)/);
-  assert.match(screen, /const context = sourceContext\.current\?\.personId === linkPersonId[\s\S]*resolveStudioPersonSourceContext\(linkPersonId, sourceRole, store\)/);
+  sourceMatch(saveFlow, /if \(linkPersonId && !editing\)/);
+  sourceMatch(saveFlow, /requestedRole: sourceRole/);
+  sourceMatch(screen, /sourceContext\.current = sourceSave\.sourceContext/);
+  sourceMatch(screen, /ensureStudioPropertySourceLink\(property\.core\.id, context\.personId, context\.role, store\)/);
+  sourceMatch(screen, /const context = sourceContext\.current\?\.personId === linkPersonId[\s\S]*resolveStudioPersonSourceContext\(linkPersonId, sourceRole, store\)/);
 });
 
 test('generic Requirement edit forwards only hydratable Studio IDs and fails closed otherwise', async () => {
@@ -82,20 +83,20 @@ test('generic Requirement edit forwards only hydratable Studio IDs and fails clo
   });
 
   const screen = await source('../app/requirement/[requirementId].tsx');
-  assert.match(screen, /getRequirementEditFormTarget\(/);
-  assert.match(screen, /if \(!editRequested \|\| !recordLoaded \|\| !baseline \|\| !isWantedStudio\(baseline\)\) return/);
-  assert.match(screen, /router\.replace\(target\.href as never\)/);
-  assert.match(screen, /testID="studio-requirement-unavailable"/);
-  assert.doesNotMatch(screen, /getStudioRequirementFallbackEditHref/);
+  sourceMatch(screen, /getRequirementEditFormTarget\(/);
+  sourceMatch(screen, /if \(!editRequested \|\| !recordLoaded \|\| !baseline \|\| !isWantedStudio\(baseline\)\) return/);
+  sourceMatch(screen, /router\.replace\(target\.href as never\)/);
+  sourceMatch(screen, /testID="studio-requirement-unavailable"/);
+  sourceDoesNotMatch(screen, /getStudioRequirementFallbackEditHref/);
 });
 
 test('legacy new Studio Requirement deep links replace into the dedicated form only once', async () => {
   const screen = await source('../app/requirement/[requirementId].tsx');
-  assert.match(screen, /routePropertyType !== 'apartment' \|\| routeApartmentSubtype !== 'studio'/);
-  assert.match(screen, /newStudioForwardedKey\.current === key/);
-  assert.match(screen, /const target = getPropertyFormRoute\(\{/);
-  assert.match(screen, /router\.replace\(\{ pathname: target\.pathname, params: target\.params \} as never\)/);
-  assert.match(screen, /newStudioForwardedKey\.current = key/);
+  sourceMatch(screen, /routePropertyType !== 'apartment' \|\| routeApartmentSubtype !== 'studio'/);
+  sourceMatch(screen, /newStudioForwardedKey\.current === key/);
+  sourceMatch(screen, /const target = getPropertyFormRoute\(\{/);
+  sourceMatch(screen, /router\.replace\(\{ pathname: target\.pathname, params: target\.params \} as never\)/);
+  sourceMatch(screen, /newStudioForwardedKey\.current = key/);
 });
 
 test('legacy generic capture blocks Studio saves when values cannot be forwarded safely', async () => {
@@ -117,16 +118,17 @@ test('legacy generic capture blocks Studio saves when values cannot be forwarded
     'stale subtype metadata on a different property type does not block that form');
 
   const screen = await source('../app/capture/index.tsx');
-  assert.match(screen, /isGenericStudioCaptureBlocked\(\s*routeApartmentSubtype,\s*selectedPropertyType,\s*captureDetails\.apartmentSubtype/);
-  assert.match(screen, /canonicalApartmentSubtypeForCategory\(demoMetadata\.categoryId\)/);
-  assert.match(screen, /testID="capture-studio-route-blocked"/);
-  assert.match(screen, /disabled=\{isStudioCaptureBlocked \|\|/);
-  assert.match(screen, /onPress=\{openPreview\} disabled=\{isStudioCaptureBlocked\}/);
-  assert.match(screen, /onPress=\{save\} loading=\{submitting\} disabled=\{isStudioCaptureBlocked\}/);
+  sourceMatch(screen, /isGenericStudioCaptureBlocked\(\s*routeApartmentSubtype,\s*selectedPropertyType,\s*captureDetails\.apartmentSubtype/);
+  sourceMatch(screen, /canonicalApartmentSubtypeForCategory\(demoMetadata\.categoryId\)/);
+  sourceMatch(screen, /testID="capture-studio-route-blocked"/);
+  sourceMatch(screen, /disabled=\{isStudioCaptureBlocked \|\|/);
+  sourceMatch(screen, /onPress=\{openPreview\} disabled=\{isStudioCaptureBlocked\}/);
+  sourceMatch(screen, /onPress=\{saveWithImport\} loading=\{submitting\} disabled=\{isStudioCaptureBlocked\}/);
+  sourceMatch(screen, /withActiveImport\(storage, firstCaptureParam\(routeParams.importId\), \(\) => save\(\.\.\.args\)\)/);
   const openPreview = screen.slice(screen.indexOf('const openPreview = () =>'), screen.indexOf('const save = async () =>'));
   const save = screen.slice(screen.indexOf('const save = async () =>'), screen.indexOf('const saveDraft = async () =>'));
-  assert.match(openPreview, /if \(isStudioCaptureBlocked\) return/);
-  assert.match(save, /if \(isStudioCaptureBlocked\) return/);
+  sourceMatch(openPreview, /if \(isStudioCaptureBlocked\) return/);
+  sourceMatch(save, /if \(isStudioCaptureBlocked\) return/);
 });
 
 test('legacy Studio escape CTA opens a fresh form or shared chooser and preserves its source draft', async () => {
@@ -154,14 +156,14 @@ test('legacy Studio escape CTA opens a fresh form or shared chooser and preserve
     screen.indexOf('const openDedicatedStudio = () =>'),
     screen.indexOf('const webBlobStore = useRef'),
   );
-  assert.match(handler, /routeTransaction === undefined[\s\S]*routeTransaction === 'sale' \|\| routeTransaction === 'rent'/);
-  assert.match(handler, /getLegacyStudioCaptureEscapeTarget\(transaction, linkPersonId, sourceRole\)/);
-  assert.match(handler, /router\.push\(\{ pathname: target\.pathname, params: target\.params \} as never\)/);
-  assert.doesNotMatch(handler, /router\.replace|updateDraft\(|updateCaptureDetails\(|replaceCaptureDetails\(|clearCaptureDetails\(|resetDraft\(/);
-  assert.match(screen, /title=\{language === 'ar' \? 'فتح نموذج الاستوديو' : 'Open Studio form'\}/);
-  assert.match(screen, /onPress=\{openDedicatedStudio\}/);
-  assert.match(screen, /testID="capture-open-dedicated-studio"/);
-  assert.match(screen, /Details from the generic Property draft will not be copied; the generic draft remains available if you go back/);
+  sourceMatch(handler, /routeTransaction === undefined[\s\S]*routeTransaction === 'sale' \|\| routeTransaction === 'rent'/);
+  sourceMatch(handler, /getLegacyStudioCaptureEscapeTarget\(transaction, linkPersonId, sourceRole\)/);
+  sourceMatch(handler, /router\.push\(\{ pathname: target\.pathname, params: target\.params \} as never\)/);
+  sourceDoesNotMatch(handler, /router\.replace|updateDraft\(|updateCaptureDetails\(|replaceCaptureDetails\(|clearCaptureDetails\(|resetDraft\(/);
+  sourceMatch(screen, /title=\{language === 'ar' \? 'فتح نموذج الاستوديو' : 'Open Studio form'\}/);
+  sourceMatch(screen, /onPress=\{openDedicatedStudio\}/);
+  sourceMatch(screen, /testID="capture-open-dedicated-studio"/);
+  sourceMatch(screen, /Details from the generic Property draft will not be copied; the generic draft remains available if you go back/);
 });
 
 test('deep-linked Studio edits fall back to their exact detail route without changing create behavior', async () => {
@@ -189,7 +191,7 @@ test('deep-linked Studio edits fall back to their exact detail route without cha
   );
 
   const screen = await source('../app/capture/studio.tsx');
-  assert.match(screen, /fallback: studioBackTarget \?/);
-  assert.match(screen, /useDraftBack\(\{ persist: persistStudio/);
-  assert.match(screen, /step === 'review' && !savedProperty && !savedRequirement/);
+  sourceMatch(screen, /fallback: studioBackTarget \?/);
+  sourceMatch(screen, /useDraftBack\(\{ persist: persistStudio/);
+  sourceMatch(screen, /step === 'review' && !savedProperty && !savedRequirement/);
 });

@@ -25,7 +25,7 @@ export function useL() {
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 
-export function AccountHeader({ title, onBack, root }: { title: string; onBack?: () => void; root?: boolean }) {
+export function AccountHeader({ title, onBack, root, trailing }: { title: string; onBack?: () => void; root?: boolean; trailing?: React.ReactNode }) {
   const colors = useColors(); const insets = useScreenInsets(); const router = useRouter();
   const { L, isRTL, fonts, row } = useL();
   return (
@@ -34,7 +34,7 @@ export function AccountHeader({ title, onBack, root }: { title: string; onBack?:
         <Feather name={root ? 'home' : isRTL ? 'chevron-right' : 'chevron-left'} size={22} color={n.navy} />
       </Pressable>
       <Text accessibilityRole="header" style={[s.headerTitle, { fontFamily: fonts.bold, color: n.ink, textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
-      <View style={s.iconBtnSpacer} />
+      {trailing ?? <View style={s.iconBtnSpacer} />}
     </View>
   );
 }

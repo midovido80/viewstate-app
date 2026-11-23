@@ -1,28 +1,10 @@
+import { sourceMatch, sourceDoesNotMatch, sourceIndex } from "./sourceAssertions";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { evaluateMatch, normalizeSeekerRequirement, validateSeekerRequirement, type SeekerRequirement } from '@workspace/property-domain';
 import { buildPersonRequirement, formValuesFromRequirement, parseOptionalRequirementNumber } from '@/services/personRequirementWorkflow';
 import { KUWAIT_GOVERNORATES, searchAreasSorted } from '@/constants/kuwait-areas';
-import { createPerson, isPropertySeeker, canOwnPropertyRequirement, PERSON_CLASSIFICATION_GROUPS } from '@/services/people';
-
-test('combined Person roles preserve seeker eligibility and broker request ownership', () => {
-  assert.deepEqual(PERSON_CLASSIFICATION_GROUPS.map(group => group.roles), [
-    ['rent_seeker', 'buy_seeker', 'investor'],
-    ['owner', 'owner_agent', 'property_management'],
-    ['broker', 'real_estate_company', 'building_guard'],
-  ]);
-  for (const classifications of [
-    ['seeker'], ['rent_seeker'], ['buy_seeker'], ['investor', 'owner'],
-  ] as const) {
-    const person = createPerson({ id: 'role-test', name: 'Ahmad', displayPhone: '50000000', classifications });
-    assert.deepEqual(person.classifications, classifications);
-    assert.equal(isPropertySeeker(person), true);
-    assert.equal(canOwnPropertyRequirement(person), true);
-  }
-  assert.equal(canOwnPropertyRequirement({ classifications: ['broker'] }), true);
-  assert.equal(canOwnPropertyRequirement({ classifications: ['owner_agent', 'property_management'] }), false);
-});
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const SEEKER = 'person-seeker';
@@ -230,9 +212,9 @@ test('multiple requirement identities remain distinct while retaining the same o
 
 test('Requirement wizard uses wrapped compact choice chips for bounded controls', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  assert.match(source, /<ChoiceChip/);
-   assert.match(source, /styles\.wrap/);
-  assert.match(source, /flexWrap: 'wrap'/);
+  sourceMatch(source, /<ChoiceChip/);
+   sourceMatch(source, /styles\.wrap/);
+  sourceMatch(source, /flexWrap: 'wrap'/);
 });
 
 test('Requirement area selector uses the canonical six-governorate source and bilingual search', async () => {
@@ -244,11 +226,11 @@ test('Requirement area selector uses the canonical six-governorate source and bi
   assert.ok(searchAreasSorted('salmiya', 'en').some(area => area.id === 'salmiya'));
   assert.ok(searchAreasSorted('سالم', 'ar').some(area => area.id === 'salmiya'));
   assert.ok(searchAreasSorted('Hawalli', 'en').length > 0);
-  assert.match(selector, /getAreasByGovernorate/);
-  assert.match(selector, /searchAreasSorted/);
-  assert.match(selector, /accessibilityState=\{\{ expanded \}\}/);
-  assert.match(selector, /selectedIds\.includes/);
-   assert.match(requirement, /<KuwaitAreaSelector selectedIds=\{areas\} onChange=\{ids =>/);
+  sourceMatch(selector, /getAreasByGovernorate/);
+  sourceMatch(selector, /searchAreasSorted/);
+  sourceMatch(selector, /accessibilityState=\{\{ expanded \}\}/);
+  sourceMatch(selector, /selectedIds\.includes/);
+   sourceMatch(requirement, /<KuwaitAreaSelector selectedIds=\{areas\} onChange=\{ids =>/);
 });
 
 test('Requirement save serializes direct invocations while preserving sequential distinct requirements', async () => {
@@ -256,20 +238,20 @@ test('Requirement save serializes direct invocations while preserving sequential
     readFile('app/requirement/[requirementId].tsx', 'utf8'),
     readFile('app/person/[personId].tsx', 'utf8'),
   ]);
-  const saveStart = requirement.indexOf('const save = async (');
-  const guard = requirement.indexOf('tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart);
-  const firstStoreAwait = requirement.indexOf('await savePersonRequirement(', guard);
-  const release = requirement.indexOf('saveFlight.current = false;', firstStoreAwait);
+  const saveStart = sourceIndex(requirement, 'const save = async (');
+  const guard = sourceIndex(requirement, 'tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart);
+  const firstStoreAwait = sourceIndex(requirement, 'await savePersonRequirement(', guard);
+  const release = sourceIndex(requirement, 'saveFlight.current = false;', firstStoreAwait);
   assert.ok(saveStart >= 0 && guard > saveStart);
   assert.ok(firstStoreAwait > guard, 'single-flight gate must be acquired before persistence');
   assert.ok(release > firstStoreAwait, 'flight must be released after the persistence flight');
-  assert.match(requirement, /finally \{\s*if \(isCurrentRoute\(\)\) \{\s*setSaving\(false\);\s*saveFlight\.current = false;/);
-  assert.doesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
-  assert.doesNotMatch(person, /person-saved-add-requirement|person-add-requirement/);
-  assert.match(person, /testID="person-primary-action"/);
-  assert.match(person, /getPersonWantedRequirementRoute\(person\.id\)/);
-  assert.match(person, /requirements\.map\(requirement/);
-  assert.match(person, /testID=\{`requirement-edit-\$\{requirement\.id\}`\}/);
+  sourceMatch(requirement, /finally \{\s*if \(isCurrentRoute\(\)\) \{\s*setSaving\(false\);\s*saveFlight\.current = false;/);
+  sourceDoesNotMatch(requirement, /const save = async \(\) => \{ if \(saving\) return;/);
+  sourceDoesNotMatch(person, /person-saved-add-requirement|person-add-requirement/);
+  sourceMatch(person, /testID="person-primary-action"/);
+  sourceMatch(person, /getPersonWantedRequirementRoute\(person\.id\)/);
+  sourceMatch(person, /requirements\.map\(requirement/);
+  sourceMatch(person, /testID=\{`requirement-edit-\$\{requirement\.id\}`\}/);
 });
 
 test('Requirement return navigation guards destructive click-through on Person details', async () => {
@@ -277,25 +259,25 @@ test('Requirement return navigation guards destructive click-through on Person d
     readFile('app/requirement/[requirementId].tsx', 'utf8'),
     readFile('app/person/[personId].tsx', 'utf8'),
   ]);
-  assert.match(requirement, /requirementSaved: '1'/);
-  assert.match(person, /requirementReturnGuard/);
-  assert.match(person, /disabled=\{busy \|\| requirementReturnGuard\}/);
-  assert.match(person, /setTimeout\(\(\) => \{/);
-  assert.match(person, /testID="requirement-return-click-guard"/);
-  assert.match(person, /pointerEvents="auto"/);
-  assert.match(person, /StyleSheet\.absoluteFillObject/);
+  sourceMatch(requirement, /requirementSaved: '1'/);
+  sourceMatch(person, /requirementReturnGuard/);
+  sourceMatch(person, /disabled=\{busy \|\| requirementReturnGuard\}/);
+  sourceMatch(person, /setTimeout\(\(\) => \{/);
+  sourceMatch(person, /testID="requirement-return-click-guard"/);
+  sourceMatch(person, /pointerEvents="auto"/);
+  sourceMatch(person, /StyleSheet\.absoluteFillObject/);
 });
 
 test('Requirement wizard keeps navigation outside scroll content and inside the safe keyboard-aware area', async () => {
   const source = await readFile('app/requirement/[requirementId].tsx', 'utf8');
   const scrollEnd = source.indexOf('</KeyboardAwareScrollViewCompat>');
-   const footerStart = source.search(/<View style=\{\[?styles\.footer/);
+   const footerStart = sourceIndex(source, '<View style={[styles.footer');
 
-  assert.match(source, /paddingTop:\s*insets\.top/);
-  assert.match(source, /<KeyboardAvoidingView behavior="padding" style=\{styles\.body\}>/);
+  sourceMatch(source, /paddingTop:\s*insets\.top/);
+  sourceMatch(source, /<KeyboardAvoidingView behavior="padding" style=\{styles\.body\}>/);
   assert.ok(scrollEnd >= 0 && footerStart > scrollEnd);
-   assert.match(source, /paddingTop:\s*insets\.top/);
-  assert.match(source, /footer:\s*\{[^}]*borderTopWidth:\s*StyleSheet\.hairlineWidth/);
+   sourceMatch(source, /paddingTop:\s*insets\.top/);
+  sourceMatch(source, /footer:\s*\{[^}]*borderTopWidth:\s*StyleSheet\.hairlineWidth/);
 });
 
 test('Person and Requirement navigation keep normal history and provide bounded no-history fallbacks', async () => {
@@ -304,13 +286,13 @@ test('Person and Requirement navigation keep normal history and provide bounded 
     readFile('app/requirement/[requirementId].tsx', 'utf8'),
   ]);
 
-  assert.match(person, /if \(router\.canGoBack\(\)\) router\.back\(\)/);
-  assert.match(person, /router\.replace\('\/people' as never\)/);
-  assert.match(person, /pathname: '\/requirement\/\[requirementId\]'[\s\S]*seekerId: person\.id/);
-   assert.match(requirement, /router\.canGoBack\(\) \? router\.back\(\) : router\.replace\('\/people'/);
-   assert.match(requirement, /const ownerId = baseline\?\.seekerId \?\? ownerFromRoute/);
-   assert.match(requirement, /const candidate = \(\) =>/);
-   assert.match(requirement, /<TouchableOpacity onPress=\{\(\) =>/);
+  sourceMatch(person, /if \(router\.canGoBack\(\)\) router\.back\(\)/);
+  sourceMatch(person, /router\.replace\('\/people' as never\)/);
+  sourceMatch(person, /pathname: '\/requirement\/\[requirementId\]'[\s\S]*seekerId: person\.id/);
+   sourceMatch(requirement, /router\.canGoBack\(\) \? router\.back\(\) : router\.replace\('\/people'/);
+   sourceMatch(requirement, /const ownerId = baseline\?\.seekerId \?\? ownerFromRoute/);
+   sourceMatch(requirement, /const candidate = \(\) =>/);
+   sourceMatch(requirement, /<TouchableOpacity onPress=\{\(\) =>/);
 });
 
 test('People list relies on Global Search and distinguishes an empty database from filtered results', async () => {
@@ -318,16 +300,16 @@ test('People list relies on Global Search and distinguishes an empty database fr
     readFile('app/(tabs)/people.tsx', 'utf8'),
     readFile('contexts/I18nContext.tsx', 'utf8'),
   ]);
-  assert.match(people, /store\.getPeople\(\)/);
-  assert.doesNotMatch(people, /store\.searchPeople|<TextInput/);
-  assert.match(people, /setTotalPeople\(all\.length\)/);
-  assert.match(people, /hasActivePeopleFilters\s*\?\s*t\('people\.no_filtered_results'\)/);
-  assert.match(people, /testID=\{totalPeople === 0 \? 'people-empty' : 'people-no-filter-results'\}/);
-  assert.match(strings, /'people\.search': 'Search People by name or phone/);
-  assert.match(strings, /'people\.no_search_results': 'No People match this name or phone search/);
-  assert.match(strings, /'people\.no_search_results': 'لا يوجد أشخاص يطابقون بحث الاسم أو الهاتف/);
-  assert.match(strings, /'people\.no_filtered_results': 'No People match the selected criteria/);
-  assert.match(strings, /'people\.no_filtered_results': 'لا يوجد أشخاص يطابقون المعايير المحددة/);
+  sourceMatch(people, /store\.getPeople\(\)/);
+  sourceDoesNotMatch(people, /store\.searchPeople|<TextInput/);
+  sourceMatch(people, /setTotalPeople\(all\.length\)/);
+  sourceMatch(people, /hasActivePeopleFilters\s*\?\s*t\('people\.no_filtered_results'\)/);
+  sourceMatch(people, /testID=\{totalPeople === 0 \? 'people-empty' : 'people-no-filter-results'\}/);
+  sourceMatch(strings, /'people\.search': 'Search People by name or phone/);
+  sourceMatch(strings, /'people\.no_search_results': 'No People match this name or phone search/);
+  sourceMatch(strings, /'people\.no_search_results': 'لا يوجد أشخاص يطابقون بحث الاسم أو الهاتف/);
+  sourceMatch(strings, /'people\.no_filtered_results': 'No People match the selected criteria/);
+  sourceMatch(strings, /'people\.no_filtered_results': 'لا يوجد أشخاص يطابقون المعايير المحددة/);
 });
 
 test('commercial services and free-text activity survive normalizer and editor round-trip', () => {

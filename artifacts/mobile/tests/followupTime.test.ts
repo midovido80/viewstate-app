@@ -18,8 +18,10 @@ test('no blank, invalid hour or malformed value can satisfy required time', () =
   assert.throws(() => timeFromParts(12, 60, 12));
 });
 test('midnight, noon and Arabic/English labels use correct periods', () => {
-  assert.equal(followupTimeLabel('00:00', 12, false), '12:00 AM');
-  assert.equal(followupTimeLabel('12:00', 12, false), '12:00 PM');
+  assert.equal(followupTimeLabel('00:00', 12, false), '12:00 midnight');
+  assert.equal(followupTimeLabel('12:00', 12, false), '12:00 noon');
+  assert.equal(followupTimeLabel('00:00', 24, true), '00:00 منتصف الليل');
+  assert.equal(followupTimeLabel('12:00', 12, true), '12:00 ظهرًا');
   assert.equal(followupTimeLabel('20:30', 12, true), '08:30 م');
   assert.equal(followupTimeLabel('20:30', 24, false), '20:30');
   assert.equal(followupTimeLabel('', 24, true), 'اختر الساعة');

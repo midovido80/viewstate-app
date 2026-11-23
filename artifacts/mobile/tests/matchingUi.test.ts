@@ -569,7 +569,7 @@ test('Comparison shows actual client range, area names and unknown evidence in b
   const result = evaluateMatch(r.value, { property: p });
   for (const language of ['en', 'ar'] as const) {
     const rows = matchingComparisonRows(result, r.value, p, language);
-    assert.equal(rows.find(row => row.field === 'budget')!.requested, '500–800 KWD');
+    assert.equal(rows.find(row => row.field === 'budget')!.requested, language === 'ar' ? 'من 500 إلى 800 د.ك' : '500–800 KWD');
     assert.equal(rows.find(row => row.field === 'budget')!.offered, '150 KWD');
     assert.equal(rows.find(row => row.field === 'budget')!.statusLabel, language === 'ar' ? 'أقل من النطاق' : 'Below range');
     assert.equal(rows.find(row => row.field === 'location')!.offered, language === 'ar' ? 'السالمية' : 'Salmiya');

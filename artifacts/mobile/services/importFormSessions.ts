@@ -200,6 +200,7 @@ export async function prepareImportedForm(
       )
       .map(([, amenity]) => amenity);
     await session.write({
+      requestDraftVersion: 2,
       step: 3,
       showCatalogBackControls: false,
       purpose,
@@ -221,7 +222,7 @@ export async function prepareImportedForm(
       floorNumber: count("floorNumber"),
       requiredArea: String(facts.areaSquareMeters ?? ""),
       unspecified: [],
-      driverRoom: false,
+      driverRoom: undefined,
       catalog,
       amenities,
       excludedAmenities: Object.entries(amenityFields)

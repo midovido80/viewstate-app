@@ -1,24 +1,41 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import {
+  sourceMatch,
+  sourceDoesNotMatch,
+  sourceIndex,
+} from "./sourceAssertions";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
-import './platformModuleStubs.ts';
-import { PROPERTY_TYPES, normalizeSeekerRequirement, type SeekerRequirement } from '@workspace/property-domain';
-import { buildPersonRequirement, formValuesFromRequirement } from '../services/personRequirementWorkflow.ts';
-import { getPropertyTypeSelectionRoute } from '../services/propertyFormRoutes.ts';
-import { PERSON_CLASSIFICATIONS, createPerson, personCanBePropertySource } from '../services/people.ts';
-import type { PropertySource } from '../services/people.ts';
+import "./platformModuleStubs.ts";
+import {
+  PROPERTY_TYPES,
+  normalizeSeekerRequirement,
+  type SeekerRequirement,
+} from "@workspace/property-domain";
+import {
+  buildPersonRequirement,
+  formValuesFromRequirement,
+} from "../services/personRequirementWorkflow.ts";
+import { getPropertyTypeSelectionRoute } from "../services/propertyFormRoutes.ts";
+import {
+  PERSON_CLASSIFICATION_GROUPS,
+  createPerson,
+  canOwnPropertyRequirement,
+  personCanBePropertySource,
+} from "../services/people.ts";
+import type { PropertySource } from "../services/people.ts";
 import {
   ensureStudioPropertySourceLink,
   getStudioPersonSourceRole,
   type StudioPropertySourceStore,
-} from '../services/studioSave.ts';
-import { getApplicablePropertyFormFields } from '../services/propertyFormCatalog.ts';
+} from "../services/studioSave.ts";
+import { getApplicablePropertyFormFields } from "../services/propertyFormCatalog.ts";
 import {
   getGenericRequirementApartmentSubtype,
   getGenericRequirementApartmentSubtypePreference,
   parseGenericRequirementApartmentSubtype,
-} from '../services/requirementFieldMap.ts';
+} from "../services/requirementFieldMap.ts";
 import {
   RequirementRouteGeneration,
   retryRequirementNavigation,
@@ -26,35 +43,54 @@ import {
   savePersonRequirement,
   shouldRenderRequirementRecoveryControls,
   tryStartRequirementSave,
-} from '../services/requirementSaveOutcome.ts';
+} from "../services/requirementSaveOutcome.ts";
 
-const seekerId = 'ux2-seeker';
-const rentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const buyId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const seekerId = "ux2-seeker";
+const rentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const buyId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-test('UX-2 keeps Property source roles independent from Person classifications', () => {
-  assert.deepEqual(PERSON_CLASSIFICATIONS, [
-    'seeker', 'rent_seeker', 'buy_seeker', 'investor',
-    'owner', 'owner_agent', 'property_management',
-    'broker', 'real_estate_company', 'building_guard',
-  ]);
+test("UX-2 keeps Property source roles independent from Person classifications", () => {
+  assert.deepEqual(
+    PERSON_CLASSIFICATION_GROUPS.map((group) => group.roles),
+    [
+      ["rent_seeker", "buy_seeker", "investor"],
+      ["owner", "owner_agent", "property_management"],
+      ["broker", "real_estate_company", "building_guard"],
+    ],
+  );
+  assert.ok(
+    canOwnPropertyRequirement({ classifications: ["rent_seeker", "owner"] }),
+  );
+  assert.ok(canOwnPropertyRequirement({ classifications: ["buy_seeker"] }));
+  assert.ok(canOwnPropertyRequirement({ classifications: ["investor"] }));
+  assert.ok(canOwnPropertyRequirement({ classifications: ["broker"] }));
   const person = createPerson({
-    id: seekerId, classifications: ['seeker', 'broker'], name: '  Contact Name  ',
-    displayPhone: '50000000', notes: 'private note',
+    id: seekerId,
+    classifications: ["seeker", "broker"],
+    name: "  Contact Name  ",
+    displayPhone: "50000000",
+    notes: "private note",
   });
-  assert.equal(person.name, '  Contact Name  ');
-  assert.equal(person.displayPhone, '50000000');
-  assert.equal(personCanBePropertySource(person, 'broker'), true);
-  assert.equal(personCanBePropertySource(person, 'owner'), true);
+  assert.equal(person.name, "  Contact Name  ");
+  assert.equal(person.displayPhone, "50000000");
+  assert.equal(personCanBePropertySource(person, "broker"), true);
+  assert.equal(personCanBePropertySource(person, "owner"), true);
 });
 
-test('UX-2 Rent preferences preserve zero, false, absence, and exact/custom values after reopening', () => {
+test("UX-2 Rent preferences preserve zero, false, absence, and exact/custom values after reopening", () => {
   const result = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 0, maximumBudget: 900, currencyCode: 'KWD', notes: '',
-    bedroomsMinimum: 0, swimmingPool: false, preferredAmenityExclusions: ['balcony'],
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 0,
+    maximumBudget: 900,
+    currencyCode: "KWD",
+    notes: "",
+    bedroomsMinimum: 0,
+    swimmingPool: false,
+    preferredAmenityExclusions: ["balcony"],
     catalogPreferences: [
-      { field: 'floorNumber', kind: 'number', comparison: 'exact', value: 7 },
+      { field: "floorNumber", kind: "number", comparison: "exact", value: 7 },
     ],
   });
   assert.equal(result.ok, true);
@@ -63,49 +99,64 @@ test('UX-2 Rent preferences preserve zero, false, absence, and exact/custom valu
   assert.equal(restored.bedroomsMinimum, 0);
   assert.equal(restored.swimmingPool, false);
   assert.equal(restored.gym, undefined);
-  assert.deepEqual(restored.preferredAmenityExclusions, ['balcony']);
-  assert.equal(restored.catalogPreferences?.[0].kind, 'number');
-  assert.deepEqual(restored.catalogPreferences, result.value.catalogPreferences);
+  assert.deepEqual(restored.preferredAmenityExclusions, ["balcony"]);
+  assert.equal(restored.catalogPreferences?.[0].kind, "number");
+  assert.deepEqual(
+    restored.catalogPreferences,
+    result.value.catalogPreferences,
+  );
   assert.equal(result.value.id, rentId);
   assert.equal(result.value.seekerId, seekerId);
 });
 
-test('Standard Apartment subtype survives candidate save, exact-ID readback, and edit round-trip', async () => {
-  const selectedSubtype = parseGenericRequirementApartmentSubtype('standard');
-  assert.equal(selectedSubtype, 'standard_apartment');
-  const standardPreference = getGenericRequirementApartmentSubtypePreference(selectedSubtype);
+test("Standard Apartment subtype survives candidate save, exact-ID readback, and edit round-trip", async () => {
+  const selectedSubtype = parseGenericRequirementApartmentSubtype("standard");
+  assert.equal(selectedSubtype, "standard_apartment");
+  const standardPreference =
+    getGenericRequirementApartmentSubtypePreference(selectedSubtype);
   assert.deepEqual(standardPreference, [
-    { field: 'apartmentSubtype', kind: 'choice', value: 'standard_apartment' },
+    { field: "apartmentSubtype", kind: "choice", value: "standard_apartment" },
   ]);
 
   const candidate = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent',
-    propertyType: 'apartment',
-    preferredAreaIds: ['salmiya'],
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
     minimumBudget: 250,
     maximumBudget: 500,
-    currencyCode: 'KWD',
-    notes: '',
+    currencyCode: "KWD",
+    notes: "",
     bedroomsMinimum: 2,
     bathroomsMinimum: 2,
     catalogPreferences: standardPreference,
   });
   assert.equal(candidate.ok, true);
   if (!candidate.ok) return;
-  assert.equal(getGenericRequirementApartmentSubtype(candidate.value.catalogPreferences), 'standard_apartment');
+  assert.equal(
+    getGenericRequirementApartmentSubtype(candidate.value.catalogPreferences),
+    "standard_apartment",
+  );
 
   const records = new Map<string, SeekerRequirement>();
   let writes = 0;
   let updates = 0;
   const store = {
-    getPerson: async (id: string) => id === seekerId ? { id, classifications: ['seeker'] } : null,
+    getPerson: async (id: string) =>
+      id === seekerId ? { id, classifications: ["seeker"] } : null,
     getRequirement: async (id: string) => records.get(id) ?? null,
     saveRequirement: async (requirement: SeekerRequirement) => {
       writes += 1;
       records.set(requirement.id, requirement);
     },
-    updateRequirement: async (baseline: SeekerRequirement, replacement: SeekerRequirement) => {
-      if (records.get(baseline.id)?.id !== baseline.id || replacement.id !== baseline.id) return false;
+    updateRequirement: async (
+      baseline: SeekerRequirement,
+      replacement: SeekerRequirement,
+    ) => {
+      if (
+        records.get(baseline.id)?.id !== baseline.id ||
+        replacement.id !== baseline.id
+      )
+        return false;
       updates += 1;
       records.set(replacement.id, replacement);
       return true;
@@ -117,22 +168,32 @@ test('Standard Apartment subtype survives candidate save, exact-ID readback, and
     store,
     navigate: () => undefined,
   });
-  assert.deepEqual(created, { status: 'saved' });
+  assert.deepEqual(created, { status: "saved" });
   assert.equal(writes, 1);
   const saved = await store.getRequirement(rentId);
   assert.ok(saved);
   assert.equal(saved.id, rentId);
 
   const reopened = formValuesFromRequirement(saved);
-  assert.equal(getGenericRequirementApartmentSubtype(reopened.catalogPreferences), 'standard_apartment');
+  assert.equal(
+    getGenericRequirementApartmentSubtype(reopened.catalogPreferences),
+    "standard_apartment",
+  );
   assert.equal(reopened.bedroomsMinimum, 2);
   assert.equal(reopened.bathroomsMinimum, 2);
-  assert.equal(getGenericRequirementApartmentSubtype([
-    { field: 'apartmentSubtype', kind: 'choice', value: 'studio' },
-  ]), undefined, 'generic Requirement hydration does not treat Studio as a selectable subtype');
-  assert.equal(parseGenericRequirementApartmentSubtype('studio'), undefined);
+  assert.equal(
+    getGenericRequirementApartmentSubtype([
+      { field: "apartmentSubtype", kind: "choice", value: "studio" },
+    ]),
+    undefined,
+    "generic Requirement hydration does not treat Studio as a selectable subtype",
+  );
+  assert.equal(parseGenericRequirementApartmentSubtype("studio"), undefined);
 
-  const edited = buildPersonRequirement(rentId, seekerId, { ...reopened, notes: 'edited without changing subtype' });
+  const edited = buildPersonRequirement(rentId, seekerId, {
+    ...reopened,
+    notes: "edited without changing subtype",
+  });
   assert.equal(edited.ok, true);
   if (!edited.ok) return;
   const updated = await savePersonRequirement({
@@ -141,118 +202,219 @@ test('Standard Apartment subtype survives candidate save, exact-ID readback, and
     store,
     navigate: () => undefined,
   });
-  assert.deepEqual(updated, { status: 'saved' });
+  assert.deepEqual(updated, { status: "saved" });
   assert.equal(writes, 1);
   assert.equal(updates, 1);
   const editedReadback = await store.getRequirement(rentId);
   assert.ok(editedReadback);
   assert.equal(editedReadback.id, rentId);
-  assert.equal(getGenericRequirementApartmentSubtype(formValuesFromRequirement(editedReadback).catalogPreferences), 'standard_apartment');
+  assert.equal(
+    getGenericRequirementApartmentSubtype(
+      formValuesFromRequirement(editedReadback).catalogPreferences,
+    ),
+    "standard_apartment",
+  );
 });
 
-test('UX-2 Buy and Floor preferences persist under canonical applicability without Rent fields', () => {
-  assert.ok(PROPERTY_TYPES.includes('floor'));
-  const residential = getApplicablePropertyFormFields('floor', 'residential').map(item => item.field);
-  const commercial = getApplicablePropertyFormFields('floor', 'commercial').map(item => item.field);
-  assert.ok(residential.includes('bedroomCount'));
-  assert.ok(!commercial.includes('bedroomCount'));
-  assert.ok(commercial.includes('commercialActivity'));
+test("UX-2 Buy and Floor preferences persist under canonical applicability without Rent fields", () => {
+  assert.ok(PROPERTY_TYPES.includes("floor"));
+  const residential = getApplicablePropertyFormFields(
+    "floor",
+    "residential",
+  ).map((item) => item.field);
+  const commercial = getApplicablePropertyFormFields("floor", "commercial").map(
+    (item) => item.field,
+  );
+  assert.ok(residential.includes("bedroomCount"));
+  assert.ok(!commercial.includes("bedroomCount"));
+  assert.ok(commercial.includes("commercialActivity"));
   const buy = buildPersonRequirement(buyId, seekerId, {
-    purpose: 'buy', propertyType: 'floor', floorUse: 'commercial',
-    preferredAreaIds: ['hawalli'], minimumBudget: 1, maximumBudget: 100000,
-    currencyCode: 'KWD', notes: 'office preference',
+    purpose: "buy",
+    propertyType: "floor",
+    floorUse: "commercial",
+    preferredAreaIds: ["hawalli"],
+    minimumBudget: 1,
+    maximumBudget: 100000,
+    currencyCode: "KWD",
+    notes: "office preference",
     catalogPreferences: [
-      { field: 'commercialActivity', kind: 'choice', value: 'retail' },
+      { field: "commercialActivity", kind: "choice", value: "retail" },
     ],
   });
   assert.equal(buy.ok, true);
   if (!buy.ok) return;
-  assert.equal(buy.value.floorUse, 'commercial');
-  assert.equal(buy.value.purpose, 'buy');
-  assert.equal('bedroomsMinimum' in buy.value, false);
-  assert.deepEqual(formValuesFromRequirement(buy.value).catalogPreferences, buy.value.catalogPreferences);
+  assert.equal(buy.value.floorUse, "commercial");
+  assert.equal(buy.value.purpose, "buy");
+  assert.equal("bedroomsMinimum" in buy.value, false);
+  assert.deepEqual(
+    formValuesFromRequirement(buy.value).catalogPreferences,
+    buy.value.catalogPreferences,
+  );
   const invalid = normalizeSeekerRequirement({
-    ...buy.value, catalogPreferences: [{ field: 'bedroomCount', kind: 'number', comparison: 'exact', value: 2 }],
+    ...buy.value,
+    catalogPreferences: [
+      { field: "bedroomCount", kind: "number", comparison: "exact", value: 2 },
+    ],
   });
   assert.equal(invalid.ok, false);
 });
 
-test('UX-2 source role travels with the Person through every existing capture route', async () => {
-  for (const route of ['index', 'transaction', 'property-type', 'apartment-subtype', 'price', 'location', 'summary']) {
-    const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
-    assert.match(source, /useLocalSearchParams/, `${route} must read its route context`);
-    assert.match(source, /linkPersonId/, `${route} must retain the Person link`);
-    assert.match(source, /sourceRole/, `${route} must retain the selected source role`);
+test("UX-2 source role travels with the Person through every existing capture route", async () => {
+  for (const route of [
+    "index",
+    "transaction",
+    "property-type",
+    "apartment-subtype",
+    "price",
+    "location",
+    "summary",
+  ]) {
+    const source = await readFile(`app/capture/${route}.tsx`, "utf8");
+    sourceMatch(
+      source,
+      /useLocalSearchParams/,
+      `${route} must read its route context`,
+    );
+    sourceMatch(source, /linkPersonId/, `${route} must retain the Person link`);
+    sourceMatch(
+      source,
+      /sourceRole/,
+      `${route} must retain the selected source role`,
+    );
   }
 
-  const transaction = await readFile('app/capture/transaction.tsx', 'utf8');
-  assert.match(transaction, /firstParam\(params\.linkPersonId\)/);
-  assert.match(transaction, /firstParam\(params\.sourceRole\)/);
-  assert.match(transaction, /router\.push\(getPropertyTypeSelectionRoute\(\{[\s\S]*linkPersonId: firstParam\(params\.linkPersonId\)[\s\S]*sourceRole: firstParam\(params\.sourceRole\)/);
-  assert.deepEqual(getPropertyTypeSelectionRoute({
-    mode: 'offered',
-    transaction: 'rent',
-    linkPersonId: 'person / exact',
-    sourceRole: 'broker',
-  }), {
-    pathname: '/capture/property-type',
-    params: { mode: 'offered', transaction: 'rent', linkPersonId: 'person / exact', sourceRole: 'broker' },
-  });
+  const transaction = await readFile("app/capture/transaction.tsx", "utf8");
+  sourceMatch(transaction, /firstParam\(params\.linkPersonId\)/);
+  sourceMatch(transaction, /firstParam\(params\.sourceRole\)/);
+  sourceMatch(
+    transaction,
+    /router\.push\(getPropertyTypeSelectionRoute\(\{[\s\S]*linkPersonId: firstParam\(params\.linkPersonId\)[\s\S]*sourceRole: firstParam\(params\.sourceRole\)/,
+  );
+  assert.deepEqual(
+    getPropertyTypeSelectionRoute({
+      mode: "offered",
+      transaction: "rent",
+      linkPersonId: "person / exact",
+      sourceRole: "broker",
+    }),
+    {
+      pathname: "/capture/property-type",
+      params: {
+        mode: "offered",
+        transaction: "rent",
+        linkPersonId: "person / exact",
+        sourceRole: "broker",
+      },
+    },
+  );
 
-  const propertyType = await readFile('app/capture/property-type.tsx', 'utf8');
-  assert.match(propertyType, /const linkPersonId = firstParam\(params\.linkPersonId\)/);
-  assert.match(propertyType, /const sourceRole = firstParam\(params\.sourceRole\)/);
-  assert.match(propertyType, /getPropertyFormRoute\(\{[\s\S]*\.\.\.\(linkPersonId \? \{ linkPersonId \} : \{\}\),[\s\S]*\.\.\.\(sourceRole \? \{ sourceRole \} : \{\}\),[\s\S]*\}\)/);
+  const propertyType = await readFile("app/capture/property-type.tsx", "utf8");
+  sourceMatch(
+    propertyType,
+    /const linkPersonId = firstParam\(params\.linkPersonId\)/,
+  );
+  sourceMatch(
+    propertyType,
+    /const sourceRole = firstParam\(params\.sourceRole\)/,
+  );
+  sourceMatch(
+    propertyType,
+    /getPropertyFormRoute\(\{[\s\S]*\.\.\.\(linkPersonId \? \{ linkPersonId \} : \{\}\),[\s\S]*\.\.\.\(sourceRole \? \{ sourceRole \} : \{\}\),[\s\S]*\}\)/,
+  );
 
-  const entry = await readFile('app/person/[personId].tsx', 'utf8');
-  assert.match(entry, /const eligibleSourceRoles = person\.classifications\.filter/);
-  assert.match(entry, /eligibleSourceRoles\.map\(role =>/);
-  assert.match(entry, /person\.classifications\.map\(classification =>/);
-  assert.match(entry, /person\.classifications\.includes\(selectedSourceRole\)/);
-  assert.match(entry, /pathname: '\/capture\/transaction'/);
-  assert.match(entry, /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: 'owner' \}/);
-  assert.match(entry, /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: role \}/);
-  assert.match(entry, /const role = selectedSourceRole;[\s\S]*sourceRole: role/);
-  assert.doesNotMatch(entry, /person-saved-add-property|person-add-wanted-studio|person-add-requirement/);
-  for (const route of ['index', 'summary']) {
-    const source = await readFile(`app/capture/${route}.tsx`, 'utf8');
-    assert.match(
+  const entry = await readFile("app/person/[personId].tsx", "utf8");
+  sourceMatch(
+    entry,
+    /const eligibleSourceRoles = person\.classifications\.filter/,
+  );
+  sourceMatch(entry, /eligibleSourceRoles\.map\(role =>/);
+  sourceMatch(entry, /person\.classifications\.map\(classification =>/);
+  sourceMatch(entry, /person\.classifications\.includes\(selectedSourceRole\)/);
+  sourceMatch(entry, /pathname: '\/capture\/transaction'/);
+  sourceMatch(
+    entry,
+    /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: 'owner' \}/,
+  );
+  sourceMatch(
+    entry,
+    /params: \{ mode: 'offered', linkPersonId: person\.id, sourceRole: role \}/,
+  );
+  sourceMatch(entry, /const role = selectedSourceRole;[\s\S]*sourceRole: role/);
+  sourceDoesNotMatch(
+    entry,
+    /person-saved-add-property|person-add-wanted-studio|person-add-requirement/,
+  );
+  for (const route of ["index", "summary"]) {
+    const source = await readFile(`app/capture/${route}.tsx`, "utf8");
+    sourceMatch(
       source,
-      /ensureStudioPropertySourceLink\(/,
+      /savePropertyWithRecovery\(/,
       `${route} persists the Person-property relationship through its owned save path`,
     );
   }
-  const genericCapture = await readFile('app/capture/index.tsx', 'utf8');
-  assert.match(genericCapture, /getStudioPersonSourceRole\(linkedPerson, sourceRole\)/);
-  assert.match(genericCapture, /const pendingSourceLink = sourceLinkRecoveryRef\.current;[\s\S]*?ensureStudioPropertySourceLink\([\s\S]*?const projection = projectToProperty\(\)/);
-  assert.match(genericCapture, /savePropertyWithRecovery\(projection\.property\)[\s\S]*?sourceLinkRecoveryRef\.current = sourceRecovery;[\s\S]*?ensureStudioPropertySourceLink\(/);
-  assert.match(genericCapture, /await ensureStudioPropertySourceLink\([\s\S]*?const detailsCleared = await clearCaptureDetails/);
-  assert.doesNotMatch(genericCapture, /store\.setPropertySource\(|store\.linkPersonToProperty\(/);
-  const summary = await readFile('app/capture/summary.tsx', 'utf8');
-  const sourceLink = await readFile('services/studioSave.ts', 'utf8');
-  assert.match(summary, /getStudioPersonSourceRole\(linkedPerson, selectedSourceRole\)/);
-  assert.match(summary, /ensureStudioPropertySourceLink\(savedId, linkPersonId, resolvedSourceRole, store\)/);
-  assert.match(sourceLink, /store\.setPropertySource\(\{ propertyCoreId, personId, role \} satisfies PropertySource\)/);
-  assert.match(sourceLink, /readbackSource\?\.personId !== personId \|\| readbackSource\.role !== role/);
-  assert.match(sourceLink, /exactReadbackLinks\.length !== 1/);
+  const genericCapture = await readFile("app/capture/index.tsx", "utf8");
+  sourceMatch(
+    genericCapture,
+    /getStudioPersonSourceRole\(linkedPerson, sourceRole\)/,
+  );
+  sourceMatch(
+    genericCapture,
+    /const pendingSourceLink = sourceLinkRecoveryRef\.current;[\s\S]*?ensureStudioPropertySourceLink\([\s\S]*?const projection = projectToProperty\(\)/,
+  );
+  sourceMatch(
+    genericCapture,
+    /savePropertyWithRecovery\(projection\.property,[\s\S]*?sourceLinkRecoveryRef\.current = sourceRecovery;[\s\S]*?ensureStudioPropertySourceLink\(/,
+  );
+  sourceMatch(
+    genericCapture,
+    /await ensureStudioPropertySourceLink\([\s\S]*?const detailsCleared = await clearCaptureDetails/,
+  );
+  sourceDoesNotMatch(
+    genericCapture,
+    /store\.setPropertySource\(|store\.linkPersonToProperty\(/,
+  );
+  const summary = await readFile("app/capture/summary.tsx", "utf8");
+  const sourceLink = await readFile("services/studioSave.ts", "utf8");
+  sourceMatch(
+    summary,
+    /getStudioPersonSourceRole\(linkedPerson, selectedSourceRole\)/,
+  );
+  sourceMatch(
+    summary,
+    /personId: linkPersonId, role: resolvedSourceRole/,
+  );
+  sourceMatch(
+    sourceLink,
+    /store\.setPropertySource\(\{ propertyCoreId, personId, role \} satisfies PropertySource\)/,
+  );
+  sourceMatch(
+    sourceLink,
+    /readbackSource\?\.personId !== personId \|\| readbackSource\.role !== role/,
+  );
+  sourceMatch(sourceLink, /exactReadbackLinks\.length !== 1/);
 });
 
-test('generic Person-origin Floor save validates role before commit and retries only the exact source link', async () => {
-  const sourceText = await readFile('app/capture/index.tsx', 'utf8');
+test("generic Person-origin Floor save validates role before commit and retries only the exact source link", async () => {
+  const sourceText = await readFile("app/capture/index.tsx", "utf8");
   const person = createPerson({
-    id: 'capture-floor-multi-role-person',
-    classifications: ['owner', 'broker'],
-    name: 'Multi-role contact',
-    displayPhone: '55500011',
+    id: "capture-floor-multi-role-person",
+    classifications: ["owner", "broker"],
+    name: "Multi-role contact",
+    displayPhone: "55500011",
   });
-  const propertyCoreId = 'capture-floor-person-property';
+  const propertyCoreId = "capture-floor-person-property";
   const originalCaptureDetails = {
-    floorUse: 'residential',
-    bedroomCount: '3',
-    description: 'Preserve these Floor details',
+    floorUse: "residential",
+    bedroomCount: "3",
+    description: "Preserve these Floor details",
   };
-  let captureDetails: typeof originalCaptureDetails | null = { ...originalCaptureDetails };
-  const properties = new Map<string, { propertyCoreId: string; captureDetails: typeof originalCaptureDetails }>();
+  let captureDetails: typeof originalCaptureDetails | null = {
+    ...originalCaptureDetails,
+  };
+  const properties = new Map<
+    string,
+    { propertyCoreId: string; captureDetails: typeof originalCaptureDetails }
+  >();
   const links: Array<{ personId: string; propertyCoreId: string }> = [];
   let propertyWrites = 0;
   let sourceWrites = 0;
@@ -266,7 +428,7 @@ test('generic Person-origin Floor save validates role before commit and retries 
   } | null = null;
 
   const store: StudioPropertySourceStore = {
-    getPerson: async id => id === person.id ? person : null,
+    getPerson: async (id) => (id === person.id ? person : null),
     getPropertySource: async () => {
       if (staleSourceReadback) {
         staleSourceReadback = false;
@@ -274,19 +436,26 @@ test('generic Person-origin Floor save validates role before commit and retries 
       }
       return source;
     },
-    getLinksForProperty: async id => links.filter(link => link.propertyCoreId === id),
-    linkPersonToProperty: async link => {
-      if (!links.some(existing => existing.personId === link.personId && existing.propertyCoreId === link.propertyCoreId)) {
+    getLinksForProperty: async (id) =>
+      links.filter((link) => link.propertyCoreId === id),
+    linkPersonToProperty: async (link) => {
+      if (
+        !links.some(
+          (existing) =>
+            existing.personId === link.personId &&
+            existing.propertyCoreId === link.propertyCoreId,
+        )
+      ) {
         links.push(link);
       }
     },
-    setPropertySource: async next => {
+    setPropertySource: async (next) => {
       sourceWrites += 1;
       source = next;
       if (rejectSourceAfterCommit) {
         rejectSourceAfterCommit = false;
         staleSourceReadback = true;
-        throw new Error('source acknowledgement lost after commit');
+        throw new Error("source acknowledgement lost after commit");
       }
     },
   };
@@ -304,77 +473,144 @@ test('generic Person-origin Floor save validates role before commit and retries 
       return;
     }
     const role = getStudioPersonSourceRole(person, requestedRole);
-    if (!role) throw new Error('SOURCE_ROLE_MISMATCH');
+    if (!role) throw new Error("SOURCE_ROLE_MISMATCH");
     propertyWrites += 1;
     properties.set(propertyCoreId, {
       propertyCoreId,
       captureDetails: { ...originalCaptureDetails },
     });
     sourceRecovery = { propertyCoreId, personId: person.id, role };
-    await ensureStudioPropertySourceLink(propertyCoreId, person.id, role, store);
+    await ensureStudioPropertySourceLink(
+      propertyCoreId,
+      person.id,
+      role,
+      store,
+    );
     sourceRecovery = null;
     captureDetails = null;
   };
 
-  assert.match(sourceText, /resolvedSourceRole = getStudioPersonSourceRole\(linkedPerson, sourceRole\)/);
-  assert.ok(
-    sourceText.indexOf('resolvedSourceRole = getStudioPersonSourceRole(linkedPerson, sourceRole)')
-      < sourceText.indexOf('savePropertyWithRecovery(projection.property)'),
-    'the exact role is validated before property creation',
+  sourceMatch(
+    sourceText,
+    /resolvedSourceRole = getStudioPersonSourceRole\(linkedPerson, sourceRole\)/,
   );
-  assert.equal(getStudioPersonSourceRole(person), null, 'a multi-role Person has no implicit default role');
+  assert.ok(
+    sourceIndex(
+      sourceText,
+      "resolvedSourceRole = getStudioPersonSourceRole(linkedPerson, sourceRole)",
+    ) <
+      sourceIndex(sourceText, "savePropertyWithRecovery(projection.property,"),
+    "the exact role is validated before property creation",
+  );
+  assert.equal(
+    getStudioPersonSourceRole(person),
+    null,
+    "a multi-role Person has no implicit default role",
+  );
   await assert.rejects(submitCapture(), /SOURCE_ROLE_MISMATCH/);
-  assert.equal(propertyWrites, 0, 'ambiguous role is rejected before the Property save');
+  assert.equal(
+    propertyWrites,
+    0,
+    "ambiguous role is rejected before the Property save",
+  );
 
-  await assert.rejects(submitCapture('broker'), /source acknowledgement lost after commit/);
+  await assert.rejects(
+    submitCapture("broker"),
+    /source acknowledgement lost after commit/,
+  );
   assert.equal(propertyWrites, 1);
-  assert.deepEqual(captureDetails, originalCaptureDetails, 'capture details remain available while source readback is uncertain');
-  assert.deepEqual(properties.get(propertyCoreId)?.captureDetails, originalCaptureDetails);
+  assert.deepEqual(
+    captureDetails,
+    originalCaptureDetails,
+    "capture details remain available while source readback is uncertain",
+  );
+  assert.deepEqual(
+    properties.get(propertyCoreId)?.captureDetails,
+    originalCaptureDetails,
+  );
 
   await submitCapture();
-  assert.equal(propertyWrites, 1, 'retry confirms the committed Property without creating another');
-  assert.equal(sourceWrites, 1, 'retry reads back the exact committed role instead of writing another');
-  assert.deepEqual(links, [{ personId: person.id, propertyCoreId }], 'the Person-property relation remains unique');
-  assert.deepEqual(source, { propertyCoreId, personId: person.id, role: 'broker' });
-  assert.equal(captureDetails, null, 'draft details clear only after exact source/link readback succeeds');
+  assert.equal(
+    propertyWrites,
+    1,
+    "retry confirms the committed Property without creating another",
+  );
+  assert.equal(
+    sourceWrites,
+    1,
+    "retry reads back the exact committed role instead of writing another",
+  );
+  assert.deepEqual(
+    links,
+    [{ personId: person.id, propertyCoreId }],
+    "the Person-property relation remains unique",
+  );
+  assert.deepEqual(source, {
+    propertyCoreId,
+    personId: person.id,
+    role: "broker",
+  });
+  assert.equal(
+    captureDetails,
+    null,
+    "draft details clear only after exact source/link readback succeeds",
+  );
 });
 
-test('UX-2 Requirement save requires an existing Person with seeker classification', async () => {
+test("UX-2 Requirement save requires an existing Person with seeker classification", async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "",
   });
   assert.equal(built.ok, true);
   if (!built.ok) return;
   let writes = 0;
   const baseStore = {
     getRequirement: async () => null,
-    saveRequirement: async () => { writes += 1; },
+    saveRequirement: async () => {
+      writes += 1;
+    },
     updateRequirement: async () => true,
   };
   const missing = await savePersonRequirement({
-    candidate: built.value, baseline: null,
+    candidate: built.value,
+    baseline: null,
     store: { ...baseStore, getPerson: async () => null },
-    navigate: () => assert.fail('must not navigate'),
+    navigate: () => assert.fail("must not navigate"),
   });
-  assert.deepEqual(missing, { status: 'missing_person' });
+  assert.deepEqual(missing, { status: "missing_person" });
   const ownerRequirement = await savePersonRequirement({
-    candidate: built.value, baseline: null,
+    candidate: built.value,
+    baseline: null,
     store: {
       ...baseStore,
-      getPerson: async () => ({ classifications: ['owner'] }),
+      getPerson: async () => ({ classifications: ["owner"] }),
       getRequirement: async () => built.value,
     },
     navigate: () => undefined,
   });
-  assert.deepEqual(ownerRequirement, { status: 'non_seeker' });
-  assert.equal(writes, 0, 'a Person without seeker classification cannot own a Requirement save');
+  assert.deepEqual(ownerRequirement, { status: "non_seeker" });
+  assert.equal(
+    writes,
+    0,
+    "a Person without seeker classification cannot own a Requirement save",
+  );
 });
 
-test('UX-2 storage and readback failures keep writes bounded and allow confirmation-only recovery', async () => {
+test("UX-2 storage and readback failures keep writes bounded and allow confirmation-only recovery", async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "",
   });
   assert.equal(built.ok, true);
   if (!built.ok) return;
@@ -383,37 +619,51 @@ test('UX-2 storage and readback failures keep writes bounded and allow confirmat
   let navigations = 0;
   let unavailable = true;
   const store = {
-    getPerson: async () => ({ classifications: ['seeker'] }),
+    getPerson: async () => ({ classifications: ["seeker"] }),
     getRequirement: async (id: string) => {
       reads += 1;
       assert.equal(id, built.value.id);
-      if (unavailable) throw new Error('private storage detail');
+      if (unavailable) throw new Error("private storage detail");
       return built.value;
     },
-    saveRequirement: async () => { writes += 1; },
+    saveRequirement: async () => {
+      writes += 1;
+    },
     updateRequirement: async () => true,
   };
   const readbackFailed = await savePersonRequirement({
-    candidate: built.value, baseline: null, store,
-    navigate: () => { navigations += 1; },
+    candidate: built.value,
+    baseline: null,
+    store,
+    navigate: () => {
+      navigations += 1;
+    },
   });
-  assert.deepEqual(readbackFailed, { status: 'saved_readback_failed' });
+  assert.deepEqual(readbackFailed, { status: "saved_readback_failed" });
   assert.equal(writes, 1);
   unavailable = false;
   const recovered = await retryRequirementReadback({
-    candidate: built.value, store,
-    navigate: () => { navigations += 1; },
+    candidate: built.value,
+    store,
+    navigate: () => {
+      navigations += 1;
+    },
   });
-  assert.deepEqual(recovered, { status: 'saved' });
-  assert.equal(writes, 1, 'readback recovery must never write a second time');
+  assert.deepEqual(recovered, { status: "saved" });
+  assert.equal(writes, 1, "readback recovery must never write a second time");
   assert.equal(reads, 2);
   assert.equal(navigations, 1);
 });
 
-test('UX-2 rejected write checks its exact ID and recovers a committed write without creating again', async () => {
+test("UX-2 rejected write checks its exact ID and recovers a committed write without creating again", async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "",
   });
   assert.equal(built.ok, true);
   if (!built.ok) return;
@@ -421,61 +671,101 @@ test('UX-2 rejected write checks its exact ID and recovers a committed write wit
   let reads = 0;
   let navigations = 0;
   const store = {
-    getPerson: async () => ({ classifications: ['seeker'] }),
+    getPerson: async () => ({ classifications: ["seeker"] }),
     getRequirement: async (id: string) => {
       reads += 1;
       assert.equal(id, rentId);
       return built.value;
     },
-    saveRequirement: async () => { writes += 1; throw new Error('private storage detail'); },
+    saveRequirement: async () => {
+      writes += 1;
+      throw new Error("private storage detail");
+    },
     updateRequirement: async () => true,
   };
   const outcome = await savePersonRequirement({
-    candidate: built.value, baseline: null, store,
-    navigate: () => { navigations += 1; },
+    candidate: built.value,
+    baseline: null,
+    store,
+    navigate: () => {
+      navigations += 1;
+    },
   });
-  assert.deepEqual(outcome, { status: 'saved' });
+  assert.deepEqual(outcome, { status: "saved" });
   assert.equal(writes, 1);
-  assert.equal(reads, 1, 'uncertain write is checked by exact ID');
+  assert.equal(reads, 1, "uncertain write is checked by exact ID");
   assert.equal(navigations, 1);
 });
 
-test('UX-2 unresolved writes require exact-ID verification before a manual retry', async () => {
+test("UX-2 unresolved writes require exact-ID verification before a manual retry", async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "",
   });
   assert.equal(built.ok, true);
   if (!built.ok) return;
   let writes = 0;
   let reads = 0;
   const store = {
-    getPerson: async () => ({ classifications: ['seeker'] }),
-    getRequirement: async (id: string) => { reads += 1; assert.equal(id, rentId); return null; },
-    saveRequirement: async () => { writes += 1; throw new Error('private storage detail'); },
+    getPerson: async () => ({ classifications: ["seeker"] }),
+    getRequirement: async (id: string) => {
+      reads += 1;
+      assert.equal(id, rentId);
+      return null;
+    },
+    saveRequirement: async () => {
+      writes += 1;
+      throw new Error("private storage detail");
+    },
     updateRequirement: async () => true,
   };
   const outcome = await savePersonRequirement({
-    candidate: built.value, baseline: null, store,
-    navigate: () => assert.fail('must not navigate'),
+    candidate: built.value,
+    baseline: null,
+    store,
+    navigate: () => assert.fail("must not navigate"),
   });
   assert.deepEqual(outcome, {
-    status: 'storage_failure',
+    status: "storage_failure",
     retryAllowed: true,
-    diagnostic: { stage: 'write', code: 'storage_failure', location: ['requirement'], errorType: 'unexpected_error' },
+    diagnostic: {
+      stage: "write",
+      code: "storage_failure",
+      location: ["requirement"],
+      errorType: "unexpected_error",
+    },
   });
   assert.equal(writes, 1);
-  assert.equal(reads, 1, 'the exact-ID lookup must happen before retry can be enabled');
+  assert.equal(
+    reads,
+    1,
+    "the exact-ID lookup must happen before retry can be enabled",
+  );
 });
 
-test('UX-2 edit updates retain the same Requirement ID and verify its seeker ownership', async () => {
+test("UX-2 edit updates retain the same Requirement ID and verify its seeker ownership", async () => {
   const original = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: 'old',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "old",
   });
   const replacement = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: 'updated',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "updated",
   });
   assert.equal(original.ok, true);
   assert.equal(replacement.ok, true);
@@ -486,9 +776,14 @@ test('UX-2 edit updates retain the same Requirement ID and verify its seeker own
     candidate: replacement.value,
     baseline: original.value,
     store: {
-      getPerson: async () => ({ classifications: ['seeker'] }),
-      getRequirement: async id => { assert.equal(id, rentId); return replacement.value; },
-      saveRequirement: async () => { creates += 1; },
+      getPerson: async () => ({ classifications: ["seeker"] }),
+      getRequirement: async (id) => {
+        assert.equal(id, rentId);
+        return replacement.value;
+      },
+      saveRequirement: async () => {
+        creates += 1;
+      },
       updateRequirement: async (expected, next) => {
         updatedIds = [expected.id, next.id];
         return true;
@@ -496,19 +791,29 @@ test('UX-2 edit updates retain the same Requirement ID and verify its seeker own
     },
     navigate: () => undefined,
   });
-  assert.deepEqual(outcome, { status: 'saved' });
+  assert.deepEqual(outcome, { status: "saved" });
   assert.deepEqual(updatedIds, [rentId, rentId]);
   assert.equal(creates, 0);
 });
 
-test('UX-2 competing edit is a non-retryable conflict and preserves the draft for an explicit reopen', async () => {
+test("UX-2 competing edit is a non-retryable conflict and preserves the draft for an explicit reopen", async () => {
   const original = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: 'latest saved notes',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "latest saved notes",
   });
   const pendingEdit = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: 'my unsaved notes',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "my unsaved notes",
   });
   assert.equal(original.ok, true);
   assert.equal(pendingEdit.ok, true);
@@ -519,44 +824,70 @@ test('UX-2 competing edit is a non-retryable conflict and preserves the draft fo
     candidate: pendingEdit.value,
     baseline: original.value,
     store: {
-      getPerson: async () => ({ classifications: ['seeker'] }),
+      getPerson: async () => ({ classifications: ["seeker"] }),
       getRequirement: async () => original.value,
-      saveRequirement: async () => { creates += 1; },
-      updateRequirement: async () => { updates += 1; return false; },
+      saveRequirement: async () => {
+        creates += 1;
+      },
+      updateRequirement: async () => {
+        updates += 1;
+        return false;
+      },
     },
-    navigate: () => assert.fail('conflict must not navigate without the user choosing'),
+    navigate: () =>
+      assert.fail("conflict must not navigate without the user choosing"),
   });
-  assert.deepEqual(outcome, { status: 'edit_conflict' });
+  assert.deepEqual(outcome, { status: "edit_conflict" });
   assert.equal(updates, 1);
   assert.equal(creates, 0);
-  assert.equal(pendingEdit.value.notes, 'my unsaved notes', 'pending editor values remain intact');
-  const route = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  assert.match(route, /editConflictRequirement\.current = requirement/);
-  assert.match(route, /save_edit_conflict/);
-  assert.match(route, /testID="requirement-reopen-latest"/);
-  assert.match(route, /onPress=\{confirmReopenLatest\}/);
-  assert.match(route, /if \(window\.confirm\(message\)\) void openPersonDetails\(\)/);
-  assert.match(route, /style: 'cancel'/);
-  assert.match(route, /will discard them/);
-  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current \|\| kitchenDraftInvalid\}/);
-  assert.doesNotMatch(route, /outcome\.status === 'edit_conflict'[\s\S]{0,180}setNotes\(/);
+  assert.equal(
+    pendingEdit.value.notes,
+    "my unsaved notes",
+    "pending editor values remain intact",
+  );
+  const route = await readFile("app/requirement/[requirementId].tsx", "utf8");
+  sourceMatch(route, /editConflictRequirement\.current = requirement/);
+  sourceMatch(route, /save_edit_conflict/);
+  sourceMatch(route, /testID="requirement-reopen-latest"/);
+  sourceMatch(route, /onPress=\{confirmReopenLatest\}/);
+  sourceMatch(
+    route,
+    /if \(window\.confirm\(message\)\) void openPersonDetails\(\)/,
+  );
+  sourceMatch(route, /style: 'cancel'/);
+  sourceMatch(route, /will discard them/);
+  sourceMatch(
+    route,
+    /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current \|\| kitchenDraftInvalid\}/,
+  );
+  sourceDoesNotMatch(
+    route,
+    /outcome\.status === 'edit_conflict'[\s\S]{0,180}setNotes\(/,
+  );
 });
 
-test('UX-2 route generation prevents stale async saves from navigating or applying outcomes', async () => {
+test("UX-2 route generation prevents stale async saves from navigating or applying outcomes", async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "",
   });
   assert.equal(built.ok, true);
   if (!built.ok) return;
   const generation = new RequirementRouteGeneration();
   const routeA = generation.advance();
   let finishWrite!: () => void;
-  const pendingWrite = new Promise<void>(resolve => { finishWrite = resolve; });
+  const pendingWrite = new Promise<void>((resolve) => {
+    finishWrite = resolve;
+  });
   let navigations = 0;
   let stateApplications = 0;
   const store = {
-    getPerson: async () => ({ classifications: ['seeker'] }),
+    getPerson: async () => ({ classifications: ["seeker"] }),
     getRequirement: async () => built.value,
     saveRequirement: async () => pendingWrite,
     updateRequirement: async () => true,
@@ -568,18 +899,20 @@ test('UX-2 route generation prevents stale async saves from navigating or applyi
     navigate: () => {
       if (generation.isCurrent(routeA)) navigations += 1;
     },
-  }).then(outcome => {
+  }).then((outcome) => {
     if (generation.isCurrent(routeA)) stateApplications += 1;
     return outcome;
   });
   generation.advance();
   finishWrite();
-  assert.deepEqual(await oldRouteSave, { status: 'saved' });
+  assert.deepEqual(await oldRouteSave, { status: "saved" });
   assert.equal(navigations, 0);
   assert.equal(stateApplications, 0);
   const routeB = generation.capture();
   let finishReadback!: (requirement: SeekerRequirement) => void;
-  const pendingReadback = new Promise<SeekerRequirement>(resolve => { finishReadback = resolve; });
+  const pendingReadback = new Promise<SeekerRequirement>((resolve) => {
+    finishReadback = resolve;
+  });
   let recoveryNavigations = 0;
   let recoveryStateApplications = 0;
   const oldRouteRecovery = retryRequirementReadback({
@@ -588,27 +921,41 @@ test('UX-2 route generation prevents stale async saves from navigating or applyi
     navigate: () => {
       if (generation.isCurrent(routeB)) recoveryNavigations += 1;
     },
-  }).then(outcome => {
+  }).then((outcome) => {
     if (generation.isCurrent(routeB)) recoveryStateApplications += 1;
     return outcome;
   });
   generation.advance();
   finishReadback(built.value);
-  assert.deepEqual(await oldRouteRecovery, { status: 'saved' });
+  assert.deepEqual(await oldRouteRecovery, { status: "saved" });
   assert.equal(recoveryNavigations, 0);
   assert.equal(recoveryStateApplications, 0);
-  const route = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  assert.match(route, /useLayoutEffect\(\(\) => \{\s*routeGeneration\.current\.advance\(\)/);
-  assert.match(route, /return \(\) => \{ routeGeneration\.current\.advance\(\); \};/);
-  assert.match(route, /if \(isCurrentRoute\(\)\) \{\s*applySaveOutcome\(outcome, result\.value\)/);
-  assert.match(route, /if \(isCurrentRoute\(\)\) applySaveOutcome\(outcome, target\)/);
-  assert.match(route, /: undefined/);
+  const route = await readFile("app/requirement/[requirementId].tsx", "utf8");
+  sourceMatch(
+    route,
+    /useLayoutEffect\(\(\) => \{\s*routeGeneration\.current\.advance\(\)/,
+  );
+  sourceMatch(
+    route,
+    /return \(\) => \{ routeGeneration\.current\.advance\(\); \};/,
+  );
+  sourceMatch(
+    route,
+    /if \(isCurrentRoute\(\)\) \{\s*applySaveOutcome\(outcome, result\.value\)/,
+  );
+  sourceMatch(
+    route,
+    /if \(isCurrentRoute\(\)\) applySaveOutcome\(outcome, target\)/,
+  );
+  sourceMatch(route, /: undefined/);
 });
 
-test('UX-2 concurrent and post-commit submits cannot launch a second write', async () => {
+test("UX-2 concurrent and post-commit submits cannot launch a second write", async () => {
   const flight = { current: false };
   let releaseWrite!: () => void;
-  const pendingWrite = new Promise<void>(resolve => { releaseWrite = resolve; });
+  const pendingWrite = new Promise<void>((resolve) => {
+    releaseWrite = resolve;
+  });
   let writes = 0;
   const submit = async (committed = false, uncertain = false) => {
     if (!tryStartRequirementSave(flight, committed, uncertain)) return;
@@ -621,54 +968,117 @@ test('UX-2 concurrent and post-commit submits cannot launch a second write', asy
   };
   const first = submit();
   await submit();
-  assert.equal(writes, 1, 'a second submit during an active write is ignored');
+  assert.equal(writes, 1, "a second submit during an active write is ignored");
   releaseWrite();
   await first;
   await submit(true);
   await submit(false, true);
   assert.equal(tryStartRequirementSave(flight, false, false, true), false);
-  assert.equal(writes, 1, 'committed, unresolved, or edit-conflicted outcomes never start another write');
+  assert.equal(
+    writes,
+    1,
+    "committed, unresolved, or edit-conflicted outcomes never start another write",
+  );
 });
 
-test('UX-2 failed navigation offers navigation-only recovery and route displays localized safe messages', async () => {
+test("UX-2 failed navigation offers navigation-only recovery and route displays localized safe messages", async () => {
   const built = buildPersonRequirement(rentId, seekerId, {
-    purpose: 'rent', propertyType: 'apartment', preferredAreaIds: ['salmiya'],
-    minimumBudget: 1, maximumBudget: 100, currencyCode: 'KWD', notes: '',
+    purpose: "rent",
+    propertyType: "apartment",
+    preferredAreaIds: ["salmiya"],
+    minimumBudget: 1,
+    maximumBudget: 100,
+    currencyCode: "KWD",
+    notes: "",
   });
   assert.equal(built.ok, true);
   if (!built.ok) return;
   let writes = 0;
   let navigateFails = true;
   const store = {
-    getPerson: async () => ({ classifications: ['seeker'] }),
+    getPerson: async () => ({ classifications: ["seeker"] }),
     getRequirement: async () => built.value,
-    saveRequirement: async () => { writes += 1; },
+    saveRequirement: async () => {
+      writes += 1;
+    },
     updateRequirement: async () => true,
   };
   const failed = await savePersonRequirement({
-    candidate: built.value, baseline: null, store,
-    navigate: () => { if (navigateFails) throw new Error('private navigation detail'); },
+    candidate: built.value,
+    baseline: null,
+    store,
+    navigate: () => {
+      if (navigateFails) throw new Error("private navigation detail");
+    },
   });
-  assert.deepEqual(failed, { status: 'saved_navigation_failed' });
+  assert.deepEqual(failed, { status: "saved_navigation_failed" });
   navigateFails = false;
-  assert.deepEqual(await retryRequirementNavigation(() => { if (navigateFails) throw new Error('private'); }), { status: 'saved' });
-  assert.equal(writes, 1, 'navigation retry cannot create a second Requirement');
-  const route = await readFile('app/requirement/[requirementId].tsx', 'utf8');
-  const messages = await readFile('services/requirementIssueMessage.ts', 'utf8');
-  assert.match(route, /testID="requirement-error">\{error\}/);
-  assert.match(route, /testID="requirement-save-recovery"/);
-  assert.match(route, /testID="requirement-open-person-details"/);
-  assert.match(route, /shouldRenderRequirementRecoveryControls\(\!\!error, recoveryAction\)/);
-  assert.equal(shouldRenderRequirementRecoveryControls(false, 'readback'), true, 'recovery control remains visible after its message is dismissed');
+  assert.deepEqual(
+    await retryRequirementNavigation(() => {
+      if (navigateFails) throw new Error("private");
+    }),
+    { status: "saved" },
+  );
+  assert.equal(
+    writes,
+    1,
+    "navigation retry cannot create a second Requirement",
+  );
+  const route = await readFile("app/requirement/[requirementId].tsx", "utf8");
+  const messages = await readFile(
+    "services/requirementIssueMessage.ts",
+    "utf8",
+  );
+  sourceMatch(route, /testID="requirement-error">\{error\}/);
+  sourceMatch(route, /testID="requirement-save-recovery"/);
+  sourceMatch(route, /testID="requirement-open-person-details"/);
+  sourceMatch(
+    route,
+    /shouldRenderRequirementRecoveryControls\(\!\!error, recoveryAction\)/,
+  );
+  assert.equal(
+    shouldRenderRequirementRecoveryControls(false, "readback"),
+    true,
+    "recovery control remains visible after its message is dismissed",
+  );
   assert.equal(shouldRenderRequirementRecoveryControls(false, null), false);
-  assert.equal(tryStartRequirementSave({ current: false }, true, false), false, 'dismissing the error cannot unlock a confirmed save');
-  assert.match(route, /tryStartRequirementSave\(saveFlight, !!confirmedRequirement\.current, !!uncertainRequirement\.current, !!editConflictRequirement\.current\)/);
-  assert.match(route, /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current \|\| kitchenDraftInvalid\}/);
-  assert.equal(tryStartRequirementSave({ current: false }, false, false, true), false, 'an edit conflict also prevents another save');
-  const saveStart = route.indexOf('const save = async (');
-  assert.ok(route.indexOf('tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)', saveStart) < route.indexOf('const result = candidate();', saveStart));
-  for (const code of ['save_missing_person', 'save_non_seeker', 'save_edit_conflict', 'save_storage_failure', 'save_readback_failed', 'save_navigation_failed']) {
-    assert.match(messages, new RegExp(`${code}: \\['[^']+', '[^']+'\\]`));
+  assert.equal(
+    tryStartRequirementSave({ current: false }, true, false),
+    false,
+    "dismissing the error cannot unlock a confirmed save",
+  );
+  sourceMatch(
+    route,
+    /tryStartRequirementSave\(saveFlight, !!confirmedRequirement\.current, !!uncertainRequirement\.current, !!editConflictRequirement\.current\)/,
+  );
+  sourceMatch(
+    route,
+    /disabled=\{saving \|\| !!confirmedRequirement\.current \|\| !!uncertainRequirement\.current \|\| !!editConflictRequirement\.current \|\| kitchenDraftInvalid\}/,
+  );
+  assert.equal(
+    tryStartRequirementSave({ current: false }, false, false, true),
+    false,
+    "an edit conflict also prevents another save",
+  );
+  const saveStart = route.indexOf("const save = async (");
+  assert.ok(
+    route.indexOf(
+      "tryStartRequirementSave(saveFlight, !!confirmedRequirement.current, !!uncertainRequirement.current, !!editConflictRequirement.current)",
+      saveStart,
+    ) < route.indexOf("const result = candidate();", saveStart),
+  );
+  for (const code of [
+    "save_missing_person",
+    "save_non_seeker",
+    "save_edit_conflict",
+    "save_storage_failure",
+    "save_readback_failed",
+    "save_navigation_failed",
+  ]) {
+    sourceMatch(messages, new RegExp(`${code}: \\['[^']+', '[^']+'\\]`));
   }
-  assert.doesNotMatch(messages, /private storage detail|private navigation detail/);
+  sourceDoesNotMatch(
+    messages,
+    /private storage detail|private navigation detail/,
+  );
 });

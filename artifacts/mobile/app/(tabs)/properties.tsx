@@ -1,5 +1,7 @@
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { PropertyVisualCard } from '@/components/PropertyVisualSummary';
+import { PropertyCircleShare } from '@/components/PropertyCircleShare';
+import type { Property } from '@workspace/property-domain';
 import { matchingTarget } from '@/services/matchingScope';
 import {useSyncedFocusEffect as useFocusEffect} from '@/hooks/useSyncedFocusEffect';
 import { projectPropertyFacts } from '@/services/propertyFactProjection';
@@ -16,7 +18,8 @@ import { useI18n, Translations } from '@/contexts/I18nContext';
 
 import { Button } from '@/components/Button';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
-import { formatPrice, formatRentalPrice } from '@/constants/market';
+import { formatMatchingBudget } from '@/services/matchingPresentation';
+import { formatPrice, formatRentalPrice, formatRentalCadence } from '@/constants/market';
 import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
 import {
   filterPropertyInventoryRows,
@@ -61,6 +64,7 @@ export default function PropertiesScreen() {
 
   const [loadResult, setLoadResult] = useState<OfferedWantedLoadResult | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sharingProperty, setSharingProperty] = useState<Property | null>(null);
   const [inventoryTab, setInventoryTab] = useState<PropertyInventoryTab>('properties');
   useEffect(() => { if (highlightedId) setInventoryTab('properties'); }, [store, highlightedId]);
   const [filter, setFilter] = useState<ComposableRecordFilter>(EMPTY_COMPOSABLE_RECORD_FILTER);
@@ -120,7 +124,9 @@ export default function PropertiesScreen() {
       ? getPropertyCardSummary(property, summaryFormatters)
       : requirement ? getRequirementCardSummary(requirement, summaryFormatters) : null;
     const areaLabel = summary?.areaLabel ?? '';
-    const priceLabel = summary?.valueLabel ?? '';
+    const priceLabel = requirement
+      ? formatMatchingBudget(requirement, language) + (requirement.purpose === 'rent' ? ' · ' + formatRentalCadence(requirement.rentalPeriodId, t) : '')
+      : summary?.valueLabel ?? '';
     const typeLabel = summary?.typeLabel ?? (type ? t(`propertyType.${type}` as keyof Translations) : '');
     const subtypeLabel = summary?.subtypeLabel ?? (isStudio ? t('enrich.apartment_subtype.studio') : undefined);
     const intent = projectRecordIntent(item.kind, transaction, language);
@@ -133,7 +139,8 @@ export default function PropertiesScreen() {
       <View
         style={[styles.card, { backgroundColor: colors.card, borderColor: isHighlighted ? colors.primary : colors.border, borderRadius: colors.cardRadius, padding: item.kind === 'offered' ? 0 : 16 }]}
       >
-        {item.kind==='offered' ? <PropertyVisualCard property={item.property} title={[typeLabel,subtypeLabel].filter(Boolean).join(' · ')} area={areaLabel} price={priceLabel} onPress={()=>router.push(getOfferedWantedHref(item.kind,item.id) as never)} testID={`property-card-${item.id}`} /> : <TouchableOpacity
+        {item.kind==='offered' ? <PropertyVisualCard property={item.property} title={[typeLabel,subtypeLabel].filter(Boolean).join(' · ')} area={areaLabel} price={priceLabel}
+          onPress={()=>router.push(getOfferedWantedHref(item.kind,item.id) as never)} onShareToCircles={() => setSharingProperty(item.property)} testID={`property-card-${item.id}`} /> : <TouchableOpacity
           onPress={() => router.push(getOfferedWantedHref(item.kind, item.id) as any)}
           testID={`requirement-card-${item.id}`}
           accessibilityRole="button"
@@ -142,7 +149,7 @@ export default function PropertiesScreen() {
         >
         {property && <PropertyCover property={property} label={typeLabel} style={{ width: 102, minHeight: 146, borderRadius: 13 }} />}
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-        {requirement && <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 17, textAlign: isRTL ? 'right' : 'left' }}>{item.person?.name ?? (language === 'ar' ? 'طلب غير مرتبط بشخص' : 'Unlinked request')}</Text>}
+        {requirement && <Text style={{ color: colors.foreground, fontFamily: fonts.bold, fontSize: 17, textAlign: isRTL ? 'right' : 'left' }}>{typeLabel} · {requirement.purpose === 'rent' ? (isRTL ? 'للإيجار' : 'For rent') : (isRTL ? 'للشراء' : 'To buy')}{areaLabel ? ' · ' + areaLabel : ''}</Text>}
         <View style={[styles.cardHeader, { flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr' }]}>
           <View
             style={{ flexDirection: 'row', direction: isRTL ? 'rtl' : 'ltr', alignItems: 'center', gap: 5, flexWrap: 'wrap', flex: 1 }}
@@ -173,9 +180,6 @@ export default function PropertiesScreen() {
           <Text style={[styles.price, { color: colors.primary, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
             {priceLabel}
           </Text>
-          <Text style={[styles.location, { color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left' }]}>
-            {areaLabel}
-          </Text>
           {cardFacts.length > 0 && <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 5, direction: isRTL ? 'rtl' : 'ltr' }}>
             {cardFacts.map(fact => <View key={fact.key} accessibilityLabel={`${fact.key === 'bedroomCount' ? language === 'ar' ? 'غرف النوم' : 'Bedrooms' : fact.key === 'bathroomCount' ? language === 'ar' ? 'الحمامات' : 'Bathrooms' : language === 'ar' ? 'المساحة بالمتر المربع' : 'Area in square meters'}: ${fact.value}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
               <PropertySpecIcon name={fact.icon} size={16} color={colors.mutedForeground} /><Text style={{ color: colors.mutedForeground, fontFamily: fonts.medium, fontSize: 12 }}>{String(fact.value)}{fact.key === 'areaSquareMeters' ? language === 'ar' ? ' م²' : ' m²' : ''}</Text>
@@ -197,7 +201,7 @@ export default function PropertiesScreen() {
             ) : null}
         {requirement && <>
           <Text style={{ color: colors.mutedForeground, fontFamily: fonts.regular, textAlign: isRTL ? 'right' : 'left', marginTop: 6 }}>
-            {[requirement.bedroomsMinimum !== undefined ? `${language === 'ar' ? 'غرف' : 'Bedrooms'}: ${requirement.bedroomsMinimum}+` : '', requirement.bathroomsMinimum !== undefined ? `${language === 'ar' ? 'حمامات' : 'Bathrooms'}: ${requirement.bathroomsMinimum}+` : ''].filter(Boolean).join(' · ')}
+            {[requirement.bedroomsMinimum !== undefined ? `${language === 'ar' ? 'غرف النوم' : 'Bedrooms'} · ${requirement.bedroomsMinimum}${isRTL ? ' فأكثر' : '+'}` : '', requirement.bathroomsMinimum !== undefined ? `${language === 'ar' ? 'الحمامات' : 'Bathrooms'} · ${requirement.bathroomsMinimum}${isRTL ? ' فأكثر' : '+'}` : ''].filter(Boolean).join(' · ')}
           </Text>
           <Button title={language === 'ar' ? 'مطابقة الآن' : 'Match now'} variant="outline" onPress={() => router.push(matchingTarget({ kind: 'requirement', id: requirement.id }) as never)} testID={`request-match-${requirement.id}`} />
         </>}
@@ -235,6 +239,7 @@ export default function PropertiesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {sharingProperty && <PropertyCircleShare key={sharingProperty.core.id} property={sharingProperty} onClose={() => setSharingProperty(null)} />}
       <PrimaryTabHeader title={t('properties.title')} compactSearch action={
         <TouchableOpacity accessibilityRole="button" testID="btn-capture"
           onPress={() => router.push({ pathname: '/capture/transaction', params: { mode: inventoryTab === 'properties' ? 'offered' : 'wanted' } })}

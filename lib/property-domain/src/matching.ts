@@ -1,5 +1,5 @@
-import { validKitchens, compareKitchens } from './kitchens.ts';
-import { isCommercialRequirement } from './commercialRequirements.ts';
+import { validKitchens, compareKitchens } from "./kitchens.ts";
+import { isCommercialRequirement } from "./commercialRequirements.ts";
 import type { Property } from "./types.ts";
 import type { SeekerRequirement } from "./requirements.ts";
 import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from "./taxonomy.ts";
@@ -63,9 +63,32 @@ export interface MatchEligibilityResult {
   readonly locationRank: number | null;
   readonly ineligibilityReasons: readonly MatchIneligibilityReason[];
 }
-const CORE_MATCH_FIELDS = new Set(['property_type', 'transaction', 'currency', 'floorUse', 'propertyUse', 'apartmentSubtype', 'rentalPeriodId', 'budget', 'location', 'bedrooms', 'bathrooms', 'builtUpAreaSquareMeters', 'plotAreaSquareMeters', 'parkingSpaceCount', 'hasCentralAC', 'hasElevator', 'occupancy', 'intendedUse', 'commercialActivity']);
+const CORE_MATCH_FIELDS = new Set([
+  "property_type",
+  "transaction",
+  "currency",
+  "floorUse",
+  "propertyUse",
+  "apartmentSubtype",
+  "rentalPeriodId",
+  "budget",
+  "location",
+  "bedrooms",
+  "bathrooms",
+  "builtUpAreaSquareMeters",
+  "plotAreaSquareMeters",
+  "parkingSpaceCount",
+  "hasCentralAC",
+  "hasElevator",
+  "occupancy",
+  "intendedUse",
+  "commercialActivity",
+]);
 export function isBlockingMatchUnknown(item: MatchExplanation): boolean {
-  return item.status === 'unknown' && (item.hard || CORE_MATCH_FIELDS.has(item.criterion));
+  return (
+    item.status === "unknown" &&
+    (item.hard || CORE_MATCH_FIELDS.has(item.criterion))
+  );
 }
 
 const finite = (value: unknown): value is number =>
@@ -95,6 +118,21 @@ export function matchingPropertyFacts(
     property.activeOffer.transaction,
     raw,
   );
+  // Count facts omitted by older offered profiles remain valid request criteria.
+  for (const field of [
+    "unitCount",
+    "officeCount",
+    "apartmentCount",
+    "shopCount",
+    "roomsPerUnit",
+    "bathroomsPerUnit",
+  ] as const) {
+    const conditionalBuildingField =
+      property.core.propertyType === "whole_building" &&
+      ["shopCount", "roomsPerUnit", "bathroomsPerUnit"].includes(field);
+    if (!conditionalBuildingField && raw[field] !== undefined)
+      details[field] = raw[field];
+  }
   const facts: Record<string, unknown> = {};
   for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
     if (!definition.appliesTo.includes(property.core.propertyType)) continue;
@@ -119,7 +157,8 @@ export function matchingPropertyFacts(
     if (details[definition.field] !== undefined)
       facts[definition.field] = unwrap(details[definition.field]);
   }
-  if (validKitchens(facts.kitchens)) facts.hasKitchen = facts.kitchens.length > 0;
+  if (validKitchens(facts.kitchens))
+    facts.hasKitchen = facts.kitchens.length > 0;
   // The approved physical area is distinct from land area. Missing does not mean zero.
   if (
     facts.builtUpAreaSquareMeters === undefined &&
@@ -163,8 +202,16 @@ export function checkMatchEligibility(
 ): MatchEligibilityResult {
   const property = candidate.property;
   const reasons: string[] = [];
-  if (property.marketingStatus === "paused" || property.marketingStatus === "sold") reasons.push(property.marketingStatus);
-  if (property.activeOffer.transaction === "rent" && property.rentalAvailability === "rented") reasons.push("rented");
+  if (
+    property.marketingStatus === "paused" ||
+    property.marketingStatus === "sold"
+  )
+    reasons.push(property.marketingStatus);
+  if (
+    property.activeOffer.transaction === "rent" &&
+    property.rentalAvailability === "rented"
+  )
+    reasons.push("rented");
   if (property.core.propertyType !== requirement.propertyType)
     reasons.push("property_type");
   if (
@@ -195,14 +242,21 @@ export function matchingRefinementFields(
 ): string[] {
   return [
     ...new Set([
-      ...(requirement.budget.maximum !== undefined || requirement.budget.minimum !== undefined ? ["budget"] : []),
+      ...(requirement.budget.maximum !== undefined ||
+      requirement.budget.minimum !== undefined
+        ? ["budget"]
+        : []),
       ...(requirement.preferredAreaMode === "all_kuwait" ? [] : ["location"]),
       ...(requirement.bedroomsMinimum === undefined ? [] : ["bedrooms"]),
       ...(requirement.bathroomsMinimum === undefined ? [] : ["bathrooms"]),
       ...(requirement.masterBedroomsMinimum === undefined
         ? []
         : ["masterBedrooms"]),
-      ...(requirement.purpose === "rent" && requirement.occupancy && requirement.occupancy !== "any" ? ["occupancy"] : []),
+      ...(requirement.purpose === "rent" &&
+      requirement.occupancy &&
+      requirement.occupancy !== "any"
+        ? ["occupancy"]
+        : []),
       ...(requirement.centralAC === undefined ? [] : ["hasCentralAC"]),
       ...(requirement.driverRoom === undefined ? [] : ["driverRoom"]),
       ...(requirement.preferredAmenities ?? []).map(
@@ -328,7 +382,14 @@ export function evaluateMatch(
       true,
     );
   if (property.core.propertyType === "other_built_property")
-    add("propertyUse", requirement.propertyUse ?? "residential / commercial", requirement.propertyUse === undefined ? undefined : facts.propertyUse, 0, "exact", true);
+    add(
+      "propertyUse",
+      requirement.propertyUse ?? "residential / commercial",
+      requirement.propertyUse === undefined ? undefined : facts.propertyUse,
+      0,
+      "exact",
+      true,
+    );
   const subtype = requirement.catalogPreferences?.find(
     (item) => item.field === "apartmentSubtype" && item.kind === "choice",
   );
@@ -365,13 +426,25 @@ export function evaluateMatch(
         true,
       );
   }
-  if (requirement.budget.maximum !== undefined) add(
-    'budget', requirement.budget.maximum, price(property).amount, 35, 'maximum', false,
-    MATCHING_DEFAULT_POLICY.maximumPriceIncrease,
-  );
-  else if (requirement.budget.minimum !== undefined) add(
-    'budget', requirement.budget.minimum, price(property).amount, 35, 'minimum', false,
-  );
+  if (requirement.budget.maximum !== undefined)
+    add(
+      "budget",
+      requirement.budget.maximum,
+      price(property).amount,
+      35,
+      "maximum",
+      false,
+      MATCHING_DEFAULT_POLICY.maximumPriceIncrease,
+    );
+  else if (requirement.budget.minimum !== undefined)
+    add(
+      "budget",
+      requirement.budget.minimum,
+      price(property).amount,
+      35,
+      "minimum",
+      false,
+    );
   // All Kuwait is unrestricted. Area selections are a set, not an inferred priority list.
   if (
     requirement.preferredAreaMode !== "all_kuwait" &&
@@ -380,7 +453,8 @@ export function evaluateMatch(
     const rawArea = property.core.locationArea?.id;
     const area =
       typeof rawArea === "string" && rawArea.trim() ? rawArea : undefined;
-    const accepted = area !== undefined && requirement.preferredAreaIds.includes(area);
+    const accepted =
+      area !== undefined && requirement.preferredAreaIds.includes(area);
     if (accepted) add("location", area, area, 25);
     else {
       add(
@@ -457,14 +531,28 @@ export function evaluateMatch(
       requirement.occupancy !== undefined &&
       requirement.occupancy !== "any"
     ) {
-      const housing = Array.isArray(facts.housingTypes) && facts.housingTypes.length
-        ? facts.housingTypes.includes(requirement.occupancy) ? requirement.occupancy
-          : facts.housingTypes.includes('mixed') ? undefined : facts.housingTypes.join(', ')
-        : facts.occupancy === 'any' ? requirement.occupancy : facts.occupancy;
-      add('occupancy', requirement.occupancy, housing, 8, 'exact', false);
+      const housing =
+        Array.isArray(facts.housingTypes) && facts.housingTypes.length
+          ? facts.housingTypes.includes(requirement.occupancy)
+            ? requirement.occupancy
+            : facts.housingTypes.includes("mixed")
+              ? undefined
+              : facts.housingTypes.join(", ")
+          : facts.occupancy === "any"
+            ? requirement.occupancy
+            : facts.occupancy;
+      add("occupancy", requirement.occupancy, housing, 8, "exact", false);
       const index = explanations.length - 1;
-      if (!strict.has('occupancy') && explanations[index].status === 'ineligible') {
-        explanations[index] = { ...explanations[index], status: 'not_met', awardedPoints: 4, code: 'negotiation_required' };
+      if (
+        !strict.has("occupancy") &&
+        explanations[index].status === "ineligible"
+      ) {
+        explanations[index] = {
+          ...explanations[index],
+          status: "not_met",
+          awardedPoints: 4,
+          code: "negotiation_required",
+        };
       }
     }
     for (const [key, field] of [
@@ -483,43 +571,126 @@ export function evaluateMatch(
     for (const amenity of list ?? [])
       flexibleFeature(amenityFields[amenity], expected);
   }
-  if (requirement.kitchens !== undefined) add('kitchens', true, compareKitchens(requirement.kitchens, validKitchens(facts.kitchens) ? facts.kitchens : undefined), 4, 'exact');
-  if (isCommercialRequirement(requirement.propertyType, requirement.floorUse, requirement.propertyUse)) {
+  if (requirement.kitchens !== undefined)
+    add(
+      "kitchens",
+      true,
+      compareKitchens(
+        requirement.kitchens,
+        validKitchens(facts.kitchens) ? facts.kitchens : undefined,
+      ),
+      4,
+      "exact",
+    );
+  if (
+    isCommercialRequirement(
+      requirement.propertyType,
+      requirement.floorUse,
+      requirement.propertyUse,
+    )
+  ) {
     if (requirement.commercialActivity !== undefined) {
       // Literal recorded activity only; this does not determine licensing permission.
-      const aliases: Record<string, string> = { 'مكتب': 'office', 'تجزئة': 'retail', 'مطعم': 'restaurant', 'عيادة': 'clinic', 'مستودع': 'warehouse' };
-      const normalized = (value: string) => { const text = value.trim().toLocaleLowerCase().replace(/\s+/g, ' '); return aliases[text] ?? text; };
-      const actual = typeof facts.commercialActivity === 'string' ? facts.commercialActivity : undefined;
-      add('commercialActivity', normalized(requirement.commercialActivity), actual === undefined ? undefined : normalized(actual), 6, 'exact', false);
+      const aliases: Record<string, string> = {
+        مكتب: "office",
+        تجزئة: "retail",
+        مطعم: "restaurant",
+        عيادة: "clinic",
+        مستودع: "warehouse",
+      };
+      const normalized = (value: string) => {
+        const text = value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+        return aliases[text] ?? text;
+      };
+      const actual =
+        typeof facts.commercialActivity === "string"
+          ? facts.commercialActivity
+          : undefined;
+      add(
+        "commercialActivity",
+        normalized(requirement.commercialActivity),
+        actual === undefined ? undefined : normalized(actual),
+        6,
+        "exact",
+        false,
+      );
       const index = explanations.length - 1;
-      explanations[index] = { ...explanations[index], expected: requirement.commercialActivity, ...(actual === undefined ? {} : { actual }) };
+      explanations[index] = {
+        ...explanations[index],
+        expected: requirement.commercialActivity,
+        ...(actual === undefined ? {} : { actual }),
+      };
     }
     const services = requirement.commercialServices;
     if (services) {
       // Only manually recorded offered facts can satisfy commercial service preferences.
-      if (services.automaticNumberCount !== undefined) add('automaticNumberCount', services.automaticNumberCount, facts.automaticNumberCount, 4, 'minimum');
-      if (services.cleaning !== undefined) add('facilityCleaning', services.cleaning, facts.hasFacilityCleaning, 4, 'exact');
-      if (services.security !== undefined) flexibleFeature('hasSecurityGuard', services.security);
-      if (services.cameras !== undefined) flexibleFeature('hasCCTV', services.cameras);
-      if (services.elevators !== undefined) flexibleFeature('hasElevator', services.elevators);
-      if (services.bathrooms !== undefined) flexibleFeature(services.bathrooms === 'private' ? 'hasPrivateBathroom' : 'hasSharedBathrooms', true);
+      if (services.automaticNumberCount !== undefined)
+        add(
+          "automaticNumberCount",
+          services.automaticNumberCount,
+          facts.automaticNumberCount,
+          4,
+          "minimum",
+        );
+      if (services.cleaning !== undefined)
+        add(
+          "facilityCleaning",
+          services.cleaning,
+          facts.hasFacilityCleaning,
+          4,
+          "exact",
+        );
+      if (services.security !== undefined)
+        flexibleFeature("hasSecurityGuard", services.security);
+      if (services.cameras !== undefined)
+        flexibleFeature("hasCCTV", services.cameras);
+      if (services.elevators !== undefined)
+        flexibleFeature("hasElevator", services.elevators);
+      if (services.bathrooms !== undefined)
+        flexibleFeature(
+          services.bathrooms === "private"
+            ? "hasPrivateBathroom"
+            : "hasSharedBathrooms",
+          true,
+        );
       // A legacy kitchen checkbox alone still says nothing about private/shared ownership.
       if (services.kitchen !== undefined) {
-        const kitchens = validKitchens(facts.kitchens) ? facts.kitchens : undefined;
-        const access = kitchens ? kitchens.some(k => k.access === services.kitchen) ? services.kitchen : kitchens.some(k => k.access === undefined) ? undefined : false : facts.hasKitchen === true ? facts.kitchenAccess : undefined;
-        add('kitchenAccess', services.kitchen, access, 4, 'exact');
+        const kitchens = validKitchens(facts.kitchens)
+          ? facts.kitchens
+          : undefined;
+        const access = kitchens
+          ? kitchens.some((k) => k.access === services.kitchen)
+            ? services.kitchen
+            : kitchens.some((k) => k.access === undefined)
+              ? undefined
+              : false
+          : facts.hasKitchen === true
+            ? facts.kitchenAccess
+            : undefined;
+        add("kitchenAccess", services.kitchen, access, 4, "exact");
       }
       for (const kind of services.parkingTypes ?? []) {
-        const actual = Array.isArray(facts.parkingTypes) ? facts.parkingTypes.includes(kind) : undefined;
-        add(`parking:${kind}`, true, actual, 4, 'exact');
+        const actual = Array.isArray(facts.parkingTypes)
+          ? facts.parkingTypes.includes(kind)
+          : undefined;
+        add(`parking:${kind}`, true, actual, 4, "exact");
       }
     }
   }
   for (const preference of requirement.catalogPreferences ?? []) {
     if (preference.field === "apartmentSubtype") continue;
     // Retired commercial Intended use never overrides the real commercial type.
-    if (isCommercialRequirement(requirement.propertyType, requirement.floorUse, requirement.propertyUse)
-      && (preference.field === 'intendedUse' || (preference.field === 'commercialActivity' && requirement.commercialActivity !== undefined))) continue;
+    if (
+      isCommercialRequirement(
+        requirement.propertyType,
+        requirement.floorUse,
+        requirement.propertyUse,
+      ) &&
+      (preference.field === "intendedUse" ||
+        (preference.field === "commercialActivity" &&
+          requirement.commercialActivity !== undefined))
+    )
+      continue;
     const field = preference.field;
     if (preference.kind === "number") {
       const area =
@@ -529,7 +700,10 @@ export function evaluateMatch(
         : preference.comparison === "exact"
           ? 0
           : preference.value > 0
-            ? 1 / preference.value
+            ? field === "ceilingHeightMeters" ||
+              field === "serviceElevatorCapacityTons"
+              ? 0
+              : 1 / preference.value
             : 0;
       add(
         field,
@@ -542,7 +716,19 @@ export function evaluateMatch(
       );
     } else if (preference.kind === "feature")
       flexibleFeature(field, preference.value);
-    else {
+    else if (field === "warehouseLevels") {
+      const levels = facts[field];
+      const actual = Array.isArray(levels)
+        ? levels.includes(preference.value)
+        : undefined;
+      add(field, true, actual, 6, "exact");
+      const index = explanations.length - 1;
+      explanations[index] = {
+        ...explanations[index],
+        expected: preference.value,
+        ...(Array.isArray(levels) ? { actual: levels.join(", ") } : {}),
+      };
+    } else {
       add(
         field,
         preference.value,
@@ -612,11 +798,14 @@ export function evaluateMatch(
     tooMany ||
     potentialScore < MATCHING_DEFAULT_POLICY.minimumQuality
       ? "excluded"
-      : unknowns.some(isBlockingMatchUnknown) || score < MATCHING_DEFAULT_POLICY.minimumQuality
+      : unknowns.some(isBlockingMatchUnknown) ||
+          score < MATCHING_DEFAULT_POLICY.minimumQuality
         ? "needs_confirmation"
         : differences.length
           ? "negotiation"
-          : unknowns.length ? "provisional" : "direct";
+          : unknowns.length
+            ? "provisional"
+            : "direct";
   return {
     engineVersion: MATCH_ENGINE_VERSION,
     requirementId: requirement.id,
@@ -626,7 +815,9 @@ export function evaluateMatch(
     priceAmount: price(property).amount,
     category,
     qualifies:
-      (category === "direct" || category === "provisional" || category === "negotiation") &&
+      (category === "direct" ||
+        category === "provisional" ||
+        category === "negotiation") &&
       score >= MATCHING_DEFAULT_POLICY.minimumQuality,
     differenceCount,
     unknownCount: unknowns.length,

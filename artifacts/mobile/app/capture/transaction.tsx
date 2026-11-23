@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
-import { useCapture } from '@/contexts/CaptureContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 import { CaptureHeader } from '@/components/CaptureHeader';
@@ -21,6 +20,7 @@ export default function TransactionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     mode?: string | string[];
+    entry?: string | string[];
     transaction?: string | string[];
     seekerId?: string | string[];
     linkPersonId?: string | string[];
@@ -28,9 +28,10 @@ export default function TransactionScreen() {
   }>();
   const colors = useColors();
   const insets = useScreenInsets();
-  const { draft } = useCapture();
   const { t, fonts, isRTL, language } = useI18n();
   const initialMode = firstParam(params.mode);
+  const listingEntry = firstParam(params.entry) === 'listing' && initialMode === 'offered';
+  const seekerEntry = initialMode === 'wanted' && Boolean(firstParam(params.seekerId));
   const initialTransaction = firstParam(params.transaction);
   const [offerMode, setOfferMode] = useState<OfferMode | undefined>(
     initialMode === 'wanted' || initialMode === 'offered' ? initialMode : undefined,
@@ -59,8 +60,9 @@ export default function TransactionScreen() {
       <CaptureHeader step={1} totalSteps={4} />
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground, fontFamily: fonts.bold, textAlign: isRTL ? 'right' : 'left' }]}>
-          {t('transaction.title')}
+          {listingEntry ? label('Add a property', 'إضافة عقار') : seekerEntry ? label('Add a client request', 'إضافة طلب للعميل') : t('transaction.title')}
         </Text>
+        {!listingEntry && !seekerEntry && <>
         <Text style={[styles.groupTitle, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
           {label('Offered or Wanted', 'معروض أم مطلوب')}
         </Text>
@@ -86,6 +88,7 @@ export default function TransactionScreen() {
           testID="select-wanted"
         />
         </ChoiceGrid>
+        </>}
 
         <Text style={[styles.groupTitle, styles.transactionHeading, { color: colors.foreground, fontFamily: fonts.semiBold, textAlign: isRTL ? 'right' : 'left' }]}>
           {offerMode === 'wanted' ? label('Purchase or Rent', 'شراء أم إيجار') : label('Sale or Rent', 'بيع أم إيجار')}

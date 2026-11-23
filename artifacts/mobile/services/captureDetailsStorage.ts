@@ -9,6 +9,8 @@ import { PROPERTY_DETAIL_FIELD_DEFINITIONS } from '@workspace/property-domain';
 import { getDemoCategory } from '@/services/propertyDemoCatalog';
 
 export type CaptureDetailValues = Partial<Record<PropertyDetailField, string>> & {
+  salePriceInput?: string;
+  rentalPriceInput?: string;
   nearbyServices?: string;
   demoMetadata?: PropertyDemoCaptureMetadata;
   areaSquareMeters?: number;

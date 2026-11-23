@@ -302,7 +302,7 @@ export function parseDemoNumericInput(value: string, decimal = false): number | 
 
 export function hasPopulatedCategoryCapture(values: Record<string, unknown>): boolean {
   for (const [key, value] of Object.entries(values)) {
-    if (key === 'areaSquareMeters' || key === 'areaUnit' || value === undefined || value === null || value === '') continue;
+    if (key === 'salePriceInput' || key === 'rentalPriceInput' || key === 'areaSquareMeters' || key === 'areaUnit' || value === undefined || value === null || value === '') continue;
     if (key === 'nearbyServices') {
       try {
         const nearby = typeof value === 'string' ? JSON.parse(value) : value;

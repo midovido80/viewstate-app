@@ -1,7 +1,18 @@
-import type { Property, PropertyDraft } from '@workspace/property-domain';
-import { validateProperty } from '@workspace/property-domain';
+import type {
+  Property,
+  PropertyDraft,
+  PropertySourceRole,
+} from "@workspace/property-domain";
+import {
+  validateProperty,
+  PROPERTY_SOURCE_ROLES,
+} from "@workspace/property-domain";
 
-export const PROPERTY_SAVE_OPERATION_KEY = '@viewstate_property_save_operation';
+export const PROPERTY_SAVE_OPERATION_KEY = "@viewstate_property_save_operation";
+export interface PropertySaveSource {
+  personId: string;
+  role: PropertySourceRole;
+}
 
 export interface RecoveryStorage {
   getItem(key: string): Promise<string | null>;
@@ -19,35 +30,50 @@ export interface PropertySaveOperationV1 {
   draftSnapshot: PropertyDraft;
   targetProperty: Property;
   preparedAt: string;
+  source?: PropertySaveSource;
 }
 
 export class SaveRecoveryReadError extends Error {
   constructor(cause: unknown) {
-    super('The pending property save operation could not be read.');
-    this.name = 'SaveRecoveryReadError';
+    super("The pending property save operation could not be read.");
+    this.name = "SaveRecoveryReadError";
     this.cause = cause;
   }
 }
 
 export class PendingSaveOperationExistsError extends Error {
   constructor() {
-    super('An unresolved property save operation already exists.');
-    this.name = 'PendingSaveOperationExistsError';
+    super("An unresolved property save operation already exists.");
+    this.name = "PendingSaveOperationExistsError";
   }
 }
 
-export type SavedPropertyAssessment = 'not_saved' | 'saved' | 'conflict';
-export type DraftCleanupResult = 'replaced' | 'newer';
+export type SavedPropertyAssessment = "not_saved" | "saved" | "conflict";
+export type DraftCleanupResult = "replaced" | "newer";
 export type SaveRecoveryResult =
-  | { status: 'complete'; savedNow: boolean; newerDraftPreserved: boolean }
-  | { status: 'retry_required' }
-  | { status: 'save_failed'; error: unknown }
-  | { status: 'cleanup_failed'; error: unknown }
-  | { status: 'conflict' }
-  | { status: 'unresolved_draft' };
+  | {
+      status: "complete";
+      propertyCoreId: string;
+      savedNow: boolean;
+      newerDraftPreserved: boolean;
+    }
+  | { status: "retry_required" }
+  | { status: "save_failed"; error: unknown }
+  | { status: "cleanup_failed"; error: unknown }
+  | { status: "conflict" }
+  | { status: "unresolved_draft" };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function validSource(value: unknown): value is PropertySaveSource {
+  return (
+    isRecord(value) &&
+    typeof value.personId === "string" &&
+    value.personId.trim().length > 0 &&
+    value.personId.length <= 500 &&
+    PROPERTY_SOURCE_ROLES.includes(value.role as PropertySourceRole)
+  );
 }
 
 export function serializeRecoveryValue(value: unknown): string {
@@ -59,64 +85,79 @@ export function createPropertySaveOperation(options: {
   draft: PropertyDraft;
   targetProperty: Property;
   preparedAt: string;
+  source?: PropertySaveSource;
 }): PropertySaveOperationV1 {
   const propertyCoreId = options.draft.propertyCoreId;
+  if (options.source !== undefined && !validSource(options.source))
+    throw new Error("INVALID_PROPERTY_SAVE_SOURCE");
   const offerId = options.draft.offerId;
   if (!propertyCoreId || !offerId) {
-    throw new Error('A complete draft identity is required for save recovery.');
+    throw new Error("A complete draft identity is required for save recovery.");
   }
 
   const validation = validateProperty(options.targetProperty);
   if (!validation.ok) {
-    throw new Error('A valid property is required for save recovery.');
+    throw new Error("A valid property is required for save recovery.");
   }
   if (
-    options.targetProperty.core.id !== propertyCoreId
-    || options.targetProperty.activeOffer.id !== offerId
-    || options.targetProperty.activeOffer.propertyCoreId !== propertyCoreId
+    options.targetProperty.core.id !== propertyCoreId ||
+    options.targetProperty.activeOffer.id !== offerId ||
+    options.targetProperty.activeOffer.propertyCoreId !== propertyCoreId
   ) {
-    throw new Error('The property and draft identities must match.');
+    throw new Error("The property and draft identities must match.");
   }
 
   return {
     version: 1,
     operationId: options.operationId,
     draftGeneration: { propertyCoreId, offerId },
-    draftSnapshot: JSON.parse(serializeRecoveryValue(options.draft)) as PropertyDraft,
-    targetProperty: JSON.parse(serializeRecoveryValue(options.targetProperty)) as Property,
+    draftSnapshot: JSON.parse(
+      serializeRecoveryValue(options.draft),
+    ) as PropertyDraft,
+    targetProperty: JSON.parse(
+      serializeRecoveryValue(options.targetProperty),
+    ) as Property,
     preparedAt: options.preparedAt,
+    ...(options.source ? { source: { ...options.source } } : {}),
   };
 }
 
-export function parsePropertySaveOperation(raw: string): PropertySaveOperationV1 {
+export function parsePropertySaveOperation(
+  raw: string,
+): PropertySaveOperationV1 {
   try {
     const value = JSON.parse(raw) as unknown;
     if (
-      !isRecord(value)
-      || value.version !== 1
-      || typeof value.operationId !== 'string'
-      || value.operationId.length === 0
-      || typeof value.preparedAt !== 'string'
-      || !isRecord(value.draftGeneration)
-      || typeof value.draftGeneration.propertyCoreId !== 'string'
-      || typeof value.draftGeneration.offerId !== 'string'
-      || !isRecord(value.draftSnapshot)
-      || !isRecord(value.targetProperty)
+      !isRecord(value) ||
+      value.version !== 1 ||
+      typeof value.operationId !== "string" ||
+      value.operationId.length === 0 ||
+      typeof value.preparedAt !== "string" ||
+      !isRecord(value.draftGeneration) ||
+      typeof value.draftGeneration.propertyCoreId !== "string" ||
+      typeof value.draftGeneration.offerId !== "string" ||
+      !isRecord(value.draftSnapshot) ||
+      !isRecord(value.targetProperty) ||
+      (value.source !== undefined && !validSource(value.source))
     ) {
-      throw new Error('The pending save operation has an invalid shape.');
+      throw new Error("The pending save operation has an invalid shape.");
     }
 
     const operation = value as unknown as PropertySaveOperationV1;
     const validation = validateProperty(operation.targetProperty);
     if (
-      !validation.ok
-      || operation.draftSnapshot.propertyCoreId !== operation.draftGeneration.propertyCoreId
-      || operation.draftSnapshot.offerId !== operation.draftGeneration.offerId
-      || operation.targetProperty.core.id !== operation.draftGeneration.propertyCoreId
-      || operation.targetProperty.activeOffer.id !== operation.draftGeneration.offerId
-      || operation.targetProperty.activeOffer.propertyCoreId !== operation.draftGeneration.propertyCoreId
+      !validation.ok ||
+      operation.draftSnapshot.propertyCoreId !==
+        operation.draftGeneration.propertyCoreId ||
+      operation.draftSnapshot.offerId !== operation.draftGeneration.offerId ||
+      operation.targetProperty.core.id !==
+        operation.draftGeneration.propertyCoreId ||
+      operation.targetProperty.activeOffer.id !==
+        operation.draftGeneration.offerId ||
+      operation.targetProperty.activeOffer.propertyCoreId !==
+        operation.draftGeneration.propertyCoreId
     ) {
-      throw new Error('The pending save operation is inconsistent.');
+      throw new Error("The pending save operation is inconsistent.");
     }
     return operation;
   } catch (error) {
@@ -138,10 +179,20 @@ export async function persistPropertySaveOperation(
   const existing = await storage.getItem(PROPERTY_SAVE_OPERATION_KEY);
   const serialized = serializeRecoveryValue(operation);
   if (existing !== null && existing !== serialized) {
-    throw new PendingSaveOperationExistsError();
+    const previous = parsePropertySaveOperation(existing);
+    // Old pending saves may acquire their explicit source before resuming.
+    if (
+      previous.source ||
+      !operation.source ||
+      serializeRecoveryValue({ ...operation, source: undefined }) !==
+        serializeRecoveryValue(previous)
+    )
+      throw new PendingSaveOperationExistsError();
   }
-  if (existing === null) {
+  if (existing !== serialized) {
     await storage.setItem(PROPERTY_SAVE_OPERATION_KEY, serialized);
+    if ((await storage.getItem(PROPERTY_SAVE_OPERATION_KEY)) !== serialized)
+      throw new Error("PROPERTY_SAVE_OPERATION_WRITE_FAILED");
   }
 }
 
@@ -153,8 +204,8 @@ export async function clearPropertySaveOperation(
   if (existing === null) return true;
   const parsed = parsePropertySaveOperation(existing);
   if (
-    parsed.operationId !== operation.operationId
-    || serializeRecoveryValue(parsed) !== serializeRecoveryValue(operation)
+    parsed.operationId !== operation.operationId ||
+    serializeRecoveryValue(parsed) !== serializeRecoveryValue(operation)
   ) {
     return false;
   }
@@ -167,20 +218,24 @@ export function assessSavedProperty(
   properties: readonly Property[],
 ): SavedPropertyAssessment {
   const matching = properties.filter(
-    property => property.core.id === operation.targetProperty.core.id,
+    (property) => property.core.id === operation.targetProperty.core.id,
   );
-  if (matching.length === 0) return 'not_saved';
-  if (matching.length !== 1) return 'conflict';
-  return serializeRecoveryValue(matching[0]) === serializeRecoveryValue(operation.targetProperty)
-    ? 'saved'
-    : 'conflict';
+  if (matching.length === 0) return "not_saved";
+  if (matching.length !== 1) return "conflict";
+  return serializeRecoveryValue(matching[0]) ===
+    serializeRecoveryValue(operation.targetProperty)
+    ? "saved"
+    : "conflict";
 }
 
 export function draftMatchesOperation(
   draft: PropertyDraft,
   operation: PropertySaveOperationV1,
 ): boolean {
-  return serializeRecoveryValue(draft) === serializeRecoveryValue(operation.draftSnapshot);
+  return (
+    serializeRecoveryValue(draft) ===
+    serializeRecoveryValue(operation.draftSnapshot)
+  );
 }
 
 export async function executePropertySaveRecovery(options: {
@@ -191,59 +246,87 @@ export async function executePropertySaveRecovery(options: {
   getDraft: () => PropertyDraft;
   cleanupDraft: (expectedDraftSnapshot: string) => Promise<DraftCleanupResult>;
   clearOperation: (operation: PropertySaveOperationV1) => Promise<boolean>;
+  completeSource?: (
+    propertyCoreId: string,
+    source: PropertySaveSource,
+  ) => Promise<void>;
 }): Promise<SaveRecoveryResult> {
   let assessment: SavedPropertyAssessment;
   try {
-    assessment = assessSavedProperty(options.operation, await options.getProperties());
+    assessment = assessSavedProperty(
+      options.operation,
+      await options.getProperties(),
+    );
   } catch (error) {
-    return { status: 'save_failed', error };
+    return { status: "save_failed", error };
   }
 
   let savedNow = false;
-  if (assessment === 'conflict') return { status: 'conflict' };
-  if (assessment === 'not_saved') {
-    if (!options.allowSave) return { status: 'retry_required' };
+  if (assessment === "conflict") return { status: "conflict" };
+  if (assessment === "not_saved") {
+    if (!options.allowSave) return { status: "retry_required" };
     if (!draftMatchesOperation(options.getDraft(), options.operation)) {
-      return { status: 'unresolved_draft' };
+      return { status: "unresolved_draft" };
     }
     try {
       await options.saveProperty(options.operation.targetProperty);
       savedNow = true;
-      assessment = assessSavedProperty(options.operation, await options.getProperties());
+      assessment = assessSavedProperty(
+        options.operation,
+        await options.getProperties(),
+      );
     } catch (error) {
-      return { status: 'save_failed', error };
+      return { status: "save_failed", error };
     }
-    if (assessment !== 'saved') {
-      return assessment === 'conflict'
-        ? { status: 'conflict' }
-        : { status: 'save_failed', error: new Error('The property save could not be confirmed.') };
+    if (assessment !== "saved") {
+      return assessment === "conflict"
+        ? { status: "conflict" }
+        : {
+            status: "save_failed",
+            error: new Error("The property save could not be confirmed."),
+          };
     }
   }
 
+  if (options.operation.source) {
+    try {
+      if (!options.completeSource)
+        throw new Error("PROPERTY_SOURCE_COMPLETION_REQUIRED");
+      await options.completeSource(
+        options.operation.targetProperty.core.id,
+        options.operation.source,
+      );
+    } catch (error) {
+      return { status: "cleanup_failed", error };
+    }
+  }
   let cleanupResult: DraftCleanupResult;
   try {
     cleanupResult = draftMatchesOperation(options.getDraft(), options.operation)
-      ? await options.cleanupDraft(serializeRecoveryValue(options.operation.draftSnapshot))
-      : 'newer';
+      ? await options.cleanupDraft(
+          serializeRecoveryValue(options.operation.draftSnapshot),
+        )
+      : "newer";
   } catch (error) {
-    return { status: 'cleanup_failed', error };
+    return { status: "cleanup_failed", error };
   }
 
   try {
     const cleared = await options.clearOperation(options.operation);
     if (!cleared) {
       return {
-        status: 'cleanup_failed',
+        status: "cleanup_failed",
         error: new PendingSaveOperationExistsError(),
       };
     }
   } catch (error) {
-    return { status: 'cleanup_failed', error };
+    return { status: "cleanup_failed", error };
   }
 
   return {
-    status: 'complete',
+    status: "complete",
+    propertyCoreId: options.operation.targetProperty.core.id,
     savedNow,
-    newerDraftPreserved: cleanupResult === 'newer',
+    newerDraftPreserved: cleanupResult === "newer",
   };
 }

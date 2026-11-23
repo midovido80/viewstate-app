@@ -404,6 +404,10 @@ export default function GlobalSearchScreen() {
             <Text style={[styles.stateText, { color: colors.mutedForeground, fontFamily: fonts.medium }]}>
               {t('search.empty')}
             </Text>
+            <Button title={language === 'ar' ? 'إضافة عقار' : 'Add a property'} testID="search-empty-add-property"
+              onPress={() => router.push({ pathname: '/capture/transaction', params: { mode: 'offered', entry: 'listing' } })} />
+            <Button title={language === 'ar' ? 'إضافة شخص' : 'Add a person'} variant="outline" testID="search-empty-add-person"
+              onPress={() => router.push('/person/new')} />
           </View>
         ) : !hasQuery ? (
           <View style={styles.centerState} testID="search-prompt">
@@ -422,6 +426,9 @@ export default function GlobalSearchScreen() {
                 ? 'search.load_failed'
                 : 'search.no_results')}
             </Text>
+            {state.status === 'ready' && !state.data.linkedPeopleUnavailable && <Text style={[styles.stateText, { color: colors.mutedForeground, fontFamily: fonts.regular }]}>
+              {language === 'ar' ? 'جرّب جزء من الاسم أو اسم المنطقة.' : 'Try part of a name or the area name.'}
+            </Text>}
           </View>
         ) : (
           <>

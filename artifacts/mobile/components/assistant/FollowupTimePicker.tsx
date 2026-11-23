@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, Text, View, useWindowDimensions, type ScrollView } from 'react-native';
 import Animated, { interpolate, Extrapolation, useAnimatedScrollHandler, useAnimatedStyle, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useI18n } from '@/contexts/I18nContext';
@@ -14,7 +14,7 @@ function WheelRow({ label, index, offset, size, onPress, font }: { label: string
 function Wheel({ label, values, index, onSelect, onBusy }: { label: string; values: string[]; index: number; onSelect: (n: number) => void; onBusy: (v: boolean) => void }) {
   const { fonts } = useI18n(), { fontScale } = useWindowDimensions(), reduced = useReducedMotion();
   const size = Math.max(48, Math.ceil(32 * fontScale)), offset = useSharedValue(index * size);
-  const ref = useRef<React.ComponentRef<typeof Animated.ScrollView>>(null), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ref = useRef<ScrollView>(null), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selected = useRef(index), finishRef = useRef<() => void>(() => {});
   selected.current = index;
   function clear() { if (timer.current) clearTimeout(timer.current); timer.current = null; }
@@ -35,7 +35,7 @@ function Wheel({ label, values, index, onSelect, onBusy }: { label: string; valu
   return <View style={{ flex: 1, minWidth: 60, gap: 4 }}><Txt center muted size={12}>{label}</Txt>
     <View accessible accessibilityRole="adjustable" accessibilityLabel={label} accessibilityValue={{ min: 0, max: values.length - 1, now: index, text: values[index] }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={e => choose(Math.max(0, Math.min(values.length - 1, selected.current + (e.nativeEvent.actionName === 'increment' ? 1 : -1))))} style={{ height: size * 3, overflow: 'hidden', borderRadius: 12, backgroundColor: c.neutral }}>
       <View pointerEvents="none" style={{ position: 'absolute', top: size, left: 0, right: 0, height: size, backgroundColor: c.pale, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#D3DFFF' }} />
-      <Animated.ScrollView ref={ref} onScroll={Platform.OS === 'web' ? e => { offset.set(e.nativeEvent.contentOffset.y); if (!timer.current) onBusy(true); release(); } : handler} scrollEventThrottle={16} nestedScrollEnabled showsVerticalScrollIndicator={false} snapToInterval={size} decelerationRate="fast" bounces={false} contentOffset={{ x: 0, y: index * size }} contentContainerStyle={{ paddingVertical: size }}>
+      <Animated.ScrollView ref={instance => { ref.current = instance; }} onScroll={Platform.OS === 'web' ? e => { offset.set(e.nativeEvent.contentOffset.y); if (!timer.current) onBusy(true); release(); } : handler} scrollEventThrottle={16} nestedScrollEnabled showsVerticalScrollIndicator={false} snapToInterval={size} decelerationRate="fast" bounces={false} contentOffset={{ x: 0, y: index * size }} contentContainerStyle={{ paddingVertical: size }}>
         {values.map((v, i) => <WheelRow key={v} label={v} index={i} offset={offset} size={size} onPress={() => choose(i)} font={fonts.semiBold} />)}
       </Animated.ScrollView>
     </View></View>;

@@ -1,4 +1,5 @@
 import { useDraftBack } from '@/hooks/useDraftBack';
+import { ImportCancelActions } from '@/components/ImportCancelActions';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { PropertyReviewProgress } from '@/components/PropertyReview';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
@@ -6,7 +7,7 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 import { useCapture } from '@/contexts/CaptureContext';
@@ -18,6 +19,9 @@ interface CaptureHeaderProps {
   step?: number;
   totalSteps?: number;
   review?: boolean;
+  importBusy?:boolean;
+  importPending?:boolean;
+  onImportEdit?:()=>void;
 }
 
 const CAPTURE_STEPS = [
@@ -28,10 +32,12 @@ const CAPTURE_STEPS = [
   'capture.progress.review',
 ] as const;
 
-export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, review = false }: CaptureHeaderProps) {
+export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, review = false, importBusy=false,importPending=false,onImportEdit }: CaptureHeaderProps) {
   const insets = useScreenInsets();
   const colors = useColors();
   const router = useRouter();
+  const params=useLocalSearchParams<{importId?:string|string[]}>();
+  const importId=Array.isArray(params.importId)?params.importId[0]:params.importId;
   const { isRTL, t, fonts } = useI18n();
   const { resetDraft, persistCurrentCapture } = useCapture();
   const { back: safeBack, exit: safeExit } = useDraftBack({ persist: persistCurrentCapture, fallback: '/' });
@@ -113,7 +119,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
           </View>
 
           <View style={[styles.side, { alignItems: isRTL ? 'flex-start' : 'flex-end' }]}>
-            <TouchableOpacity
+            {!importId&&<TouchableOpacity
               onPress={handleCancel}
               style={styles.cancelBtn}
               testID="capture-cancel"
@@ -121,7 +127,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
               accessibilityLabel={t('capture.cancel')}
             >
               <Text style={[styles.cancelText, { color: CANCEL_ACTION_COLOR, fontFamily: fonts.medium }]}>{t('capture.cancel')}</Text>
-            </TouchableOpacity>
+            </TouchableOpacity>}
           </View>
         </View>
 
@@ -186,6 +192,7 @@ export function CaptureHeader({ onBack, onCancel, title, step, totalSteps, revie
         ) : null}
       </View>
 
+      <ImportCancelActions importId={importId} busy={importBusy} pending={importPending} onEdit={onImportEdit} exit={safeExit}/>
       <Modal
         visible={cancelVisible}
         transparent

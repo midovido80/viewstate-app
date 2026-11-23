@@ -1,117 +1,204 @@
-import { AppUpdateAction } from '@/components/AppUpdateAction';
-import { useAppUpdate } from '@/contexts/AppUpdateContext';
-import { useCircleNotifications, type CircleNoticeKind } from '@/contexts/CircleNotificationsContext';
-import { CircleNotificationSettings } from '@/components/CircleNotificationSettings';
-import { matchingTarget } from '@/services/matchingScope';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
-import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
-import { currentNoticeMatch, type MatchNotice } from '@/services/matchNotifications';
-import { matchNoticeEvidence } from '@/services/matchNoticePresentation';
-import { AccountScreen } from '@/components/account/ui';
-import { Action, AlertNote, AssistantText as Txt, CountBadge } from '@/components/assistant/ui';
+import { AppUpdateAction } from '@/components/AppUpdateAction';
+import { AccountHeader, useL } from '@/components/account/ui';
+import { nextDesign as colors } from '@/constants/nextDesign';
 import { getAreaById } from '@/constants/kuwait-areas';
+import { useCircleNotifications, type CircleNoticeKind } from '@/contexts/CircleNotificationsContext';
+import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import { useI18n } from '@/contexts/I18nContext';
+import { useScreenInsets } from '@/hooks/useScreenInsets';
+import { groupNotificationFeed, type FeedRow } from '@/services/notificationFeed';
+
+type Local = ReturnType<typeof useMatchNotifications>['state']['entries'][number];
+type Circle = ReturnType<typeof useCircleNotifications>['inbox']['entries'][number];
+type Row = FeedRow<Local, Circle>;
+
+const circleLabels: Record<CircleNoticeKind, readonly [string, string]> = {
+  invite: ['دعوة لدائرة الثقة', 'Trust Circle invitation'],
+  listing: ['عقار جديد في دائرة الثقة', 'New Trust Circle listing'],
+  match: ['مطابقة في دائرة الثقة', 'Trust Circle match'],
+  cooperation: ['تحديث تعاون', 'Cooperation update'],
+  test: ['إشعار تجريبي', 'Test notification'],
+};
+
 export default function NotificationsScreen() {
-  const n = useMatchNotifications(), account = useAccountFoundation(), { language, t } = useI18n(), router = useRouter();
-  const circle = useCircleNotifications();
+  const router = useRouter();
   const { noticeId } = useLocalSearchParams<{ noticeId?: string }>();
-  const consumedPush = useRef<string | null>(null);
-  const update = useAppUpdate();
-  const unread = n.unread + circle.inbox.unread + Number(update.available);
-  const [showDeviceSettings, setShowDeviceSettings] = useState(false);
-  const ar = language === 'ar', [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const openShare = async (notice: MatchNotice) => {
-    if (busy) return; setBusy(true); setError('');
-    try { const current = await n.resolve(notice.id); await n.mark(notice.id, 'read'); router.push({ pathname: '/property/[propertyCoreId]/share', params: { propertyCoreId: current.match.result.propertyId, matchNoticeId: notice.id } } as never); }
-    catch { setError(ar ? 'تعذر تأكيد المطابقة الحالية؛ حدّث القائمة قبل المشاركة.' : 'The current match could not be confirmed. Refresh before sharing.'); }
-    finally { setBusy(false); }
-  };
-  const openLocalProperty = async (notice: MatchNotice) => {
-    if (busy) return;
+  const { L, align, row, fonts, isRTL, language } = useL();
+  const { t } = useI18n();
+  const insets = useScreenInsets();
+  const local = useMatchNotifications();
+  const { inbox, failed, refresh: refreshCircle, markRead } = useCircleNotifications();
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const opening = useRef(false);
+  const consumed = useRef<string | undefined>(undefined);
+  const { today, earlier } = groupNotificationFeed(local.state.entries, inbox.entries, unreadOnly, new Date());
+  const sections = [
+    { title: L('اليوم', 'Today'), data: today },
+    { title: L('السابق', 'Earlier'), data: earlier },
+  ].filter(section => section.data.length > 0);
+  const dateFormat = new Intl.DateTimeFormat(isRTL ? 'ar-KW' : 'en-KW', {
+    timeZone: 'Asia/Kuwait', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+
+  const openCircle = useCallback(async (id: string, kind?: CircleNoticeKind) => {
+    if (opening.current) return;
+    opening.current = true;
     setBusy(true);
-    setError('');
+    setError(false);
     try {
-      const property = n.catalog.properties.find(item => item.core.id === notice.propertyId);
-      if (!property) throw new Error('PROPERTY_UNAVAILABLE');
-      await n.mark(notice.id, 'read');
-      router.push({ pathname: '/property/[propertyCoreId]', params: { propertyCoreId: property.core.id } } as never);
+      const target = await markRead(id);
+      if (target?.circleId) {
+        router.push({
+          pathname: '/trust-circle',
+          params: { circleId: target.circleId, noticeKind: target.matchId ? 'match' : target.kind, noticeTargetId: target.matchId ?? target.targetId },
+        } as never);
+      } else if (!target && kind !== 'test') setError(true);
     } catch {
-      setError(ar ? 'العقار لم يعد متاحًا.' : 'This property is no longer available.');
-    } finally { setBusy(false); }
-  };
-  const mark = async (id: string, action: 'read' | 'snooze') => {
-    if (busy) return; setBusy(true); setError('');
-    try { await n.mark(id, action); } catch { setError(ar ? 'لم يُحفظ التغيير. حاول مجددًا.' : 'Change was not saved. Try again.'); } finally { setBusy(false); }
-  };
-  const groups = new Map<string, MatchNotice[]>();
-  for (const notice of n.state.entries) groups.set(notice.personId, [...(groups.get(notice.personId) ?? []), notice]);
-  const circleLabels: Record<CircleNoticeKind, [string, string]> = {
-    invite: ['دعوة جديدة لدائرة الثقة', 'New Trust Circle invitation'],
-    listing: ['عقار جديد في دائرة الثقة', 'New Trust Circle listing'],
-    match: ['مطابقة جديدة في دائرة الثقة', 'New Trust Circle match'],
-    cooperation: ['تحديث تعاون في دائرة الثقة', 'Trust Circle cooperation update'],
-    test: ['إشعار تجريبي', 'Test notification'],
-  };
-  const openCircleNotice = async (id: string, kind?: CircleNoticeKind) => {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      const target = await circle.markRead(id);
-      if (target?.circleId) router.push({
-        pathname: '/trust-circle', params: { circleId: target.circleId, noticeKind: target.kind, noticeTargetId: target.targetId },
-      } as never);
-      else if (!target && kind !== 'test') setError(ar ? 'موضوع الإشعار لم يعد متاحًا.' : 'This notification’s destination is no longer available.');
-    } catch {
-      setError(ar ? 'تعذّر فتح الإشعار. حاول مجددًا.' : 'Could not open the notification. Try again.');
+      setError(true);
     } finally {
       setBusy(false);
+      opening.current = false;
     }
-  };
+  }, [markRead, router]);
+
   useEffect(() => {
-    if (busy || typeof noticeId !== 'string' || consumedPush.current === noticeId) return;
-    consumedPush.current = noticeId;
-    void openCircleNotice(noticeId);
-  }, [busy, noticeId]);
-  return <AccountScreen title={ar ? 'الإشعارات' : 'Notifications'} subtitle={ar ? 'فرص المطابقة محفوظة هنا؛ الإرسال يتم باختيارك.' : 'Matching opportunities stay here. You choose what to send.'}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{(n.historyReady || unread > 0) ? <CountBadge count={unread} /> : <Txt muted>—</Txt>}<Txt>{ar ? 'غير مقروءة' : 'Unread'}</Txt><Action label={ar ? 'تحديث' : 'Refresh'} icon="refresh-cw" disabled={busy} onPress={() => { setError(''); void circle.refresh(); void n.refresh().catch(() => setError(ar ? 'تعذر التحديث.' : 'Refresh failed.')); }} /><Action label={ar ? 'إعدادات التنبيه' : 'Alert settings'} icon="settings" onPress={() => router.push('/account/notifications' as never)} /></View>
-    {(!account.state.notifications.enabled || !account.state.notifications.matches) && <Txt muted>{ar ? 'التنبيه الفوري متوقف. يمكنك تفعيله من إعدادات التنبيه.' : 'Foreground alerts are off. Enable them in Alert settings.'}</Txt>}
-    {(error || n.error) && <AlertNote>{error || (ar ? 'تعذر تحميل الإشعارات بأمان؛ بياناتك المحفوظة لم تُحذف.' : 'Notifications could not be loaded safely. Saved data was preserved.')}</AlertNote>}
-    <AppUpdateAction />
-    {n.status === 'loading' && <ActivityIndicator color="#175CD3" />}
-    {n.historyReady && !n.state.entries.length && !circle.inbox.entries.length && !circle.failed && !update.available && <Txt muted>{ar ? 'لا توجد إشعارات جديدة بعد. المطابقات الموجودة سابقًا متاحة في تبويب المطابقة.' : 'No new notifications yet. Existing matches remain in Matching.'}</Txt>}
-    {circle.failed && <AlertNote>{ar ? 'تعذّر تحديث إشعارات دائرة الثقة.' : 'Could not refresh Trust Circle notifications.'}</AlertNote>}
-    {circle.inbox.entries.map(notice => <Pressable key={notice.id} accessibilityRole="button"
-      disabled={busy || (notice.kind === 'test' && Boolean(notice.read_at))}
-      style={{ minHeight: 48, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: notice.read_at ? '#D4DEEA' : '#A7C6ED' }}
-      onPress={() => void openCircleNotice(notice.id, notice.kind)}>
-      <Txt bold={!notice.read_at}>{circleLabels[notice.kind][ar ? 0 : 1]}</Txt>
-    </Pressable>)}
-    <Action label={ar ? 'صوت وإشعارات الهاتف' : 'Phone sound and notifications'} icon="volume-2"
-      onPress={() => setShowDeviceSettings(value => !value)} />
-    {showDeviceSettings && <CircleNotificationSettings />}
-    {[...groups].map(([personId, entries]) => <View key={personId} style={{ marginTop: 18, gap: 10 }}>
-      <Txt bold color="#A45117">{n.catalog.people.find(p => p.id === personId)?.name ?? (ar ? 'عميل غير متاح' : 'Client unavailable')}{` · ${entries.length} `}{ar ? 'إشعارات عقارات' : 'property notifications'}</Txt>
-      {entries.map((notice, index) => {
-        const match = n.status === 'ready' ? currentNoticeMatch(notice, n.matches) : undefined;
-        const property = n.catalog.properties.find(p => p.core.id === notice.propertyId);
-        const evidence = match && matchNoticeEvidence(match, property, language);
-        return <View key={notice.id} testID="match-notification-row" style={{ padding: 14, gap: 8, borderRadius: 12, borderWidth: 1, borderColor: notice.read ? '#D4DEEA' : '#A7C6ED', backgroundColor: index % 2 ? '#F4F8FE' : '#FFFFFF' }}>
-          <Pressable accessibilityRole="button" disabled={busy || !property} onPress={() => void openLocalProperty(notice)} style={{ minHeight: 44, flexDirection: 'row', gap: 8, alignItems: 'center' }}>{!notice.read && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#C62828' }} />}<Txt bold>{property ? `${t(`propertyType.${property.core.propertyType}`)} · ${getAreaById(property.core.locationArea.id)?.[language] ?? property.core.locationArea.id}` : ar ? 'عقار غير متاح' : 'Property unavailable'}</Txt></Pressable>
-          <Txt size={12} muted>{new Intl.DateTimeFormat(ar ? 'ar-KW' : 'en-GB', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Kuwait' }).format(new Date(notice.createdAt))}</Txt>
-          {evidence ? <><Txt size={13}>{(ar ? 'يتوافق: ' : 'Meets: ') + (evidence.agrees.join(' · ') || (ar ? 'التصنيف والمعاملة' : 'Type and transaction'))}</Txt>{evidence.differs.length > 0 && <Txt size={13} color="#C62828">{(ar ? 'للمناقشة: ' : 'Discuss: ') + evidence.differs.join(' · ')}</Txt>}{evidence.unknown.length > 0 && <Txt size={12} muted>{(ar ? 'يحتاج تأكيدًا: ' : 'Needs confirmation: ') + evidence.unknown.join('، ')}</Txt>}</> : <Txt color="#C62828" size={13}>{ar ? 'هذا الإشعار محفوظ، لكن المطابقة تحتاج تحديثًا أو لم تعد ضمن الترشيحات الحالية.' : 'This notification is retained, but its match needs refreshing or is no longer current.'}</Txt>}
-          {notice.snoozedUntil && !notice.read && <Txt muted size={12}>{ar ? 'تم تأجيل التذكير لوقت لاحق أثناء فتح التطبيق.' : 'Reminder deferred until later while the app is open.'}</Txt>}
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            <Action label={ar ? 'مشاركة العقار' : 'Share property'} icon="share-2" tone="primary" disabled={busy || !match} onPress={() => void openShare(notice)} />
-            <Action label={ar ? 'عرض المقارنة' : 'View comparison'} icon="target" disabled={busy || !match} onPress={() => { void mark(notice.id, 'read'); match && router.push(matchingTarget({ kind: 'requirement', id: match.requirement.id }) as never); }} />
-            {!notice.read && <Action label={ar ? 'تم الاطلاع' : 'Mark read'} icon="check" disabled={busy} onPress={() => void mark(notice.id, 'read')} />}
-            {match && <Action label={ar ? 'ذكّرني بعد ساعة' : 'Remind in an hour'} icon="clock" disabled={busy} onPress={() => void mark(notice.id, 'snooze')} />}
+    if (busy || typeof noticeId !== 'string' || consumed.current === noticeId) return;
+    consumed.current = noticeId;
+    void openCircle(noticeId);
+  }, [noticeId, busy, openCircle]);
+
+  async function refresh() {
+    setRefreshing(true);
+    setError(false);
+    try {
+      await Promise.allSettled([local.refresh(), refreshCircle()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function openMatch(item: Local) {
+    if (opening.current) return;
+    opening.current = true;
+    setBusy(true);
+    setError(false);
+    try {
+      if (!item.read) await local.mark(item.id, 'read');
+      router.push({ pathname: '/notification-match', params: { noticeId: item.id } } as never);
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+      opening.current = false;
+    }
+  }
+
+  function renderRow({ item: entry }: { item: Row }) {
+    let title: string;
+    let subtitle: string;
+    const date = dateFormat.format(new Date(entry.createdAt));
+    if (entry.source === 'local') {
+      const property = local.catalog.properties.find(item => item.core.id === entry.item.propertyId);
+      const person = local.catalog.people.find(item => item.id === entry.item.personId);
+      const area = property && getAreaById(property.core.locationArea.id);
+      title = property
+        ? [t(`propertyType.${property.core.propertyType}`), area?.[language]].filter(Boolean).join(' · ')
+        : L('مطابقة عقار', 'Property match');
+      subtitle = [person?.name, date].filter(Boolean).join(' · ');
+    } else {
+      title = circleLabels[entry.item.kind][isRTL ? 0 : 1];
+      subtitle = date;
+    }
+
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={[title, subtitle, !entry.read && L('غير مقروء', 'Unread')].filter(Boolean).join('، ')}
+        disabled={busy}
+        onPress={() => entry.source === 'local' ? void openMatch(entry.item) : void openCircle(entry.item.id, entry.item.kind)}
+        style={({ pressed }) => [styles.notice, { flexDirection: row, backgroundColor: pressed ? colors.soft : colors.white }]}
+        testID={entry.source === 'local' ? 'match-notification-row' : 'circle-notification-row'}
+      >
+        {!entry.read && <View style={styles.dot} />}
+        <View style={styles.noticeText}>
+          {entry.source === 'local' && <Text style={[styles.kind, { fontFamily: fonts.semiBold, textAlign: align }]}>{L('مطابقة عقار', 'Property match')}</Text>}
+          <Text style={[styles.title, { fontFamily: entry.read ? fonts.medium : fonts.bold, textAlign: align }]}>{title}</Text>
+          <Text style={[styles.muted, { fontFamily: fonts.regular, textAlign: align }]}>{subtitle}</Text>
+        </View>
+        <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={19} color={colors.muted} />
+      </Pressable>
+    );
+  }
+
+  const loading = local.status === 'loading';
+  return (
+    <View style={styles.screen}>
+      <AccountHeader title={L('الإشعارات', 'Notifications')} onBack={() => router.canGoBack() ? router.back() : router.replace('/')}
+        trailing={<Pressable accessibilityRole="button" accessibilityLabel={L('إعدادات الإشعارات', 'Notification settings')}
+          style={styles.gear} onPress={() => router.push('/account/notifications' as never)} testID="notification-settings">
+          <Feather name="settings" size={22} color={colors.ink} />
+        </Pressable>} />
+      <SectionList
+        sections={sections}
+        renderItem={renderRow}
+        renderSectionHeader={({ section }) => <Text accessibilityRole="header"
+          style={[styles.section, { fontFamily: fonts.bold, textAlign: align }]}>{section.title}</Text>}
+        keyExtractor={entry => `${entry.source}-${entry.item.id}`}
+        stickySectionHeadersEnabled={false}
+        refreshing={refreshing}
+        onRefresh={() => void refresh()}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 18 }]}
+        ListHeaderComponent={
+          <View style={styles.headerContent}>
+            <AppUpdateAction mode="banner" />
+            <View style={[styles.filters, { flexDirection: row }]}>
+              {[false, true].map(value => (
+                <Pressable key={String(value)} accessibilityRole="tab" accessibilityState={{ selected: unreadOnly === value }}
+                  onPress={() => setUnreadOnly(value)} style={[styles.filter, unreadOnly === value && styles.filterSelected]}
+                  testID={value ? 'notifications-unread' : 'notifications-all'}>
+                  <Text style={{ color: unreadOnly === value ? colors.blue : colors.ink, fontFamily: fonts.semiBold }}>
+                    {value ? L('غير مقروءة', 'Unread') : L('الكل', 'All')}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {(error || local.error || failed) && <Text accessibilityRole="alert" style={[styles.error, { textAlign: align, fontFamily: fonts.medium }]}>
+              {error ? L('تعذّر فتح الإشعار. حاول مرة ثانية.', 'Could not open the notification. Try again.')
+                : L('تعذّر تحميل بعض الإشعارات. اسحب القائمة لتحت وحاول مرة ثانية.', 'Could not load some notifications. Pull down to try again.')}
+            </Text>}
           </View>
-        </View>;
-      })}
-    </View>)}
-  </AccountScreen>;
+        }
+        ListEmptyComponent={loading ? <ActivityIndicator color={colors.blue} /> : !local.error && !failed
+          ? <Text style={[styles.empty, { fontFamily: fonts.medium }]}>
+            {unreadOnly ? L('ما عندك إشعارات غير مقروءة', 'No unread notifications') : L('ما عندك إشعارات للحين', 'No notifications yet')}
+          </Text> : null}
+      />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
+  gear: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  content: { maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 16, paddingTop: 10 },
+  headerContent: { gap: 14, marginBottom: 6 },
+  filters: { direction: 'ltr', borderWidth: 1, borderColor: colors.border, padding: 3, borderRadius: 12, backgroundColor: colors.white },
+  filter: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  filterSelected: { backgroundColor: colors.soft },
+  section: { fontSize: 18, color: colors.ink, marginTop: 13, marginBottom: 9 },
+  notice: { direction: 'ltr', alignItems: 'center', gap: 10, minHeight: 74, padding: 12, marginBottom: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
+  noticeText: { minWidth: 0, flex: 1, gap: 2 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.blue },
+  kind: { fontSize: 12, color: colors.blue },
+  title: { fontSize: 16, color: colors.ink },
+  muted: { fontSize: 13, color: colors.muted },
+  empty: { padding: 32, textAlign: 'center', color: colors.muted },
+  error: { color: colors.red },
+});

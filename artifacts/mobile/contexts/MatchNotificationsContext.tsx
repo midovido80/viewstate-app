@@ -13,6 +13,7 @@ import { selectHomeMatches, type HomeMatch } from '@/services/assistantHome';
 import { matchNoticeRepository, playMatchCue, stopMatchCue } from '@/services/matchNoticeDevice';
 import { claimDueMatchNotices, currentNoticeMatch, initialMatchNotices, isQuietTime, noticeIsDue, reconcileMatchNotices, updateNotice, type MatchNotice, type MatchNoticeSettings, type MatchNoticeState } from '@/services/matchNotifications';
 import { useAccountFoundation } from './AccountFoundationContext';
+import { isNotificationScreen } from '@/services/notificationFeed';
 import { MatchNoticeToast } from '@/components/notifications/MatchNoticeToast';
 export interface MatchCatalog { properties: Property[]; people: Person[]; requirements: SeekerRequirement[] }
 async function readMatchCatalog(store: ReturnType<typeof useUserData>['store']): Promise<MatchCatalog> {
@@ -103,6 +104,7 @@ export function MatchNotificationsProvider({ children }: { children: React.React
   const claiming = useRef(false);
   useEffect(() => {
     if (!account.ready || !account.state.notifications.enabled || !account.state.notifications.matches) { setBanner(null); return; }
+    if (isNotificationScreen(pathname)) { if (banner) setBanner(null); return; }
     if (banner || claiming.current || error || !historyReady || status !== 'ready' || !state.entries.some(n => noticeIsDue(n, new Date().toISOString()) && currentNoticeMatch(n, latestMatches.current))) return;
     claiming.current = true;
     let claimed: MatchNotice[] = [];
@@ -113,7 +115,7 @@ export function MatchNotificationsProvider({ children }: { children: React.React
       if (!mounted.current) return;
       setState(next);
       const candidates = claimed.map(notice => ({ notice, match: currentNoticeMatch(notice, latestMatches.current)! })).filter(x => x.match).sort((a, b) => b.match.result.score - a.match.result.score);
-      if (candidates.length && pathname !== '/notifications' && AppState.currentState === 'active' && preferences.current.state.notifications.enabled && preferences.current.state.notifications.matches) {
+      if (candidates.length && !isNotificationScreen(pathname) && AppState.currentState === 'active' && preferences.current.state.notifications.enabled && preferences.current.state.notifications.matches) {
         setBanner({ ...candidates[0], count: candidates.length });
         if (!isQuietTime(next.settings, new Date()) && next.settings.sound) void playMatchCue(true).catch(() => undefined);
       }

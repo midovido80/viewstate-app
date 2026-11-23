@@ -1,60 +1,143 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
-import { registerHooks } from 'node:module';
-import { choiceTileWidth } from '../services/choicePresentation.ts';
+import assert from "node:assert/strict";
+import test from "node:test";
+import { registerHooks } from "node:module";
+import { choiceTileWidth } from "../services/choicePresentation.ts";
 
-const state = { dismissals: 0, rtl: false, fontScale: 1, platform: 'web', capture: undefined as any, router: undefined as any, params: {} as any, width: 148, measured: undefined as number | undefined };
+const state = {
+  dismissals: 0,
+  rtl: false,
+  fontScale: 1,
+  platform: "web",
+  capture: undefined as any,
+  router: undefined as any,
+  params: {} as any,
+  width: 148,
+  measured: undefined as number | undefined,
+};
 (globalThis as any).__choiceGridTest = state;
 const stubs = new Map([
-  ['react', `
+  ["@/components/ImportCancelActions", "export const ImportCancelActions = () => null;"],
+  [
+    "react",
+    `
     const createElement = (type, props, ...children) => ({ type, props: { ...props, children: children.length > 1 ? children : children[0] ?? props?.children } });
     const React = { createElement }; globalThis.React = React; export default React;
     export { createElement }; export const forwardRef = render => render; export const createContext = value => ({ Provider: 'Provider' });
     export const useContext = () => globalThis.__choiceGridTest.width;
     export const useRef = current => ({ current });
     export const useState = initial => [initial, value => { globalThis.__choiceGridTest.measured = value; }];
-  `],
-  ['react/jsx-runtime', `export const Fragment = 'Fragment'; export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx;`],
-  ['react-native', `export const useWindowDimensions = () => ({ width: 390, height: 844, fontScale: globalThis.__choiceGridTest.fontScale }); export const Platform = { get OS() { return globalThis.__choiceGridTest.platform; } }; export const Keyboard = {dismiss: () => globalThis.__choiceGridTest.dismissals++}; export const Pressable = 'Pressable'; export const ScrollView = 'ScrollView'; export const ActivityIndicator = 'ActivityIndicator'; export const View = 'View'; export const Text = 'Text'; export const TextInput = 'TextInput'; export const TouchableOpacity = 'TouchableOpacity'; export const StyleSheet = { create: value => value };`],
-  ['react-native-safe-area-context', `export const useSafeAreaInsets = () => ({top:32,bottom:36,left:0,right:0});`],
-  ['@expo/vector-icons', `export const Feather = 'Feather';`],
-  ['react-native-keyboard-controller', `export const KeyboardAwareScrollView = 'NativeKeyboardAwareScrollView';`],
-  ['@/hooks/useScreenInsets', `export const useScreenInsets = () => ({ top: 32, bottom: 36, left: 0, right: 0 });`],
-  ['@/components/CaptureHeader', `export const CaptureHeader = 'CaptureHeader';`],
-  ['@/components/KuwaitAreaSelector', `export const KuwaitAreaSelector = 'KuwaitAreaSelector';`],
-  ['@/contexts/CaptureContext', `export const useCapture = () => globalThis.__choiceGridTest.capture;`],
-  ['expo-router', `export const useLocalSearchParams = () => globalThis.__choiceGridTest.params; export const useRouter = () => globalThis.__choiceGridTest.router;`],
+  `,
+  ],
+  [
+    "react/jsx-runtime",
+    `export const Fragment = 'Fragment'; export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx;`,
+  ],
+  [
+    "react-native",
+    `export const useWindowDimensions = () => ({ width: 390, height: 844, fontScale: globalThis.__choiceGridTest.fontScale }); export const Platform = { get OS() { return globalThis.__choiceGridTest.platform; } }; export const Keyboard = {dismiss: () => globalThis.__choiceGridTest.dismissals++}; export const Pressable = 'Pressable'; export const ScrollView = 'ScrollView'; export const ActivityIndicator = 'ActivityIndicator'; export const View = 'View'; export const Text = 'Text'; export const TextInput = 'TextInput'; export const TouchableOpacity = 'TouchableOpacity'; export const StyleSheet = { create: value => value };`,
+  ],
+  [
+    "react-native-safe-area-context",
+    `export const useSafeAreaInsets = () => ({top:32,bottom:36,left:0,right:0});`,
+  ],
+  ["@expo/vector-icons", `export const Feather = 'Feather';`],
+  [
+    "react-native-keyboard-controller",
+    `export const KeyboardAwareScrollView = 'NativeKeyboardAwareScrollView';`,
+  ],
+  [
+    "@/hooks/useScreenInsets",
+    `export const useScreenInsets = () => ({ top: 32, bottom: 36, left: 0, right: 0 });`,
+  ],
+  [
+    "@/components/CaptureHeader",
+    `export const CaptureHeader = 'CaptureHeader';`,
+  ],
+  [
+    "@/components/KuwaitAreaSelector",
+    `export const KuwaitAreaSelector = 'KuwaitAreaSelector';`,
+  ],
+  [
+    "@/contexts/CaptureContext",
+    `export const useCapture = () => globalThis.__choiceGridTest.capture;`,
+  ],
+  [
+    "expo-router",
+    `export const useLocalSearchParams = () => globalThis.__choiceGridTest.params; export const useRouter = () => globalThis.__choiceGridTest.router;`,
+  ],
 
-  ['@/hooks/useColors', `export const useColors = () => ({ card: '#fff', foreground: '#111', border: '#ddd', primary: '#1A56FF', accent: '#203568', background: '#F7F8FB', mutedForeground: '#64748B' });`],
-  ['@/contexts/I18nContext', `export const useI18n = () => ({ isRTL: globalThis.__choiceGridTest.rtl, language: globalThis.__choiceGridTest.rtl ? 'ar' : 'en', fonts: { medium: 'medium', semiBold: 'bold', bold: 'bold' }, t: key => key });`],
-  ['@workspace/property-domain', `export const APARTMENT_SUBTYPES = []; export const FURNISHING_VALUES = [];`],
-  ['@/components/NumericQuickPick', `export const NumericQuickPick = 'NumericQuickPick';`],
-  ['@/services/numericQuickPick', `export const FLOOR_NUMBER_QUICK_PICK_VALUES = []; export const isPropertyNumericQuickPickSurface = () => true;`],
-  ['@/services/propertyDetailPresentation', `export const propertyDetailLabels = { hasBalcony: ['Balcony', 'بلكونة'] }; export const propertyDetailDisplayDefinitions = []; export const RESIDENTIAL_AMENITY_PROPERTY_FIELDS = []; export const formatPropertyDetailValue = () => '';`],
-  ['@/services/propertyFormCatalog', `export const getApplicablePropertyFormFields = () => [{ field: 'hasBalcony', control: 'boolean', group: 'amenity' }];`],
+  [
+    "@/hooks/useColors",
+    `export const useColors = () => ({ card: '#fff', foreground: '#111', border: '#ddd', primary: '#1A56FF', accent: '#203568', background: '#F7F8FB', mutedForeground: '#64748B' });`,
+  ],
+  [
+    "@/contexts/I18nContext",
+    `export const useI18n = () => ({ isRTL: globalThis.__choiceGridTest.rtl, language: globalThis.__choiceGridTest.rtl ? 'ar' : 'en', fonts: { medium: 'medium', semiBold: 'bold', bold: 'bold' }, t: key => key });`,
+  ],
+  [
+    "@workspace/property-domain",
+    `export const APARTMENT_SUBTYPES = []; export const FURNISHING_VALUES = [];`,
+  ],
+  [
+    "@/components/NumericQuickPick",
+    `export const NumericQuickPick = 'NumericQuickPick';`,
+  ],
+  [
+    "@/services/numericQuickPick",
+    `export const FLOOR_NUMBER_QUICK_PICK_VALUES = []; export const isPropertyNumericQuickPickSurface = () => true;`,
+  ],
+  [
+    "@/services/propertyDetailPresentation",
+    `export const propertyDetailLabels = { hasBalcony: ['Balcony', 'بلكونة'] }; export const propertyDetailDisplayDefinitions = []; export const RESIDENTIAL_AMENITY_PROPERTY_FIELDS = []; export const formatPropertyDetailValue = () => '';`,
+  ],
+  [
+    "@/services/propertyFormCatalog",
+    `export const getApplicablePropertyFormFields = () => [{ field: 'hasBalcony', control: 'boolean', group: 'amenity' }];`,
+  ],
 ]);
 registerHooks({
   resolve(specifier, context, next) {
-    return stubs.has(specifier) ? { url: `choice-test:${encodeURIComponent(specifier)}`, shortCircuit: true } : next(specifier, context);
+    return stubs.has(specifier)
+      ? {
+          url: `choice-test:${encodeURIComponent(specifier)}`,
+          shortCircuit: true,
+        }
+      : next(specifier, context);
   },
   load(url, context, next) {
-    return url.startsWith('choice-test:') ? { format: 'module', source: stubs.get(decodeURIComponent(url.slice('choice-test:'.length)))!, shortCircuit: true } : next(url, context);
+    return url.startsWith("choice-test:")
+      ? {
+          format: "module",
+          source: stubs.get(
+            decodeURIComponent(url.slice("choice-test:".length)),
+          )!,
+          shortCircuit: true,
+        }
+      : next(url, context);
   },
 });
 
 let orderedAmenities: unknown;
 const loadComponents = async () => {
-  orderedAmenities = (await import('../components/OrderedPropertyAmenities.tsx')).OrderedPropertyAmenities;
-  return Promise.all([import('../components/ChoiceTile.tsx'), import('../components/PropertyEnrichmentFields.tsx')]);
+  orderedAmenities = (
+    await import("../components/OrderedPropertyAmenities.tsx")
+  ).OrderedPropertyAmenities;
+  return Promise.all([
+    import("../components/ChoiceTile.tsx"),
+    import("../components/PropertyEnrichmentFields.tsx"),
+  ]);
 };
 const props = (element: any) => element.props;
 function elements(element: any): any[] {
   if (Array.isArray(element)) return element.flatMap(elements);
-  if (orderedAmenities && element?.type === orderedAmenities) return elements(element.type(element.props));
-  return element && typeof element === 'object' && 'props' in element ? [element, ...elements(element.props.children)] : [];
+  if (orderedAmenities && element?.type === orderedAmenities)
+    return elements(element.type(element.props));
+  return element && typeof element === "object" && "props" in element
+    ? [element, ...elements(element.props.children)]
+    : [];
 }
 
-test('Choice grids fit two equal columns after measurement at narrow, phone and tablet widths', async () => {
+test("Choice grids fit two equal columns after measurement at narrow, phone and tablet widths", async () => {
   const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
   for (const width of [240, 280, 320, 350, 362, 728]) {
     const grid = tiles.ChoiceGrid({ children: null });
@@ -66,78 +149,116 @@ test('Choice grids fit two equal columns after measurement at narrow, phone and 
   assert.equal(choiceTileWidth(NaN), undefined);
 });
 
-test('Editable tiles retain radio/checkbox semantics, full labels and exactly one press callback in both directions', async () => {
+test("Editable tiles retain radio/checkbox semantics, full labels and exactly one press callback in both directions", async () => {
   const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
   for (const rtl of [false, true]) {
     state.rtl = rtl;
-    for (const role of ['radio', 'checkbox'] as const) {
+    for (const role of ["radio", "checkbox"] as const) {
       let presses = 0;
-      const tile = tiles.ChoiceTile({ label: '✓ جمعية / سوبرماركت', selected: true, role, onPress: () => presses++ });
+      const tile = tiles.ChoiceTile({
+        label: "✓ جمعية / سوبرماركت",
+        selected: true,
+        role,
+        onPress: () => presses++,
+      });
       assert.equal(props(tile).accessibilityRole, role);
       assert.deepEqual(props(tile).accessibilityState, { checked: true });
-      assert.equal(props(tile).accessibilityLabel, 'جمعية / سوبرماركت');
+      assert.equal(props(tile).accessibilityLabel, "جمعية / سوبرماركت");
       props(tile).onPress();
       assert.equal(presses, 1);
       assert.equal(props(tile).style.at(-1).width, 148);
-      assert.equal(props(tile).style.at(-1).flexDirection, rtl ? 'row-reverse' : 'row');
+      assert.equal(
+        props(tile).style.at(-1).flexDirection,
+        rtl ? "row-reverse" : "row",
+      );
     }
   }
 });
 
-test('Saved choice facts contain no input role, selection indicator or press action', async () => {
+test("Saved choice facts contain no input role, selection indicator or press action", async () => {
   const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
-  const fact = tiles.ChoiceFact({ label: 'بلكونة' });
+  const fact = tiles.ChoiceFact({ label: "بلكونة" });
   assert.equal(props(fact).onPress, undefined);
   assert.equal(props(fact).accessibilityRole, undefined);
-  assert.equal(elements(fact).some(item => item.props.name === 'check'), false);
+  assert.equal(
+    elements(fact).some((item) => item.props.name === "check"),
+    false,
+  );
 });
 
-test('Amenity taps select or clear a fact while historical false is readable and other fields stay untouched', async () => {
+test("Amenity taps select or clear a fact while historical false is readable and other fields stay untouched", async () => {
   const [tiles, { PropertyEnrichmentFields }] = await loadComponents();
-  for (const initial of ['', 'true', 'false']) {
+  for (const initial of ["", "true", "false"]) {
     const changes: unknown[] = [];
-    const form = PropertyEnrichmentFields({ recordScopeKey: 'test', propertyType: 'apartment', values: { hasBalcony: initial, bedroomCount: '3' }, onChange: (field, value) => changes.push([field, value]) });
-    const tile = elements(form).find(item => typeof item.type === 'function' && item.type.name === 'ChoiceTile')!;
+    const form = PropertyEnrichmentFields({
+      recordScopeKey: "test",
+      propertyType: "apartment",
+      values: { hasBalcony: initial, bedroomCount: "3" },
+      onChange: (field, value) => changes.push([field, value]),
+    });
+    const tile = elements(form).find(
+      (item) =>
+        typeof item.type === "function" && item.type.name === "ChoiceTile",
+    )!;
     assert.ok(tile);
-    assert.equal(props(tile).selected, initial !== '');
-    if (initial === 'false') assert.match(props(tile).label, /بدون|No /);
+    assert.equal(props(tile).selected, initial !== "");
+    if (initial === "false") assert.match(props(tile).label, /بدون|No /);
     props(tile).onPress();
-    assert.deepEqual(changes, [['hasBalcony', initial ? '' : 'true']]);
+    assert.deepEqual(changes, [["hasBalcony", initial ? "" : "true"]]);
   }
 });
 
-
-test('Area and Block stay in reading order, share a row, and stack for enlarged system text', async () => {
-  const { PropertyAreaBlockRow } = await import('../components/PropertyFormCard.tsx');
+test("Area and Block stay in reading order, share a row, and stack for enlarged system text", async () => {
+  const { PropertyAreaBlockRow } =
+    await import("../components/PropertyFormCard.tsx");
   for (const rtl of [false, true]) {
     state.rtl = rtl;
     state.fontScale = 1;
-    const row = PropertyAreaBlockRow({ area: 'area-control', block: 'block-control' });
-    assert.equal(row.props.style.flexDirection, rtl ? 'row-reverse' : 'row');
-    assert.equal(row.props.children[0].props.children, 'area-control');
-    assert.equal(row.props.children[1].props.children, 'block-control');
+    const row = PropertyAreaBlockRow({
+      area: "area-control",
+      block: "block-control",
+    });
+    assert.equal(row.props.style.flexDirection, rtl ? "row-reverse" : "row");
+    assert.equal(row.props.children[0].props.children, "area-control");
+    assert.equal(row.props.children[1].props.children, "block-control");
     assert.equal(row.props.children[0].props.style.flex, 1);
     state.fontScale = 1.6;
-    assert.equal(PropertyAreaBlockRow({ area: 'area', block: 'block' }).props.style.flexDirection, 'column');
+    assert.equal(
+      PropertyAreaBlockRow({ area: "area", block: "block" }).props.style
+        .flexDirection,
+      "column",
+    );
   }
   state.fontScale = 1;
 });
 
-test('Form cards do not add press handlers or alter their field controls', async () => {
-  const { PropertyFormCard } = await import('../components/PropertyFormCard.tsx');
-  const control = { type: 'TextInput', key: null, props: { value: '500', onChangeText: () => undefined } };
-  const card = PropertyFormCard({ title: 'المواصفات', children: control });
+test("Form cards do not add press handlers or alter their field controls", async () => {
+  const { PropertyFormCard } =
+    await import("../components/PropertyFormCard.tsx");
+  const control = {
+    type: "TextInput",
+    key: null,
+    props: { value: "500", onChangeText: () => undefined },
+  };
+  const card = PropertyFormCard({ title: "المواصفات", children: control });
   assert.equal(card.props.onPress, undefined);
   assert.equal(card.props.children.props.children[1], control);
 });
 
-
-test('Action buttons keep one native press target across loading and disabled transitions', async () => {
-  const { Button } = await import('../components/Button.tsx');
+test("Action buttons keep one native press target across loading and disabled transitions", async () => {
+  const { Button } = await import("../components/Button.tsx");
   let presses = 0;
-  const active = Button({ title: 'Save details', onPress: () => presses++ });
-  const busy = Button({ title: 'Save details', onPress: () => presses++, loading: true });
-  const disabled = Button({ title: 'Save details', onPress: () => presses++, disabled: true });
+  const active = Button({ title: "Save details", onPress: () => presses++ });
+  const busy = Button({
+    title: "Save details",
+    onPress: () => presses++,
+    loading: true,
+  });
+  const disabled = Button({
+    title: "Save details",
+    onPress: () => presses++,
+    disabled: true,
+  });
   assert.equal(active.type, busy.type);
   assert.equal(active.type, disabled.type);
   assert.equal(busy.props.disabled, true);
@@ -146,109 +267,214 @@ test('Action buttons keep one native press target across loading and disabled tr
   assert.equal(presses, 1);
 });
 
-test('Native scroll viewport preserves refs, input taps and scrolling while keeping its height bounded', async () => {
-  const { KeyboardAwareScrollViewCompat } = await import('../components/KeyboardAwareScrollViewCompat.tsx');
-  for (const platform of ['web', 'android', 'ios']) {
+test("Native scroll viewport preserves refs, input taps and scrolling while keeping its height bounded", async () => {
+  const { KeyboardAwareScrollViewCompat } =
+    await import("../components/KeyboardAwareScrollViewCompat.tsx");
+  for (const platform of ["web", "android", "ios"]) {
     state.platform = platform;
     const ref = { current: null };
-    const view = (KeyboardAwareScrollViewCompat as any)({ children: 'fields', bottomOffset: 80, style: { backgroundColor: '#fff' } }, ref);
-    assert.equal(view.type, platform === 'web' ? 'ScrollView' : 'NativeKeyboardAwareScrollView');
+    const view = (KeyboardAwareScrollViewCompat as any)(
+      {
+        children: "fields",
+        bottomOffset: 80,
+        style: { backgroundColor: "#fff" },
+      },
+      ref,
+    );
+    assert.equal(
+      view.type,
+      platform === "web" ? "ScrollView" : "NativeKeyboardAwareScrollView",
+    );
     assert.equal(view.props.ref, ref);
     assert.equal(view.props.removeClippedSubviews, false);
-    assert.equal(view.props.keyboardShouldPersistTaps, 'handled');
+    assert.equal(view.props.keyboardShouldPersistTaps, "handled");
     assert.equal(view.props.style[0].flex, 1);
     assert.equal(view.props.style[0].minHeight, 0);
   }
-  state.platform = 'web';
+  state.platform = "web";
 });
 
-test('Basic capture requires area and price, then reviews the same draft with Person context intact', async () => {
-  const { default: PriceScreen } = await import('../app/capture/price.tsx');
-  for (const transaction of ['rent', 'sale']) {
+test("Basic capture requires area and price, then reviews the same draft with Person context intact", async () => {
+  const { default: PriceScreen } = await import("../app/capture/price.tsx");
+  for (const transaction of ["rent", "sale"]) {
     const pushes: any[] = [];
-    const draft: any = { transaction, propertyType: 'apartment', block: '3', rentalPeriodId: 'monthly' };
-    state.params = { linkPersonId: 'person-1', sourceRole: 'owner', apartmentSubtype: 'duplex' };
+    const draft: any = {
+      transaction,
+      propertyType: "apartment",
+      block: "3",
+      rentalPeriodId: "monthly",
+    };
+    state.params = {
+      importId: "basic-import-fixture",
+      linkPersonId: "person-1",
+      sourceRole: "owner",
+      apartmentSubtype: "duplex",
+    };
     state.router = { push: (route: any) => pushes.push(route) };
-    state.capture = { draft, isReady: true, updateDraft: (next: any) => Object.assign(draft, next) };
-    const next = () => elements(PriceScreen()).find(item => item.props.testID === 'btn-next')!.props.onPress();
+    const captureDetails: Record<string, string> = {};
+    state.capture = {
+      draft,
+      captureDetails,
+      updateCaptureDetails: (next: any) => Object.assign(captureDetails, next),
+      isReady: true,
+      updateDraft: (next: any) => Object.assign(draft, next),
+    };
+    const next = () =>
+      elements(PriceScreen())
+        .find((item) => item.props.testID === "btn-next")!
+        .props.onPress();
     next();
     assert.equal(pushes.length, 0);
-    draft[transaction === 'rent' ? 'rentalPrice' : 'salePrice'] = { amount: 500, currencyCode: 'KWD' };
+    draft[transaction === "rent" ? "rentalPrice" : "salePrice"] = {
+      amount: 500,
+      currencyCode: "KWD",
+    };
     next();
-    assert.equal(pushes.length, 0, 'valid price alone cannot skip the area');
-    draft.locationAreaId = 'KW-HA-SALMIYA';
+    assert.equal(pushes.length, 0, "valid price alone cannot skip the area");
+    draft.locationAreaId = "KW-HA-SALMIYA";
     next();
     assert.equal(pushes.length, 1);
-    assert.equal(pushes[0].pathname, '/capture/summary');
+    assert.equal(pushes[0].pathname, "/capture/summary");
     assert.deepEqual(pushes[0].params, state.params);
-    assert.equal(draft.block, '3');
-    if (transaction === 'rent') assert.equal(draft.rentalPeriodId, 'monthly');
+    assert.equal(draft.block, "3");
+    if (transaction === "rent") assert.equal(draft.rentalPeriodId, "monthly");
   }
 });
 
-test('Amenities stay contiguous in two columns before parking and conditional detail controls', async () => {
+test("Amenities stay contiguous in two columns before parking and conditional detail controls", async () => {
   await loadComponents();
-  const { OrderedPropertyAmenities } = await import('../components/OrderedPropertyAmenities.tsx');
-  const mark = (name: string): any => ({ type: 'marker', props: { name } });
+  const { OrderedPropertyAmenities } =
+    await import("../components/OrderedPropertyAmenities.tsx");
+  const mark = (name: string): any => ({ type: "marker", props: { name } });
   const entries = [
-    { field: 'hasBalcony', content: mark('balcony') },
-    { field: 'parkingSpaceCount', details: true, content: mark('parking-count') },
-    { field: 'hasElevator', content: mark('lift') },
-    { field: 'hasCentralAC', content: mark('ac') },
-    { field: 'hasSecurityGuard', content: mark('security') },
-    { field: 'serviceElevatorCapacityTons', details: true, content: mark('capacity') },
+    { field: "hasBalcony", content: mark("balcony") },
+    {
+      field: "parkingSpaceCount",
+      details: true,
+      content: mark("parking-count"),
+    },
+    { field: "hasElevator", content: mark("lift") },
+    { field: "hasCentralAC", content: mark("ac") },
+    { field: "hasSecurityGuard", content: mark("security") },
+    {
+      field: "serviceElevatorCapacityTons",
+      details: true,
+      content: mark("capacity"),
+    },
   ];
   const before = JSON.stringify(entries);
   for (const rtl of [false, true]) {
     state.rtl = rtl;
-    const all = elements(OrderedPropertyAmenities({ entries, extra: mark('legacy-extra') }));
-    const choices = all.find(item => item.props.testID === 'ordered-amenity-choices')!;
-    const details = all.find(item => item.props.testID === 'ordered-amenity-details')!;
+    const all = elements(
+      OrderedPropertyAmenities({ entries, extra: mark("legacy-extra") }),
+    );
+    const choices = all.find(
+      (item) => item.props.testID === "ordered-amenity-choices",
+    )!;
+    const details = all.find(
+      (item) => item.props.testID === "ordered-amenity-details",
+    )!;
     assert.equal(choices.props.columns, 2);
-    assert.deepEqual(elements(choices.props.children).filter(item => item.type === 'marker').map(item => item.props.name), ['ac', 'security', 'lift', 'balcony', 'legacy-extra']);
-    assert.deepEqual(elements(details).filter(item => item.type === 'marker').map(item => item.props.name), ['parking-count', 'capacity']);
+    assert.deepEqual(
+      elements(choices.props.children)
+        .filter((item) => item.type === "marker")
+        .map((item) => item.props.name),
+      ["ac", "security", "lift", "balcony", "legacy-extra"],
+    );
+    assert.deepEqual(
+      elements(details)
+        .filter((item) => item.type === "marker")
+        .map((item) => item.props.name),
+      ["parking-count", "capacity"],
+    );
     assert.ok(all.indexOf(choices) < all.indexOf(details));
   }
   assert.equal(JSON.stringify(entries), before);
 });
 
-test('Standalone person actions keep a 48px nonshrinking hit target in both directions', async () => {
-  const { ApprovedAction } = await import('../components/ApprovedActions.tsx');
-  const flatten = (styles: any): any => Object.assign({}, ...styles.flat(Infinity).filter(Boolean));
+test("Standalone person actions keep a 48px nonshrinking hit target in both directions", async () => {
+  const { ApprovedAction } = await import("../components/ApprovedActions.tsx");
+  const flatten = (styles: any): any =>
+    Object.assign({}, ...styles.flat(Infinity).filter(Boolean));
   for (const rtl of [false, true]) {
     state.rtl = rtl;
-    for (const options of [{ layout: 'block' as const }, { style: { flex: 0 } }]) {
+    for (const options of [
+      { layout: "block" as const },
+      { style: { flex: 0 } },
+    ]) {
       let presses = 0;
-      const action = ApprovedAction({ title: rtl ? 'إضافة متطلبات' : 'Add requirement', onPress: () => presses++, ...options });
+      const action = ApprovedAction({
+        title: rtl ? "إضافة متطلبات" : "Add requirement",
+        onPress: () => presses++,
+        ...options,
+      });
       const style = flatten(action.props.style);
       assert.equal(style.height, 48);
       assert.equal(style.minHeight, 48);
-      assert.equal(style.flexBasis, 'auto');
+      assert.equal(style.flexBasis, "auto");
       assert.equal(style.flexShrink, 0);
-      assert.equal(style.width, '100%');
-      assert.equal(style.flexDirection, rtl ? 'row-reverse' : 'row');
-      action.props.onPress(); action.props.onPress();
+      assert.equal(style.width, "100%");
+      assert.equal(style.flexDirection, rtl ? "row-reverse" : "row");
+      action.props.onPress();
+      action.props.onPress();
       assert.equal(presses, 2);
-      assert.equal(action.props.accessibilityRole, 'button');
+      assert.equal(action.props.accessibilityRole, "button");
     }
-    const row = ApprovedAction({ title: 'Call', onPress() {} });
+    const row = ApprovedAction({ title: "Call", onPress() {} });
     assert.equal(flatten(row.props.style).flex, 1);
     assert.equal(flatten(row.props.style).height, 56);
   }
 });
 
-
-test('three-page footer uses Previous, saves only on the last page, dismisses keyboard and respects bottom safe area', async () => {
-  const { PropertyWizardFooter } = await import('../components/PropertyWizard.tsx');
-  for (const rtl of [false,true]) for (const page of [0,1,2] as const) {
-    state.rtl=rtl; let previous=0,next=0;
-    const footer=PropertyWizardFooter({page,previous:()=>previous++,next:()=>next++});
-    assert.equal(footer.props.style.paddingBottom,36);
-    const buttons=elements(footer).filter(item=>item.type==='Pressable');
-    assert.equal(buttons.length,2);assert.equal(buttons[0].props.children.props.children,rtl?'السابق':'Previous');
-    assert.equal(buttons[1].props.children.props.children,page===2?(rtl?'حفظ العقار':'Save property'):(rtl?'التالي':'Next'));
-    const before=state.dismissals;buttons[0].props.onPress();buttons[1].props.onPress();assert.equal(previous,1);assert.equal(next,1);assert.equal(state.dismissals,before+2);
-    const busy=PropertyWizardFooter({page,previous:()=>{},next:()=>{},busy:true});assert.ok(elements(busy).filter(item=>item.type==='Pressable').every(item=>item.props.disabled));
-  }
-  state.rtl=false;
+test("three-page footer uses Previous, saves only on the last page, dismisses keyboard and respects bottom safe area", async () => {
+  const { PropertyWizardFooter } =
+    await import("../components/PropertyWizard.tsx");
+  for (const rtl of [false, true])
+    for (const page of [0, 1, 2] as const) {
+      state.rtl = rtl;
+      let previous = 0,
+        next = 0;
+      const footer = PropertyWizardFooter({
+        page,
+        previous: () => previous++,
+        next: () => next++,
+      });
+      assert.equal(footer.props.style.paddingBottom, 36);
+      const buttons = elements(footer).filter(
+        (item) => item.type === "Pressable",
+      );
+      assert.equal(buttons.length, 2);
+      assert.equal(
+        buttons[0].props.children.props.children,
+        rtl ? "السابق" : "Previous",
+      );
+      assert.equal(
+        buttons[1].props.children.props.children,
+        page === 2
+          ? rtl
+            ? "حفظ العقار"
+            : "Save property"
+          : rtl
+            ? "التالي"
+            : "Next",
+      );
+      const before = state.dismissals;
+      buttons[0].props.onPress();
+      buttons[1].props.onPress();
+      assert.equal(previous, 1);
+      assert.equal(next, 1);
+      assert.equal(state.dismissals, before + 2);
+      const busy = PropertyWizardFooter({
+        page,
+        previous: () => {},
+        next: () => {},
+        busy: true,
+      });
+      assert.ok(
+        elements(busy)
+          .filter((item) => item.type === "Pressable")
+          .every((item) => item.props.disabled),
+      );
+    }
+  state.rtl = false;
 });

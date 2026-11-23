@@ -1,10 +1,10 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import assert from "node:assert/strict";
+import test from "node:test";
 import {
   FLOOR_USES,
   PROPERTY_DETAIL_FIELD_DEFINITIONS,
   PROPERTY_TYPES,
-} from '@workspace/property-domain';
+} from "@workspace/property-domain";
 import {
   OFFER_REQUEST_FORM_CATALOG,
   PROPERTY_FORM_CORE_CATALOG,
@@ -12,91 +12,130 @@ import {
   getApplicablePropertyFormFields,
   getApplicablePropertyFormFieldsForMode,
   type PropertyFormWantedFieldDefinition,
-} from '@/services/propertyFormCatalog';
+} from "@/services/propertyFormCatalog";
 import {
   APPROVED_REQUIREMENT_CATALOG_FIELDS,
   CANONICAL_CATALOG_FIELDS,
   getRequirementCatalogFields,
   getRequirementPresentationFields,
   isRequirementCatalogFieldAllowed,
-} from '@/services/requirementFieldMap';
+} from "@/services/requirementFieldMap";
 
-test('Foundation catalog represents each canonical Property field as an offered actual fact', () => {
+test("Foundation catalog represents each canonical Property field as an offered actual fact", () => {
   assert.equal(OFFER_REQUEST_FORM_CATALOG.core, PROPERTY_FORM_CORE_CATALOG);
   assert.equal(OFFER_REQUEST_FORM_CATALOG.details, PROPERTY_FORM_CATALOG);
-  assert.equal(PROPERTY_FORM_CATALOG.length, PROPERTY_DETAIL_FIELD_DEFINITIONS.length);
+  assert.equal(
+    PROPERTY_FORM_CATALOG.length,
+    PROPERTY_DETAIL_FIELD_DEFINITIONS.length,
+  );
   for (const domainDefinition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
-    const descriptor = PROPERTY_FORM_CATALOG.find(item => item.field === domainDefinition.field);
+    const descriptor = PROPERTY_FORM_CATALOG.find(
+      (item) => item.field === domainDefinition.field,
+    );
     assert.ok(descriptor, domainDefinition.field);
-    assert.deepEqual(descriptor.offered, { kind: 'actual_fact', field: domainDefinition.field });
+    assert.deepEqual(descriptor.offered, {
+      kind: "actual_fact",
+      field: domainDefinition.field,
+    });
     assert.deepEqual(descriptor.appliesTo, domainDefinition.appliesTo);
     assert.deepEqual(descriptor.floorUses, domainDefinition.floorUses);
   }
 
   for (const propertyType of PROPERTY_TYPES) {
-    const applicable = new Set(PROPERTY_DETAIL_FIELD_DEFINITIONS
-      .filter(definition => definition.appliesTo.includes(propertyType))
-      .map(definition => definition.field));
-    const foundationFields = PROPERTY_FORM_CATALOG
-      .filter(definition => definition.appliesTo.includes(propertyType))
-      .map(definition => definition.field);
+    const applicable = new Set(
+      PROPERTY_DETAIL_FIELD_DEFINITIONS.filter((definition) =>
+        definition.appliesTo.includes(propertyType),
+      ).map((definition) => definition.field),
+    );
+    const foundationFields = PROPERTY_FORM_CATALOG.filter((definition) =>
+      definition.appliesTo.includes(propertyType),
+    ).map((definition) => definition.field);
     assert.deepEqual(new Set(foundationFields), applicable, propertyType);
   }
 });
 
-test('Wanted descriptors keep actual counts distinct from native Requirement minimums', () => {
-  const bedroom = PROPERTY_FORM_CATALOG.find(item => item.field === 'bedroomCount');
-  const bathroom = PROPERTY_FORM_CATALOG.find(item => item.field === 'bathroomCount');
-  assert.deepEqual(bedroom?.offered, { kind: 'actual_fact', field: 'bedroomCount' });
+test("Wanted descriptors keep actual counts distinct from native Requirement minimums", () => {
+  const bedroom = PROPERTY_FORM_CATALOG.find(
+    (item) => item.field === "bedroomCount",
+  );
+  const bathroom = PROPERTY_FORM_CATALOG.find(
+    (item) => item.field === "bathroomCount",
+  );
+  assert.deepEqual(bedroom?.offered, {
+    kind: "actual_fact",
+    field: "bedroomCount",
+  });
   assert.deepEqual(bedroom?.wanted, {
-    kind: 'limit',
-    storage: 'native',
-    field: 'bedroomsMinimum',
-    comparison: 'minimum',
-    presentation: 'core',
+    kind: "limit",
+    storage: "native",
+    field: "bedroomsMinimum",
+    comparison: "minimum",
+    presentation: "core",
   });
   assert.deepEqual(bathroom?.wanted, {
-    kind: 'limit',
-    storage: 'native',
-    field: 'bathroomsMinimum',
-    comparison: 'minimum',
-    presentation: 'core',
+    kind: "limit",
+    storage: "native",
+    field: "bathroomsMinimum",
+    comparison: "minimum",
+    presentation: "core",
   });
-  assert.deepEqual(PROPERTY_FORM_CATALOG.find(item => item.field === 'hasCentralAC')?.wanted, {
-    kind: 'preference',
-    storage: 'native',
-    field: 'centralAC',
-    valueType: 'boolean',
-    presentation: 'core',
-  });
+  assert.deepEqual(
+    PROPERTY_FORM_CATALOG.find((item) => item.field === "hasCentralAC")?.wanted,
+    {
+      kind: "preference",
+      storage: "native",
+      field: "centralAC",
+      valueType: "boolean",
+      presentation: "core",
+    },
+  );
 });
 
-test('Only existing bounded catalogPreference meanings receive wanted mappings', () => {
+test("Approved building and warehouse request meanings have bounded typed mappings", () => {
   const expected: Record<string, readonly [string, string?]> = {
-    plotAreaSquareMeters: ['number', 'minimum'],
-    builtUpAreaSquareMeters: ['number', 'minimum'],
-    parkingSpaceCount: ['number', 'minimum'],
-    livingRoomCount: ['number', 'minimum'],
-    floorNumber: ['number', 'exact'],
-    apartmentSubtype: ['choice'],
-    furnishing: ['choice'],
-    intendedUse: ['choice'],
-    commercialActivity: ['choice'],
-    hasPool: ['feature'],
-    hasWaterfront: ['feature'],
-    hasColdStorage: ['feature'],
-    hasGuardRoom: ['feature'],
-    hasKitchen: ['feature'],
-    hasHall: ['feature'],
-    hasParking: ['feature'],
-    hasSplitAC: ['feature'],
-    hasSharedPool: ['feature'],
-    hasSharedGym: ['feature'],
-    hasSeaView: ['feature'],
+    plotAreaSquareMeters: ["number", "minimum"],
+    floorCount: ["number", "minimum"],
+    unitCount: ["number", "minimum"],
+    apartmentCount: ["number", "minimum"],
+    shopCount: ["number", "minimum"],
+    officeCount: ["number", "minimum"],
+    roomsPerUnit: ["number", "minimum"],
+    bathroomsPerUnit: ["number", "minimum"],
+    entranceCount: ["number", "minimum"],
+    loadingBayCount: ["number", "minimum"],
+    ceilingHeightMeters: ["number", "minimum"],
+    serviceElevatorCapacityTons: ["number", "minimum"],
+    warehouseKind: ["choice"],
+    warehouseLevels: ["choice"],
+    hasVehicleRamp: ["feature"],
+    hasServiceElevator: ["feature"],
+    hasEscalator: ["feature"],
+    hasFireSystem: ["feature"],
+    builtUpAreaSquareMeters: ["number", "minimum"],
+    parkingSpaceCount: ["number", "minimum"],
+    livingRoomCount: ["number", "minimum"],
+    floorNumber: ["number", "exact"],
+    apartmentSubtype: ["choice"],
+    furnishing: ["choice"],
+    intendedUse: ["choice"],
+    commercialActivity: ["choice"],
+    hasPool: ["feature"],
+    hasWaterfront: ["feature"],
+    hasColdStorage: ["feature"],
+    hasGuardRoom: ["feature"],
+    hasKitchen: ["feature"],
+    hasHall: ["feature"],
+    hasParking: ["feature"],
+    hasSplitAC: ["feature"],
+    hasSharedPool: ["feature"],
+    hasSharedGym: ["feature"],
+    hasSeaView: ["feature"],
   };
-  const mapped = PROPERTY_FORM_CATALOG.filter(item => item.wanted?.storage === 'catalogPreference');
+  const mapped = PROPERTY_FORM_CATALOG.filter(
+    (item) => item.wanted?.storage === "catalogPreference",
+  );
   assert.deepEqual(
-    mapped.map(item => item.field).sort(),
+    mapped.map((item) => item.field).sort(),
     Object.keys(expected).sort(),
   );
   for (const definition of mapped) {
@@ -104,158 +143,316 @@ test('Only existing bounded catalogPreference meanings receive wanted mappings',
     const approvedMapping = expected[definition.field];
     assert.ok(approvedMapping, definition.field);
     const [preferenceKind, comparison] = approvedMapping;
-    assert.equal(wanted.storage, 'catalogPreference', definition.field);
-    if (wanted.storage !== 'catalogPreference') continue;
+    assert.equal(wanted.storage, "catalogPreference", definition.field);
+    if (wanted.storage !== "catalogPreference") continue;
     assert.equal(wanted.field, definition.field);
     assert.equal(wanted.preferenceKind, preferenceKind, definition.field);
-    if (comparison && 'comparison' in wanted) {
+    if (comparison && "comparison" in wanted) {
       assert.equal(wanted.comparison, comparison, definition.field);
     }
   }
 
-  assert.equal(PROPERTY_FORM_CATALOG.find(item => item.field === 'floorCount')?.wanted, undefined);
-  assert.equal(PROPERTY_FORM_CATALOG.find(item => item.field === 'clarification')?.wanted, undefined);
-  const maidRoom = PROPERTY_FORM_CATALOG.find(item => item.field === 'hasMaidRoom')?.wanted;
-  assert.equal(maidRoom?.storage, 'native');
-  assert.equal(maidRoom && 'field' in maidRoom ? maidRoom.field : undefined, 'preferredAmenities');
-  assert.equal(PROPERTY_FORM_CATALOG.find(item => item.field === 'hasHeating')?.wanted?.storage, 'native');
+  assert.equal(
+    PROPERTY_FORM_CATALOG.find((item) => item.field === "floorCount")?.wanted
+      ?.storage,
+    "catalogPreference",
+  );
+  assert.equal(
+    PROPERTY_FORM_CATALOG.find((item) => item.field === "clarification")
+      ?.wanted,
+    undefined,
+  );
+  const maidRoom = PROPERTY_FORM_CATALOG.find(
+    (item) => item.field === "hasMaidRoom",
+  )?.wanted;
+  assert.equal(maidRoom?.storage, "native");
+  assert.equal(
+    maidRoom && "field" in maidRoom ? maidRoom.field : undefined,
+    "preferredAmenities",
+  );
+  assert.equal(
+    PROPERTY_FORM_CATALOG.find((item) => item.field === "hasHeating")?.wanted
+      ?.storage,
+    "native",
+  );
 });
 
-test('Requirement presentation and field allow-lists derive from Foundation metadata and applicability', () => {
+test("Requirement presentation and field allow-lists derive from Foundation metadata and applicability", () => {
   assert.deepEqual([...CANONICAL_CATALOG_FIELDS].sort(), [
-    'bathroomCount',
-    'bedroomCount',
-    'builtUpAreaSquareMeters',
-    'floorNumber',
-    'hasCentralAC',
-    'livingRoomCount',
-    'parkingSpaceCount',
-    'plotAreaSquareMeters',
+    "bathroomCount",
+    "bedroomCount",
+    "builtUpAreaSquareMeters",
+    "floorNumber",
+    "hasCentralAC",
+    "livingRoomCount",
+    "parkingSpaceCount",
   ]);
   assert.deepEqual([...APPROVED_REQUIREMENT_CATALOG_FIELDS].sort(), [
-    'apartmentSubtype',
-    'commercialActivity',
-    'furnishing',
-    'hasColdStorage',
-    'hasGuardRoom',
-    'hasHall',
-    'hasKitchen',
-    'hasParking',
-    'hasPool',
-    'hasSeaView',
-    'hasSharedGym',
-    'hasSharedPool',
-    'hasSplitAC',
-    'hasWaterfront',
-    'intendedUse',
+    "apartmentCount",
+    "apartmentSubtype",
+    "bathroomsPerUnit",
+    "ceilingHeightMeters",
+    "commercialActivity",
+    "entranceCount",
+    "floorCount",
+    "furnishing",
+    "hasColdStorage",
+    "hasEscalator",
+    "hasFireSystem",
+    "hasGuardRoom",
+    "hasHall",
+    "hasKitchen",
+    "hasParking",
+    "hasPool",
+    "hasSeaView",
+    "hasServiceElevator",
+    "hasSharedGym",
+    "hasSharedPool",
+    "hasSplitAC",
+    "hasVehicleRamp",
+    "hasWaterfront",
+    "intendedUse",
+    "loadingBayCount",
+    "officeCount",
+    "plotAreaSquareMeters",
+    "roomsPerUnit",
+    "serviceElevatorCapacityTons",
+    "shopCount",
+    "unitCount",
+    "warehouseKind",
+    "warehouseLevels",
   ]);
   for (const propertyType of PROPERTY_TYPES) {
     const expected = getApplicablePropertyFormFields(propertyType)
-      .filter(item => item.wanted?.storage === 'catalogPreference'
-        && APPROVED_REQUIREMENT_CATALOG_FIELDS.has(item.field)
-        && expectedGlobalApproval(item.field))
-      .map(item => item.field);
-    assert.deepEqual(getRequirementCatalogFields(propertyType).map(item => item.field), expected, propertyType);
+      .filter(
+        (item) =>
+          item.wanted?.storage === "catalogPreference" &&
+          APPROVED_REQUIREMENT_CATALOG_FIELDS.has(item.field) &&
+          expectedGlobalApproval(item.field),
+      )
+      .map((item) => item.field);
+    assert.deepEqual(
+      getRequirementCatalogFields(propertyType).map((item) => item.field),
+      expected,
+      propertyType,
+    );
     for (const definition of PROPERTY_FORM_CATALOG) {
-      assert.equal(isRequirementCatalogFieldAllowed(definition.field), expectedGlobalApproval(definition.field));
+      assert.equal(
+        isRequirementCatalogFieldAllowed(definition.field),
+        expectedGlobalApproval(definition.field),
+      );
     }
   }
 
-  assert.deepEqual(getRequirementPresentationFields('apartment').leading, ['apartmentSubtype', 'furnishing']);
-  assert.deepEqual(getRequirementPresentationFields('floor', 'residential').leading, ['furnishing']);
-  assert.deepEqual(getRequirementPresentationFields('floor', 'commercial').specifications, ['intendedUse', 'commercialActivity']);
-  assert.deepEqual(getRequirementPresentationFields('floor', 'residential').specifications, []);
-  assert.equal(getRequirementCatalogFields('floor', 'residential').some(item => item.field === 'commercialActivity'), false);
-  for (const field of ['hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'] as const) {
-    assert.equal(getRequirementCatalogFields('apartment').some(item => item.field === field), false);
+  assert.deepEqual(getRequirementPresentationFields("apartment").leading, [
+    "apartmentSubtype",
+    "furnishing",
+  ]);
+  assert.deepEqual(
+    getRequirementPresentationFields("floor", "residential").leading,
+    ["furnishing"],
+  );
+  assert.deepEqual(
+    getRequirementPresentationFields("floor", "commercial").specifications,
+    ["intendedUse", "commercialActivity", "ceilingHeightMeters"],
+  );
+  assert.deepEqual(
+    getRequirementPresentationFields("floor", "residential").specifications,
+    [],
+  );
+  assert.equal(
+    getRequirementCatalogFields("floor", "residential").some(
+      (item) => item.field === "commercialActivity",
+    ),
+    false,
+  );
+  for (const field of [
+    "hasKitchen",
+    "hasHall",
+    "hasParking",
+    "hasSplitAC",
+    "hasSharedPool",
+    "hasSharedGym",
+    "hasSeaView",
+  ] as const) {
+    assert.equal(
+      getRequirementCatalogFields("apartment").some(
+        (item) => item.field === field,
+      ),
+      false,
+    );
     assert.equal(isRequirementCatalogFieldAllowed(field), false);
   }
 });
 
-test('Mode-aware catalog accessor excludes unsupported details from wanted mode', () => {
-  const offeredWholeBuilding = getApplicablePropertyFormFieldsForMode('offered', 'whole_building');
+test("Mode-aware catalog accessor excludes unsupported details from wanted mode", () => {
+  const offeredWholeBuilding = getApplicablePropertyFormFieldsForMode(
+    "offered",
+    "whole_building",
+  );
   const wantedWholeBuilding: readonly PropertyFormWantedFieldDefinition[] =
-    getApplicablePropertyFormFieldsForMode('wanted', 'whole_building');
-  assert.ok(offeredWholeBuilding.some(item => item.field === 'floorCount'));
-  assert.equal(wantedWholeBuilding.some(item => item.field === 'floorCount'), false);
-  assert.ok(wantedWholeBuilding.some(item =>
-    item.field === 'builtUpAreaSquareMeters' && item.wanted.storage === 'catalogPreference',
-  ));
-
-  const residentialWanted = getApplicablePropertyFormFieldsForMode('wanted', 'floor', 'residential');
-  const commercialWanted = getApplicablePropertyFormFieldsForMode('wanted', 'floor', 'commercial');
-  const floorUsePreference = residentialWanted.find(item => item.field === 'floorUse')?.wanted;
-  assert.deepEqual(floorUsePreference, {
-    kind: 'preference',
-    storage: 'native',
-    field: 'floorUse',
-    values: FLOOR_USES,
-    presentation: 'none',
-  });
-  assert.ok(commercialWanted.some(item => item.field === 'floorUse'));
+    getApplicablePropertyFormFieldsForMode("wanted", "whole_building");
+  assert.ok(offeredWholeBuilding.some((item) => item.field === "floorCount"));
   assert.equal(
-    getApplicablePropertyFormFieldsForMode('wanted', 'apartment').some(item => item.field === 'floorUse'),
+    wantedWholeBuilding.some((item) => item.field === "floorCount"),
+    true,
+  );
+  assert.equal(
+    wantedWholeBuilding.some((item) => item.field === "clarification"),
     false,
   );
-  assert.ok(residentialWanted.some(item => item.field === 'bedroomCount'));
-  assert.equal(residentialWanted.some(item => item.field === 'commercialActivity'), false);
-  assert.ok(commercialWanted.some(item => item.field === 'commercialActivity'));
-  assert.equal(commercialWanted.some(item => item.field === 'bedroomCount'), false);
-  assert.equal(getRequirementCatalogFields('floor', 'commercial').some(item => item.field === 'floorUse'), false);
-  assert.equal(getRequirementPresentationFields('floor', 'commercial').leading.includes('floorUse'), false);
+  assert.ok(
+    wantedWholeBuilding.some(
+      (item) =>
+        item.field === "builtUpAreaSquareMeters" &&
+        item.wanted.storage === "catalogPreference",
+    ),
+  );
+
+  const residentialWanted = getApplicablePropertyFormFieldsForMode(
+    "wanted",
+    "floor",
+    "residential",
+  );
+  const commercialWanted = getApplicablePropertyFormFieldsForMode(
+    "wanted",
+    "floor",
+    "commercial",
+  );
+  const floorUsePreference = residentialWanted.find(
+    (item) => item.field === "floorUse",
+  )?.wanted;
+  assert.deepEqual(floorUsePreference, {
+    kind: "preference",
+    storage: "native",
+    field: "floorUse",
+    values: FLOOR_USES,
+    presentation: "none",
+  });
+  assert.ok(commercialWanted.some((item) => item.field === "floorUse"));
+  assert.equal(
+    getApplicablePropertyFormFieldsForMode("wanted", "apartment").some(
+      (item) => item.field === "floorUse",
+    ),
+    false,
+  );
+  assert.ok(residentialWanted.some((item) => item.field === "bedroomCount"));
+  assert.equal(
+    residentialWanted.some((item) => item.field === "commercialActivity"),
+    false,
+  );
+  assert.ok(
+    commercialWanted.some((item) => item.field === "commercialActivity"),
+  );
+  assert.equal(
+    commercialWanted.some((item) => item.field === "bedroomCount"),
+    false,
+  );
+  assert.equal(
+    getRequirementCatalogFields("floor", "commercial").some(
+      (item) => item.field === "floorUse",
+    ),
+    false,
+  );
+  assert.equal(
+    getRequirementPresentationFields("floor", "commercial").leading.includes(
+      "floorUse",
+    ),
+    false,
+  );
 });
 
-test('Shared core descriptors map only existing Property and Requirement paths', () => {
-  assert.deepEqual(PROPERTY_FORM_CORE_CATALOG.map(item => item.key), [
-    'propertyType', 'transaction', 'location', 'price',
-  ]);
+test("Shared core descriptors map only existing Property and Requirement paths", () => {
+  assert.deepEqual(
+    PROPERTY_FORM_CORE_CATALOG.map((item) => item.key),
+    ["propertyType", "transaction", "location", "price"],
+  );
   for (const descriptor of PROPERTY_FORM_CORE_CATALOG) {
     assert.deepEqual(descriptor.appliesTo, PROPERTY_TYPES);
   }
 
-  const propertyType = PROPERTY_FORM_CORE_CATALOG.find(item => item.key === 'propertyType');
-  if (propertyType?.key === 'propertyType') {
-    assert.equal(propertyType.offered.path, 'core.propertyType');
-    assert.equal(propertyType.wanted.storage, 'native');
-    assert.equal(propertyType.wanted.field, 'propertyType');
+  const propertyType = PROPERTY_FORM_CORE_CATALOG.find(
+    (item) => item.key === "propertyType",
+  );
+  if (propertyType?.key === "propertyType") {
+    assert.equal(propertyType.offered.path, "core.propertyType");
+    assert.equal(propertyType.wanted.storage, "native");
+    assert.equal(propertyType.wanted.field, "propertyType");
     assert.deepEqual(propertyType.wanted.values, PROPERTY_TYPES);
   }
 
-  const transaction = PROPERTY_FORM_CORE_CATALOG.find(item => item.key === 'transaction');
-  if (transaction?.key === 'transaction') {
-    assert.equal(transaction.offered.path, 'activeOffer.transaction');
-    assert.equal(transaction.wanted.field, 'purpose');
+  const transaction = PROPERTY_FORM_CORE_CATALOG.find(
+    (item) => item.key === "transaction",
+  );
+  if (transaction?.key === "transaction") {
+    assert.equal(transaction.offered.path, "activeOffer.transaction");
+    assert.equal(transaction.wanted.field, "purpose");
     assert.deepEqual(transaction.wanted.mappings, [
-      { offered: 'sale', wanted: 'buy' },
-      { offered: 'rent', wanted: 'rent' },
+      { offered: "sale", wanted: "buy" },
+      { offered: "rent", wanted: "rent" },
     ]);
   }
 
-  const location = PROPERTY_FORM_CORE_CATALOG.find(item => item.key === 'location');
-  if (location?.key === 'location') {
-    assert.equal(location.offered.path, 'core.locationArea.id');
-    assert.deepEqual(location.wanted.fields, ['preferredAreaIds', 'preferredAreaMode']);
-    assert.deepEqual(location.wanted.areaModeValues, ['specific_areas', 'all_kuwait']);
+  const location = PROPERTY_FORM_CORE_CATALOG.find(
+    (item) => item.key === "location",
+  );
+  if (location?.key === "location") {
+    assert.equal(location.offered.path, "core.locationArea.id");
+    assert.deepEqual(location.wanted.fields, [
+      "preferredAreaIds",
+      "preferredAreaMode",
+    ]);
+    assert.deepEqual(location.wanted.areaModeValues, [
+      "specific_areas",
+      "all_kuwait",
+    ]);
   }
 
-  const price = PROPERTY_FORM_CORE_CATALOG.find(item => item.key === 'price');
-  if (price?.key === 'price') {
-    assert.equal(price.offered.selectedBy, 'activeOffer.transaction');
-    assert.equal(price.offered.saleAmountPath, 'activeOffer.salePrice.amount');
-    assert.equal(price.offered.rentAmountPath, 'activeOffer.rentalPrice.amount');
+  const price = PROPERTY_FORM_CORE_CATALOG.find((item) => item.key === "price");
+  if (price?.key === "price") {
+    assert.equal(price.offered.selectedBy, "activeOffer.transaction");
+    assert.equal(price.offered.saleAmountPath, "activeOffer.salePrice.amount");
+    assert.equal(
+      price.offered.rentAmountPath,
+      "activeOffer.rentalPrice.amount",
+    );
     assert.deepEqual(price.wanted, {
-      kind: 'range',
-      storage: 'native',
-      minimumField: 'budget.minimum',
-      maximumField: 'budget.maximum',
-      currencyField: 'budget.currencyCode',
+      kind: "range",
+      storage: "native",
+      minimumField: "budget.minimum",
+      maximumField: "budget.maximum",
+      currencyField: "budget.currencyCode",
     });
   }
 });
 
 function expectedGlobalApproval(field: string): boolean {
-  return !['hasKitchen', 'hasHall', 'hasParking', 'hasSplitAC', 'hasSharedPool', 'hasSharedGym', 'hasSeaView'].includes(field) && [
-    'apartmentSubtype', 'furnishing', 'intendedUse', 'commercialActivity',
-    'hasPool', 'hasWaterfront', 'hasGuardRoom', 'hasColdStorage',
+  return [
+    "apartmentSubtype",
+    "furnishing",
+    "intendedUse",
+    "commercialActivity",
+    "hasPool",
+    "hasWaterfront",
+    "hasGuardRoom",
+    "hasColdStorage",
+    "plotAreaSquareMeters",
+    "floorCount",
+    "unitCount",
+    "roomsPerUnit",
+    "bathroomsPerUnit",
+    "apartmentCount",
+    "shopCount",
+    "officeCount",
+    "ceilingHeightMeters",
+    "warehouseKind",
+    "warehouseLevels",
+    "entranceCount",
+    "hasVehicleRamp",
+    "hasServiceElevator",
+    "serviceElevatorCapacityTons",
+    "hasEscalator",
+    "hasFireSystem",
+    "loadingBayCount",
   ].includes(field);
 }

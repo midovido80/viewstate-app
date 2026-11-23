@@ -30,6 +30,8 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
    create table storage.buckets(id text, name text, public boolean, file_size_limit bigint);
    create table storage.objects(bucket_id text, name text);
    create function storage.foldername(text) returns text[] language sql as $$ select string_to_array($1,'/') $$;`);
+  await db.exec('create table public.user_profiles(user_id uuid primary key,display_name text,company text,phone text);');
+  await db.exec('alter table auth.users add column phone text, add column phone_confirmed_at timestamptz, add column is_anonymous boolean default false;');
   for (const migration of [
     '20261104070955_offline_workspace_sync.sql',
     '20261104071244_fix_sync_record_key_validation.sql',
@@ -46,9 +48,14 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
     '20261115160000_pilot_update_announcements.sql',
     '20261115170000_circle_matching_progress.sql',
     '20261115180000_circle_notification_targets.sql',
+    '20261119075658_circle_member_summaries.sql',
+    '20261119080832_circle_match_notification_context.sql',
+    '20261119084104_circle_invite_links.sql',
+    '20261119133000_request_catalog_parity.sql',
   ]) {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${migration}`, import.meta.url), 'utf8'));
   }
+  await db.exec(await readFile(new URL('../../supabase/tests/circles/request_catalog_parity.sql', import.meta.url), 'utf8'));
   for(const u of users)await db.query('insert into auth.users(id) values($1)',[u]);
   type Tx=Pick<PGlite,'query'>;
   async function asUser<T>(b:number,work:(tx:Tx)=>Promise<T>,anonymous=false):Promise<T>{
@@ -69,6 +76,13 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   await assert.rejects(catalog(1), /CIRCLE_MEMBERSHIP_REQUIRED/);
   await asUser(1, tx => tx.query('select public.vs_circle_accept($1)', [circle]));
   await invite(8);
+  const memberSummaries = (b: number) => asUser(b, async tx => (await tx.query<{user_id: string; state: string; display_name: string; company: string}>('select * from public.vs_circle_members($1)', [circle])).rows);
+  await db.query('insert into public.user_profiles(user_id,display_name,company,phone) values($1,$2,$3,$4)', [users[1], 'Broker fixture', 'Office fixture', 'PRIVATE_PHONE_SENTINEL']);
+  assert.equal((await memberSummaries(0)).length, 3, 'owner sees active and invited members');
+  assert.equal((await memberSummaries(1)).length, 2, 'ordinary members see active colleagues only');
+  assert.equal((await memberSummaries(1)).find(item => item.user_id === users[1])?.display_name, 'Broker fixture');
+  assert.doesNotMatch(JSON.stringify(await memberSummaries(0)), /PRIVATE_PHONE_SENTINEL|phone/);
+  await assert.rejects(memberSummaries(8), /CIRCLE_MEMBERSHIP_REQUIRED/);
   const withoutPermission = await asUser(8, tx => tx.query<{ data: { unread: number } }>(
     'select public.vs_circle_notification_inbox() data',
   ));
@@ -214,6 +228,13 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   assert.equal(await openNotice(8, matchNotice.id), null);
   assert.deepEqual(await openNotice(0, matchNotice.id), {
     kind: 'requirement', circleId: circle, targetId: publisherWorkspace.matches[0].id,
+    matchId: publisherWorkspace.matches[0].id,
+  });
+  const requesterNotice = (await noticeInbox(1)).entries.find(item => item.kind === 'match');
+  assert.ok(requesterNotice);
+  assert.deepEqual(await openNotice(1, requesterNotice.id), {
+    kind: 'listing', circleId: circle, targetId: (await catalog(1))[0].id,
+    matchId: publisherWorkspace.matches[0].id,
   });
   assert.equal((await noticeInbox(8)).unread, beforeInvite.unread);
   await asUser(8, tx => tx.query('select public.vs_circle_test_notification($1)', [firstDevice]));
@@ -459,5 +480,47 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
   const queue=await db.query<{count:string}>('select count(*) count from viewstate_circle.change_queue');
   assert.ok(Number(queue.rows[0].count)>30);
   console.log(JSON.stringify({evidence:'LOCAL_POSTGRES_RLS_RPC_AND_MATCHER_NOT_HOSTED_E2E',brokerIdentities:8,outsiderIdentities:1,initialPublishedProperties:30,initialCrossBrokerPairs:total,sharedReadChecks:8,queueIntents:Number(queue.rows[0].count),publishBatchMs,matchBatchMs}));
+  const inviteCircle = id(978);
+  const token = 'ab'.repeat(32), expiredToken = 'cd'.repeat(32), revokedToken = 'ef'.repeat(32);
+  await asUser(0, tx => tx.query('select public.vs_circle_create($1,$2)', [inviteCircle, 'Invitation test']));
+  const makeLink = (broker: number, value: string) => asUser(broker, tx => tx.query('select public.vs_circle_invite_link($1,$2)', [inviteCircle, value]));
+  const previewLink = (broker: number, value: string) => asUser(broker, async tx => (await tx.query<{ data: { circleName: string } | null }>('select public.vs_circle_invite_preview($1) data', [value])).rows[0].data);
+  const acceptLink = (broker: number, value: string) => asUser(broker, tx => tx.query('select public.vs_circle_invite_accept($1)', [value]));
+  await assert.rejects(makeLink(8, token), /CIRCLE_MEMBERSHIP_REQUIRED/);
+  await makeLink(0, token); await makeLink(0, token);
+  assert.equal((await previewLink(1, token))?.circleName, 'Invitation test');
+  assert.equal(await previewLink(1, '00'.repeat(32)), null);
+  assert.doesNotMatch(JSON.stringify((await db.query('select * from viewstate_circle.invite_links')).rows), new RegExp(token));
+  await acceptLink(1, token); await acceptLink(1, token);
+  await assert.rejects(acceptLink(2, token), /CIRCLE_INVITE_UNAVAILABLE/);
+  await assert.rejects(makeLink(1, '12'.repeat(32)), /CIRCLE_OWNER_REQUIRED/);
+  await makeLink(0, expiredToken);
+  await db.query("update viewstate_circle.invite_links set expires_at=now()-interval '1 second' where used_at is null");
+  assert.equal(await previewLink(2, expiredToken), null);
+  await assert.rejects(acceptLink(2, expiredToken), /CIRCLE_INVITE_UNAVAILABLE/);
+  await makeLink(0, revokedToken);
+  await asUser(0, tx => tx.query("select public.vs_circle_member($1,$2,'invite')", [inviteCircle, users[2]]));
+  await asUser(2, tx => tx.query('select public.vs_circle_accept($1)', [inviteCircle]));
+  await asUser(0, tx => tx.query("select public.vs_circle_member($1,$2,'revoke')", [inviteCircle, users[2]]));
+  await assert.rejects(acceptLink(2, revokedToken), /CIRCLE_INVITE_UNAVAILABLE/);
+  const sendPhone = (phone: string) => asUser(0, async tx => (await tx.query<{ data: { status: string } }>('select public.vs_circle_invite_phone($1,$2) data', [inviteCircle, phone])).rows[0].data.status);
+  await db.query('update auth.users set phone=$1 where id=$2', ['96550001234', users[4]]);
+  assert.equal(await sendPhone('+96550001234'), 'unavailable', 'unconfirmed profile numbers do not identify a recipient');
+  await db.query('update auth.users set phone_confirmed_at=now() where id=$1', [users[4]]);
+  assert.equal(await sendPhone('+96550001234'), 'sent');
+  assert.equal(await sendPhone('+96550001234'), 'pending');
+  await asUser(4, tx=>tx.query('select public.vs_circle_accept($1)',[inviteCircle]));
+  assert.equal(await sendPhone('+96550001234'), 'already_member');
+  for(let i=0;i<26;i++)assert.equal(await sendPhone('+96550009999'),'unavailable');
+  assert.equal(await sendPhone('+96550009999'),'rate_limited');
+  const named = await asUser(4, async tx => (await tx.query<{ data: {circle_name: string}[] }>('select public.vs_circle_invitations_named() data')).rows[0].data);
+  assert.ok(!named.some(invite => invite.circle_name === 'Invitation test'), 'accepted invitation leaves pending inbox');
+  await asUser(0, tx => tx.query('select public.vs_circle_request($1,$2,$3,$4,$5,$6,$7)', [circle,id(981),['salmiya'],600,'monthly',2,2]));
+  await asUser(1, tx => tx.query('select public.vs_circle_request($1,$2,$3,$4,$5,$6,$7)', [circle,id(982),['salmiya'],600,'monthly',2,2]));
+  const peerRequests=(await db.query('select * from viewstate_circle.requests where circle_id=$1 and owner_id=$2',[circle,users[1]])).rows.length;
+  await asUser(0, tx => tx.query('select public.vs_circle_matching_pause($1)', [circle]));
+  assert.equal((await db.query('select * from viewstate_circle.requests where circle_id=$1 and owner_id=$2', [circle, users[0]])).rows.length, 0);
+  assert.equal((await db.query('select * from viewstate_circle.requests where circle_id=$1 and owner_id=$2',[circle,users[1]])).rows.length,peerRequests);
+  console.log('INVITATION_CAPABILITIES: hashed, owner-only, single-use, idempotent, expiry/revocation, confirmed phone and named invitation passed');
  }finally{await db.close();}
 });

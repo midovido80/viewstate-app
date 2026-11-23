@@ -7,14 +7,15 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 
 function ClassicTabLayout() {
-  const colors = useColors(), allowMotion = useAppMotion();
-  const { t } = useI18n();
+  const colors = useColors(),
+    allowMotion = useAppMotion();
+  const { t, language } = useI18n();
   const insets = useScreenInsets();
 
   return (
     <Tabs
       backBehavior="history"
-      tabBar={props => <RaisedTabBar {...props} />}
+      tabBar={(props) => <RaisedTabBar {...props} />}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
@@ -51,6 +52,10 @@ function ClassicTabLayout() {
         options={{
           title: t('properties.title'),
         }}
+      />
+      <Tabs.Screen
+        name="circle"
+        options={{ title: language === 'ar' ? 'دائرة الثقة' : 'Trust Circle' }}
       />
       <Tabs.Screen
         name="matching"
