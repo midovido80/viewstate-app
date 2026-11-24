@@ -19,3 +19,5 @@ Commit and push the intended changes before running `npm run release:pilot -- "R
 See [the source and release policy](docs/releases/pilot-source-policy-20261123.ar.md), [the November 23 source recovery report](docs/releases/github-recovery-20261123.ar.md), and [project instructions](AGENTS.md). Web previews do not prove physical Android push delivery.
 
 The [Claude report remediation results](docs/releases/claude-report-fixes-20261123.ar.md) record source fixes, regression checks, pending deployment and remaining product/device decisions.
+
+The [multi-recipient invitation change](docs/viewstate-next/multi-recipient-invitations-20261124.ar.md) adds phone/saved-person selection, private batch invitations and individual WhatsApp drafts. It remains a source change awaiting separate deployment.
