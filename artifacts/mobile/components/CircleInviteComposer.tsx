@@ -1,45 +1,28 @@
+import { useState } from "react";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
   Pressable,
-  Share,
   Text,
   View,
 } from "react-native";
-import * as Crypto from "expo-crypto";
 import { Feather } from "@expo/vector-icons";
 import { useI18n } from "@/contexts/I18nContext";
-import { useRealAccount } from "@/contexts/RealAccountContext";
-import { useUserData } from "@/contexts/UserDataContext";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { useColors } from "@/hooks/useColors";
-import {
-  circleRpc,
-  listTrustCircles,
-  type TrustCircle,
-} from "@/services/circleMatchingApi";
-import {
-  canInvitePerson,
-  circleInviteMessage,
-  circleInviteUrl,
-} from "@/services/circleInvitations";
-import { filterPropertySourcePeople } from "@/services/propertySourceSelection";
-import {
-  normalizePhoneForCountry,
-  type PhoneCountryCode,
-} from "@/services/phoneEntry";
-import { openWhatsAppComposeWithOpener } from "@/services/whatsappCompose";
 import type { Person } from "@/services/people";
+import type { InviteRecipient } from "@/services/circleInviteRecipients";
 import { Button } from "./Button";
-import { TextInput } from "./FormField";
 import { CompactDropdown } from "./FormChoices";
-import { KeyboardAwareScrollViewCompat } from "./KeyboardAwareScrollViewCompat";
+import { TextInput } from "./FormField";
 import { PhoneCountrySheet } from "./PhoneCountrySheet";
 import { PhoneNumberText } from "./PhoneNumberText";
+import { useCircleInviteComposer } from "./useCircleInviteComposer";
 
 export function CircleInviteComposer({
   onClose,
@@ -50,491 +33,534 @@ export function CircleInviteComposer({
   initialCircleId?: string;
   person?: Person;
 }) {
-  const router = useRouter();
-  const account = useRealAccount(),
-    { store } = useUserData(),
+  const router = useRouter(),
     colors = useColors(),
     insets = useScreenInsets();
-  const { language, fonts, isRTL } = useI18n(),
+  const { language, isRTL, fonts } = useI18n(),
     ar = language === "ar";
-  const [circles, setCircles] = useState<TrustCircle[]>([]),
-    [ready, setReady] = useState(false);
-  const [circleId, setCircleId] = useState(initialCircleId ?? ""),
-    [people, setPeople] = useState<Person[]>([]);
-  const [recipient, setRecipient] = useState(person),
-    [query, setQuery] = useState("");
-  const [phone, setPhone] = useState(
-    person?.normalizedPhone || person?.displayPhone || "",
-  );
-  const [country, setCountry] = useState<PhoneCountryCode>("KW"),
-    [countryOpen, setCountryOpen] = useState(false);
-  const [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false),
-    [sharedText, setSharedText] = useState("");
-  const flight = useRef(false),
-    live = useRef(true),
-    capability = useRef<
-      { circle: string; phone: string; token: string } | undefined
-    >(undefined);
   const L = (a: string, e: string) => (ar ? a : e);
+  const model = useCircleInviteComposer(initialCircleId, person, language);
+  const [countryOpen, setCountryOpen] = useState(false);
   const text = {
     color: colors.foreground,
     fontFamily: fonts.regular,
     textAlign: isRTL ? ("right" as const) : ("left" as const),
     lineHeight: 24,
   };
-  useEffect(() => {
-    live.current = true;
-    if (account)
-      void Promise.all([listTrustCircles(account.request), store.getPeople()])
-        .then(([all, contacts]) => {
-          if (!live.current) return;
-          const owned = all.filter(
-            (circle) => circle.owner_id === account.profile.user_id,
-          );
-          setCircles(owned);
-          setPeople(
-            contacts.filter((contact) =>
-              canInvitePerson(contact.classifications),
-            ),
-          );
-          setCircleId((value) =>
-            owned.some((circle) => circle.id === value) ? value : "",
-          );
-          setReady(true);
-        })
-        .catch(() => {
-          if (live.current) {
-            setReady(true);
-            setError(
-              L(
-                "تعذّر تحميل الدوائر. أغلق الدعوة وافتحها مرة ثانية.",
-                "Could not load circles. Reopen the invitation.",
-              ),
-            );
-          }
-        });
-    return () => {
-      live.current = false;
-    };
-  }, [account?.profile.user_id, store]);
-  let international = "";
-  try {
-    international = normalizePhoneForCountry(phone, country);
-  } catch {}
-  const send = async (channel: "app" | "whatsapp") => {
-    if (flight.current || !account) return;
-    setError("");
-    setNotice("");
-    const circle = circles.find((item) => item.id === circleId);
-    if (!circle) {
-      setError(L("اختر الدائرة أولًا.", "Choose a circle first."));
-      return;
-    }
-    if (!/^\+[1-9][0-9]{6,14}$/.test(international)) {
-      setError(
-        L(
-          "راجع رقم المستلم مع كود الدولة.",
-          "Review the recipient’s international number.",
-        ),
-      );
-      return;
-    }
-    flight.current = true;
-    setBusy(true);
-    try {
-      if (channel === "app") {
-        const result = await circleRpc<{ status: string }>(
-          account.request,
-          "vs_circle_invite_phone",
-          { p_circle: circle.id, p_phone: international },
-        );
-        if (!live.current) return;
-        if (result.status === "rate_limited") {
-          setError(
-            L(
-              "وصلت حد الدعوات المباشرة اليوم. جرّب غدًا أو استخدم واتساب.",
-              "Daily direct invitation limit reached. Retry tomorrow or use WhatsApp.",
-            ),
-          );
-          return;
-        }
-        if (
-          ![
-            "accepted",
-            "sent",
-            "pending",
-            "already_member",
-            "unavailable",
-          ].includes(result.status)
-        )
-          throw new Error("CIRCLE_INVITE_RESPONSE_INVALID");
-        setNotice(
-          L(
-            "تمت معالجة الطلب. إذا كان الرقم مؤكدًا في ViewState، تظهر الدعوة للمستلم. حفاظًا على الخصوصية، ما نؤكد تسجيل الرقم أو وصول الدعوة. تقدر ترسل الرابط عبر واتساب.",
-            "Request processed. If the number is verified in ViewState, the recipient can see the invitation. For privacy, registration and delivery are not confirmed. You can also send the link via WhatsApp.",
-          ),
-        );
-      } else {
-        if (
-          capability.current?.circle !== circle.id ||
-          capability.current?.phone !== international
-        ) {
-          const token = Array.from(Crypto.getRandomBytes(32), (value) =>
-            value.toString(16).padStart(2, "0"),
-          ).join("");
-          await circleRpc(account.request, "vs_circle_invite_link", {
-            p_circle: circle.id,
-            p_token: token,
-          });
-          capability.current = {
-            circle: circle.id,
-            phone: international,
-            token,
-          };
-        }
-        const message = circleInviteMessage(
-          account.profile.display_name,
-          circle.name,
-          circleInviteUrl(capability.current.token),
-          language,
-        );
-        if (!live.current) return;
-        setSharedText(message);
-        await openWhatsAppComposeWithOpener(
-          `phone=${encodeURIComponent(international.replace(/\D/g, ""))}&text=${encodeURIComponent(message)}`,
-          Linking,
-        );
-        if (live.current)
-          setNotice(
-            L(
-              "فتحنا واتساب بالدعوة الجاهزة. راجع الرسالة واضغط إرسال هناك.",
-              "WhatsApp opened with the invitation. Review and press Send there.",
-            ),
-          );
-      }
-    } catch {
-      if (live.current)
-        setError(
-          L(
-            "تعذّر فتح الإرسال. الدعوة باقية هنا؛ تقدر تشارك النص أو تعيد المحاولة.",
-            "Could not open sending. Share the prepared text or retry.",
-          ),
-        );
-    } finally {
-      flight.current = false;
-      if (live.current) setBusy(false);
-    }
+  const rowDirection = isRTL ? ("row-reverse" as const) : ("row" as const);
+  const close = () => {
+    if (!model.busy) onClose();
   };
+  const rowStyle = {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 10,
+  };
+  function recipientRow(item: InviteRecipient) {
+    const checked = !!item.phone && !!model.selected[item.phone];
+    return (
+      <Pressable
+        testID={`invite-recipient-${item.key}`}
+        accessibilityRole="checkbox"
+        accessibilityLabel={`${item.name} ${item.phone ?? item.rawPhone}`}
+        accessibilityState={{ checked, disabled: model.busy || !item.phone }}
+        disabled={model.busy || !item.phone}
+        onPress={() => model.toggle(item)}
+        style={{
+          ...rowStyle,
+          flexDirection: rowDirection,
+          alignItems: "center",
+          borderColor: checked ? colors.primary : colors.border,
+        }}
+      >
+        <Feather
+          name={checked ? "check-square" : "square"}
+          size={23}
+          color={checked ? colors.primary : colors.foreground}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...text, fontFamily: fonts.semiBold }}>
+            {item.name}
+          </Text>
+          <PhoneNumberText>{item.phone ?? item.rawPhone}</PhoneNumberText>
+          {!item.phone && (
+            <Text style={text}>
+              {L(
+                "راجع الرقم من خانة إضافة رقم بالأسفل.",
+                "Review this number using Add a number below.",
+              )}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  }
+  const selectionHeader = (
+    <View style={{ gap: 12, paddingBottom: 12 }}>
+      <CompactDropdown
+        label={L("الدائرة", "Circle")}
+        testID="invite-circle-picker"
+        options={model.circles.map((circle) => ({
+          value: circle.id,
+          label: circle.name,
+          selected: circle.id === model.circleId,
+        }))}
+        onSelect={model.chooseCircle}
+      />
+      <View style={{ flexDirection: rowDirection, gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Button
+            testID="invite-source-people"
+            title={L("الأشخاص عندي", "My people")}
+            variant={model.source === "people" ? "primary" : "outline"}
+            disabled={model.busy}
+            onPress={() => model.chooseSource("people")}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button
+            testID="invite-source-phone"
+            title={L("سجل الهاتف", "Phone contacts")}
+            variant={model.source === "phone" ? "primary" : "outline"}
+            disabled={model.busy}
+            onPress={() => model.chooseSource("phone")}
+          />
+        </View>
+      </View>
+      <Text style={text}>
+        {L(
+          "اختَر رقمًا أو أكثر. كل رقم ظاهر اختيار مستقل، والمكرر يُحسب مرة واحدة.",
+          "Choose one or more numbers. Every number is a separate choice; duplicates count once.",
+        )}
+      </Text>
+      <TextInput
+        testID="invite-recipient-search"
+        accessibilityLabel={L("ابحث بالاسم أو الرقم", "Search name or number")}
+        placeholder={L("ابحث بالاسم أو الرقم", "Search name or number")}
+        value={model.query}
+        onChangeText={model.setQuery}
+        style={{
+          ...text,
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: 10,
+          padding: 10,
+        }}
+      />
+      <Button
+        testID="invite-country"
+        variant="outline"
+        title={L(
+          `دولة الأرقام المحلية: ${model.country}`,
+          `Local numbers dialing country: ${model.country}`,
+        )}
+        onPress={() => setCountryOpen(true)}
+      />
+      {model.source === "phone" && (
+        <View style={{ gap: 8 }}>
+          {model.contactsState === "loading" && (
+            <ActivityIndicator color={colors.primary} />
+          )}
+          {model.contactsState === "limited" && (
+            <Text style={text}>
+              {L(
+                "ظاهرين جهات الاتصال اللي سمحت للتطبيق يشوفها فقط.",
+                "Only the contacts you allowed are shown.",
+              )}
+            </Text>
+          )}
+          {model.contactsState === "unavailable" && (
+            <Text style={text}>
+              {L(
+                "سجل الهاتف متاح من تطبيق الهاتف. تقدر تختار من الأشخاص عندك أو تضيف رقمًا هنا.",
+                "Phone contacts are available in the mobile app. Choose saved people or add a number here.",
+              )}
+            </Text>
+          )}
+          {["denied", "blocked", "error"].includes(model.contactsState) && (
+            <>
+              <Text style={text}>
+                {L(
+                  "ما قدرنا نعرض سجل الهاتف. تقدر تستخدم الأشخاص عندك أو تضيف رقمًا.",
+                  "Could not show phone contacts. Choose saved people or add a number.",
+                )}
+              </Text>
+              <Button
+                testID="invite-contacts-retry"
+                variant="outline"
+                title={
+                  model.contactsState === "blocked"
+                    ? L("فتح إعدادات الإذن", "Open permission settings")
+                    : L("إعادة المحاولة", "Retry")
+                }
+                onPress={() => {
+                  if (model.contactsState === "blocked")
+                    void Linking.openSettings().catch(() =>
+                      model.setError(
+                        L("تعذّر فتح الإعدادات.", "Could not open settings."),
+                      ),
+                    );
+                  else void model.loadContacts();
+                }}
+              />
+            </>
+          )}
+          {!["loading", "unavailable", "idle"].includes(
+            model.contactsState,
+          ) && (
+            <Button
+              testID="invite-contacts-refresh"
+              variant="outline"
+              title={L(
+                "تحديث القائمة بعد تغيير الإذن",
+                "Refresh after changing permission",
+              )}
+              onPress={() => model.loadContacts()}
+            />
+          )}
+        </View>
+      )}
+      {model.source === "people" && model.peopleError && (
+        <>
+          <Text style={text}>
+            {L(
+              "تعذّر تحميل الأشخاص المحفوظين.",
+              "Could not load saved people.",
+            )}
+          </Text>
+          <Button
+            variant="outline"
+            title={L("إعادة التحميل", "Reload")}
+            onPress={() => void model.load()}
+          />
+        </>
+      )}
+    </View>
+  );
+  const selectionFooter = (
+    <View style={{ gap: 8, paddingVertical: 12 }}>
+      <Text style={{ ...text, fontFamily: fonts.semiBold }}>
+        {L("أو أضف رقمًا", "Or add a number")}
+      </Text>
+      <TextInput
+        testID="invite-phone"
+        accessibilityLabel={L("رقم المدعو", "Invitee phone")}
+        keyboardType="phone-pad"
+        value={model.manualPhone}
+        onChangeText={model.setManualPhone}
+        style={{
+          ...text,
+          writingDirection: "ltr",
+          textAlign: "left",
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: 10,
+          padding: 10,
+        }}
+      />
+      <Button
+        testID="invite-add-number"
+        title={L("إضافة للاختيار", "Add to selection")}
+        variant="outline"
+        onPress={model.addManual}
+      />
+      <Text style={text}>
+        {L(
+          "قراءة سجل الهاتف لا تضيف الأشخاص لسجلاتك ولا ترفع السجل للخادم. تُرسل الأرقام المختارة فقط عند طلب الدعوة.",
+          "Reading phone contacts does not import people or upload your address book. Only selected numbers are sent when you request invitations.",
+        )}
+      </Text>
+    </View>
+  );
+  const reviewHeader = (
+    <View style={{ gap: 10, paddingBottom: 12 }}>
+      <Text style={{ ...text, fontFamily: fonts.semiBold }}>
+        {model.circles.find((circle) => circle.id === model.circleId)?.name}
+      </Text>
+      <Button
+        testID="invite-edit-selection"
+        variant="outline"
+        title={L("تعديل الاختيار", "Edit selection")}
+        disabled={model.busy}
+        onPress={() => model.setStage("select")}
+      />
+      <Button
+        testID="invite-send-app"
+        title={L(
+          `دعوة عبر ViewState (${model.chosen.filter((row) => model.appResults[row.phone!] === undefined).length})`,
+          `Invite in ViewState (${model.chosen.filter((row) => model.appResults[row.phone!] === undefined).length})`,
+        )}
+        loading={model.busy}
+        disabled={
+          !model.chosen.length ||
+          model.chosen.every(
+            (row) => model.appResults[row.phone!] !== undefined,
+          )
+        }
+        onPress={() => model.sendApp()}
+      />
+      <Text style={text}>
+        {L(
+          "الدعوة المباشرة تتطلب رقم حساب مؤكّدًا. حدها 10 محاولات يوميًا. تمت معالجة الطلب لا تعني تأكيد تسجيل الرقم أو وصول الدعوة؛ تقدر تستخدم واتساب أيضًا.",
+          "In-app invitations require a verified account phone. The limit is 10 attempts per day. Processing does not confirm registration or delivery; you can also use WhatsApp.",
+        )}
+      </Text>
+      {model.chosen.some(
+        (row) => model.appResults[row.phone!] === "rate_limited",
+      ) && (
+        <Button
+          testID="invite-retry-limited"
+          variant="outline"
+          title={L(
+            "إعادة محاولة الأرقام المحدودة لاحقًا",
+            "Retry limited numbers later",
+          )}
+          disabled={model.busy}
+          onPress={() => model.sendApp(true)}
+        />
+      )}
+      <Text style={text}>
+        {L(
+          "واتساب: افتح رسالة كل زميل، وراجعها واضغط إرسال هناك. لكل رقم رابط دعوة مستقل.",
+          "WhatsApp: open each colleague’s draft, review it and press Send there. Each number gets its own invitation link.",
+        )}
+      </Text>
+    </View>
+  );
+  function reviewRow(item: InviteRecipient) {
+    const phone = item.phone!;
+    return (
+      <View testID={`invite-review-row-${phone}`} style={rowStyle}>
+        <View
+          style={{ flexDirection: rowDirection, alignItems: "center", gap: 8 }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...text, fontFamily: fonts.semiBold }}>
+              {item.name}
+            </Text>
+            <PhoneNumberText>{phone}</PhoneNumberText>
+          </View>
+          <Pressable
+            testID={`invite-remove-${phone}`}
+            accessibilityRole="button"
+            accessibilityLabel={L(`إزالة ${item.name}`, `Remove ${item.name}`)}
+            disabled={model.busy}
+            onPress={() => model.toggle(item)}
+            style={{ padding: 12 }}
+          >
+            <Feather name="x" size={22} color={colors.foreground} />
+          </Pressable>
+        </View>
+        {model.appResults[phone] && (
+          <Text accessibilityLiveRegion="polite" style={text}>
+            {model.appResults[phone] === "accepted"
+              ? L(
+                  "تمت معالجة الطلب داخل ViewState.",
+                  "Request processed in ViewState.",
+                )
+              : L(
+                  "وصلت حد الدعوات المباشرة. جرّب لاحقًا أو استخدم واتساب.",
+                  "Direct invitation limit reached. Retry later or use WhatsApp.",
+                )}
+          </Text>
+        )}
+        <Button
+          testID={`invite-whatsapp-${phone}`}
+          title={L("فتح الدعوة في واتساب", "Open invitation in WhatsApp")}
+          variant="whatsapp"
+          disabled={model.busy}
+          onPress={() => model.whatsapp(item)}
+        />
+        {model.opened[phone] && (
+          <Text accessibilityLiveRegion="polite" style={text}>
+            {Platform.OS === "web"
+              ? L(
+                  "طلبنا فتح واتساب. إذا ما فتح، انسخ نص الدعوة بالأسفل. تأكيد الإرسال يكون منك هناك.",
+                  "WhatsApp launch requested. If it did not open, copy the invitation below. You confirm sending there.",
+                )
+              : L(
+                  "تم فتح واتساب. تأكيد إرسال الرسالة يكون منك هناك.",
+                  "WhatsApp opened. You confirm sending there.",
+                )}
+          </Text>
+        )}
+        {model.messages[phone] && (
+          <>
+            <Text testID={`invite-message-${phone}`} selectable style={text}>
+              {model.messages[phone]}
+            </Text>
+            <Button
+              testID={`invite-share-${phone}`}
+              title={L("مشاركة نص الدعوة", "Share invitation text")}
+              variant="outline"
+              disabled={model.busy}
+              onPress={() => model.share(phone)}
+            />
+          </>
+        )}
+      </View>
+    );
+  }
   return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      onRequestClose={() => {
-        if (!busy) onClose();
-      }}
-    >
+    <Modal visible transparent animationType="slide" onRequestClose={close}>
       <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{
           flex: 1,
           justifyContent: "flex-end",
-          backgroundColor: "#00000066",
+          backgroundColor: "rgba(0,0,0,0.35)",
         }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View
-          testID="circle-invite-composer"
-          accessibilityViewIsModal
           style={{
-            height: "88%",
+            height: "90%",
             backgroundColor: colors.card,
             borderTopLeftRadius: 22,
             borderTopRightRadius: 22,
-            padding: 18,
-            paddingBottom: insets.bottom,
-            gap: 12,
+            padding: 16,
+            paddingBottom: Math.max(insets.bottom, 12),
+            gap: 10,
           }}
         >
-          <View
-            style={{
-              direction: "ltr",
-              flexDirection: isRTL ? "row-reverse" : "row",
-              alignItems: "center",
-            }}
-          >
+          <View style={{ flexDirection: rowDirection, alignItems: "center" }}>
             <Text
               accessibilityRole="header"
-              style={{ ...text, flex: 1, fontFamily: fonts.bold, fontSize: 23 }}
+              style={{ ...text, flex: 1, fontSize: 22, fontFamily: fonts.bold }}
             >
-              {L("دعوة لدائرة الثقة", "Invite to Trust Circle")}
+              {L("دعوة زملاء للدائرة", "Invite colleagues")}
             </Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={L("إغلاق الدعوة", "Close invitation")}
-              disabled={busy}
-              onPress={onClose}
-              style={{
-                width: 48,
-                height: 48,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
+              disabled={model.busy}
+              onPress={close}
+              style={{ padding: 12 }}
             >
-              <Feather name="x" size={22} color={colors.foreground} />
+              <Feather name="x" size={23} color={colors.foreground} />
             </Pressable>
           </View>
-          <KeyboardAwareScrollViewCompat
-            contentContainerStyle={{ gap: 14, paddingBottom: 16 }}
-          >
-            {!account ? (
-              <>
-                <Text style={text}>
-                  {L(
-                    "سجّل الدخول عشان ترسل دعوة من حسابك.",
-                    "Sign in to invite colleagues.",
-                  )}
-                </Text>
-                <Button
-                  title={L("تسجيل الدخول", "Sign in")}
-                  onPress={() => {
-                    onClose();
-                    router.push("/account/account");
-                  }}
-                />
-              </>
-            ) : !ready ? (
+          {!model.account ? (
+            <>
               <Text style={text}>
-                {L("جارٍ تحميل دوائرك…", "Loading your circles…")}
-              </Text>
-            ) : !circles.length ? (
-              <>
-                <Text style={text}>
-                  {L(
-                    "الدعوات يرسلها مسؤول الدائرة. أنشئ دائرة أو اطلب من مسؤول دائرتك إرسال الدعوة.",
-                    "Only circle owners send invitations. Create a circle or ask its owner.",
-                  )}
-                </Text>
-                <Button
-                  title={L("إنشاء دائرة", "Create a circle")}
-                  onPress={() => {
-                    onClose();
-                    router.push({
-                      pathname: "/trust-circle",
-                      params: { create: "1" },
-                    } as never);
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <CompactDropdown
-                  label={L("1. أي دائرة تبي تدعوه لها؟", "1. Choose a circle")}
-                  testID="invite-circle-picker"
-                  options={circles.map((circle) => ({
-                    value: circle.id,
-                    label: circle.name,
-                    selected: circle.id === circleId,
-                  }))}
-                  onSelect={(value) => {
-                    if (flight.current) return;
-                    setCircleId(value);
-                    setError("");
-                    setNotice("");
-                    setSharedText("");
-                    capability.current = undefined;
-                  }}
-                />
-                <Text style={text}>
-                  {L(
-                    "الدعوة متاحة للدوائر اللي تديرها.",
-                    "You can invite to circles you own.",
-                  )}
-                </Text>
-                <Text style={{ ...text, fontFamily: fonts.bold }}>
-                  {L("2. منو تبي تدعو؟", "2. Choose a colleague")}
-                </Text>
-                {!person && (
-                  <>
-                    <TextInput
-                      testID="invite-person-search"
-                      accessibilityLabel={L(
-                        "ابحث عن زميل",
-                        "Search colleagues",
-                      )}
-                      placeholder={L(
-                        "ابحث بالاسم أو رقم الهاتف",
-                        "Search name or phone",
-                      )}
-                      value={query}
-                      editable={!busy}
-                      onChangeText={setQuery}
-                      style={{
-                        ...text,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        borderRadius: 12,
-                        padding: 12,
-                      }}
-                    />
-                    {filterPropertySourcePeople(people, "all", query)
-                      .slice(0, 6)
-                      .map((item) => (
-                        <Button
-                          key={item.id}
-                          title={
-                            (recipient?.id === item.id ? "✓ " : "") + item.name
-                          }
-                          variant="outline"
-                          disabled={busy}
-                          onPress={() => {
-                            if (flight.current) return;
-                            setSharedText("");
-                            setNotice("");
-                            capability.current = undefined;
-                            setRecipient(item);
-                            setPhone(item.normalizedPhone || item.displayPhone);
-                            setError("");
-                          }}
-                        />
-                      ))}
-                  </>
+                {L(
+                  "سجّل الدخول عشان ترسل دعوة من حسابك.",
+                  "Sign in to invite colleagues.",
                 )}
-                {recipient && (
-                  <Text style={{ ...text, fontFamily: fonts.bold }}>
-                    {recipient.name}
+              </Text>
+              <Button
+                title={L("تسجيل الدخول", "Sign in")}
+                onPress={() => {
+                  close();
+                  router.push("/account/account");
+                }}
+              />
+            </>
+          ) : !model.ready ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : model.loadError ? (
+            <>
+              <Text style={text}>
+                {L("تعذّر تحميل دوائرك.", "Could not load your circles.")}
+              </Text>
+              <Button
+                title={L("إعادة المحاولة", "Retry")}
+                onPress={() => void model.load()}
+              />
+            </>
+          ) : !model.circles.length ? (
+            <>
+              <Text style={text}>
+                {L(
+                  "الدعوات يرسلها مسؤول الدائرة. أنشئ دائرة أو اطلب من مسؤولها إرسال الدعوة.",
+                  "Only circle owners send invitations. Create a circle or ask its owner.",
+                )}
+              </Text>
+              <Button
+                title={L("إنشاء دائرة", "Create a circle")}
+                onPress={() => {
+                  close();
+                  router.push({
+                    pathname: "/trust-circle",
+                    params: { create: "1" },
+                  } as never);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <FlatList
+                data={model.stage === "select" ? model.rows : model.chosen}
+                style={{ flex: 1 }}
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={(item) => item.key}
+                ListHeaderComponent={
+                  model.stage === "select" ? selectionHeader : reviewHeader
+                }
+                ListFooterComponent={
+                  model.stage === "select" ? selectionFooter : undefined
+                }
+                renderItem={({ item }) =>
+                  model.stage === "select"
+                    ? recipientRow(item)
+                    : reviewRow(item)
+                }
+                ListEmptyComponent={
+                  <Text style={text}>
+                    {L(
+                      "ما فيه نتائج هنا. غيّر البحث أو المصدر، أو أضف رقمًا.",
+                      "No results here. Change search/source or add a number.",
+                    )}
                   </Text>
-                )}
-                <View
-                  style={{
-                    direction: "ltr",
-                    flexDirection: isRTL ? "row-reverse" : "row",
-                    gap: 8,
-                  }}
-                >
-                  <Button
-                    title={country}
-                    variant="outline"
-                    disabled={busy}
-                    onPress={() => {
-                      if (!flight.current) setCountryOpen(true);
-                    }}
-                  />
-                  <TextInput
-                    testID="invite-phone"
-                    accessibilityLabel={L("رقم المدعو", "Invitee phone")}
-                    keyboardType="phone-pad"
-                    value={phone}
-                    editable={!busy}
-                    onChangeText={(value) => {
-                      if (flight.current) return;
-                      setSharedText("");
-                      setNotice("");
-                      capability.current = undefined;
-                      setPhone(value);
-                      setRecipient(undefined);
-                    }}
-                    style={{
-                      ...text,
-                      flex: 1,
-                      minHeight: 48,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 12,
-                      padding: 12,
-                      textAlign: "left",
-                      writingDirection: "ltr",
-                    }}
-                  />
-                </View>
-                <PhoneNumberText style={{ color: colors.primary }}>
-                  {international || phone}
-                </PhoneNumberText>
-                <Text style={{ ...text, fontFamily: fonts.bold }}>
-                  {L("3. شلون تبي ترسل الدعوة؟", "3. Choose how to send")}
-                </Text>
-                <Button
-                  testID="invite-send-app"
-                  title={L("إرسال عبر ViewState", "Send in ViewState")}
-                  loading={busy}
-                  disabled={busy}
-                  onPress={() => void send("app")}
-                />
-                <Text style={text}>
-                  {L(
-                    "للرقم المؤكد داخل التطبيق. إذا ما توفر، استخدم واتساب.",
-                    "For a confirmed in-app phone number. Otherwise use WhatsApp.",
-                  )}
-                </Text>
-                <Button
-                  testID="invite-send-whatsapp"
-                  title={L("إرسال عبر واتساب", "Send via WhatsApp")}
-                  variant="whatsapp"
-                  loading={busy}
-                  disabled={busy}
-                  onPress={() => void send("whatsapp")}
-                />
-                <Text style={text}>
-                  {L(
-                    "بيظهر اسم حسابك واسم الدائرة، بدون معرّف الحساب. المستلم يراجع الدعوة ويقبلها بنفسه.",
-                    "Shows your account name and circle, without account IDs. The recipient reviews and accepts.",
-                  )}
-                </Text>
-              </>
-            )}
-            {!!error && (
+                }
+              />
               <Text
-                accessibilityRole="alert"
-                style={{ ...text, color: colors.destructive }}
+                testID="invite-selection-count"
+                accessibilityLiveRegion="polite"
+                style={{ ...text, fontFamily: fonts.semiBold }}
               >
-                {error}
+                {L(
+                  `المختارون: ${model.chosen.length} / 50`,
+                  `Selected: ${model.chosen.length} / 50`,
+                )}
               </Text>
-            )}
-            {!!notice && (
-              <Text accessibilityLiveRegion="polite" style={text}>
-                {notice}
-              </Text>
-            )}
-            {!!sharedText && (
-              <>
-                <Text selectable style={text}>
-                  {sharedText}
-                </Text>
+              {model.stage === "select" && (
                 <Button
-                  title={L("مشاركة نص الدعوة", "Share invitation text")}
-                  variant="outline"
-                  onPress={() => {
-                    void Share.share({ message: sharedText }).catch(() =>
-                      setError(
-                        L(
-                          "تعذّرت المشاركة. أعد المحاولة.",
-                          "Could not share. Retry.",
-                        ),
-                      ),
-                    );
-                  }}
+                  testID="invite-review"
+                  title={L("مراجعة الدعوات", "Review invitations")}
+                  disabled={
+                    !model.chosen.length || !model.circleId || model.busy
+                  }
+                  onPress={() => model.setStage("review")}
                 />
-              </>
-            )}
-          </KeyboardAwareScrollViewCompat>
+              )}
+            </>
+          )}
+          {!!model.error && (
+            <Text
+              accessibilityRole="alert"
+              style={{ ...text, color: colors.destructive }}
+            >
+              {model.error}
+            </Text>
+          )}
           <Button
             title={L("رجوع", "Back")}
             variant="outline"
-            disabled={busy}
-            onPress={onClose}
+            disabled={model.busy}
+            onPress={close}
           />
         </View>
         {countryOpen && (
           <PhoneCountrySheet
-            country={country}
+            country={model.country}
             onClose={() => setCountryOpen(false)}
             onSelect={(value) => {
-              if (flight.current) return;
-              capability.current = undefined;
-              setSharedText("");
-              setNotice("");
-              setCountry(value);
+              model.setCountry(value);
               setCountryOpen(false);
             }}
           />
