@@ -65,6 +65,7 @@ export function CircleInviteComposer({
       <Pressable
         testID={`invite-recipient-${item.key}`}
         accessibilityRole="checkbox"
+        aria-checked={checked}
         accessibilityLabel={`${item.name} ${item.phone ?? item.rawPhone}`}
         accessibilityState={{ checked, disabled: model.busy || !item.phone }}
         disabled={model.busy || !item.phone}
@@ -524,7 +525,7 @@ export function CircleInviteComposer({
                 style={{ ...text, fontFamily: fonts.semiBold }}
               >
                 {L(
-                  `المختارون: ${model.chosen.length} / 50`,
+                  `المختارون: ${model.chosen.length}، الحد 50 رقمًا`,
                   `Selected: ${model.chosen.length} / 50`,
                 )}
               </Text>
