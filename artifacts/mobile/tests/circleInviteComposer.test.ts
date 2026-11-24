@@ -144,6 +144,11 @@ test("actual invitation modal selects from both sources, sends one private batch
   assert.equal(state.contacts, 0, "address book is not read on modal open");
   find("invite-recipient-+96550001234").props.onPress();
   find("invite-recipient-+96550005678").props.onPress();
+  assert.equal(
+    find("invite-recipient-+96550001234").props["aria-checked"],
+    true,
+    "web assistive technology receives the selected state",
+  );
   state.renewRequest = true;
   await settle();
   assert.equal(

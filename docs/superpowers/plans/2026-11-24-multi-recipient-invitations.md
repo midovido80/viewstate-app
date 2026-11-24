@@ -52,4 +52,4 @@ Files: modify CircleInviteComposer.tsx; add focused CircleInviteRecipientsPicker
 - [x] Implement searchable virtualized phone rows, source switch, selection count, review, manual fallback, independent recipient actions and honest status/error messages.
 - [x] Include new mobile tests in npm test. Run formatter, mobile suite, complete TypeScript, property-domain tests and PostgreSQL harness. No lint command exists in mobile package.
 - [x] Fresh independent branch review, fix evidenced blockers with regressions, record results.
-- [ ] Commit and open/merge PR after required CI into designated branch, return local checkout there; final preview only from designated branch. Do not deploy backend or mobile update.
+- [x] Commit and open/merge PR after required CI into designated branch, return local checkout there; final preview only from designated branch. Do not deploy backend or mobile update.
