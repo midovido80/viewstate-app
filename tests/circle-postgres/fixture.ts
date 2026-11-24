@@ -7,7 +7,11 @@ export async function circleFixture() {
     create role anon; create role authenticated; create role service_role;
     create schema auth;
     create table auth.users(id uuid primary key, aud text, role text, created_at timestamptz default now(),
-      phone text, phone_confirmed_at timestamptz, is_anonymous boolean default false);
+      phone text, phone_confirmed_at timestamptz, is_anonymous boolean default false,
+      email text, email_confirmed_at timestamptz, raw_app_meta_data jsonb default '{}'::jsonb,
+      raw_user_meta_data jsonb default '{}'::jsonb);
+    create table auth.identities(id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id),
+      provider text, identity_data jsonb);
     grant usage on schema auth to authenticated;
     create function auth.uid() returns uuid language sql stable as $$
       select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid $$;

@@ -18,6 +18,7 @@ type Row = FeedRow<Local, Circle>;
 
 const circleLabels: Record<CircleNoticeKind, readonly [string, string]> = {
   invite: ['دعوة لدائرة الثقة', 'Trust Circle invitation'],
+  join_request: ['طلب انضمام ينتظر موافقتك', 'Join request awaiting your approval'],
   listing: ['عقار جديد في دائرة الثقة', 'New Trust Circle listing'],
   match: ['مطابقة في دائرة الثقة', 'Trust Circle match'],
   cooperation: ['تحديث تعاون', 'Cooperation update'],

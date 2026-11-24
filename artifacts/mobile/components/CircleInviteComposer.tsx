@@ -307,8 +307,8 @@ export function CircleInviteComposer({
       />
       <Text style={text}>
         {L(
-          "الدعوة المباشرة تتطلب رقم حساب مؤكّدًا. حدها 10 محاولات يوميًا. تمت معالجة الطلب لا تعني تأكيد تسجيل الرقم أو وصول الدعوة؛ تقدر تستخدم واتساب أيضًا.",
-          "In-app invitations require a verified account phone. The limit is 10 attempts per day. Processing does not confirm registration or delivery; you can also use WhatsApp.",
+          "نستخدم رقم التواصل للوصول لحساب جوجل الحالي. يقبل الزميل مشاركة اسمه وبريده معك، ثم توافق أنت على انضمامه. لا يحتاج تأكيد هاتف. الحد 10 محاولات يوميًا؛ المعالجة لا تؤكد تسجيل الرقم أو وصول الدعوة. إذا لم تصله، استخدم واتساب.",
+          "The contact phone routes the invitation to an existing Google account. Your colleague agrees to share their name and email, then you approve membership. No phone verification needed. Limit: 10 attempts per day. Processing does not confirm registration or delivery. Use WhatsApp if needed.",
         )}
       </Text>
       {model.chosen.some(

@@ -4,7 +4,7 @@ import { useRealAccount } from '@/contexts/RealAccountContext';
 import { circleRpc } from '@/services/circleMatchingApi';
 import { isCirclePush } from '@/services/circlePush';
 
-export type CircleNoticeKind = 'invite' | 'match' | 'listing' | 'cooperation' | 'test';
+export type CircleNoticeKind = 'invite' | 'join_request' | 'match' | 'listing' | 'cooperation' | 'test';
 export type CircleNoticeTarget = {
   kind: 'invite' | 'circle' | 'listing' | 'requirement' | 'cooperation' | 'test';
   circleId?: string;
@@ -40,7 +40,7 @@ function CircleInboxSession({ children }: { children: ReactNode }) {
     if (!api) return;
     const turn = ++version.current;
     try {
-      const next = await circleRpc<Inbox>(api, 'vs_circle_notification_inbox');
+      const next = await circleRpc<Inbox>(api, 'vs_circle_notification_inbox_v2');
       if (version.current === turn) {
         setInbox(next);
         setFailed(false);

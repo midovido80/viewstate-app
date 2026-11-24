@@ -32,6 +32,8 @@ test('PostgreSQL RLS/RPC: eight identities, thirty shared properties, cross-brok
    create function storage.foldername(text) returns text[] language sql as $$ select string_to_array($1,'/') $$;`);
   await db.exec('create table public.user_profiles(user_id uuid primary key,display_name text,company text,phone text);');
   await db.exec('alter table auth.users add column phone text, add column phone_confirmed_at timestamptz, add column is_anonymous boolean default false;');
+  await db.exec(`alter table auth.users add column email text, add column email_confirmed_at timestamptz, add column raw_app_meta_data jsonb default '{}'::jsonb;
+    create table auth.identities(id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id), provider text, identity_data jsonb);`);
   for (const migration of (await readdir(new URL('../../supabase/migrations/',import.meta.url)))
     .filter(file=>file.endsWith('.sql') && file>'20261104000000').sort()) {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${migration}`, import.meta.url), 'utf8'));

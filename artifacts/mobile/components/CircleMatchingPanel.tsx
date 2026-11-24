@@ -1,3 +1,9 @@
+import {
+  CircleInvitationCard,
+  type CircleInvitation,
+} from "./CircleInvitationCard";
+import { CircleJoinReviewPanel } from "./CircleJoinReviewPanel";
+import { acceptCircleInvitation } from "@/services/circleJoinApproval";
 import { CircleInviteComposer } from "./CircleInviteComposer";
 import { Button } from "./Button";
 import { useRouter } from "expo-router";
@@ -73,11 +79,7 @@ import { setCirclePush } from "@/services/circlePush";
 import type { CloudRequest } from "@/services/workspaceCloud";
 
 type Circle = TrustCircle;
-type Invitation = {
-  circle_id: string;
-  circle_name?: string;
-  inviter_name?: string;
-};
+type Invitation = CircleInvitation;
 type AutomaticMatch = {
   id: string;
   request_id: string;
@@ -879,51 +881,45 @@ export function CircleMatchingPanel({
               Number(a.circle_id === initialCircleId),
           )
           .map((invite) => (
-            <View key={invite.circle_id} style={{ gap: 6 }}>
-              <AssistantText bold>
-                {invite.circle_name ||
-                  L("دعوة لدائرة الثقة", "Trust Circle invitation")}
-              </AssistantText>
-              <Action
-                label={
-                  L("قبول الدعوة من ", "Accept invitation from ") +
-                  (invite.inviter_name || L("زميل", "a colleague"))
-                }
-                disabled={busy}
-                testID={`circle-accept-${invite.circle_id}`}
-                onPress={() =>
-                  void perform(
-                    async () => {
-                      await rpc("vs_circle_accept", {
-                        p_circle: invite.circle_id,
-                      });
-                      const available = await refresh();
+            <CircleInvitationCard
+              key={invite.circle_id}
+              invite={invite}
+              busy={busy}
+              onAccept={() =>
+                void perform(
+                  async () => {
+                    const outcome = await acceptCircleInvitation(
+                      api.current,
+                      invite,
+                    );
+                    const available = await refresh();
+                    if (outcome === "joined") {
                       const joined = available.find(
                         (circle) => circle.id === invite.circle_id,
                       );
                       if (joined) await loadCircle(joined);
-                    },
-                    L("تم الانضمام للدائرة", "Joined the circle"),
-                  )
-                }
-              />
-              <Action
-                label={L("رفض الدعوة", "Decline invitation")}
-                disabled={busy}
-                testID={`circle-decline-${invite.circle_id}`}
-                onPress={() =>
-                  void perform(
-                    async () => {
-                      await rpc("vs_circle_decline", {
-                        p_circle: invite.circle_id,
-                      });
-                      await refresh();
-                    },
-                    L("تم حفظ التغيير", "Change saved"),
-                  )
-                }
-              />
-            </View>
+                    }
+                  },
+                  invite.requires_review
+                    ? L(
+                        "تم إرسال طلب الانضمام. بانتظار موافقة مسؤول الدائرة.",
+                        "Join request sent. Awaiting the circle owner's approval.",
+                      )
+                    : L("تم الانضمام للدائرة", "Joined the circle"),
+                )
+              }
+              onDecline={() =>
+                void perform(
+                  async () => {
+                    await rpc("vs_circle_decline", {
+                      p_circle: invite.circle_id,
+                    });
+                    await refresh();
+                  },
+                  L("تم حفظ التغيير", "Change saved"),
+                )
+              }
+            />
           ))}
         <View
           style={{
@@ -1121,6 +1117,17 @@ export function CircleMatchingPanel({
                 ),
               )}
             </View>
+            {selected.owner_id === owner && (
+              <CircleJoinReviewPanel
+                key={owner + ":" + selected.id}
+                circleId={selected.id}
+                request={api.current}
+                onChanged={async () => {
+                  await loadCircle(selected);
+                  if (section === "members") setSection("opportunities");
+                }}
+              />
+            )}
             {section === "members" && (
               <>
                 {membersFailed ? (
