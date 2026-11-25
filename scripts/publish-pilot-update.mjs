@@ -13,15 +13,19 @@ const {
 const endpoint =
   "https://taduvwcajtjpceavlxrc.supabase.co/functions/v1/circle-match-worker";
 const groupPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
-const [argument, existingGroup] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const deferAnnouncement = args[0] === "--defer-announcement";
+const [argument, existingGroup] = deferAnnouncement ? args.slice(1) : args;
 const source = assertPilotSource();
 console.log(`Publishing source: ${source.branch} at ${source.head}`);
 const secret = process.env.CIRCLE_WORKER_SECRET;
 
-if (!secret)
+if (!secret && !deferAnnouncement)
   throw new Error(
     "Load CIRCLE_WORKER_SECRET from secure operator storage before publishing.",
   );
+if (deferAnnouncement && argument === "--announce")
+  throw new Error("An announcement cannot also be deferred.");
 if (
   internal.channel !== "viewstate-next-pilot" ||
   internal.channel !== source.config.channel ||
@@ -94,33 +98,37 @@ if (argument !== "--announce") {
 if (!groupPattern.test(group ?? ""))
   throw new Error("Expected a published EAS update group UUID.");
 
-let response;
-try {
-  response = await fetch(endpoint, {
-    method: "POST",
-    redirect: "error",
-    signal: AbortSignal.timeout(15_000),
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-      "x-viewstate-operation": "announce-update",
-    },
-    body: JSON.stringify({
-      group,
-      channel: internal.channel,
-      runtime: expo.runtimeVersion,
-    }),
-  });
-} catch {
-  throw new Error(
-    `Update is published. Retry the announcement with --announce ${group}.`,
+if (deferAnnouncement) {
+  console.log(`Announcement deferred. Published update group: ${group}`);
+} else {
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/json",
+        "x-viewstate-operation": "announce-update",
+      },
+      body: JSON.stringify({
+        group,
+        channel: internal.channel,
+        runtime: expo.runtimeVersion,
+      }),
+    });
+  } catch {
+    throw new Error(
+      `Update is published. Retry the announcement with --announce ${group}.`,
+    );
+  }
+  if (!response.ok)
+    throw new Error(
+      `Update is published. Announcement returned HTTP ${response.status}. Retry with --announce ${group}.`,
+    );
+  const result = await response.json();
+  console.log(
+    `Update announcement accepted. New device deliveries queued: ${result.queued}.`,
   );
 }
-if (!response.ok)
-  throw new Error(
-    `Update is published. Announcement returned HTTP ${response.status}. Retry with --announce ${group}.`,
-  );
-const result = await response.json();
-console.log(
-  `Update announcement accepted. New device deliveries queued: ${result.queued}.`,
-);
