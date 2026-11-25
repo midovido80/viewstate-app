@@ -16,10 +16,6 @@ begin
  order by (m.user_id=circle_owner) desc,p.display_name nulls last,m.user_id;
 end $$;
 
-create index circle_verified_phone_lookup on auth.users
-  (('+' || regexp_replace(phone, '[^0-9]', '', 'g')))
-  where phone_confirmed_at is not null and is_anonymous is not true;
-
 create or replace function public.vs_circle_invite_phone(p_circle uuid,p_phone text) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare who uuid:=viewstate_circle.require_member(p_circle); recipient uuid; tries integer; member_state text;
