@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validatePilotSource } from "../scripts/pilot-source.mjs";
 import { fingerprintPreviewInputs } from "../scripts/preview-inputs.mjs";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -19,6 +19,17 @@ const source = {
   defaultBranch: config.branch,
   dirty: false,
 };
+
+test("hosted migrations do not require ownership of managed Auth tables", async () => {
+  const sql = await readFile(
+    new URL(
+      "../supabase/migrations/20261123130947_circle_invite_privacy_and_fairness.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.doesNotMatch(sql, /create\s+index[\s\S]*?on\s+auth\.users/i);
+});
 
 test("deferred publication keeps source gates and publishes without loading an announcement credential", () => {
   const publisher = new URL(
