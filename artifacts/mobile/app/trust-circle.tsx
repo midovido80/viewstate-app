@@ -1,23 +1,22 @@
+import { WorkspaceBannerContext } from "@/contexts/WorkspaceBannerContext";
+import { circleHeaderTopInset } from "@/services/circleWorkspaceLayout";
 import { Text } from "@/components/AppText";
-import { Pressable } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import type { Property, SeekerRequirement } from '@workspace/property-domain';
-import { CircleMatchingPanel } from '@/components/CircleMatchingPanel';
-import { Button } from '@/components/Button';
-import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { PrimaryTabHeader } from '@/components/PrimaryTabHeader';
-import { useI18n } from '@/contexts/I18nContext';
-import { useRealAccount } from '@/contexts/RealAccountContext';
-import { useUserData } from '@/contexts/UserDataContext';
-import { useColors } from '@/hooks/useColors';
-import { useScreenInsets } from '@/hooks/useScreenInsets';
+import { Feather } from "@expo/vector-icons";
+import { useCallback, useContext, useState } from "react";
+import { ActivityIndicator, Pressable, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import type { Property, SeekerRequirement } from "@workspace/property-domain";
+import { CircleMatchingPanel } from "@/components/CircleMatchingPanel";
+import { Button } from "@/components/Button";
+import { useI18n } from "@/contexts/I18nContext";
+import { useRealAccount } from "@/contexts/RealAccountContext";
+import { useUserData } from "@/contexts/UserDataContext";
+import { useColors } from "@/hooks/useColors";
+import { useScreenInsets } from "@/hooks/useScreenInsets";
 
 export default function TrustCircleScreen() {
   const { language, fonts, isRTL } = useI18n();
-  const L = (ar: string, en: string) => (language === 'ar' ? ar : en);
+  const L = (ar: string, en: string) => (language === "ar" ? ar : en);
   const colors = useColors();
   const router = useRouter();
   const {
@@ -36,12 +35,13 @@ export default function TrustCircleScreen() {
     create?: string;
   }>();
   const initialMatch =
-    typeof requestId === 'string'
-      ? { kind: 'request' as const, id: requestId }
-      : typeof propertyId === 'string'
-        ? { kind: 'property' as const, id: propertyId }
+    typeof requestId === "string"
+      ? { kind: "request" as const, id: requestId }
+      : typeof propertyId === "string"
+        ? { kind: "property" as const, id: propertyId }
         : undefined;
   const insets = useScreenInsets();
+  const banner = useContext(WorkspaceBannerContext);
   const account = useRealAccount();
   const { store } = useUserData();
   const [data, setData] = useState<{
@@ -73,30 +73,30 @@ export default function TrustCircleScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View
         style={{
-          paddingTop: insets.top,
+          paddingTop: circleHeaderTopInset(insets.top, banner),
           paddingHorizontal: 16,
           paddingBottom: 8,
-          direction: 'ltr',
-          flexDirection: isRTL ? 'row-reverse' : 'row',
-          alignItems: 'center',
+          direction: "ltr",
+          flexDirection: isRTL ? "row-reverse" : "row",
+          alignItems: "center",
           gap: 12,
         }}
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={L('رجوع', 'Back')}
+          accessibilityLabel={L("رجوع", "Back")}
           onPress={() =>
-            router.canGoBack() ? router.back() : router.replace('/')
+            router.canGoBack() ? router.back() : router.replace("/")
           }
           style={{
             width: 48,
             height: 48,
-            justifyContent: 'center',
-            alignItems: 'center',
+            justifyContent: "center",
+            alignItems: "center",
           }}
         >
           <Feather
-            name={isRTL ? 'arrow-right' : 'arrow-left'}
+            name={isRTL ? "arrow-right" : "arrow-left"}
             size={23}
             color={colors.foreground}
           />
@@ -108,10 +108,10 @@ export default function TrustCircleScreen() {
             fontFamily: fonts.bold,
             fontSize: 23,
             flex: 1,
-            textAlign: isRTL ? 'right' : 'left',
+            textAlign: isRTL ? "right" : "left",
           }}
         >
-          {L('دائرة الثقة', 'Trust Circle')}
+          {L("دائرة الثقة", "Trust Circle")}
         </Text>
       </View>
       <View style={{ flex: 1 }}>
@@ -121,36 +121,36 @@ export default function TrustCircleScreen() {
               style={{
                 color: colors.foreground,
                 fontFamily: fonts.regular,
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: isRTL ? "right" : "left",
               }}
             >
               {L(
-                'سجّل الدخول بحساب Google عشان تشارك العقارات وتتعاون مع بروكرز تثق فيهم.',
-                'Sign in with Google to share listings and collaborate with brokers you trust.',
+                "سجّل الدخول بحساب Google عشان تشارك العقارات وتتعاون مع بروكرز تثق فيهم.",
+                "Sign in with Google to share listings and collaborate with brokers you trust.",
               )}
             </Text>
             <Button
-              title={L('تفعيل حسابي', 'Activate my account')}
-              onPress={() => router.push('/account/account')}
+              title={L("تفعيل حسابي", "Activate my account")}
+              onPress={() => router.push("/account/account")}
             />
           </>
         ) : failed ? (
           <Button
             title={L(
-              'تعذّر تحميل البيانات. أعد المحاولة',
-              'Could not load your records. Retry',
+              "تعذّر تحميل البيانات. أعد المحاولة",
+              "Could not load your records. Retry",
             )}
             onPress={() => setAttempt((value) => value + 1)}
           />
         ) : data ? (
           <CircleMatchingPanel
             fullScreen
-            initialCreate={create === '1'}
+            initialCreate={create === "1"}
             key={noticeTargetId ?? initialMatch?.id ?? circleId ?? owner}
             noticeKind={noticeKind}
             noticeTargetId={noticeTargetId}
             initialCircleId={
-              typeof circleId === 'string' ? circleId : undefined
+              typeof circleId === "string" ? circleId : undefined
             }
             initialMatch={initialMatch}
             request={account.request}

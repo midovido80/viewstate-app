@@ -33,6 +33,7 @@ import {
 } from "@/services/syncConflictPresentation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { WorkspaceBannerContext } from "@/contexts/WorkspaceBannerContext";
 import {
   workspaceSyncProblem,
   workspaceSyncProblemMessage,
@@ -43,10 +44,12 @@ export function WorkspaceConnection({
   resources,
   device,
   revalidate,
+  children,
 }: {
   resources: UserResources;
   device: Device;
   revalidate: () => Promise<boolean>;
+  children?: React.ReactNode;
 }) {
   const { language, isRTL, fonts, t } = useI18n(),
     colors = useColors(),
@@ -309,7 +312,7 @@ export function WorkspaceConnection({
     }
   }
   return (
-    <>
+    <WorkspaceBannerContext.Provider value={status !== "synced"}>
       {status !== "synced" && (
         <Pressable
           testID="workspace-sync-status"
@@ -633,6 +636,7 @@ export function WorkspaceConnection({
           />
         </View>
       </Modal>
-    </>
+      {children}
+    </WorkspaceBannerContext.Provider>
   );
 }

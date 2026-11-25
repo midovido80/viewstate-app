@@ -1,3 +1,10 @@
+import {
+  CircleSectionTabs,
+  CircleMatchingStatus,
+  CircleWorkspaceActions,
+  type CircleSection,
+} from "./CircleWorkspaceControls";
+import { circleDesign } from "@/constants/circleDesign";
 import { CircleMemberAttribution } from "./CircleMemberAttribution";
 import type { CircleAttribution } from "@/services/circleMemberAttribution";
 import { Text } from "@/components/AppText";
@@ -45,7 +52,6 @@ import {
   Platform,
   Pressable,
   Share,
-  Switch,
   View,
 } from "react-native";
 import * as Crypto from "expo-crypto";
@@ -163,9 +169,7 @@ export function CircleMatchingPanel({
   const [serverProcessing, setServerProcessing] = useState(false);
   const [matchScope, setMatchScope] = useState<MatchScope | null>(null);
   const [automatic, setAutomatic] = useState<AutomaticMatch[]>([]);
-  const [section, setSection] = useState<
-    "opportunities" | "properties" | "requests" | "members"
-  >("opportunities");
+  const [section, setSection] = useState<CircleSection>("opportunities");
   const [members, setMembers] = useState<
     {
       user_id: string;
@@ -194,7 +198,7 @@ export function CircleMatchingPanel({
   const [results, setResults] = useState<
     readonly (MatchResult & { requirementId: string })[] | null
   >(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
   const [failureReason, setFailureReason] = useState("");
   const [done, setDone] = useState("");
@@ -954,7 +958,7 @@ export function CircleMatchingPanel({
           <View style={{ flex: 1 }}>
             {circles.length > 0 && (
               <CompactDropdown
-                label={L("الدائرة", "Circle")}
+                title={L("اختيار الدائرة", "Choose circle")}
                 testID="circle-picker"
                 options={circles.map((circle) => ({
                   value: circle.id,
@@ -1033,114 +1037,36 @@ export function CircleMatchingPanel({
 
         {selected && (
           <>
-            <View
+            <CircleMatchingStatus
               testID="circle-matching-status"
-              style={{
-                backgroundColor:
-                  enabledRequests.length && !failed
-                    ? "#EDF8F1"
-                    : colors.secondary,
-                padding: 14,
-                borderRadius: 14,
-                gap: 6,
+              enabled={enabledRequests.length > 0}
+              failed={failed}
+              processing={serverProcessing}
+              busy={busy}
+              lastChecked={lastChecked}
+              onChoose={() => openTool("match")}
+              onToggle={(value) => {
+                if (value) openTool("match");
+                else
+                  void perform(
+                    async () => {
+                      await rpc("vs_circle_matching_pause", {
+                        p_circle: selected.id,
+                      });
+                      await loadCircle(selected);
+                    },
+                    L(
+                      "تم إيقاف مطابقة طلباتك في هذه الدائرة",
+                      "Your request matching was paused in this circle",
+                    ),
+                  );
               }}
-            >
-              <View
-                style={{
-                  direction: "ltr",
-                  flexDirection: isRTL ? "row-reverse" : "row",
-                  gap: 12,
-                  alignItems: "center",
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <AssistantText bold>
-                    {failed
-                      ? L(
-                          "تعذّر تحديث حالة المطابقة",
-                          "Could not refresh matching",
-                        )
-                      : serverProcessing
-                        ? L("جارٍ فحص المطابقات", "Checking matches")
-                        : enabledRequests.length
-                          ? L(
-                              "مطابقة طلباتك التلقائية مفعّلة",
-                              "Your automatic request matching is enabled",
-                            )
-                          : L(
-                              "فعّل مطابقة أول طلب عميل",
-                              "Enable your first request",
-                            )}
-                  </AssistantText>
-                </View>
-                <Switch
-                  testID="circle-matching-switch"
-                  accessibilityLabel={L(
-                    "المطابقة التلقائية لطلباتك في الدائرة",
-                    "Your automatic matching in this circle",
-                  )}
-                  value={enabledRequests.length > 0}
-                  disabled={busy || failed}
-                  onValueChange={(value) => {
-                    if (value) openTool("match");
-                    else
-                      void perform(
-                        async () => {
-                          await rpc("vs_circle_matching_pause", {
-                            p_circle: selected.id,
-                          });
-                          await loadCircle(selected);
-                        },
-                        L(
-                          "تم إيقاف مطابقة طلباتك في هذه الدائرة",
-                          "Your request matching was paused in this circle",
-                        ),
-                      );
-                  }}
-                />
-              </View>
-              {lastChecked && (
-                <AssistantText muted>
-                  {L("آخر تحديث للنتائج: ", "Results refreshed: ")}
-                  {new Date(lastChecked).toLocaleTimeString(
-                    ar ? "ar-KW" : "en-GB",
-                    { hour: "2-digit", minute: "2-digit" },
-                  )}
-                </AssistantText>
-              )}
-              <Action
-                label={L("اختيار طلب للمطابقة", "Choose a request to match")}
-                onPress={() => openTool("match")}
-                disabled={busy}
-              />
-            </View>
-            <View
-              style={{
-                direction: "ltr",
-                flexDirection: isRTL ? "row-reverse" : "row",
-                gap: 8,
-              }}
-            >
-              {(
-                ["opportunities", "properties", "requests", "members"] as const
-              ).map((value) => (
-                <View key={value} style={{ flex: 1 }}>
-                  <Action
-                    label={
-                      value === "opportunities"
-                        ? L("الفرص", "Opportunities")
-                        : value === "properties"
-                          ? L("العقارات", "Properties")
-                          : value === "requests"
-                            ? L("الطلبات", "Requests")
-                            : L("الأعضاء", "Members")
-                    }
-                    tone={section === value ? "primary" : "secondary"}
-                    onPress={() => setSection(value)}
-                  />
-                </View>
-              ))}
-            </View>
+            />
+            <CircleSectionTabs
+              testID="circle-section-navigation"
+              selected={section}
+              onSelect={setSection}
+            />
             {selected.owner_id === owner && (
               <CircleJoinReviewPanel
                 key={owner + ":" + selected.id}
@@ -1252,22 +1178,28 @@ export function CircleMatchingPanel({
                   !serverProcessing &&
                   !visibleAutomatic.length &&
                   !results?.length && (
-                    <AssistantText>
-                      {L(
-                        "ما فيه فرص مطابقة ظاهرة لك للحين. شارك عقار أو فعّل مطابقة طلب؛ نعرض الفرصة لما تتوفر مواصفات مناسبة.",
-                        "No visible matching opportunities yet. Share a listing or enable a request; suitable opportunities will appear here.",
-                      )}
-                    </AssistantText>
+                    <View
+                      testID="circle-opportunities-empty"
+                      style={{
+                        paddingVertical: circleDesign.space.section,
+                        gap: circleDesign.space.tight,
+                      }}
+                    >
+                      <AssistantText
+                        bold
+                        size={circleDesign.text.title.fontSize}
+                      >
+                        {L("لا توجد مطابقات بعد", "No matches yet")}
+                      </AssistantText>
+                      <AssistantText muted>
+                        {L(
+                          "شارك عقارًا أو اختر طلب عميل. ستظهر هنا الفرص المناسبة عند توفرها.",
+                          "Share a listing or choose a client request. Suitable opportunities will appear here.",
+                        )}
+                      </AssistantText>
+                    </View>
                   )}
-                {!busy && listings.length === 0 && (
-                  <AssistantText>
-                    {L(
-                      "لا توجد عقارات منشورة في هذه الدائرة.",
-                      "This circle has no published listings yet.",
-                    )}
-                  </AssistantText>
-                )}
-                {(matchScope || visibleAutomatic.length > 0) && (
+                {(Boolean(results?.length) || visibleAutomatic.length > 0) && (
                   <AssistantText bold>
                     {L("نتائج المطابقة", "Matching results")} · {selected.name}
                   </AssistantText>
@@ -1397,6 +1329,15 @@ export function CircleMatchingPanel({
             )}
             {section === "properties" && (
               <>
+                {!busy && !failed && listings.length === 0 && (
+                  <AssistantText>
+                    {L(
+                      "لا توجد عقارات منشورة في هذه الدائرة.",
+                      "This circle has no published listings yet.",
+                    )}
+                  </AssistantText>
+                )}
+
                 <AssistantText bold>
                   {L("العقارات المشاركة", "Shared properties")} (
                   {listings.length})
@@ -1506,20 +1447,11 @@ export function CircleMatchingPanel({
             gap: 10,
           }}
         >
-          <Button
-            testID="circle-share-fixed"
-            title={L("شارك عقار", "Share listing")}
+          <CircleWorkspaceActions
             style={{ flex: 1 }}
-            disabled={busy}
-            onPress={() => openTool("publish")}
-          />
-          <Button
-            testID="circle-invite-fixed"
-            title={L("دعوة زميل", "Invite colleague")}
-            variant="outline"
-            style={{ flex: 1 }}
-            disabled={busy}
-            onPress={() => openTool("invite")}
+            busy={busy}
+            onShare={() => openTool("publish")}
+            onInvite={() => openTool("invite")}
           />
         </View>
       )}
