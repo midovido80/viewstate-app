@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useRef } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import type { PropertyDetailField } from '@workspace/property-domain';
 import { FieldValidationContext, TextInput } from '@/components/FormField';
 import { ChoiceGrid, ChoiceTile } from '@/components/FormChoices';

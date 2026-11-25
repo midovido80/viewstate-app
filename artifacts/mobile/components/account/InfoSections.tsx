@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useState } from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -13,20 +14,21 @@ export function appVersion() {
 }
 
 export function DataSection() {
+  const account = useRealAccount();
   const { L } = useL();
   return (
     <AccountScreen title={L('بياناتي', 'My data')} subtitle={L('أين تُحفظ بياناتك اليوم.', 'Where your data lives today.')}>
       <Card padded>
-        <Badge kind="warn" text={L('هذا الجهاز فقط — لا سحابة', 'This device only — no cloud')} />
-        <Body>{L('العقارات والأشخاص والطلبات والوسائط محفوظة على هذا الجهاز فقط.', 'Properties, people, requests and media are stored on this device only.')}</Body>
+        <Badge kind="warn" text={account ? L('بيانات الجهاز ونسخة الحساب الخاصة', 'Device data and private account copy') : L('ضيف — بيانات هذا الجهاز', 'Guest — this device only')} />
+        <Body>{account ? L('تُحفظ السجلات على جهازك، وتُحدّث نسخة خاصة بحساب جوجل على الخادم عند اكتمال المزامنة. لا يتيح ذلك سجلاتك للزملاء.', 'Records are saved on your device, with a private Google-linked server copy updated after successful synchronization. This does not share records with colleagues.') : L('بيانات الضيف محفوظة على هذا الجهاز ولا تُزامن إلى حساب جوجل.', 'Guest data stays on this device and does not synchronize to a Google account.')}</Body>
       </Card>
       <Card>
         <Row first icon="download" title={L('نسخة احتياطية كاملة', 'Full backup')} right={<Badge kind="off" text={L('غير متاح', 'Unavailable')} />} />
         <Row icon="upload" title={L('استعادة', 'Restore')} right={<Badge kind="off" text={L('غير متاح', 'Unavailable')} />} />
         <Row icon="share" title={L('تصدير البيانات', 'Export data')} right={<Badge kind="off" text={L('غير متاح', 'Unavailable')} />} />
-        <Row icon="cloud-off" title={L('المزامنة السحابية', 'Cloud sync')} right={<Badge kind="off" text={L('غير متاح', 'Unavailable')} />} />
+        <Row icon="cloud" title={L('نسخة الحساب الخاصة', 'Private account copy')} sub={account ? L('تُحدّث تلقائيًا عند توفر الاتصال؛ حالة الحفظ تظهر أعلى التطبيق عند الحاجة.', 'Updates automatically when connected; saving status appears at the top when needed.') : L('تحتاج تفعيل حساب جوجل.', 'Requires activating a Google account.')} />
       </Card>
-      <Note warn>{L('لا توجد نسخة احتياطية أو تصدير أو استعادة حاليًا. حذف التطبيق أو فقدان الجهاز يعني فقدان البيانات. تغيير الهاتف لن ينقلها تلقائيًا.', 'There is no backup, export or restore today. Uninstalling the app or losing the device loses the data. Changing phones does not move it.')}</Note>
+      <Note warn>{L('التصدير وملف النسخة الاحتياطية اليدوية غير متاحين. لا تمسح بيانات التطبيق أو تغيّر الهاتف قبل التأكد من اكتمال حفظ نسخة حسابك. بيانات الضيف والتغييرات غير المحفوظة بالخادم تبقى على الجهاز فقط.', 'Export and manual backup files are unavailable. Do not clear app data or change phones before confirming your account copy is up to date. Guest data and changes not saved to the server remain on this device only.')}</Note>
     </AccountScreen>
   );
 }
@@ -126,7 +128,7 @@ export function LegalSection() {
       <Card padded>
         <H t={L('الخصوصية', 'Privacy')} />
         <Body>{account ? L('تسجيل الدخول باستخدام Google عبر Supabase. يُحفظ البريد ومعرّف الحساب وملف التواصل في الخدمة، وتبقى العقارات والأشخاص والميديا والمسودات محليًا لكل حساب على حدة. الصورة الشخصية محلية.', 'Sign-in uses Google through Supabase. Your email, account ID and contact profile are held by the service; properties, people, media and drafts remain in separate local account storage. Profile photos stay local.') : L('يحفظ التطبيق بياناتك على هذا الجهاز. السجلات مرتبطة بالجهاز وليست معزولة لكل حساب؛ أي شخص يستخدم الجهاز يمكنه رؤيتها.', 'The app stores your data on this device. Records are device-scoped, not isolated per account; anyone using the device can see them.')}</Body>
-        <Body>{account ? L('لم تُفعّل مزامنة العقارات والميديا أو SMS. مشاركة بيانات التواصل اختيارية لكل مشاركة. تُطلب الأذونات عند استخدام الميزة فقط.', 'Property/media sync and SMS are not enabled. Contact details are shared only when selected for that share. Permissions are requested only when a feature is used.') : L('لا تسجيل دخول ولا مزامنة سحابية حاليًا. الأذونات تُطلب فقط عند استخدام الميزة وتُدار من إعدادات النظام.', 'There is no sign-in or cloud sync today. Permissions are asked only when a feature is used and are managed in system settings.')}</Body>
+        <Body>{account ? L('تُحفظ نسخة خاصة من سجلات حساب جوجل ومرفقاته على الخادم عند اكتمال المزامنة. لا يُرسل SMS، ومشاركة بيانات التواصل اختيارية لكل مشاركة. تُطلب الأذونات عند استخدام الميزة فقط.', 'Google-linked records and attachments have a private server copy after successful synchronization. No SMS is sent. Contact details are shared only when selected for that share. Permissions are requested only when a feature is used.') : L('لا تسجيل دخول ولا مزامنة سحابية حاليًا. الأذونات تُطلب فقط عند استخدام الميزة وتُدار من إعدادات النظام.', 'There is no sign-in or cloud sync today. Permissions are asked only when a feature is used and are managed in system settings.')}</Body>
         <Body muted>{account ? L('هذه نسخة تجريبية. حذف الحساب والتصدير الشامل وسياسات الاحتفاظ النهائية تحتاج استكمالًا قبل الإطلاق العام.', 'This is a trial. Account deletion, full export and final retention policies must be completed before public launch.') : L('قبل تفعيل الحسابات سنوضح مزوّدي الدخول والبيانات المجمعة والأغراض والاحتفاظ والتصدير والحذف.', 'Before accounts launch we will explain sign-in providers, collected data, purposes, retention, export and deletion.')}</Body>
         <H t={L('شروط الاستخدام', 'Terms of use')} />
         <Body>{L('أنت مسؤول عن البيانات التي تدخلها وعن مشاركتها مع الآخرين.', 'You are responsible for the data you enter and for what you share with others.')}</Body>

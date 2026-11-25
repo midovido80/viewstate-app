@@ -1,4 +1,5 @@
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Text } from "@/components/AppText";
+import { Modal, Pressable, View } from 'react-native';
 import type { Property } from '@workspace/property-domain';
 import { Action, AssistantText } from '@/components/assistant/ui';
 import { useColors } from '@/hooks/useColors';

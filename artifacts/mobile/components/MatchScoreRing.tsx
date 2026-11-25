@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useI18n } from '@/contexts/I18nContext';
 /** A visual encoding of the existing engine score; never a new matching calculation. */

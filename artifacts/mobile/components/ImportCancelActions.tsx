@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useState } from "react";
-import { Modal, Text, View } from "react-native";
+import { Modal, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUserData } from "@/contexts/UserDataContext";

@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { NextFieldPair } from '@/components/next/NextSurfaces';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { createContext, useContext } from 'react';
-import { Keyboard, Pressable, Text, View } from 'react-native';
+import { Keyboard, Pressable, View } from 'react-native';
 import { useI18n } from '@/contexts/I18nContext';
 import { useColors } from '@/hooks/useColors';
 export type PropertyPage = 0 | 1 | 2;

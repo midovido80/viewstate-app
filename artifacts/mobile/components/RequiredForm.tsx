@@ -1,13 +1,7 @@
+import { Text } from "@/components/AppText";
 import { FieldValidationContext } from "@/components/FormField";
 import React, { createContext, useContext, useRef, useState } from "react";
-import {
-  AccessibilityInfo,
-  ScrollView,
-  Text,
-  View,
-  type NativeSyntheticEvent,
-  type NativeScrollEvent,
-} from "react-native";
+import { AccessibilityInfo, ScrollView, View, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
 import { useI18n } from "@/contexts/I18nContext";
 import {
   missingCompletionFields,

@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { PhoneNumberText } from '@/components/PhoneNumberText';
 import { CircleInviteComposer } from '@/components/CircleInviteComposer';
 import { canInvitePerson } from '@/services/circleInvitations';
@@ -14,19 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-  Linking,
-  Modal,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Linking, Modal, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Property, type SeekerRequirement } from '@workspace/property-domain';

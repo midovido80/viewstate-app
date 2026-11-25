@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { Feather } from '@expo/vector-icons';
 import { PhoneCountrySheet } from '@/components/PhoneCountrySheet';
 import { PhoneNumberText } from '@/components/PhoneNumberText';
@@ -5,7 +6,7 @@ import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, Modal, Platform, Pressable, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Linking, Modal, Platform, Pressable, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import * as Contacts from 'expo-contacts';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';

@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useI18n } from "@/contexts/I18nContext";
 

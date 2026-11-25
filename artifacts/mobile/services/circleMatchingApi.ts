@@ -1,5 +1,6 @@
 import {
   validateProperty,
+  PROPERTY_DETAIL_FIELD_DEFINITIONS,
   validateSeekerRequirement,
   type Property,
   type SeekerRequirement,
@@ -83,10 +84,12 @@ export async function publishCircleProperty(
 
 /** Only the domain's matching projection is published. Never send the private record. */
 export function circlePropertyFacts(property: Property) {
+  if (!property?.core || !property.activeOffer) return null;
   const offer = property.activeOffer;
   const price =
     offer.transaction === "rent" ? offer.rentalPrice : offer.salePrice;
   if (
+    !price ||
     price.currencyCode !== "KWD" ||
     property.marketingStatus === "sold" ||
     (offer.transaction === "rent" &&
@@ -105,6 +108,11 @@ export function circlePropertyFacts(property: Property) {
     areaUnit,
   } = source;
   const details = { ...source.typeDetails } as Record<string, unknown>;
+  // Matching may derive cross-type criteria; publication retains only schema-valid facts.
+  for (const definition of PROPERTY_DETAIL_FIELD_DEFINITIONS) {
+    if (!definition.appliesTo.includes(core.propertyType))
+      delete details[definition.field];
+  }
   // Free-form remarks are never included. Structured arrays use the same safe
   // fields as the domain validators, even for records from older clients.
   delete details.clarification;

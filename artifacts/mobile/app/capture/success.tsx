@@ -1,9 +1,10 @@
+import { Text } from "@/components/AppText";
 import { useDraftBack } from '@/hooks/useDraftBack';
 import { matchingEntryHref } from '@/services/matchingScope';
 import { useRef } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';
 import { useColors } from '@/hooks/useColors';

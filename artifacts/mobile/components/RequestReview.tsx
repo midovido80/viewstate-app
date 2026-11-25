@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Text } from "@/components/AppText";
+import { Pressable, View } from "react-native";
 import type { SeekerRequirement } from "@workspace/property-domain";
 import {
   getRequirementDetailsRows,

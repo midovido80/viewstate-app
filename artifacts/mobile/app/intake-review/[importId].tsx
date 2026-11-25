@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { ImportWizardPage } from '@/components/ImportWizardPage';
 import { ImportCancelActions } from '@/components/ImportCancelActions';
 import {
@@ -13,7 +14,7 @@ import * as FileSystem from 'expo-file-system';
 import { createWebFileAttachments } from '@/services/attachments';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { Text, View, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useCapture } from '@/contexts/CaptureContext';

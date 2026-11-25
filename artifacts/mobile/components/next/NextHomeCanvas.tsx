@@ -1,15 +1,10 @@
+import { Text } from "@/components/AppText";
 import { TrustCircleHero } from './TrustCircleHero';
 import { AppUpdateAction } from '@/components/AppUpdateAction';
 import { NextFirstUse } from './NextFirstUse';
 import { NextRecentWork } from './NextRecentWork';
 import React from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';

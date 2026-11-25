@@ -1,12 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  Share,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Platform, Share, View } from "react-native";
 import { useUserData } from "@/contexts/UserDataContext";
 import { useRealAccount } from "@/contexts/RealAccountContext";
 import { useGuestAccount } from "@/contexts/GuestAccountContext";

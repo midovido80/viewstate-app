@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { AppState, Pressable, Text, View } from "react-native";
+import { AppState, Pressable, View } from "react-native";
 import * as FileSystem from "expo-file-system";
 import { usePathname, useRouter } from "expo-router";
 import { isRequirementEditorPath, isCircleWorkspacePath } from "@/services/screenInsets";

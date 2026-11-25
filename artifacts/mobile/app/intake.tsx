@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { useImportAutosave } from '@/hooks/useImportAutosave';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';

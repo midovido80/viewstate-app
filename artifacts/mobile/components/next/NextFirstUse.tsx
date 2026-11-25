@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { Text } from "@/components/AppText";
+import { View } from 'react-native';
 import { HomeTaskActions } from '@/components/assistant/home-task-actions';
 import { nextDesign as colors } from '@/constants/nextDesign';
 import { useI18n } from '@/contexts/I18nContext';

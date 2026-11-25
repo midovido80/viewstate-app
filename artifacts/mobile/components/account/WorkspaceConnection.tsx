@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { getRequirementDetailsRows } from "@/services/requirementDetailsPresentation";
 import {
   propertyDetailLabels,
@@ -14,7 +15,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { useI18n } from "@/contexts/I18nContext";
@@ -33,6 +33,11 @@ import {
 } from "@/services/syncConflictPresentation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import {
+  workspaceSyncProblem,
+  workspaceSyncProblemMessage,
+  type SyncProblem,
+} from "@/services/workspaceSyncStatus";
 type Device = Awaited<ReturnType<typeof createGoogleAccountDevice>>;
 export function WorkspaceConnection({
   resources,
@@ -51,6 +56,8 @@ export function WorkspaceConnection({
   const [resolving, setResolving] = useState(false);
   const [resolutionError, setResolutionError] = useState("");
   const [damagedState, setDamagedState] = useState(false);
+  const [problem, setProblem] = useState<SyncProblem>("unknown");
+  const [statusDetails, setStatusDetails] = useState(false);
   const [status, setStatus] = useState<
       "local" | "synced" | "offline" | "error" | "conflict"
     >("local"),
@@ -110,12 +117,17 @@ export function WorkspaceConnection({
       } catch (error) {
         if (!alive) return;
         const code = (error as Error).message;
+        const reason = workspaceSyncProblem(error);
+        setProblem(reason);
         setDamagedState(code === "SYNC_STATE_DAMAGED");
         setStatus(
-          /CONNECTION|FETCH|NETWORK|REAUTHENTICATE|HTTP_40[13]/i.test(code)
+          reason === "offline"
             ? "offline"
-            : "error",
+            : reason === "pending"
+              ? "local"
+              : "error",
         );
+        if (reason === "pending") again = true;
       } finally {
         flight = false;
         if (again && alive) {
@@ -157,8 +169,8 @@ export function WorkspaceConnection({
   const copy =
     status === "offline"
       ? ar
-        ? "بدون اتصال — يمكنك متابعة العمل؛ التغييرات محفوظة على الجهاز."
-        : "Offline — keep working. Changes are saved on this device."
+        ? "نسخة حسابك غير متصلة — التغييرات محفوظة على الجهاز. اضغط للتفاصيل."
+        : "Your account copy is offline — changes are saved on this device. Tap for details."
       : status === "conflict"
         ? ar
           ? conflicts.some((conflict) => conflict.validationIssues?.length)
@@ -169,15 +181,15 @@ export function WorkspaceConnection({
             : `${conflicts.length} conflicts to review — local work is preserved`
         : status === "error"
           ? ar
-            ? "المزامنة تحتاج مراجعة — بياناتك محفوظة ويمكنك متابعة العمل."
-            : "Sync needs attention — your data is saved and work can continue."
+            ? "لم يكتمل حفظ نسخة حسابك — بيانات الجهاز محفوظة. اضغط لمعرفة السبب."
+            : "Your account copy did not finish saving — device data is preserved. Tap for details."
           : status === "synced"
             ? ar
               ? "تمت المزامنة"
               : "Synced"
             : ar
-              ? "بيانات الجهاز متاحة — جارٍ التحقق والمزامنة…"
-              : "Device data is available — checking and syncing…";
+              ? "جارٍ تحديث نسخة حسابك الخاصة؛ يمكنك متابعة العمل…"
+              : "Updating your private account copy; you can keep working…";
   function preview(value: unknown, key: string): string {
     if (value === undefined) return ar ? "تم حذف السجل" : "Record deleted";
     const v = value as Record<string, any>;
@@ -303,7 +315,7 @@ export function WorkspaceConnection({
           testID="workspace-sync-status"
           accessibilityRole="button"
           onPress={() =>
-            status === "conflict" ? setOpen(true) : retry.current()
+            status === "conflict" ? setOpen(true) : setStatusDetails(true)
           }
           style={{
             paddingTop: insets.top + 7,
@@ -321,6 +333,67 @@ export function WorkspaceConnection({
           )}
         </Pressable>
       )}
+      <Modal
+        visible={statusDetails}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setStatusDetails(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            padding: 24,
+            backgroundColor: "#00000066",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.card,
+              padding: 20,
+              borderRadius: 16,
+              gap: 14,
+            }}
+          >
+            <Text style={[text, { fontFamily: fonts.bold, fontSize: 20 }]}>
+              {ar ? "حفظ نسخة حسابك الخاصة" : "Your private account copy"}
+            </Text>
+            <Text style={text}>
+              {ar
+                ? "المزامنة تحفظ سجلات العقارات والأشخاص والطلبات والمتابعات والمرفقات في مساحة حساب جوجل الخاصة، لتحديثها بين أجهزتك. لا تنشرها للزملاء أو دوائر الثقة؛ المشاركة في الدائرة إجراء منفصل تختاره أنت."
+                : "Synchronization saves your properties, people, requests, follow-ups and attachments in your private Google-linked account space across devices. It does not publish them to colleagues or Trust Circles; circle sharing is a separate action you choose."}
+            </Text>
+            <Text style={text} testID="workspace-sync-problem">
+              {status === "synced"
+                ? ar
+                  ? "نسخة حسابك الخاصة محدثة الآن."
+                  : "Your private account copy is now up to date."
+                : status === "local"
+                  ? copy
+                  : workspaceSyncProblemMessage(
+                      status === "offline" ? "offline" : problem,
+                      ar,
+                    )}
+            </Text>
+            <Button
+              title={
+                ar
+                  ? "إعادة محاولة حفظ نسخة الحساب"
+                  : "Retry saving account copy"
+              }
+              onPress={() => {
+                setStatusDetails(false);
+                retry.current();
+              }}
+            />
+            <Button
+              title={ar ? "إغلاق والمتابعة" : "Close and continue"}
+              variant="outline"
+              onPress={() => setStatusDetails(false)}
+            />
+          </View>
+        </View>
+      </Modal>
       {damagedState && (
         <View
           style={{ padding: 14, gap: 8, backgroundColor: colors.secondary }}

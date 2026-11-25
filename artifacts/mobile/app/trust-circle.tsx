@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import type { Property, SeekerRequirement } from '@workspace/property-domain';
 import { CircleMatchingPanel } from '@/components/CircleMatchingPanel';

@@ -1,11 +1,6 @@
+import { Text } from "@/components/AppText";
 import React from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useI18n } from "@/contexts/I18nContext";

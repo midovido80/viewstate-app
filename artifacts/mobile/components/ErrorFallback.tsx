@@ -1,13 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useState } from 'react';
-import {
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';

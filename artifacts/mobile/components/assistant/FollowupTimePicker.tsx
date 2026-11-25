@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, Text, View, useWindowDimensions, type ScrollView } from 'react-native';
+import { Platform, Pressable, View, useWindowDimensions, type ScrollView } from 'react-native';
 import Animated, { interpolate, Extrapolation, useAnimatedScrollHandler, useAnimatedStyle, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useI18n } from '@/contexts/I18nContext';

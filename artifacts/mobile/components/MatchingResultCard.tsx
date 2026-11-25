@@ -1,8 +1,9 @@
+import { Text } from "@/components/AppText";
 import { nextDesign as n } from '@/constants/nextDesign';
 import { PropertyCover } from "@/components/PropertyCover";
 import { MatchScoreRing } from "@/components/MatchScoreRing";
 import { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type {
   MatchExplanation,

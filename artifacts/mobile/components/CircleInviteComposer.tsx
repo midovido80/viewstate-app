@@ -1,16 +1,7 @@
+import { Text } from "@/components/AppText";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useI18n } from "@/contexts/I18nContext";
 import { useScreenInsets } from "@/hooks/useScreenInsets";

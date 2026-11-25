@@ -1,4 +1,5 @@
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Text } from "@/components/AppText";
+import { Platform, StyleSheet, View } from 'react-native';
 import { AppUpdateAction } from '@/components/AppUpdateAction';
 import { CircleNotificationSettings } from '@/components/CircleNotificationSettings';
 import { useAppUpdate } from '@/contexts/AppUpdateContext';

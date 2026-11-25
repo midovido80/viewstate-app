@@ -1,10 +1,11 @@
+import { Text } from "@/components/AppText";
 import { useDraftBack } from '@/hooks/useDraftBack';
 import { ImportCancelActions } from '@/components/ImportCancelActions';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { PropertyReviewProgress } from '@/components/PropertyReview';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';

@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useState, type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { matchingCountLabel } from "@/services/matchingGroups";
 import { Button } from "@/components/Button";
 import { useI18n } from "@/contexts/I18nContext";

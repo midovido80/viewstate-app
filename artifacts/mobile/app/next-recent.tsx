@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text } from "react-native";
+import { ActivityIndicator } from "react-native";
 import type { Property, SeekerRequirement } from "@workspace/property-domain";
 import type { Person } from "@/services/people";
 import { useUserData } from "@/contexts/UserDataContext";

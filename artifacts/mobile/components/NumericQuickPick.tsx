@@ -1,8 +1,9 @@
+import { Text } from "@/components/AppText";
 import { TextInput } from "@/components/FormField";
 import { RequiredLabelText } from "@/components/RequiredForm";
 import { propertyFormInputStyle } from "@/components/PropertyFormCard";
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View, Pressable } from "react-native";
+import { StyleSheet, View, Pressable } from "react-native";
 import { CompactDropdown } from "@/components/FormChoices";
 import { useColors } from "@/hooks/useColors";
 import { useI18n } from "@/contexts/I18nContext";

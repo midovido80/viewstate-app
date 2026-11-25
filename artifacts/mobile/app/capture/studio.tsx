@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { ImportCancelActions } from '@/components/ImportCancelActions';
 import { withActiveImport } from '@/services/importLifecycle';
 import { canOwnPropertyRequirement } from '@/services/people';
@@ -21,17 +22,7 @@ import { NearbyServicesSelector } from '@/components/NearbyServicesSelector';
 import { DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  BackHandler,
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, BackHandler, Image, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';

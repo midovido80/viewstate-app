@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { ImportCancelActions } from '@/components/ImportCancelActions';
 import { withActiveImport } from '@/services/importLifecycle';
 import {
@@ -56,18 +57,7 @@ import {
 } from "@/constants/navigation";
 import { getPropertyTypeSelectionRoute } from "@/services/propertyFormRoutes";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { Feather } from "@expo/vector-icons";

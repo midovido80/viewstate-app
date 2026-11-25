@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { changeListingStatus, listingStatus, type ListingStatus } from '@/services/propertyLifecycle';
 import { PropertyCircleShare } from '@/components/PropertyCircleShare';
 import { usePropertyWizardValidation } from '@/hooks/usePropertyWizardValidation';
@@ -29,17 +30,7 @@ import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
 import { assertPropertyDetailsEditClassification, assertSavedPropertyClassificationUnchanged, getSavedPropertyTypeLabel } from '@/services/savedPropertyClassification';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  Image,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, Image, useWindowDimensions, View } from 'react-native';
 import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import * as Sharing from 'expo-sharing';

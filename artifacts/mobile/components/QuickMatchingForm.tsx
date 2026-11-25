@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useState } from 'react';
-import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { TextInput, FieldSelect } from './FormField';
 import { ChoiceGrid, ChoiceTile } from './ChoiceTile';

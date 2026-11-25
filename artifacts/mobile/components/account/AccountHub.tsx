@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -55,7 +56,7 @@ export default function AccountHub() {
           <Row first icon="user" title={L('حسابي', 'My account')} sub={L('الملف الشخصي ووسائل الدخول', 'Profile & sign-in methods')} onPress={() => go('account')} />
           <Row icon="shield" title={L('الخصوصية والمشاركة', 'Privacy & sharing')} sub={L('بيانات على جهازك، ومشاركة باختيارك', 'On-device data. Sharing you choose.')} onPress={() => go('privacy')} />
           <Row icon="sliders" title={L('إعدادات التطبيق', 'App settings')} sub={L('اللغة والإشعارات والحركة', 'Language, notifications & motion')} onPress={() => go('settings')} />
-          <Row icon="database" title={L('بياناتي', 'My data')} sub={L('لا نسخ احتياطي ولا سحابة بعد', 'No backup or cloud yet')} onPress={() => go('data')} />
+          <Row icon="database" title={L('بياناتي', 'My data')} sub={L('بيانات الجهاز ونسخة الحساب الخاصة', 'Device data and private account copy')} onPress={() => go('data')} />
         </Card>
 
         <SectionLabel>{L('نحن معك', 'HERE TO HELP')}</SectionLabel>

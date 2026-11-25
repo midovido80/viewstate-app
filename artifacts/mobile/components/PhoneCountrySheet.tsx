@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Button } from '@/components/Button';
 import { TextInput } from '@/components/FormField';

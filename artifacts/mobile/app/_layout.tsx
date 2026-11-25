@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { AppUpdateProvider } from '@/contexts/AppUpdateContext';
 import { CircleNotificationsProvider } from '@/contexts/CircleNotificationsContext';
 import { IncomingImportBanner } from '@/components/IncomingImportBanner';
@@ -43,7 +44,7 @@ import { I18nProvider, useI18n } from '@/contexts/I18nContext';
 import { AccountFoundationProvider } from '@/contexts/AccountFoundationContext';
 import { CaptureProvider } from '@/contexts/CaptureContext';
 import { ImportCancellationGate } from '@/components/ImportCancellationGate';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import colors from '@/constants/colors';
 import { StartupRecoveryScreen } from '@/components/StartupRecoveryScreen';
 

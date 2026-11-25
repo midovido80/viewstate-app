@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Easing, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';

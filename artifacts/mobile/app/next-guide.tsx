@@ -1,4 +1,5 @@
-import { Text } from "react-native";
+import { Text } from "@/components/AppText";
+
 import { useRouter } from "expo-router";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNextExperience } from "@/contexts/NextExperienceContext";

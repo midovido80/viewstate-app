@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { formatMatchingBudget } from '@/services/matchingPresentation';
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type {
   MatchingPolicy,

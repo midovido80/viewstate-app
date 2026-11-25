@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { nextDesign as n } from '@/constants/nextDesign';
 import { TextInput } from '@/components/FormField';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, Switch, ActivityIndicator, Image, ScrollView, Platform, KeyboardAvoidingView, type TextInputProps } from 'react-native';
+import { View, StyleSheet, Pressable, Modal, Switch, ActivityIndicator, Image, ScrollView, Platform, KeyboardAvoidingView, type TextInputProps } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';

@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { TextInput } from '@/components/FormField';
 import React from 'react';
-import { View, Text, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, type TextInputProps } from 'react-native';
+import { View, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, type TextInputProps } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';

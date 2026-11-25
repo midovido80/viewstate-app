@@ -1,8 +1,9 @@
+import { Text } from "@/components/AppText";
 import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { AccountSection } from './AccountSection';
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';

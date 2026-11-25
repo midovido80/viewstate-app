@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { useUserData } from "@/contexts/UserDataContext";
 import { useCapture } from "@/contexts/CaptureContext";
 import { useI18n } from "@/contexts/I18nContext";

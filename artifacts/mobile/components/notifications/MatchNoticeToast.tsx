@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, ScrollView, useWindowDimensions } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, ScrollView, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Property } from '@workspace/property-domain';
 import type { HomeMatch } from '@/services/assistantHome';

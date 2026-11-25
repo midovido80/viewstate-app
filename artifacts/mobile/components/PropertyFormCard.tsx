@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { PropertyPageSection, type PropertyPage } from '@/components/PropertyWizard';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';
 

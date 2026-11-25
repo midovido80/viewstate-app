@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { PropertyFieldGrid } from '@/components/PropertyFieldGrid';
 import { useContext } from 'react';
 import { BathroomKitchenRow, KitchenCountContext, KitchenSlot } from '@/components/PropertyWizard';
@@ -5,7 +6,7 @@ import { TextInput } from '@/components/FormField';
 import { RequiredField } from '@/components/RequiredForm';
 import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities';
 import { AMENITY_DETAIL_GROUPS } from '@/services/propertyAmenityOrder';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { FORM_MULTI_FIELDS, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { getPropertyFormProfile, isPropertyProfileFieldVisible, PROFILE_CHOICES } from '@/services/propertyProfileForm';
 import { getPropertyFormField } from '@/services/propertyFormCatalog';

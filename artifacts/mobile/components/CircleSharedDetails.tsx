@@ -1,4 +1,5 @@
-import { Modal, ScrollView, Text, View } from 'react-native';
+import { Text } from "@/components/AppText";
+import { Modal, ScrollView, View } from 'react-native';
 import type { Property, PropertyDetailField, SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';
 import { useI18n, type Translations } from '@/contexts/I18nContext';
