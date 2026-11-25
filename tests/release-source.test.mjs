@@ -5,6 +5,7 @@ import { fingerprintPreviewInputs } from "../scripts/preview-inputs.mjs";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const config = {
   repository: "midovido80/viewstate-app",
@@ -18,6 +19,33 @@ const source = {
   defaultBranch: config.branch,
   dirty: false,
 };
+
+test("deferred publication keeps source gates and publishes without loading an announcement credential", () => {
+  const publisher = new URL(
+    "../scripts/publish-pilot-update.mjs",
+    import.meta.url,
+  ).href;
+  const script = `
+    import {registerHooks} from 'node:module';
+    process.argv=['node','publisher','--defer-announcement','Verified release'];
+    delete process.env.CIRCLE_WORKER_SECRET;
+    globalThis.fetch=()=>{throw Error('Announcement must remain deferred')};
+    const modules=new Map([
+      ['./pilot-source.mjs',"export const assertPilotSource=()=>{console.log('SOURCE_GATE_CHECKED');return {branch:'codex/latest-pilot-2026-11-23',head:'a'.repeat(40),config:{channel:'viewstate-next-pilot',runtime:'viewstate-next-android-1'}}}"],
+      ['node:child_process',"export const spawnSync=(cmd,args,options)=>{if(options.env.CIRCLE_WORKER_SECRET)throw Error('Credential reached bundle');console.log('PUBLISH_INVOKED');return {status:0,stdout:JSON.stringify([{platform:'android',runtimeVersion:'viewstate-next-android-1',group:'11111111-1111-4111-8111-111111111111'}])}}"]
+    ]);
+    registerHooks({resolve(name,ctx,next){return modules.has(name)?{url:'test-publish:'+name,shortCircuit:true}:next(name,ctx)},load(url,ctx,next){return url.startsWith('test-publish:')?{format:'module',source:modules.get(url.slice(13)),shortCircuit:true}:next(url,ctx)}});
+    await import(${JSON.stringify(publisher)});
+  `;
+  const output = execFileSync(
+    process.execPath,
+    ["--input-type=module", "-e", script],
+    { encoding: "utf8" },
+  );
+  assert.match(output, /SOURCE_GATE_CHECKED/);
+  assert.match(output, /PUBLISH_INVOKED/);
+  assert.match(output, /Announcement deferred/);
+});
 test("publishing accepts the committed current tip of the designated branch", () => {
   assert.doesNotThrow(() => validatePilotSource(config, source));
 });
