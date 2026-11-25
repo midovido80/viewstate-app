@@ -1,3 +1,5 @@
+import { CircleMemberAttribution } from "./CircleMemberAttribution";
+import type { CircleAttribution } from "@/services/circleMemberAttribution";
 import { Text } from "@/components/AppText";
 import {
   CircleInvitationCard,
@@ -36,7 +38,16 @@ import {
   type ListingStatus,
 } from "@/services/propertyLifecycle";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Modal, Platform, Pressable, Share, Switch, View } from "react-native";
+import {
+  ActivityIndicator,
+  AppState,
+  Modal,
+  Platform,
+  Pressable,
+  Share,
+  Switch,
+  View,
+} from "react-native";
 import * as Crypto from "expo-crypto";
 import type {
   MatchResult,
@@ -153,7 +164,7 @@ export function CircleMatchingPanel({
   const [matchScope, setMatchScope] = useState<MatchScope | null>(null);
   const [automatic, setAutomatic] = useState<AutomaticMatch[]>([]);
   const [section, setSection] = useState<
-    "opportunities" | "properties" | "members"
+    "opportunities" | "properties" | "requests" | "members"
   >("opportunities");
   const [members, setMembers] = useState<
     {
@@ -164,6 +175,19 @@ export function CircleMatchingPanel({
       is_owner: boolean;
     }[]
   >([]);
+  const [attribution, setAttribution] = useState<CircleAttribution>({
+    members: [],
+    requests: [],
+    matches: [],
+  });
+  const memberFor = (id?: string) =>
+    attribution.members.find((member) => member.user_id === id);
+  const matchMember = (id: string) => {
+    const match = attribution.matches.find((item) => item.id === id);
+    return memberFor(
+      match?.publisher === owner ? match.requester : match?.publisher,
+    );
+  };
   const [membersFailed, setMembersFailed] = useState(false);
   const [lastChecked, setLastChecked] = useState<string>();
   const [opportunity, setOpportunity] = useState<CircleOpportunity>();
@@ -299,7 +323,7 @@ export function CircleMatchingPanel({
   ]);
 
   async function loadCircle(circle: Circle, scope?: MatchScope, quiet = false) {
-    const [rows, workspace, history] = await Promise.all([
+    const [rows, workspace, history, nextAttribution] = await Promise.all([
       rpc<SharedCircleProperty[]>("vs_circle_catalog", { p_circle: circle.id }),
       rpc<{
         requests: SharedRequest[];
@@ -307,6 +331,7 @@ export function CircleMatchingPanel({
         processing?: boolean;
       }>("vs_circle_matching_workspace", { p_circle: circle.id }),
       rpc<Cooperation[]>("vs_circle_cooperation_list", { p_circle: circle.id }),
+      rpc<CircleAttribution>("vs_circle_attribution", { p_circle: circle.id }),
     ]);
     const source = new CircleMatchingSource(async () => rows);
     const candidates = await source.getCandidates();
@@ -354,6 +379,7 @@ export function CircleMatchingPanel({
         )
       : null;
     if (!active.current) return;
+    setAttribution(nextAttribution);
     setSelected(circle);
     void storage
       .setItem("@viewstate/circle/selected", circle.id)
@@ -473,7 +499,7 @@ export function CircleMatchingPanel({
   }
 
   async function openMatchOpportunity(circleId: string, matchId: string) {
-    const [facts, workspace, rows] = await Promise.all([
+    const [facts, workspace, rows, nextAttribution] = await Promise.all([
       rpc<Record<string, unknown> | null>("vs_circle_match_requirement", {
         p_circle: circleId,
         p_match: matchId,
@@ -482,6 +508,7 @@ export function CircleMatchingPanel({
         p_circle: circleId,
       }),
       rpc<SharedCircleProperty[]>("vs_circle_catalog", { p_circle: circleId }),
+      rpc<CircleAttribution>("vs_circle_attribution", { p_circle: circleId }),
     ]);
     const match = workspace.matches.find((item) => item.id === matchId);
     const requirement = facts && { ...facts, id: matchId, notes: "" };
@@ -500,6 +527,7 @@ export function CircleMatchingPanel({
       throw new Error("CIRCLE_MATCH_UNAVAILABLE");
     if (active.current) {
       setSection("opportunities");
+      setAttribution(nextAttribution);
       setOpportunity({
         id: matchId,
         property,
@@ -691,6 +719,9 @@ export function CircleMatchingPanel({
       key={entry.id}
       entry={entry}
       owner={owner}
+      member={memberFor(
+        entry.sender_id === owner ? entry.recipient_id : entry.sender_id,
+      )}
       busy={busy}
       onAction={(action: CooperationAction) =>
         void perform(
@@ -1090,23 +1121,25 @@ export function CircleMatchingPanel({
                 gap: 8,
               }}
             >
-              {(["opportunities", "properties", "members"] as const).map(
-                (value) => (
-                  <View key={value} style={{ flex: 1 }}>
-                    <Action
-                      label={
-                        value === "opportunities"
-                          ? L("الفرص", "Opportunities")
-                          : value === "properties"
-                            ? L("العقارات", "Properties")
+              {(
+                ["opportunities", "properties", "requests", "members"] as const
+              ).map((value) => (
+                <View key={value} style={{ flex: 1 }}>
+                  <Action
+                    label={
+                      value === "opportunities"
+                        ? L("الفرص", "Opportunities")
+                        : value === "properties"
+                          ? L("العقارات", "Properties")
+                          : value === "requests"
+                            ? L("الطلبات", "Requests")
                             : L("الأعضاء", "Members")
-                      }
-                      tone={section === value ? "primary" : "secondary"}
-                      onPress={() => setSection(value)}
-                    />
-                  </View>
-                ),
-              )}
+                    }
+                    tone={section === value ? "primary" : "secondary"}
+                    onPress={() => setSection(value)}
+                  />
+                </View>
+              ))}
             </View>
             {selected.owner_id === owner && (
               <CircleJoinReviewPanel
@@ -1118,6 +1151,55 @@ export function CircleMatchingPanel({
                   if (section === "members") setSection("opportunities");
                 }}
               />
+            )}
+            {section === "requests" && (
+              <View style={{ gap: 16 }}>
+                {!sharedRequests.length && (
+                  <AssistantText>
+                    {L(
+                      "لا توجد طلبات مشاركة في هذه الدائرة.",
+                      "No shared requests in this circle.",
+                    )}
+                  </AssistantText>
+                )}
+                {sharedRequests.map((item) => {
+                  const member = memberFor(
+                    attribution.requests.find(
+                      (request) => request.id === item.id,
+                    )?.owner_id,
+                  );
+                  return (
+                    <View
+                      key={item.id}
+                      style={{
+                        gap: 8,
+                        padding: 16,
+                        borderWidth: 1,
+                        borderRadius: 16,
+                        borderColor: colors.border,
+                        backgroundColor: colors.card,
+                      }}
+                    >
+                      <AssistantText bold>
+                        {t(
+                          `propertyType.${item.type}` as Parameters<
+                            typeof t
+                          >[0],
+                        )}{" "}
+                        ·{" "}
+                        {item.purpose === "rent"
+                          ? L("للإيجار", "For rent")
+                          : L("للشراء", "To buy")}
+                      </AssistantText>
+                      <CircleMemberAttribution
+                        member={member}
+                        own={member?.user_id === owner}
+                        label={L("صاحب طلب العميل", "Request shared by")}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
             )}
             {section === "members" && (
               <>
@@ -1267,6 +1349,7 @@ export function CircleMatchingPanel({
                       <AssistantText>
                         {listingLabel(listing.property)}
                       </AssistantText>
+                      <CircleMemberAttribution member={matchMember(match.id)} />
                       <Action
                         label={L(
                           "شوف تفاصيل المطابقة",
@@ -1360,6 +1443,10 @@ export function CircleMatchingPanel({
                           price={summary.valueLabel}
                         />
                       </Pressable>
+                      <CircleMemberAttribution
+                        member={memberFor(row.publisher_id)}
+                        own={row.publisher_id === owner}
+                      />
                       {row.publisher_id === owner && (
                         <Action
                           label={L("إدارة الإعلان", "Manage listing")}
@@ -1712,7 +1799,7 @@ export function CircleMatchingPanel({
                         .filter((request) => !request.local_id)
                         .map((request, index) => ({
                           value: request.id,
-                          label: `${L("طلب مشارك", "Shared request")} ${index + 1} • ${t(`propertyType.${request.type}` as Parameters<typeof t>[0])}`,
+                          label: `${L("طلب مشارك", "Shared request")} ${index + 1} · ${memberFor(attribution.requests.find((item) => item.id === request.id)?.owner_id)?.display_name || L("عضو لم يحدد اسمه", "Member name unavailable")} • ${t(`propertyType.${request.type}` as Parameters<typeof t>[0])}`,
                           selected:
                             matchScope?.kind === "request" &&
                             matchScope.id === request.id,
@@ -1730,8 +1817,8 @@ export function CircleMatchingPanel({
                     <>
                       <AssistantText muted>
                         {L(
-                          "اسم العميل ورقمه بيانات خاصة. فعّل مطابقة هذا الطلب بالدائرة، أو ابحث فيه بشكل خاص.",
-                          "Client name and phone stay private. Enable automatic matching or search privately.",
+                          "اسم العميل ورقمه بيانات خاصة. عند مشاركة الطلب يظهر اسمك ومكتبك ورقم تواصلك لأعضاء الدائرة.",
+                          "Client name and phone stay private. Sharing displays your name, company and contact number to circle members.",
                         )}
                       </AssistantText>
                       <Action
@@ -1845,6 +1932,7 @@ export function CircleMatchingPanel({
       {opportunity && (
         <CircleMatchDetails
           opportunity={opportunity}
+          member={matchMember(opportunity.id)}
           onClose={() => setOpportunity(undefined)}
           onCooperate={
             cooperations.some(
@@ -1862,6 +1950,16 @@ export function CircleMatchingPanel({
         />
       )}
       <CircleSharedDetails
+        member={
+          detail?.kind === "property"
+            ? memberFor(
+                listings.find((item) => item.row.id === detail.id)?.row
+                  .publisher_id,
+              )
+            : detail?.kind === "request"
+              ? matchMember(detail.id)
+              : undefined
+        }
         property={
           detail?.kind === "preview"
             ? detail.property

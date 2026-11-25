@@ -1,22 +1,24 @@
+import { CircleMemberAttribution } from "./CircleMemberAttribution";
+import type { CircleMemberContact } from "@/services/circleMemberAttribution";
 import { Text } from "@/components/AppText";
-import { Modal, ScrollView, View } from 'react-native';
+import { Modal, ScrollView, View } from "react-native";
 import {
   evaluateMatch,
   type Property,
   type SeekerRequirement,
-} from '@workspace/property-domain';
-import { normalizeMyPropertyCandidate } from '@/services/myPropertiesMatchingSource';
+} from "@workspace/property-domain";
+import { normalizeMyPropertyCandidate } from "@/services/myPropertiesMatchingSource";
 import {
   matchingExplanationText,
   formatMatchingBudget,
-} from '@/services/matchingPresentation';
-import { getAreaById } from '@/constants/kuwait-areas';
-import { formatPrice, formatRentalPrice } from '@/constants/market';
-import { useScreenInsets } from '@/hooks/useScreenInsets';
-import { useColors } from '@/hooks/useColors';
-import { useI18n } from '@/contexts/I18nContext';
-import { Button } from './Button';
-import { PropertyFactStrip } from './PropertyVisualSummary';
+} from "@/services/matchingPresentation";
+import { getAreaById } from "@/constants/kuwait-areas";
+import { formatPrice, formatRentalPrice } from "@/constants/market";
+import { useScreenInsets } from "@/hooks/useScreenInsets";
+import { useColors } from "@/hooks/useColors";
+import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "./Button";
+import { PropertyFactStrip } from "./PropertyVisualSummary";
 
 export type CircleOpportunity = {
   id: string;
@@ -26,25 +28,27 @@ export type CircleOpportunity = {
 };
 export function CircleMatchDetails({
   opportunity,
+  member,
   onClose,
   onCooperate,
 }: {
   opportunity: CircleOpportunity;
+  member?: CircleMemberContact;
   onClose: () => void;
   onCooperate?: () => void;
 }) {
   const { language, isRTL, fonts, t } = useI18n(),
     colors = useColors(),
     insets = useScreenInsets();
-  const ar = language === 'ar',
+  const ar = language === "ar",
     { property, requirement, ownProperty } = opportunity;
   const candidate = normalizeMyPropertyCandidate(property);
   const result = candidate
-    ? evaluateMatch(requirement, candidate, { strictFields: ['location'] })
+    ? evaluateMatch(requirement, candidate, { strictFields: ["location"] })
     : undefined;
   const offer = property.activeOffer;
   const price =
-    offer.transaction === 'rent'
+    offer.transaction === "rent"
       ? formatRentalPrice(
           offer.rentalPrice.amount,
           offer.rentalPrice.currencyCode,
@@ -60,7 +64,7 @@ export function CircleMatchDetails({
   const text = {
     color: colors.foreground,
     fontFamily: fonts.regular,
-    textAlign: isRTL ? ('right' as const) : ('left' as const),
+    textAlign: isRTL ? ("right" as const) : ("left" as const),
     lineHeight: 24,
   };
   const card = {
@@ -92,34 +96,46 @@ export function CircleMatchDetails({
             lineHeight: 32,
           }}
         >
-          {ar ? 'تفاصيل المطابقة' : 'Match details'}
+          {ar ? "تفاصيل المطابقة" : "Match details"}
         </Text>
         <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 16 }}>
+          <CircleMemberAttribution
+            member={member}
+            label={
+              ar
+                ? ownProperty
+                  ? "صاحب طلب العميل"
+                  : "صاحب مشاركة العقار"
+                : ownProperty
+                  ? "Request shared by"
+                  : "Property shared by"
+            }
+          />
           <View style={card}>
             <Text style={{ ...text, fontFamily: fonts.bold }}>
               {ownProperty
                 ? ar
-                  ? 'طلب عميل زميلك'
-                  : 'Your colleague’s client request'
+                  ? "طلب عميل زميلك"
+                  : "Your colleague’s client request"
                 : ar
-                  ? 'طلب عميلك'
-                  : 'Your client request'}
+                  ? "طلب عميلك"
+                  : "Your client request"}
             </Text>
             <Text style={text}>
-              {requirement.preferredAreaMode === 'all_kuwait'
+              {requirement.preferredAreaMode === "all_kuwait"
                 ? ar
-                  ? 'كل مناطق الكويت'
-                  : 'All Kuwait'
+                  ? "كل مناطق الكويت"
+                  : "All Kuwait"
                 : requirement.preferredAreaIds
                     .map((id) => getAreaById(id)?.[language] ?? id)
-                    .join('، ')}
+                    .join("، ")}
             </Text>
             <Text style={text}>
               {formatMatchingBudget(requirement, language)}
             </Text>
             {requirement.bedroomsMinimum !== undefined && (
               <Text style={text}>
-                {ar ? 'غرف النوم المطلوبة: ' : 'Bedrooms needed: '}
+                {ar ? "غرف النوم المطلوبة: " : "Bedrooms needed: "}
                 {requirement.bedroomsMinimum}
               </Text>
             )}
@@ -128,14 +144,14 @@ export function CircleMatchDetails({
             <Text style={{ ...text, fontFamily: fonts.bold }}>
               {ownProperty
                 ? ar
-                  ? 'عقارك المشارك'
-                  : 'Your shared property'
+                  ? "عقارك المشارك"
+                  : "Your shared property"
                 : ar
-                  ? 'عقار زميلك'
-                  : 'Your colleague’s property'}
+                  ? "عقار زميلك"
+                  : "Your colleague’s property"}
             </Text>
             <Text style={text}>
-              {t(`propertyType.${property.core.propertyType}`)} •{' '}
+              {t(`propertyType.${property.core.propertyType}`)} •{" "}
               {getAreaById(property.core.locationArea.id)?.[language] ??
                 property.core.locationArea.id}
             </Text>
@@ -143,7 +159,7 @@ export function CircleMatchDetails({
             <PropertyFactStrip property={property} compact />
           </View>
           <Text style={{ ...text, fontFamily: fonts.bold, fontSize: 18 }}>
-            {ar ? 'ليش طابقناهم؟' : 'Why this match?'}
+            {ar ? "ليش طابقناهم؟" : "Why this match?"}
           </Text>
           {result?.explanations.map((item, index) => (
             <Text
@@ -151,7 +167,7 @@ export function CircleMatchDetails({
               style={{
                 ...text,
                 color:
-                  item.status === 'matched'
+                  item.status === "matched"
                     ? colors.foreground
                     : colors.mutedForeground,
               }}
@@ -161,24 +177,24 @@ export function CircleMatchDetails({
           ))}
           <Text style={text}>
             {ar
-              ? 'المعاينة والتوفر يحتاجون تأكيد من الزميل. بيانات العميل والمالك ما تنعرض في الدائرة.'
-              : 'Confirm availability and viewing with your colleague. Client and owner details stay private.'}
+              ? "المعاينة والتوفر يحتاجون تأكيد من الزميل. بيانات العميل والمالك ما تنعرض في الدائرة."
+              : "Confirm availability and viewing with your colleague. Client and owner details stay private."}
           </Text>
         </ScrollView>
         {onCooperate ? (
           <Button
-            title={ar ? 'طلب تعاون مع الزميل' : 'Request cooperation'}
+            title={ar ? "طلب تعاون مع الزميل" : "Request cooperation"}
             onPress={onCooperate}
           />
         ) : (
           <Text style={text}>
             {ar
-              ? 'طلب التعاون موجود في قائمة الفرص.'
-              : 'Cooperation request is available in Opportunities.'}
+              ? "طلب التعاون موجود في قائمة الفرص."
+              : "Cooperation request is available in Opportunities."}
           </Text>
         )}
         <Button
-          title={ar ? 'إغلاق' : 'Close'}
+          title={ar ? "إغلاق" : "Close"}
           variant="outline"
           onPress={onClose}
         />
