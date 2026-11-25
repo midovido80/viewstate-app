@@ -60,7 +60,8 @@ export default function AccountHub() {
 
         <SectionLabel>{L('نحن معك', 'HERE TO HELP')}</SectionLabel>
         <Card>
-          <Row first icon="help-circle" title={L('المساعدة والدعم', 'Help & support')} sub={L('دليل، مشكلة أو اقتراح', 'Guide, issues & ideas')} onPress={() => go('help')} />
+          <Row first icon="user-plus" title={L('دعوة زملاء لاستخدام ViewState', 'Invite colleagues to ViewState')} sub={L('اختيار زملاء أو مشاركة رابط تحميل التطبيق', 'Choose colleagues or share the app download link')} onPress={() => go('invite-app')} testID="settings-invite-app" />
+          <Row icon="help-circle" title={L('المساعدة والدعم', 'Help & support')} sub={L('دليل، مشكلة أو اقتراح', 'Guide, issues & ideas')} onPress={() => go('help')} />
           <Row icon="info" title={L('عن ViewState', 'About ViewState')} sub={`${L('الإصدار', 'Version')} ${appVersion().version}`} onPress={() => go('about')} />
         </Card>
       </ScrollView>

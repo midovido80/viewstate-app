@@ -8,6 +8,7 @@ import { PrivacySection, SharingSection, PermissionsSection } from '@/components
 import { SettingsSection, NotificationsSection } from '@/components/account/SettingsSection';
 import { DataSection, HelpSection, AboutSection, LegalSection } from '@/components/account/InfoSections';
 import { WelcomeSection, PhoneSection, ProviderSection } from '@/components/account/OnboardingSections';
+import { AppSharingSection } from '@/components/account/AppSharingSection';
 
 export default function AccountSectionRoute() {
   const { section, method } = useLocalSearchParams<{ section: string; method?: string }>();
@@ -18,6 +19,7 @@ export default function AccountSectionRoute() {
     return <AccountScreen title={L('الملف الشخصي', 'Personal profile')}><Note>{L('سيظهر المحرر بعد تحميل الإعدادات المحلية.', 'The editor appears once local settings have loaded.')}</Note></AccountScreen>;
   }
   switch (section) {
+    case 'invite-app': return <AppSharingSection />;
     case 'profile': return <ProfileSection />;
     case 'setup': return <ProfileSection setup />;
     case 'privacy': return <PrivacySection />;
