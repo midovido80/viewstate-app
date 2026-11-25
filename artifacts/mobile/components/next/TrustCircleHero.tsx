@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { Text } from "@/components/AppText";
+import { View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useI18n } from '@/contexts/I18nContext';

@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { withActiveImport } from '@/services/importLifecycle';
 import { useUserData } from "@/contexts/UserDataContext";
 import {
@@ -6,7 +7,7 @@ import {
 } from "@/components/PropertyReview";
 import { getFloorTypeLabel } from "@/services/propertySectorSelection";
 import { useRef, useState } from "react";
-import { View, StyleSheet, Text, ScrollView, Alert } from "react-native";
+import { View, StyleSheet, ScrollView, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { useCapture } from "@/contexts/CaptureContext";

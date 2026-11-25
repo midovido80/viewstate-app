@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { getAreaById } from '@/constants/kuwait-areas';
 import { formatMatchingBudget } from '@/services/matchingPresentation';
 import { CircleMatchingPanel } from '@/components/CircleMatchingPanel';
@@ -15,13 +16,7 @@ import { MatchingResultsGroups } from '@/components/MatchingResultsGroups';
 import type { MatchingResultsLayout } from '@/services/matchingGroups';
 import { readMatchingReturn, rememberMatchingReturn } from '@/services/matchingReturnSession';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  ScrollView,
-} from 'react-native';
+import { StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useScreenInsets } from '@/hooks/useScreenInsets';

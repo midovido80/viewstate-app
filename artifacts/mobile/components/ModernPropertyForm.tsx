@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { showsNextKitchenFields } from '@/services/nextFormPresentation';
 import { KitchenCountContext, KitchenSlotContext } from '@/components/PropertyWizard';
 import { KitchenFields } from '@/components/KitchenFields';
@@ -9,7 +10,7 @@ import { TextInput } from '@/components/FormField';
 import { PropertyProfileFields } from '@/components/PropertyProfileFields';
 import { getPropertyFormProfile } from '@/services/propertyProfileForm';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
-import { Text, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import type { PropertyType, PropertyCaptureCategoryId, PropertyDemoCaptureMetadata, PropertyDetailField } from '@workspace/property-domain';
 import type { DemoCategoryDefinition } from '@/services/propertyDemoCatalog';
 import { parseDemoNumericInput } from '@/services/propertyDemoCatalog';

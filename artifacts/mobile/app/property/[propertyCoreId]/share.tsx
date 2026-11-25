@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { useGuestAccount } from '@/contexts/GuestAccountContext';
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { accountShareSignature } from '@/services/accountOnboarding';
@@ -10,7 +11,7 @@ import { formatPropertyDetailValue } from '@/services/propertyDetailPresentation
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, Share, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';

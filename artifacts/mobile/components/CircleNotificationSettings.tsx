@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useCallback, useRef, useState } from 'react';
-import { Alert, AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, Linking, Platform, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Badge, Card, Row, useL } from '@/components/account/ui';
 import { Action } from '@/components/assistant/ui';

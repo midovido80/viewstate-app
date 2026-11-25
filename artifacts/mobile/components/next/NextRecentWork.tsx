@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { compactPropertyLabel } from "@/services/compactPropertyLabel";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import type { Property, SeekerRequirement } from "@workspace/property-domain";

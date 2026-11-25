@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { CANCEL_ACTION_COLOR, isCancelActionLabel } from '@/constants/cancelAction';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';

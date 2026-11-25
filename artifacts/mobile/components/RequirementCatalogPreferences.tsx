@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { RequirementServiceRow } from "@/components/RequirementServiceRows";
 import { TextInput } from "@/components/FormField";
 import { useState, useEffect } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import {
   APARTMENT_SUBTYPES,
   FURNISHING_VALUES,

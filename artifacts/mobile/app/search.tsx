@@ -1,15 +1,9 @@
+import { Text } from "@/components/AppText";
 import { TextInput } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';

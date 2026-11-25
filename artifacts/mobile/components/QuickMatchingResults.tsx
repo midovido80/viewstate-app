@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { useI18n } from '@/contexts/I18nContext';
 import { getSavedPropertyTypeLabel } from '@/services/savedPropertyClassification';
 import { getAreaById } from '@/constants/kuwait-areas';

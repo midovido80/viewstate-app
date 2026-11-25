@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { isRequirementEditorPath, isCircleWorkspacePath } from '@/services/screenInsets';
 import { HomeQuickAdd } from '@/components/assistant/HomeQuickAdd';
 import { homeQuickRoute } from '@/services/assistantHome';
@@ -5,13 +6,7 @@ import { circleUnreadCount, isNotificationScreen } from '@/services/notification
 import { useAppUpdate } from '@/contexts/AppUpdateContext';
 import { useCircleNotifications } from '@/contexts/CircleNotificationsContext';
 import React, { createContext, useContext, useState } from 'react';
-import {
-  Keyboard,
-  Modal,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import { Keyboard, Modal, Pressable, View } from 'react-native';
 import {
   SafeAreaInsetsContext,
   useSafeAreaInsets,

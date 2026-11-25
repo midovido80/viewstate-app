@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useRef, useState } from 'react';
-import { Text } from 'react-native';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {

@@ -1,13 +1,7 @@
+import { Text } from "@/components/AppText";
 import { CompactDropdown } from "@/components/FormChoices";
 import React, { useState } from "react";
-import {
-  View,
-  StyleSheet,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-} from "react-native";
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { useCapture } from "@/contexts/CaptureContext";

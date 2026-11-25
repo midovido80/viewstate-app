@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { Property } from "@workspace/property-domain";
 import { Feather } from "@expo/vector-icons";
 import { useI18n } from "@/contexts/I18nContext";

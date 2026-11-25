@@ -4,6 +4,7 @@ import { registerHooks } from 'node:module';
 const env = { rtl: false, states: [] as any[], cursor: 0 };
 (globalThis as any).__formFeedback = env;
 const mocks = new Map([
+ ['@/components/AppText', `export const Text='Text';`],
  ['react', `
  const createElement=(type,props,...children)=>({type,props:{...props,children:children.length>1?children:children[0]??props?.children}});
  globalThis.React={createElement}; export default globalThis.React; export {createElement}; export const Fragment='Fragment';

@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { FieldValidationContext } from '@/components/FormField';
 import { fieldSurface } from '@/constants/formFields';
 import React, {
@@ -8,16 +9,7 @@ import React, {
   useContext,
   type ReactNode,
 } from "react";
-import {
-  Keyboard,
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { Keyboard, Modal, Pressable, ScrollView, View, type StyleProp, type ViewStyle } from "react-native";
 import { useI18n } from "@/contexts/I18nContext";
 import { isNumericChoiceSet, nextDesign as n } from '@/constants/nextDesign';
 import { Feather } from '@expo/vector-icons';

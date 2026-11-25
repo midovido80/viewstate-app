@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { CANCEL_ACTION_COLOR, isCancelActionLabel } from '@/constants/cancelAction';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
-import { TouchableOpacity, Text, ActivityIndicator, type ViewStyle, type TextStyle } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, type ViewStyle, type TextStyle } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';
 

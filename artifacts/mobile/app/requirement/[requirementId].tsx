@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { ImportCancelActions } from '@/components/ImportCancelActions';
 import { withActiveImport } from '@/services/importLifecycle';
 import { Feather } from "@expo/vector-icons";
@@ -44,14 +45,7 @@ import {
   navigationButtonTextStyle,
 } from "@/constants/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import {
   parseFloorUse,
   getFloorTypeLabel,

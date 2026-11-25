@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { useSyncedFocusEffect as useFocusEffect } from "@/hooks/useSyncedFocusEffect";
 import { useUserData } from "@/contexts/UserDataContext";
 import {
@@ -5,15 +6,7 @@ import {
   useIntentFilterWidth,
 } from "@/components/filters/RaisedFilterButton";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PhoneNumberText } from "@/components/PhoneNumberText";
 import { contactPhonePresentation } from "@/services/phoneEntry";

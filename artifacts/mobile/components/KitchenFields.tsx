@@ -1,4 +1,5 @@
-import { Text, View, useWindowDimensions } from "react-native";
+import { Text } from "@/components/AppText";
+import { View, useWindowDimensions } from "react-native";
 import type { KitchenSpec } from "@workspace/property-domain";
 import { CompactDropdown } from "./FormChoices";
 

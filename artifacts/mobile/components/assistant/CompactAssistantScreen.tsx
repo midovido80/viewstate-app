@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { NextHomeCanvas } from '@/components/next/NextHomeCanvas';
 import { useAppChrome } from '@/components/AppChrome';
 import { useLocalFormDraft } from '@/hooks/useDraftBack';
@@ -6,7 +7,7 @@ import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
 import { useUserData } from '@/contexts/UserDataContext';
 import { useMatchNotifications } from '@/contexts/MatchNotificationsContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';

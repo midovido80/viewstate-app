@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import {
   capturePriceText,
   capturePriceChange,
@@ -16,7 +17,7 @@ import {
   propertyFormInputStyle,
 } from "@/components/PropertyFormCard";
 import { useRef, useState } from "react";
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";

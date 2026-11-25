@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { useRealAccount } from '@/contexts/RealAccountContext';
 import { PropertyVisualCard } from '@/components/PropertyVisualSummary';
 import { PropertyCircleShare } from '@/components/PropertyCircleShare';
@@ -10,7 +11,7 @@ import { PropertyCover } from '@/components/PropertyCover';
 import { useUserData } from '@/contexts/UserDataContext';
 import { RaisedFilterButton, useIntentFilterWidth } from '@/components/filters/RaisedFilterButton';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, FlatList, ScrollView, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, FlatList, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';

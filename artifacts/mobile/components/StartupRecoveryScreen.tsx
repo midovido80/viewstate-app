@@ -1,11 +1,6 @@
+import { Text } from "@/components/AppText";
 import React from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';
 import colors from '@/constants/colors';

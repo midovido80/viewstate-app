@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { createWorkspaceAccountRequest } from '@/services/workspaceSyncDevice';
 import { setCircleForegroundOwner, prepareCirclePushSignOut, retryCirclePushRevocations, showRegisteredCirclePush } from '@/services/circlePush';
 import type { CloudRequest } from '@/services/workspaceCloud';
@@ -14,7 +15,7 @@ import { flushPropertyEditDraftWrites } from '@/services/propertyUpdateRecovery'
 import { flushPropertyEnrichmentDraftWrites } from '@/services/propertyEnrichmentRecovery';
 import { transferGuestDevice } from '@/services/guestTransferDevice';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useI18n } from './I18nContext';

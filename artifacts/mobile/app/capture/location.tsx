@@ -1,7 +1,8 @@
+import { Text } from "@/components/AppText";
 import { TextInput, FieldSelect } from '@/components/FormField';
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { useState, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Modal, SectionList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Feather } from '@expo/vector-icons';

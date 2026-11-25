@@ -1,15 +1,9 @@
+import { Text } from "@/components/AppText";
 import { TextInput, FieldSelect } from "@/components/FormField";
 import { CANCEL_ACTION_COLOR } from "@/constants/cancelAction";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 import { useMemo, useState, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Modal,
-  ScrollView,
-} from "react-native";
+import { StyleSheet, TouchableOpacity, View, Modal, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
   getAreaById,

@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SectionList, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AppUpdateAction } from '@/components/AppUpdateAction';

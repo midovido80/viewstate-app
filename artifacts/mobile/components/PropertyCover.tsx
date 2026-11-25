@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useEffect, useState } from 'react';
-import { Image, Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Property } from '@workspace/property-domain';
 import { useUserData } from '@/contexts/UserDataContext';

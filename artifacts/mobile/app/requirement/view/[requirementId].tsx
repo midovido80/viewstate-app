@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { CircleRequirementAction } from '@/components/CircleRequirementAction';
 import { deleteRequirementRecord } from '@/services/requirementDeletion';
 import { canOwnPropertyRequirement } from '@/services/people';
@@ -9,7 +10,7 @@ import { ChoiceFact, ChoiceGrid } from '@/components/ChoiceTile';
 import { getFloorTypeLabel } from '@/services/propertySectorSelection';
 import { navigationButtonStyle, navigationButtonTextStyle } from '@/constants/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { hasOfficeRequirementServices, type SeekerRequirement } from '@workspace/property-domain';

@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { NextFieldPair as BathroomKitchenRow } from '@/components/next/NextSurfaces';
 import { PropertyFieldGrid, type PropertyGridField } from '@/components/PropertyFieldGrid';
 import { KitchenCountContext, KitchenSlot } from '@/components/PropertyWizard';
@@ -7,7 +8,7 @@ import { OrderedPropertyAmenities } from '@/components/OrderedPropertyAmenities'
 import { PropertyFormCard, propertyFormInputStyle } from '@/components/PropertyFormCard';
 import { APARTMENT_SUBTYPES, FURNISHING_VALUES, type ApartmentSubtype, type PropertyDetailField, type PropertyType } from '@workspace/property-domain';
 import { useContext } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { ChoiceTile, ChoiceGrid } from '@/components/FormChoices';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';

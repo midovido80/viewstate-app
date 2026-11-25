@@ -1,4 +1,5 @@
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { Text } from "@/components/AppText";
+import { TouchableOpacity, StyleSheet } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';

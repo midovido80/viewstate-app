@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useEffect, useRef, useState } from "react";
-import { AppState, Text, View } from "react-native";
+import { AppState, View } from "react-native";
 import { useI18n } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import {

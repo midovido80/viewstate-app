@@ -1,9 +1,10 @@
+import { Text } from "@/components/AppText";
 import { useAppUpdate } from '@/contexts/AppUpdateContext';
 import { circleUnreadCount } from '@/services/notificationFeed';
 import { useCircleNotifications } from '@/contexts/CircleNotificationsContext';
 import { useAppChrome } from '@/components/AppChrome';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';

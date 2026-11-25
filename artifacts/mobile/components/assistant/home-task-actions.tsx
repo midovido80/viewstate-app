@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { Feather } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { nextDesign as colors } from '@/constants/nextDesign';
 import { useI18n } from '@/contexts/I18nContext';
 import type { HomeQuickAction } from '@/services/assistantHome';

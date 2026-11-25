@@ -1,4 +1,5 @@
-import { Modal, ScrollView, Text, View } from 'react-native';
+import { Text } from "@/components/AppText";
+import { Modal, ScrollView, View } from 'react-native';
 import {
   evaluateMatch,
   type Property,

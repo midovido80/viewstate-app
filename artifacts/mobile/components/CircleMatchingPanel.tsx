@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import {
   CircleInvitationCard,
   type CircleInvitation,
@@ -35,17 +36,7 @@ import {
   type ListingStatus,
 } from "@/services/propertyLifecycle";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  AppState,
-  Modal,
-  Platform,
-  Pressable,
-  Share,
-  Switch,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, AppState, Modal, Platform, Pressable, Share, Switch, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import type {
   MatchResult,

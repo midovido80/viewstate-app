@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Action } from '@/components/assistant/ui';
 import { Row, useL } from '@/components/account/ui';

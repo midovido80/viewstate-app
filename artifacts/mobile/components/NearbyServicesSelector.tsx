@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { PropertyFormCard } from '@/components/PropertyFormCard';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { ChoiceTile as ChoiceChip, ChoiceGrid } from '@/components/FormChoices';
 import { COMMERCIAL_NEARBY_SERVICES, DEMO_NEARBY_SERVICES } from '@/services/propertyDemoCatalog';
 

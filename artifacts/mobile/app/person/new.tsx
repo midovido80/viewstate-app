@@ -1,3 +1,4 @@
+import { Text } from "@/components/AppText";
 import { useDraftBack, useLocalFormDraft } from '@/hooks/useDraftBack';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -5,7 +6,7 @@ import { TextInput, FieldSelect } from '@/components/FormField';
 import { useUserData } from '@/contexts/UserDataContext';
 import { CANCEL_ACTION_COLOR } from '@/constants/cancelAction';
 import { useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { Button } from '@/components/Button';

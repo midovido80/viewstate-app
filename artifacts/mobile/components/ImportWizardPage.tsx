@@ -1,12 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useEffect, useRef } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/contexts/I18nContext';
 import { useScreenInsets } from '@/hooks/useScreenInsets';

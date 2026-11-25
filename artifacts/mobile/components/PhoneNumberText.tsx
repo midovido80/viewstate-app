@@ -1,4 +1,5 @@
-import { Text, type TextProps } from 'react-native';
+import { Text } from "@/components/AppText";
+import { type TextProps } from 'react-native';
 
 export function PhoneNumberText({ children, style, ...props }: TextProps & { children: string }) {
   return <Text {...props} accessibilityLabel={props.accessibilityLabel ?? children}

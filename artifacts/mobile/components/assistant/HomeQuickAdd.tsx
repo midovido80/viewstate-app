@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { Feather } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useAccountFoundation } from '@/contexts/AccountFoundationContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { nextDesign as colors } from '@/constants/nextDesign';

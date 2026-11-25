@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import {
   matchingRefinementFields,
   type MatchingPolicy,

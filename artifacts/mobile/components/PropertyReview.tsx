@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import type { ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useI18n } from '@/contexts/I18nContext';

@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import { useCallback, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { SeekerRequirement } from '@workspace/property-domain';
 import { Button } from '@/components/Button';

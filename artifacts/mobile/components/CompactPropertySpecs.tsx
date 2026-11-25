@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useI18n } from '@/contexts/I18nContext';
 import { PropertySpecIcon } from '@/components/PropertySpecIcon';
 import { choiceTileWidth } from '@/services/choicePresentation';

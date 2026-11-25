@@ -1,6 +1,7 @@
+import { Text } from "@/components/AppText";
 import { PropertyFormCard } from '@/components/PropertyFormCard';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useI18n } from '@/contexts/I18nContext';

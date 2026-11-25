@@ -1,5 +1,6 @@
+import { Text } from "@/components/AppText";
 import React, { useState } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScreenInsets } from '@/hooks/useScreenInsets';
 import { useCapture } from '@/contexts/CaptureContext';
