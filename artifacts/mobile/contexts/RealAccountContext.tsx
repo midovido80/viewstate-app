@@ -288,7 +288,35 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   </ScrollView></SafeAreaView>;
   if (active && stage === 'profile') return <AccountProfileForm userId={active.lease.account.userId} email={active.lease.account.email} initial={active.profile ?? (pendingTransfer.current ? { user_id: active.lease.account.userId, display_name: pendingTransfer.current.name, phone: pendingTransfer.current.phone, company: '', classification: '' as UserContactProfile['classification'], other_classification: '' } : null)} photo={active.photo} onSave={saveContact} onCancel={() => void signOut()} />;
   if (active && stage === 'welcome') return <View style={{ flex: 1 }}><Welcome name={active.profile?.display_name} reducedMotion={active.reducedMotion} busy={busy} onDone={() => void finishWelcome()} />{error ? <Text accessibilityRole="alert" style={[s.red, { padding: 16 }]}>{error}</Text> : null}</View>;
-  if (active?.profile && stage === 'ready') return <Context.Provider value={{ email: active.lease.account.email, profile: active.profile, photo: active.photo, request: createWorkspaceAccountRequest(active.resources, device.current!), assertActive: () => assertCurrent(active), saveContact, signOut }}><UserDataProvider value={active.data}><View key={active.id} style={{flex:1}}><WorkspaceConnection resources={active.resources} device={device.current!} revalidate={active.lease.revalidate} /><View style={{flex:1}}>{children}</View></View></UserDataProvider></Context.Provider>;
+  if (active?.profile && stage === "ready")
+    return (
+      <Context.Provider
+        value={{
+          email: active.lease.account.email,
+          profile: active.profile,
+          photo: active.photo,
+          request: createWorkspaceAccountRequest(
+            active.resources,
+            device.current!,
+          ),
+          assertActive: () => assertCurrent(active),
+          saveContact,
+          signOut,
+        }}
+      >
+        <UserDataProvider value={active.data}>
+          <View key={active.id} style={{ flex: 1 }}>
+            <WorkspaceConnection
+              resources={active.resources}
+              device={device.current!}
+              revalidate={active.lease.revalidate}
+            >
+              <View style={{ flex: 1 }}>{children}</View>
+            </WorkspaceConnection>
+          </View>
+        </UserDataProvider>
+      </Context.Provider>
+    );
   return <AccountEntryScreen checking={stage === 'checking'} failed={stage === 'error'} busy={busy} error={error}
     onGoogle={() => void signIn()} onGuest={() => void startGuest()} onRetry={() => void bootstrap(true)}
     onSignOut={device.current ? () => void signOut() : undefined}
