@@ -1,30 +1,53 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState, Platform } from 'react-native';
-import { useRealAccount } from '@/contexts/RealAccountContext';
-import { circleRpc } from '@/services/circleMatchingApi';
-import { isCirclePush } from '@/services/circlePush';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { AppState, Platform } from "react-native";
+import { useRealAccount } from "@/contexts/RealAccountContext";
+import { circleRpc } from "@/services/circleMatchingApi";
+import { isCirclePush } from "@/services/circlePush";
 
-export type CircleNoticeKind = 'invite' | 'join_request' | 'match' | 'listing' | 'cooperation' | 'test';
+export type CircleNoticeKind =
+  "invite" | "join_request" | "match" | "listing" | "cooperation" | "test";
 export type CircleNoticeTarget = {
-  kind: 'invite' | 'circle' | 'listing' | 'requirement' | 'cooperation' | 'test';
+  kind:
+    "invite" | "circle" | "listing" | "requirement" | "cooperation" | "test";
   circleId?: string;
   targetId?: string;
   matchId?: string;
 };
 type Inbox = {
   unread: number;
-  entries: { id: string; kind: CircleNoticeKind; created_at: string; read_at: string | null }[];
+  entries: {
+    id: string;
+    kind: CircleNoticeKind;
+    created_at: string;
+    read_at: string | null;
+    member_name?: string | null;
+  }[];
 };
 const empty: Inbox = { unread: 0, entries: [] };
 const CircleNotifications = createContext({
-  inbox: empty, failed: false,
+  inbox: empty,
+  failed: false,
   refresh: async () => {},
   markRead: async (_id: string): Promise<CircleNoticeTarget | null> => null,
 });
 
-export function CircleNotificationsProvider({ children }: { children: ReactNode }) {
+export function CircleNotificationsProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const owner = useRealAccount()?.profile.user_id;
-  return <CircleInboxSession key={owner ?? 'guest'}>{children}</CircleInboxSession>;
+  return (
+    <CircleInboxSession key={owner ?? "guest"}>{children}</CircleInboxSession>
+  );
 }
 
 function CircleInboxSession({ children }: { children: ReactNode }) {
@@ -40,7 +63,10 @@ function CircleInboxSession({ children }: { children: ReactNode }) {
     if (!api) return;
     const turn = ++version.current;
     try {
-      const next = await circleRpc<Inbox>(api, 'vs_circle_notification_inbox_v2');
+      const next = await circleRpc<Inbox>(
+        api,
+        "vs_circle_notification_inbox_v3",
+      );
       if (version.current === turn) {
         setInbox(next);
         setFailed(false);
@@ -49,37 +75,61 @@ function CircleInboxSession({ children }: { children: ReactNode }) {
       if (version.current === turn) setFailed(true);
     }
   }, []);
-  const markRead = useCallback(async (id: string) => {
-    const api = request.current;
-    if (!api) return null;
-    const target = await circleRpc<CircleNoticeTarget | null>(api, 'vs_circle_notification_open', { p_id: id });
-    version.current++;
-    setInbox(current => {
-      const unread = current.entries.some(entry => entry.id === id && !entry.read_at);
-      return unread ? {
-        unread: Math.max(0, current.unread - 1),
-        entries: current.entries.map(entry => entry.id === id ? { ...entry, read_at: new Date().toISOString() } : entry),
-      } : current;
-    });
-    void refresh();
-    return target;
-  }, [refresh]);
+  const markRead = useCallback(
+    async (id: string) => {
+      const api = request.current;
+      if (!api) return null;
+      const target = await circleRpc<CircleNoticeTarget | null>(
+        api,
+        "vs_circle_notification_open",
+        { p_id: id },
+      );
+      version.current++;
+      setInbox((current) => {
+        const unread = current.entries.some(
+          (entry) => entry.id === id && !entry.read_at,
+        );
+        return unread
+          ? {
+              unread: Math.max(0, current.unread - 1),
+              entries: current.entries.map((entry) =>
+                entry.id === id
+                  ? { ...entry, read_at: new Date().toISOString() }
+                  : entry,
+              ),
+            }
+          : current;
+      });
+      void refresh();
+      return target;
+    },
+    [refresh],
+  );
 
   useEffect(() => {
     if (!authenticated) return;
     let active = true;
     let stopPush: (() => void) | undefined;
-    const check = () => { if (AppState.currentState !== 'background') void refresh(); };
+    const check = () => {
+      if (AppState.currentState !== "background") void refresh();
+    };
     check();
     const timer = setInterval(check, 15_000);
-    const state = AppState.addEventListener('change', next => { if (next === 'active') check(); });
-    if (Platform.OS === 'android') void import('expo-notifications').then(notifications => {
-      if (!active) return;
-      const subscription = notifications.addNotificationReceivedListener(notification => {
-        if (isCirclePush(notification.request.content.data)) check();
-      });
-      stopPush = () => subscription.remove();
-    }).catch(() => undefined);
+    const state = AppState.addEventListener("change", (next) => {
+      if (next === "active") check();
+    });
+    if (Platform.OS === "android")
+      void import("expo-notifications")
+        .then((notifications) => {
+          if (!active) return;
+          const subscription = notifications.addNotificationReceivedListener(
+            (notification) => {
+              if (isCirclePush(notification.request.content.data)) check();
+            },
+          );
+          stopPush = () => subscription.remove();
+        })
+        .catch(() => undefined);
     return () => {
       active = false;
       version.current++;
@@ -89,7 +139,11 @@ function CircleInboxSession({ children }: { children: ReactNode }) {
     };
   }, [authenticated, refresh]);
 
-  return <CircleNotifications.Provider value={{ inbox, failed, refresh, markRead }}>{children}</CircleNotifications.Provider>;
+  return (
+    <CircleNotifications.Provider value={{ inbox, failed, refresh, markRead }}>
+      {children}
+    </CircleNotifications.Provider>
+  );
 }
 
 export const useCircleNotifications = () => useContext(CircleNotifications);
