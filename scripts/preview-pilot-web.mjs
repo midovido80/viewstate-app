@@ -5,9 +5,14 @@ import path from "node:path";
 import { assertPilotSource, repositoryRoot } from "./pilot-source.mjs";
 import { fingerprintPreviewInputs } from "./preview-inputs.mjs";
 
-const before = assertPilotSource({ preview: true });
+const pilot2 = process.argv.includes("--pilot2");
+const previewOptions = { preview: true, pilot2 };
+const before = assertPilotSource(previewOptions);
 const mobile = path.join(repositoryRoot, "artifacts/mobile");
-const output = path.join(repositoryRoot, ".preview/pilot-web");
+const output = path.join(
+  repositoryRoot,
+  pilot2 ? ".preview/pilot2-web" : ".preview/pilot-web",
+);
 async function fingerprint() {
   const names = execFileSync(
     "git",
@@ -45,7 +50,7 @@ const build = spawnSync(
 );
 if (build.error || build.status !== 0)
   throw Error("PILOT_PREVIEW_BUILD_FAILED");
-const after = assertPilotSource({ preview: true });
+const after = assertPilotSource(previewOptions);
 if (before.head !== after.head || inputHash !== (await fingerprint()))
   throw Error("PILOT_PREVIEW_SOURCE_CHANGED: restart the preview build");
 const proof = {
@@ -81,7 +86,7 @@ const handler = async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     res.setHeader("Cache-Control", "no-store");
     if (url.pathname === "/__source") {
-      const current = assertPilotSource({ preview: true });
+      const current = assertPilotSource(previewOptions);
       res.setHeader("Content-Type", "application/json");
       res.end(
         JSON.stringify({
@@ -103,7 +108,7 @@ const handler = async (req, res) => {
       file = path.join(output, "index.html");
     }
     if (path.extname(file) === ".html") {
-      assertPilotSource({ preview: true });
+      assertPilotSource(previewOptions);
       if (inputHash !== (await fingerprint())) {
         res
           .writeHead(409)

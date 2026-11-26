@@ -26,7 +26,9 @@ import { accountEntryStage, ONBOARDING_SEEN_KEY } from '@/services/accountOnboar
 import {validateUserContactProfile,type UserContactProfile} from '@/services/googleAccountContract';
 import { clearMatchingReturn } from '@/services/matchingReturnSession';
 import { stopMatchCue } from '@/services/matchNoticeDevice';
-import { AccountProfileForm, accountScreenStyles as s, type ContactInput } from '@/components/account/AccountProfileForm';
+import { AccountProfileForm, type ContactInput } from '@/components/account/AccountProfileForm';
+
+import { useAccountScreenStyles } from '@/components/account/identityStyles';
 
 type Device = Awaited<ReturnType<typeof createGoogleAccountDevice>>;
 type Lease = Awaited<ReturnType<Device['account']['openScope']>>;
@@ -44,6 +46,7 @@ export function RealAccountGate({ children }: { children: React.ReactNode }) {
   const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const configured = Boolean(url || publishableKey);
   const { language, isRTL } = useI18n();
+  const s = useAccountScreenStyles();
   const L = (ar: string, en: string) => language === 'ar' ? ar : en;
   const [stage, setStage] = useState<'checking' | 'signin' | 'profile' | 'welcome' | 'ready' | 'error' | 'guest_profile' | 'guest_welcome' | 'guest_ready' | 'transfer'>('checking');
   const [guest, setGuest] = useState<GuestActive | null>(null);

@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - "codex/latest-pilot-2026-11-23"
+      - "codex/pilot-2"
   push:
     branches:
       - main
       - "codex/latest-pilot-2026-11-23"
+      - "codex/pilot-2"
       - "fix/offline-session-sync-*"
       - "work/viewstate-next-*"
   workflow_dispatch:
