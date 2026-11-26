@@ -13,6 +13,8 @@ import { useI18n } from "@/contexts/I18nContext";
 import { validateGuestContact } from "@/services/guestAccount";
 import { useAccountScreenStyles } from "./identityStyles";
 import { IdentityBrand } from "./IdentityBrand";
+import { StatusBar } from "expo-status-bar";
+import { pilot2Theme } from "@/constants/pilot2Theme";
 export function GuestProfileForm({
   name: initialName = "",
   phone: initialPhone = "",
@@ -77,6 +79,7 @@ export function GuestProfileForm({
   };
   return (
     <SafeAreaView style={s.safe}>
+      <StatusBar style="dark" backgroundColor={pilot2Theme.color.background} />
       <KeyboardAvoidingView
         style={s.safe}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -109,6 +112,7 @@ export function GuestProfileForm({
             onChangeText={(v) => {
               setName(v);
               setField("");
+              setError("");
             }}
             maxLength={100}
             editable={!busy}
@@ -130,6 +134,7 @@ export function GuestProfileForm({
             onChangeText={(v) => {
               setPhone(v);
               setField("");
+              setError("");
             }}
             maxLength={30}
             editable={!busy}

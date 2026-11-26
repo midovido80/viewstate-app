@@ -41,7 +41,10 @@ export function AccountEntryScreen(p: Props) {
   const blocked = p.busy || p.checking;
   return (
     <SafeAreaView style={[s.safe, intro && s.intro]}>
-      <StatusBar style={intro ? "light" : "dark"} />
+      <StatusBar
+        style={intro ? "light" : "dark"}
+        backgroundColor={intro ? theme.color.primary : theme.color.background}
+      />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={s.page}
@@ -91,12 +94,14 @@ export function AccountEntryScreen(p: Props) {
             )}
           </Text>
         </View>
-        <Image
-          accessible={false}
-          source={require("@/assets/images/pilot2-welcome.png")}
-          resizeMode="cover"
-          style={[s.hero, intro && s.introHero]}
-        />
+        <View style={[s.hero, intro && s.introHero]}>
+          <Image
+            accessible={false}
+            source={require("@/assets/images/pilot2-welcome.png")}
+            resizeMode="cover"
+            style={s.heroImage}
+          />
+        </View>
         {intro ? (
           <IdentityButton
             label={L("ابدأ", "Get started")}
@@ -223,7 +228,13 @@ const s = StyleSheet.create({
   },
   heading: { alignItems: "center", gap: theme.space.lg },
   center: { textAlign: "center" },
-  hero: { width: "100%", aspectRatio: 1.7, borderRadius: theme.radius.card },
+  hero: {
+    width: "100%",
+    aspectRatio: 1.7,
+    borderRadius: theme.radius.card,
+    overflow: "hidden",
+  },
+  heroImage: { width: "100%", height: "100%" },
   introHero: { aspectRatio: 1.2, borderRadius: theme.radius.hero },
   actions: { gap: theme.space.md, marginTop: "auto" },
   checking: {

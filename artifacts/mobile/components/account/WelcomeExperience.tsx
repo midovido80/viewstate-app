@@ -10,6 +10,7 @@ import {
 } from "@/constants/pilot2Theme";
 import { IdentityBrand } from "./IdentityBrand";
 import { IdentityButton } from "./IdentityButton";
+import { StatusBar } from "expo-status-bar";
 
 export function WelcomeExperience({
   onDone,
@@ -63,6 +64,7 @@ export function WelcomeExperience({
   ];
   return (
     <SafeAreaView style={s.safe}>
+      <StatusBar style="dark" backgroundColor={theme.color.background} />
       <ScrollView contentContainerStyle={s.page}>
         <IdentityBrand compact />
         <View style={s.heading}>

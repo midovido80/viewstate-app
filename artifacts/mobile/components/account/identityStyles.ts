@@ -60,11 +60,6 @@ export function useAccountScreenStyles() {
         borderColor: t.color.danger,
         backgroundColor: t.color.dangerSoft,
       },
-      select: {
-        ...direction,
-        alignItems: "center",
-        justifyContent: "space-between",
-      },
       avatarRow: { ...direction, gap: t.space.lg, alignItems: "center" },
       avatar: {
         width: t.size.avatar,
@@ -94,30 +89,6 @@ export function useAccountScreenStyles() {
         ...type.label,
         color: t.color.onPrimary,
         textAlign: "center",
-      },
-      backdrop: {
-        flex: 1,
-        justifyContent: "center",
-        padding: t.space.xl,
-        backgroundColor: t.color.scrim,
-      },
-      sheet: {
-        width: "100%",
-        maxWidth: t.size.page,
-        alignSelf: "center",
-        backgroundColor: t.color.surface,
-        borderRadius: t.radius.card,
-        padding: t.space.xl,
-        gap: t.space.sm,
-      },
-      role: {
-        ...direction,
-        minHeight: t.size.touch,
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderBottomWidth: 1,
-        borderBottomColor: t.color.border,
-        paddingVertical: t.space.md,
       },
       roleChoices: { ...direction, flexWrap: "wrap", gap: t.space.sm },
       roleChoice: {

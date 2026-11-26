@@ -25,6 +25,7 @@ import { chooseLocalProfilePhoto } from "@/services/accountDevice";
 import { pilot2Theme as theme } from "@/constants/pilot2Theme";
 import { useAccountScreenStyles } from "./identityStyles";
 import { IdentityBrand } from "./IdentityBrand";
+import { StatusBar } from "expo-status-bar";
 
 export type ContactInput = Omit<UserContactProfile, "user_id">;
 export function AccountProfileForm({
@@ -194,6 +195,7 @@ export function AccountProfileForm({
   };
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
+      <StatusBar style="dark" backgroundColor={theme.color.background} />
       <KeyboardAvoidingView
         style={s.safe}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
