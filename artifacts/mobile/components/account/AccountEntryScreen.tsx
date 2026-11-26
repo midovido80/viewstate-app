@@ -1,40 +1,250 @@
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather, FontAwesome } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { Text } from "@/components/AppText";
-import React from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, FontAwesome } from '@expo/vector-icons';
-import { ViewStateBrand } from '@/components/brand/ViewStateBrand';
-import { useI18n } from '@/contexts/I18nContext';
-import { useColors } from '@/hooks/useColors';
+import { useI18n } from "@/contexts/I18nContext";
+import {
+  pilot2Theme as theme,
+  pilot2Typography,
+} from "@/constants/pilot2Theme";
+import { IdentityBrand } from "./IdentityBrand";
+import { IdentityButton } from "./IdentityButton";
 
-type Props = { checking: boolean; failed: boolean; busy: boolean; error: string; onGoogle(): void; onGuest(): void; onRetry(): void; onSignOut?: () => void; onOpenBrowser?: () => void };
-/** Real Google and local Guest use the existing gate; unconfigured providers cannot collect credentials. */
+type Props = {
+  checking: boolean;
+  failed: boolean;
+  busy: boolean;
+  error: string;
+  onGoogle(): void;
+  onGuest(): void;
+  onRetry(): void;
+  onSignOut?: () => void;
+  onOpenBrowser?: () => void;
+};
+
 export function AccountEntryScreen(p: Props) {
-  const { language, setLanguage, isRTL, fonts } = useI18n(), c = useColors(), ar = language === 'ar';
-  const L = (a: string, e: string) => ar ? a : e;
-  const text = { fontFamily: fonts.regular, color: c.text, textAlign: isRTL ? 'right' as const : 'left' as const };
-  const button = (label: string, onPress: () => void, icon?: React.ReactNode, testID?: string, primary = false) => <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ disabled: p.busy }} disabled={p.busy} onPress={onPress} style={({ pressed }) => [s.button, { backgroundColor: primary ? c.primary : 'white', borderColor: primary ? c.primary : c.border, opacity: p.busy ? .5 : pressed ? .75 : 1 }]}>{p.busy && primary ? <ActivityIndicator color="white" /> : icon}<Text style={{ fontFamily: fonts.bold, color: primary ? 'white' : c.text, fontSize: 15 }}>{label}</Text></Pressable>;
-  return <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.page}>
-      <Pressable accessibilityRole="button" onPress={() => setLanguage(ar ? 'en' : 'ar')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text style={[text, { color: c.primary }]}>{ar ? 'English' : 'العربية'}</Text></Pressable>
-      <View style={{ alignItems: 'center', gap: 14, marginBottom: 16 }}><ViewStateBrand large /><Text accessibilityRole="header" style={{ fontFamily: fonts.bold, fontSize: 29, color: c.text }}>{L('أهلًا بعودتك', 'Welcome back')}</Text><Text style={[text, { textAlign: 'center', color: c.mutedForeground, fontSize: 15 }]}>{L('مساعدك العقاري الشخصي، كل يوم.', 'Your personal property assistant, every day.')}</Text></View>
-      <View style={s.card}>
-        {/* Disabled until a complete email signup/recovery service is implemented. Never request a Google password. */}
-        <Text style={[text, { fontFamily: fonts.semiBold }]}>{L('البريد الإلكتروني', 'Email')}</Text>
-        <View accessibilityState={{ disabled: true }} style={s.unavailableField}><Feather name="mail" size={18} color={c.mutedForeground} /><Text style={[text, { color: c.mutedForeground, flex: 1 }]}>name@example.com</Text></View>
-        <Text style={[text, { fontFamily: fonts.semiBold }]}>{L('كلمة المرور', 'Password')}</Text>
-        <View accessibilityState={{ disabled: true }} style={s.unavailableField}><Feather name="lock" size={18} color={c.mutedForeground} /><Text style={{ color: c.mutedForeground, flex: 1 }}>••••••••</Text><Feather name="eye-off" size={18} color={c.mutedForeground} /></View>
-        <Text style={[text, { fontSize: 12, lineHeight: 19, color: c.mutedForeground }]}>{L('الدخول بالبريد وكلمة المرور غير مفعّل حاليًا. تابع باستخدام Google أو استخدم التطبيق كضيف.', 'Email/password sign-in is not activated. Continue with Google or use the app as a guest.')}</Text>
-        {p.error ? <View accessibilityRole="alert" style={s.error}><Text style={[text, { color: c.destructive, lineHeight: 22 }]}>{p.error}</Text></View> : null}
-        {p.checking ? <ActivityIndicator size="large" color={c.primary} /> : p.failed ? <>{button(L('إعادة المحاولة', 'Retry'), p.onRetry, undefined, undefined, true)}{p.onSignOut && button(L('تسجيل الخروج', 'Sign out'), p.onSignOut)}</> : button(L('المتابعة باستخدام Google', 'Sign in with Google'), p.onGoogle, <FontAwesome name="google" size={19} color="white" />, 'google-sign-in', true)}
-        <View accessibilityState={{ disabled: true }} style={[s.button, { backgroundColor: '#F4F6FA', borderColor: c.border, opacity: .65 }]}><FontAwesome name="apple" size={21} color={c.text} /><Text style={[text, { fontFamily: fonts.medium }]}>{L('Apple — لاحقًا', 'Apple — coming later')}</Text></View>
-        <View style={s.separator}><View style={s.line} /><Text style={{ fontFamily: fonts.regular, color: c.mutedForeground }}>{L('أو', 'or')}</Text><View style={s.line} /></View>
-        {button(L('استخدام بدون حساب', 'Use as guest'), p.onGuest, <Feather name="user" size={19} color={c.primary} />, 'use-as-guest')}
-        <Text style={[text, { color: c.mutedForeground, fontSize: 12, lineHeight: 20, textAlign: 'center' }]}>{L('بدون حساب، تُحفظ عقاراتك وعملاؤك على هذا الجهاز. يمكنك تفعيل حسابك لاحقًا من الإعدادات.', 'As a guest, properties and clients stay on this device. Activate your account later in Settings.')}</Text>
-      </View>
-      {p.onOpenBrowser && button(L('فتح في تبويب مستقل', 'Open in a separate tab'), p.onOpenBrowser, <Feather name="external-link" size={17} color={c.primary} />)}
-      <Text style={[text, { color: c.mutedForeground, fontSize: 11, lineHeight: 18, textAlign: 'center' }]}>{L('لا نطلب كلمة مرور Google داخل ViewState. مزامنة العقارات والميديا سحابيًا لم تُفعّل بعد.', 'We never ask for your Google password in ViewState. Property and media cloud sync is not activated yet.')}</Text>
-    </ScrollView>
-  </KeyboardAvoidingView></SafeAreaView>;
+  const { language, setLanguage, fonts } = useI18n();
+  const ar = language === "ar";
+  const L = (a: string, e: string) => (ar ? a : e);
+  const type = pilot2Typography(fonts);
+  const [started, setStarted] = useState(false);
+  const intro = !started && !p.checking && !p.failed && !p.error;
+  const blocked = p.busy || p.checking;
+  return (
+    <SafeAreaView style={[s.safe, intro && s.intro]}>
+      <StatusBar
+        style={intro ? "light" : "dark"}
+        backgroundColor={intro ? theme.color.primary : theme.color.background}
+      />
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={s.page}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={L("التبديل إلى الإنجليزية", "Switch to Arabic")}
+          onPress={() => setLanguage(ar ? "en" : "ar")}
+          style={s.language}
+        >
+          <Text
+            style={[
+              type.label,
+              { color: intro ? theme.color.onPrimary : theme.color.primary },
+            ]}
+          >
+            {ar ? "English" : "العربية"}
+          </Text>
+        </Pressable>
+        <View style={s.heading}>
+          <IdentityBrand inverse={intro} />
+          <Text
+            accessibilityRole="header"
+            style={[
+              type.title,
+              s.center,
+              { color: intro ? theme.color.onPrimary : theme.color.text },
+            ]}
+          >
+            {intro
+              ? L(
+                  "علاقات موثوقة. صفقات أوضح.",
+                  "Trusted connections. Clearer deals.",
+                )
+              : L("أهلًا بك", "Welcome")}
+          </Text>
+          <Text
+            style={[
+              type.body,
+              s.center,
+              { color: intro ? theme.color.onPrimary : theme.color.muted },
+            ]}
+          >
+            {L(
+              "عقاراتك وعملاؤك وفرص التعاون، في مكان واحد.",
+              "Your properties, clients and opportunities, together.",
+            )}
+          </Text>
+        </View>
+        <View style={[s.hero, intro && s.introHero]}>
+          <Image
+            accessible={false}
+            source={require("@/assets/images/pilot2-welcome.png")}
+            resizeMode="cover"
+            style={s.heroImage}
+          />
+        </View>
+        {intro ? (
+          <IdentityButton
+            label={L("ابدأ", "Get started")}
+            secondary
+            testID="identity-start"
+            onPress={() => setStarted(true)}
+          />
+        ) : (
+          <View style={s.actions}>
+            {p.error ? (
+              <View accessibilityRole="alert" style={s.error}>
+                <Text
+                  selectable
+                  style={[type.body, { color: theme.color.danger }]}
+                >
+                  {p.error}
+                </Text>
+              </View>
+            ) : null}
+            {p.checking ? (
+              <View accessibilityLiveRegion="polite" style={s.checking}>
+                <ActivityIndicator color={theme.color.primary} />
+                <Text
+                  style={[type.body, s.center, { color: theme.color.muted }]}
+                >
+                  {L("جارٍ فتح حسابك…", "Opening your account…")}
+                </Text>
+              </View>
+            ) : p.failed ? (
+              <>
+                <IdentityButton
+                  label={L("إعادة المحاولة", "Retry")}
+                  onPress={p.onRetry}
+                  busy={p.busy}
+                  testID="account-entry-retry"
+                />
+                {p.onSignOut ? (
+                  <IdentityButton
+                    label={L("تسجيل الخروج", "Sign out")}
+                    secondary
+                    onPress={p.onSignOut}
+                    disabled={blocked}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <IdentityButton
+                label={L("الدخول بحساب Google", "Continue with Google")}
+                secondary
+                onPress={p.onGoogle}
+                busy={p.busy}
+                icon={
+                  <FontAwesome
+                    name="google"
+                    size={theme.size.icon}
+                    color={theme.color.primary}
+                  />
+                }
+                testID="google-sign-in"
+              />
+            )}
+            <IdentityButton
+              label={L("تجربة بدون حساب", "Try as a guest")}
+              onPress={p.onGuest}
+              disabled={blocked}
+              icon={
+                <Feather
+                  name="user"
+                  size={theme.size.icon}
+                  color={theme.color.onPrimary}
+                />
+              }
+              testID="use-as-guest"
+            />
+            <Text
+              style={[type.caption, s.center, { color: theme.color.muted }]}
+            >
+              {L(
+                "تجربة الضيف تحفظ بياناتك على هذا الجهاز فقط. يمكنك تفعيل حسابك لاحقًا من الإعدادات.",
+                "Guest data stays on this device. You can activate your account later in Settings.",
+              )}
+            </Text>
+            {p.onOpenBrowser ? (
+              <IdentityButton
+                label={L("فتح في تبويب مستقل", "Open in a separate tab")}
+                secondary
+                onPress={p.onOpenBrowser}
+                disabled={blocked}
+              />
+            ) : null}
+            <Text
+              style={[type.caption, s.center, { color: theme.color.muted }]}
+            >
+              {L(
+                "الدخول الآمن يتم عبر Google، دون إدخال كلمة مرورك هنا.",
+                "Sign in securely through Google, without entering your password here.",
+              )}
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
-const s = StyleSheet.create({ page: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingTop: 8, paddingBottom: 26, gap: 12, maxWidth: 470, width: '100%', alignSelf: 'center' }, card: { borderWidth: 1, borderColor: '#DBE3EF', backgroundColor: 'white', borderRadius: 22, padding: 20, gap: 11, shadowColor: '#172C4D', shadowOpacity: .04, shadowRadius: 18, shadowOffset: { width: 0, height: 6 } }, button: { minHeight: 50, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }, unavailableField: { minHeight: 48, paddingHorizontal: 13, backgroundColor: '#F5F7FB', borderColor: '#DBE3EF', borderWidth: 1, borderRadius: 13, flexDirection: 'row', gap: 10, alignItems: 'center' }, separator: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 3 }, line: { flex: 1, height: 1, backgroundColor: '#E5EAF2' }, error: { padding: 12, borderRadius: 12, backgroundColor: '#FFF1F2' } });
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.color.background },
+  intro: { backgroundColor: theme.color.primary },
+  page: {
+    flexGrow: 1,
+    paddingHorizontal: theme.space.xl,
+    paddingBottom: theme.space.xl,
+    gap: theme.space.xl,
+    width: "100%",
+    maxWidth: theme.size.page,
+    alignSelf: "center",
+  },
+  language: {
+    minHeight: theme.size.touch,
+    minWidth: theme.size.touch,
+    alignSelf: "flex-end",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heading: { alignItems: "center", gap: theme.space.lg },
+  center: { textAlign: "center" },
+  hero: {
+    width: "100%",
+    aspectRatio: 1.7,
+    borderRadius: theme.radius.card,
+    overflow: "hidden",
+  },
+  heroImage: { width: "100%", height: "100%" },
+  introHero: { aspectRatio: 1.2, borderRadius: theme.radius.hero },
+  actions: { gap: theme.space.md, marginTop: "auto" },
+  checking: {
+    alignItems: "center",
+    gap: theme.space.sm,
+    padding: theme.space.md,
+  },
+  error: {
+    padding: theme.space.md,
+    borderRadius: theme.radius.control,
+    backgroundColor: theme.color.dangerSoft,
+  },
+});

@@ -10,7 +10,8 @@
     "test:release": "node --test tests/release-source.test.mjs",
     "release:check": "node scripts/check-pilot-source.mjs",
     "release:pilot": "node scripts/publish-pilot-update.mjs",
-    "preview:web": "node scripts/preview-pilot-web.mjs"
+    "preview:web": "node scripts/preview-pilot-web.mjs",
+    "preview:pilot2": "node scripts/preview-pilot-web.mjs --pilot2"
   },
   "private": true,
   "dependencies": {

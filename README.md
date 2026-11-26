@@ -21,3 +21,5 @@ See [the source and release policy](docs/releases/pilot-source-policy-20261123.a
 The [Claude report remediation results](docs/releases/claude-report-fixes-20261123.ar.md) record source fixes, regression checks, pending deployment and remaining product/device decisions.
 
 The [multi-recipient invitation change](docs/viewstate-next/multi-recipient-invitations-20261124.ar.md) adds phone/saved-person selection, private batch invitations and individual WhatsApp drafts. It remains a source change awaiting separate deployment.
+
+Pilot 2 is a separate, unpublished visual redesign on `codex/pilot-2`. Feature PRs target that integration branch. Run `npm run preview:pilot2` there for a rebuilt local preview on port 8082, and verify `/__source`. This does not change the release branch, OTA channel, native app identity or hosted database. See [the staged redesign contract](docs/viewstate-next/pilot2-stage1-20261126.ar.md).

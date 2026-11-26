@@ -1,62 +1,159 @@
+import React, { useEffect, useRef, useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { Text } from "@/components/AppText";
-import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Easing, Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { useI18n } from '@/contexts/I18nContext';
-import { useColors } from '@/hooks/useColors';
-import { ViewStateMark } from '@/components/brand/ViewStateBrand';
+import { useI18n } from "@/contexts/I18nContext";
+import {
+  pilot2Theme as theme,
+  pilot2Typography,
+} from "@/constants/pilot2Theme";
+import { IdentityBrand } from "./IdentityBrand";
+import { IdentityButton } from "./IdentityButton";
+import { StatusBar } from "expo-status-bar";
 
-/** Only mounted for the existing first-use journey. No auth/session logic lives here. */
-export function WelcomeExperience({ reducedMotion, onDone, busy, name }: { reducedMotion: boolean; onDone(): void; busy: boolean; name?: string }) {
-  const { language, isRTL, fonts } = useI18n(), c = useColors(), ar = language === 'ar';
-  const [systemReduced, setSystemReduced] = useState(true);
-  const reveal = useRef(new Animated.Value(1)).current, pulse = useRef(new Animated.Value(0)).current;
-  const done = useRef(onDone); done.current = onDone;
-  const completed = useRef(false);
-  const finish = () => { if (busy || completed.current) return; completed.current = true; done.current(); };
-  // If a persistence failure keeps the welcome mounted, the user can retry.
-  useEffect(() => { if (!busy) completed.current = false; }, [busy]);
+export function WelcomeExperience({
+  onDone,
+  busy,
+  name,
+}: {
+  reducedMotion: boolean;
+  onDone(): void;
+  busy: boolean;
+  name?: string;
+}) {
+  const { language, fonts, isRTL } = useI18n();
+  const ar = language === "ar";
+  const type = pilot2Typography(fonts);
+  const [submitted, setSubmitted] = useState(false);
+  const locked = useRef(false);
   useEffect(() => {
-    let alive = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then(v => { if (alive) setSystemReduced(v); }).catch(() => undefined);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setSystemReduced);
-    return () => { alive = false; sub.remove(); };
-  }, []);
-  useEffect(() => {
-    if (reducedMotion || systemReduced) { reveal.setValue(1); pulse.setValue(0); return; }
-    reveal.setValue(0);
-    const entry = Animated.timing(reveal, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true });
-    const breathe = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 1350, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0, duration: 1350, useNativeDriver: true }),
-    ]));
-    entry.start(); breathe.start();
-    return () => { entry.stop(); breathe.stop(); };
-  }, [reducedMotion, systemReduced, reveal, pulse]);
-  useEffect(() => {
-    if (busy || reducedMotion || systemReduced) return;
-    const timer = setTimeout(() => { if (AppState.currentState === 'active' || !AppState.currentState) finish(); }, 5200);
-    return () => clearTimeout(timer);
-  }, [busy, reducedMotion, systemReduced]);
-  const text = { fontFamily: fonts.regular, color: c.mutedForeground, textAlign: 'center' as const };
-  return <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-    <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24, gap: 20, width: '100%', maxWidth: 520, alignSelf: 'center' }}>
-      <Pressable disabled={busy} accessibilityRole="button" onPress={finish} style={{ alignSelf: 'flex-end', minHeight: 44, flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-        <Text style={{ color: c.primary, fontFamily: fonts.semiBold }}>{ar ? 'تخطي' : 'Skip'}</Text><Feather name={isRTL ? 'chevrons-left' : 'chevrons-right'} size={20} color={c.primary} />
-      </Pressable>
-      <Animated.View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24, paddingVertical: 28, opacity: reveal, transform: [{ translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }] }}>
-        <View style={{ width: 214, height: 214, alignItems: 'center', justifyContent: 'center' }}>
-          <Animated.View style={{ position: 'absolute', width: 202, height: 202, borderRadius: 101, borderWidth: 1, borderColor: '#D5E1FF', opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.45] }), transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.06] }) }] }} />
-          <View style={{ width: 166, height: 166, borderRadius: 83, backgroundColor: '#EAF0FF', alignItems: 'center', justifyContent: 'center' }}><ViewStateMark size={106} /></View>
+    if (!busy) {
+      locked.current = false;
+      setSubmitted(false);
+    }
+  }, [busy]);
+  const finish = () => {
+    if (busy || locked.current) return;
+    locked.current = true;
+    setSubmitted(true);
+    onDone();
+  };
+  const features = [
+    {
+      icon: "home" as const,
+      title: ar ? "عقاراتك مرتبة" : "Organized properties",
+      body: ar
+        ? "سجّل المعروض والمطلوب بطريقتك المعتادة."
+        : "Add offers and requirements using the familiar forms.",
+    },
+    {
+      icon: "users" as const,
+      title: ar ? "عملاؤك قريبون" : "Clients within reach",
+      body: ar
+        ? "احتفظ بتفاصيل الأشخاص وطلباتهم معًا."
+        : "Keep people and their requirements together.",
+    },
+    {
+      icon: "link" as const,
+      title: ar ? "تعاون بثقة" : "Work together",
+      body: ar
+        ? "راجع المطابقات واختر ما تشاركه مع زملائك."
+        : "Review matches and choose what to share with colleagues.",
+    },
+  ];
+  return (
+    <SafeAreaView style={s.safe}>
+      <StatusBar style="dark" backgroundColor={theme.color.background} />
+      <ScrollView contentContainerStyle={s.page}>
+        <IdentityBrand compact />
+        <View style={s.heading}>
+          <Text
+            accessibilityRole="header"
+            style={[type.title, s.center, { color: theme.color.text }]}
+          >
+            {name
+              ? ar
+                ? `أهلًا، ${name}`
+                : `Welcome, ${name}`
+              : ar
+                ? "جاهز لفرصتك القادمة؟"
+                : "Ready for your next opportunity?"}
+          </Text>
+          <Text style={[type.body, s.center, { color: theme.color.muted }]}>
+            {ar
+              ? "مساحة أهدأ لتنظيم شغلك العقاري، خطوة بخطوة."
+              : "A calmer place to organize your property work, step by step."}
+          </Text>
         </View>
-        <Text style={{ fontSize: 42, letterSpacing: -1.2, color: c.text, fontFamily: fonts.bold }}>ViewState</Text>
-        {!!name && <Text style={[text, { fontFamily: fonts.medium, fontSize: 16 }]}>{ar ? `أهلًا، ${name}` : `Welcome, ${name}`}</Text>}
-        <Text style={{ fontFamily: fonts.bold, color: c.text, fontSize: 25, lineHeight: 37, textAlign: 'center' }}>{ar ? 'عقاراتك. عملاؤك.\nفرصك القادمة.' : 'Your properties. Your clients.\nYour next opportunity.'}</Text>
-        <Text style={[text, { fontSize: 15, lineHeight: 25 }]}>{ar ? 'نظّم عقاراتك وعملاءك، اكتشف أقرب المطابقات، وتابع مواعيدك من مكان واحد.' : 'Organize properties and clients, discover your closest matches, and keep every follow-up in one place.'}</Text>
-        <View style={{ flexDirection: 'row', gap: 24 }}>{(['home', 'users', 'link'] as const).map(icon => <Feather key={icon} name={icon} size={22} color={c.primary} />)}</View>
-      </Animated.View>
-      <Pressable testID="account-welcome-start" accessibilityRole="button" disabled={busy} onPress={finish} style={({ pressed }) => ({ backgroundColor: c.primary, opacity: pressed || busy ? 0.7 : 1, borderRadius: 14, minHeight: 52, padding: 14, justifyContent: 'center', alignItems: 'center' })}>{busy ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontFamily: fonts.bold, fontSize: 16 }}>{ar ? 'ابدأ استخدام ViewState' : 'Start using ViewState'}</Text>}</Pressable>
-    </ScrollView>
-  </SafeAreaView>;
+        <View style={s.features}>
+          {features.map((feature) => (
+            <View
+              key={feature.icon}
+              style={[
+                s.feature,
+                { flexDirection: isRTL ? "row-reverse" : "row" },
+              ]}
+            >
+              <View style={s.icon}>
+                <Feather
+                  name={feature.icon}
+                  size={theme.size.icon}
+                  color={theme.color.primary}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[type.heading, { color: theme.color.text }]}>
+                  {feature.title}
+                </Text>
+                <Text style={[type.body, { color: theme.color.muted }]}>
+                  {feature.body}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={s.action}>
+          <IdentityButton
+            label={ar ? "ابدأ استخدام ViewState" : "Start using ViewState"}
+            onPress={finish}
+            busy={busy || submitted}
+            testID="account-welcome-start"
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.color.background },
+  page: {
+    flexGrow: 1,
+    width: "100%",
+    maxWidth: theme.size.page,
+    alignSelf: "center",
+    padding: theme.space.xl,
+    gap: theme.space.xxl,
+  },
+  heading: { gap: theme.space.md },
+  center: { textAlign: "center" },
+  features: { gap: theme.space.lg },
+  feature: {
+    direction: "ltr",
+    alignItems: "center",
+    gap: theme.space.md,
+    backgroundColor: theme.color.surface,
+    padding: theme.space.lg,
+    borderRadius: theme.radius.card,
+  },
+  icon: {
+    minHeight: theme.size.touch,
+    minWidth: theme.size.touch,
+    borderRadius: theme.radius.control,
+    backgroundColor: theme.color.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  action: { marginTop: "auto" },
+});

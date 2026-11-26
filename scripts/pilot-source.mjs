@@ -7,7 +7,22 @@ export const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 export const pilotConfig = JSON.parse(
   readFileSync(new URL("../pilot-source.json", import.meta.url), "utf8"),
 );
-export function validatePilotSource(config, source, { preview = false } = {}) {
+export function previewSourceConfig(
+  config,
+  { preview = false, pilot2 = false } = {},
+) {
+  if (!pilot2) return config;
+  if (!preview)
+    throw Error("PILOT2_PREVIEW_ONLY: experimental source cannot publish");
+  return { ...config, branch: "codex/pilot-2", previewPort: 8082 };
+}
+
+export function validatePilotSource(
+  config,
+  source,
+  { preview = false, pilot2 = false } = {},
+) {
+  config = previewSourceConfig(config, { preview, pilot2 });
   if (source.branch !== config.branch)
     throw Error(
       `PILOT_SOURCE_BRANCH: use ${config.branch}; current checkout is ${source.branch || "detached"}`,
@@ -34,7 +49,8 @@ export function validatePilotSource(config, source, { preview = false } = {}) {
       "PILOT_SOURCE_DEFAULT_BRANCH: GitHub default branch must match pilot-source.json",
     );
 }
-export function assertPilotSource({ preview = false } = {}) {
+export function assertPilotSource({ preview = false, pilot2 = false } = {}) {
+  const config = previewSourceConfig(pilotConfig, { preview, pilot2 });
   const git = (args) =>
     execFileSync("git", args, {
       cwd: repositoryRoot,
@@ -55,8 +71,8 @@ export function assertPilotSource({ preview = false } = {}) {
   };
   validatePilotSource(
     pilotConfig,
-    { ...source, remoteHead: source.head, defaultBranch: pilotConfig.branch },
-    { preview },
+    { ...source, remoteHead: source.head, defaultBranch: config.branch },
+    { preview, pilot2 },
   );
   if (!preview) {
     const remoteLines = git([
@@ -81,5 +97,5 @@ export function assertPilotSource({ preview = false } = {}) {
         .split(/\s/)[0] ?? "";
     validatePilotSource(pilotConfig, source);
   }
-  return { ...source, root, config: pilotConfig };
+  return { ...source, root, config };
 }

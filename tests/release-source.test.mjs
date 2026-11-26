@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validatePilotSource } from "../scripts/pilot-source.mjs";
+import {
+  validatePilotSource,
+  previewSourceConfig,
+} from "../scripts/pilot-source.mjs";
 import { fingerprintPreviewInputs } from "../scripts/preview-inputs.mjs";
 import { mkdtemp, mkdir, writeFile, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,6 +22,39 @@ const source = {
   defaultBranch: config.branch,
   dirty: false,
 };
+
+test("Pilot 2 is an explicit isolated preview target and cannot publish", () => {
+  const experimental = { ...source, branch: "codex/pilot-2" };
+  assert.doesNotThrow(() =>
+    validatePilotSource(config, experimental, { preview: true, pilot2: true }),
+  );
+  assert.equal(
+    previewSourceConfig(config, { preview: true, pilot2: true }).previewPort,
+    8082,
+  );
+  assert.throws(
+    () => validatePilotSource(config, experimental, { preview: true }),
+    /PILOT_SOURCE_BRANCH/,
+  );
+  assert.throws(
+    () => validatePilotSource(config, experimental),
+    /PILOT_SOURCE_BRANCH/,
+  );
+  assert.throws(
+    () => validatePilotSource(config, experimental, { pilot2: true }),
+    /PILOT2_PREVIEW_ONLY/,
+  );
+  assert.throws(
+    () =>
+      validatePilotSource(
+        config,
+        { ...experimental, branch: "codex/p2-01-identity-auth" },
+        { preview: true, pilot2: true },
+      ),
+    /PILOT_SOURCE_BRANCH/,
+  );
+  assert.doesNotThrow(() => validatePilotSource(config, source));
+});
 
 test("hosted migrations do not require ownership of managed Auth tables", async () => {
   const sql = await readFile(
